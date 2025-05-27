@@ -3,7 +3,7 @@ import os
 import pytest
 
 from archivey.archive_stream import ArchiveStream
-from archivey.types import MemberType
+from archivey.types import MemberType, CompressionFormat
 from sample_archives import SAMPLE_ARCHIVES, ArchiveInfo, GenerationMethod
 
 

@@ -8,6 +8,7 @@ class GenerationMethod(Enum):
     ZIPFILE = "zipfile"
     INFOZIP = "zip_command_line"
     EXTERNAL = "external"
+    TAR_COMMAND_LINE = "tar_command_line"
 
 
 @dataclass
@@ -195,6 +196,68 @@ COMPRESSION_METHOD_FILES_LZMA = COMPRESSION_METHOD_FILES + [
 ]
 
 
+TAR_BASIC_FILES = [
+    FileInfo(
+        name="file1.txt",
+        mtime=_fake_mtime(1),
+        contents=b"Hello, world!",
+    ),
+    FileInfo(
+        name="subdir/",
+        mtime=_fake_mtime(2),
+        type=MemberType.DIR,
+    ),
+    FileInfo(
+        name="empty_subdir/",
+        mtime=_fake_mtime(3),
+        type=MemberType.DIR,
+    ),
+    FileInfo(
+        name="subdir/file2.txt",
+        mtime=_fake_mtime(4),
+        contents=b"Hello, universe!",
+    ),
+    FileInfo(
+        name="abc.txt",
+        mtime=_fake_mtime(5),
+        contents=b"ABC",
+    ),
+    FileInfo(
+        name="implicit_subdir/file3.txt",
+        mtime=_fake_mtime(6),
+        contents=b"Hello there!",
+    ),
+]
+
+TAR_SYMLINK_FILES = [
+    FileInfo(name="file1.txt", contents=b"Hello, world!", mtime=_fake_mtime(1)),
+    FileInfo(
+        name="symlink_to_file1.txt",
+        mtime=_fake_mtime(2),
+        type=MemberType.LINK,
+        link_target="file1.txt",
+    ),
+    FileInfo(
+        name="subdir/",
+        mtime=_fake_mtime(3),
+        type=MemberType.DIR,
+    ),
+    FileInfo(
+        name="subdir/link_to_file1.txt",
+        mtime=_fake_mtime(4),
+        type=MemberType.LINK,
+        link_target="../file1.txt",
+    ),
+    FileInfo(
+        name="subdir_link",
+        mtime=_fake_mtime(5),
+        type=MemberType.LINK,
+        link_target="subdir",
+        link_target_type=MemberType.DIR,
+    ),
+]
+
+
 SAMPLE_ARCHIVES = [
     ArchiveInfo(
         filename="basic_zipfile.zip",
@@ -250,5 +313,40 @@ SAMPLE_ARCHIVES = [
         generation_method=GenerationMethod.INFOZIP,
         format=CompressionFormat.ZIP,
         files=COMPRESSION_METHOD_FILES,
+    ),
+    ArchiveInfo(
+        filename="basic_tar.tar",
+        generation_method=GenerationMethod.TAR_COMMAND_LINE,
+        format=CompressionFormat.TAR,
+        files=TAR_BASIC_FILES,
+        archive_comment=None,
+    ),
+    ArchiveInfo(
+        filename="symlinks_tar.tar",
+        generation_method=GenerationMethod.TAR_COMMAND_LINE,
+        format=CompressionFormat.TAR,
+        files=TAR_SYMLINK_FILES,
+        archive_comment=None,
+    ),
+    ArchiveInfo(
+        filename="basic_tar_gz.tar.gz",
+        generation_method=GenerationMethod.TAR_COMMAND_LINE,
+        format=CompressionFormat.TAR_GZ,
+        files=TAR_BASIC_FILES,
+        archive_comment=None,
+    ),
+    ArchiveInfo(
+        filename="basic_tar_bz2.tar.bz2",
+        generation_method=GenerationMethod.TAR_COMMAND_LINE,
+        format=CompressionFormat.TAR_BZ2,
+        files=TAR_BASIC_FILES,
+        archive_comment=None,
+    ),
+    ArchiveInfo(
+        filename="basic_tar_xz.tar.xz",
+        generation_method=GenerationMethod.TAR_COMMAND_LINE,
+        format=CompressionFormat.TAR_XZ,
+        files=TAR_BASIC_FILES,
+        archive_comment=None,
     ),
 ]

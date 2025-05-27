@@ -5,15 +5,13 @@ import gzip
 import lzma
 from datetime import datetime
 from typing import List, Iterator, Union
-from archivey.base import (
+from archivey.base_reader import (
     ArchiveReader,
     ArchiveMember,
-    ArchiveCorruptedError,
-    ArchiveMemberNotFoundError,
     ArchiveInfo,
-    MemberType,
 )
-from archivey.formats import CompressionFormat
+from archivey.exceptions import ArchiveCorruptedError, ArchiveMemberNotFoundError
+from archivey.types import CompressionFormat, MemberType
 
 
 class TarReader(ArchiveReader):
@@ -61,9 +59,13 @@ class TarReader(ArchiveReader):
                             CompressionFormat.TAR_ZSTD: CompressionFormat.ZSTD,
                             CompressionFormat.TAR_LZ4: CompressionFormat.LZ4,
                         }.get(self.get_format())
+                
+                filename = info.name
+                if info.isdir() and not filename.endswith("/"):
+                    filename += "/"
 
                 member = ArchiveMember(
-                    filename=info.name,
+                    filename=filename,
                     size=info.size,
                     mtime=datetime.fromtimestamp(info.mtime) if info.mtime else None,
                     type=(
@@ -96,7 +98,9 @@ class TarReader(ArchiveReader):
 
         return self._members
 
-    def open(self, member: Union[str, ArchiveMember]) -> io.IOBase:
+    def open(self, member: Union[str, ArchiveMember], *, pwd: bytes | None = None) -> io.IOBase:
+        if pwd is not None:
+            raise ArchiveError("TAR format does not support password protection.")
         if isinstance(member, str):
             try:
                 info = self._archive.getmember(member)

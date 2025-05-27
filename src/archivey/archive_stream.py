@@ -135,9 +135,14 @@ class ArchiveStream:
 
             self._reader = TarReader(filename, **kwargs)
         elif ext in [".gz", ".bz2", ".xz", ".tgz", ".tbz", ".txz"]:
-            from archivey.compressed_reader import CompressedReader
-
-            self._reader = CompressedReader(filename, **kwargs)
+            # Check if it's a tar archive based on full name (e.g. xxx.tar.gz) or specific extension
+            member_name = os.path.splitext(os.path.basename(filename))[0]
+            if ext in [".tgz", ".tbz", ".txz"] or member_name.lower().endswith(".tar"):
+                from archivey.tar_reader import TarReader
+                self._reader = TarReader(filename, **kwargs)
+            else:
+                from archivey.compressed_reader import CompressedReader
+                self._reader = CompressedReader(filename, **kwargs)
         else:
             raise ArchiveNotSupportedError(f"Unsupported archive format: {ext}")
 

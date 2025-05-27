@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from typing import Generator
 import zipfile
-from archivey.types import MemberType
+from archivey.types import MemberType, CompressionFormat
 
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
@@ -190,9 +190,66 @@ def create_zip_archive_with_infozip_command_line(
             )
 
 
+def create_tar_archive_with_command_line(
+    archive_path: str,
+    files: list[FileInfo],
+    archive_comment: str | None = None,
+    compression_format: CompressionFormat = CompressionFormat.TAR,
+):
+    """
+    Create a tar archive using the tar command line tool.
+    """
+    if archive_comment:
+        # TAR format does not support archive comments.
+        # We could log a warning here if a logging mechanism is in place.
+        pass
+
+    abs_archive_path = os.path.abspath(archive_path)
+    if os.path.exists(archive_path):
+        os.remove(archive_path)
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        write_files_to_dir(tempdir, files)
+
+        command = ["tar"]
+        command.append("-c")  # Create a new archive
+        command.append("-f")  # Specify the archive file
+        command.append(abs_archive_path)
+
+        # Add compression flag based on the compression_format
+        if compression_format == CompressionFormat.TAR_GZ:
+            command.append("-z")  # gzip
+        elif compression_format == CompressionFormat.TAR_BZ2:
+            command.append("-j")  # bzip2
+        elif compression_format == CompressionFormat.TAR_XZ:
+            command.append("-J")  # xz
+        elif compression_format != CompressionFormat.TAR:
+            # This case should ideally not be reached if enums are used correctly
+            raise ValueError(f"Unsupported tar compression format: {compression_format}")
+
+        # Add file names to the command
+        # These names must be relative to the temporary directory
+        for file_info in files:
+            command.append(file_info.name)
+        
+        try:
+            subprocess.run(command, check=True, cwd=tempdir)
+        except FileNotFoundError:
+            # Handle case where tar command is not found
+            # For testing purposes, we might want to skip tests or raise a specific exception
+            print(f"Command 'tar' not found. Skipping TAR archive creation for {archive_path}")
+            # Depending on requirements, could raise an error:
+            # raise OSError("tar command not found, cannot create TAR archive.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error creating TAR archive {archive_path}: {e}")
+            # Optionally re-raise or handle as a test failure
+            raise
+
+
 GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.ZIPFILE: create_zip_archive_with_zipfile,
     GenerationMethod.INFOZIP: create_zip_archive_with_infozip_command_line,
+    GenerationMethod.TAR_COMMAND_LINE: create_tar_archive_with_command_line,
 }
 
 
@@ -205,7 +262,15 @@ def create_archive(archive_info: ArchiveInfo, base_dir: str):
         return
 
     generator = GENERATION_METHODS_TO_GENERATOR[archive_info.generation_method]
-    generator(full_path, archive_info.files, archive_info.archive_comment)
+    if archive_info.generation_method == GenerationMethod.TAR_COMMAND_LINE:
+        generator(
+            full_path,
+            archive_info.files,
+            archive_info.archive_comment,
+            archive_info.format,
+        )
+    else:
+        generator(full_path, archive_info.files, archive_info.archive_comment)
 
 
 def create_archives(archives: list[ArchiveInfo], base_dir: str):

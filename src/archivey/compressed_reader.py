@@ -8,17 +8,20 @@ import lz4
 from datetime import datetime
 import struct
 from typing import Iterator, List
-from archivey.base import (
+
+from archivey.base_reader import ArchiveReader
+from archivey.exceptions import (
     ArchiveEOFError,
-    ArchiveInfo,
-    ArchiveReader,
-    ArchiveMember,
     ArchiveError,
     ArchiveCorruptedError,
     ArchiveFormatError,
+)
+from archivey.types import (
+    ArchiveInfo,
+    ArchiveMember,
+    CompressionFormat,
     MemberType,
 )
-from archivey.formats import CompressionFormat
 
 
 def _read_null_terminated_bytes(f: io.BufferedReader) -> bytes:
