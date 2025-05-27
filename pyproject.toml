@@ -1,7 +1,7 @@
 [project]
 name = "archivey"
 version = "0.1.0"
-description = "Unified interface for reading ZIP, TAR, RAR, 7z, ISO and similar archives"
+description = "Unified interface for reading ZIP, TAR, RAR, 7z and other archives"
 readme = "README.md"
 authors = [
     { name = "Davi Figueiredo", email = "gh@davitf.com" }
