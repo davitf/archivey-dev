@@ -100,7 +100,7 @@ class TarReader(ArchiveReader):
 
     def open(self, member: Union[str, ArchiveMember], *, pwd: bytes | None = None) -> io.IOBase:
         if pwd is not None:
-            raise ArchiveError("TAR format does not support password protection.")
+            raise ValueError("TAR format does not support password protection.")
         if isinstance(member, str):
             try:
                 info = self._archive.getmember(member)

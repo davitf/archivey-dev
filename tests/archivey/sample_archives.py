@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+import os
 from archivey.types import CompressionFormat, MemberType
 
 
@@ -23,6 +24,8 @@ class FileInfo:
     link_target_type: MemberType | None = MemberType.FILE
     compression_method: str | None = None
 
+TEST_ARCHIVES_DIR = "test_archives"
+TEST_ARCHIVES_EXTERNAL_DIR = "test_archives_external"
 
 @dataclass
 class ArchiveInfo:
@@ -31,6 +34,12 @@ class ArchiveInfo:
     format: CompressionFormat
     files: list[FileInfo]
     archive_comment: str | None = None
+
+    def get_archive_path(self, base_dir: str) -> str:
+        if self.generation_method == GenerationMethod.EXTERNAL:
+            return os.path.join(base_dir, TEST_ARCHIVES_EXTERNAL_DIR, self.filename)
+        else:
+            return os.path.join(base_dir, TEST_ARCHIVES_DIR, self.filename)
 
 
 def _fake_mtime(i: int) -> datetime:
@@ -266,6 +275,16 @@ SAMPLE_ARCHIVES = [
         files=ENCODING_FILES,
         archive_comment="Comentário em português 😀",
     ),
+
+
+    ArchiveInfo(
+        filename="encoding_infozip_jules.zip",
+        generation_method=GenerationMethod.EXTERNAL,
+        format=CompressionFormat.ZIP,
+        files=ENCODING_FILES,
+        archive_comment="Comentário em português 😀",
+    ),
+
     # info-zip does not support LZMA
     ArchiveInfo(
         filename="compression_methods_zipfile.zip",
@@ -315,4 +334,5 @@ SAMPLE_ARCHIVES = [
         format=CompressionFormat.TAR_XZ,
         files=BASIC_FILES,
     ),
+
 ]

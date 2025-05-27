@@ -3,7 +3,7 @@ import os
 import pytest
 
 from archivey.archive_stream import ArchiveStream
-from archivey.types import MemberType, CompressionFormat
+from archivey.types import MemberType
 from sample_archives import SAMPLE_ARCHIVES, ArchiveInfo, GenerationMethod
 
 
@@ -17,12 +17,14 @@ def full_path_to_archive(archive_filename: str) -> str:
 
 @pytest.mark.parametrize("sample_archive", SAMPLE_ARCHIVES, ids=lambda x: x.filename)
 def test_read_archive(sample_archive: ArchiveInfo):
+    archive_base_dir = os.path.join(os.path.dirname(__file__), "..")
+
     files_by_name = {file.name: file for file in sample_archive.files}
     allow_timestamp_rounding_error = (
         sample_archive.generation_method == GenerationMethod.ZIPFILE
     )
 
-    with ArchiveStream(full_path_to_archive(sample_archive.filename)) as archive:
+    with ArchiveStream(sample_archive.get_archive_path(archive_base_dir)) as archive:
         assert archive.get_format() == sample_archive.format
         format_info = archive.get_archive_info()
         assert normalize_newlines(format_info.comment) == normalize_newlines(

@@ -1,4 +1,3 @@
-from datetime import datetime
 import logging
 import os
 import subprocess
@@ -154,7 +153,7 @@ def create_zip_archive_with_infozip_command_line(
         for i, (password, compression_method, group_files) in enumerate(
             group_files_by_password_and_compression_method(files)
         ):
-            command = ["zip"]
+            command = ["zip", "-q"]
             if i > 0:
                 command += ["--update"]
             command += ["--symlinks"]
@@ -247,11 +246,12 @@ GENERATION_METHODS_TO_GENERATOR = {
 
 
 def create_archive(archive_info: ArchiveInfo, base_dir: str):
-    full_path = os.path.join(base_dir, archive_info.filename)
+    full_path = archive_info.get_archive_path(base_dir)
+
     if archive_info.generation_method == GenerationMethod.EXTERNAL:
         # Check that the archive file exists
         if not os.path.exists(full_path):
-            raise FileNotFoundError(f"Archive file {full_path} does not exist")
+            raise FileNotFoundError(f"External archive {full_path} does not exist")
         return
 
     generator = GENERATION_METHODS_TO_GENERATOR[archive_info.generation_method]
@@ -292,11 +292,14 @@ if __name__ == "__main__":
         nargs="*",
         help="Optional list of file patterns to generate. If not specified, generates all archives.",
     )
+    parser.add_argument(
+        "--base-dir",
+        help="Base directory where archives will be generated. Defaults to the script directory.",
+    )
     args = parser.parse_args()
 
-    # Get the directory of the script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    output_dir = os.path.join(script_dir, "test_archives")
+    # Use base_dir if provided, otherwise use the directory of the script
+    base_dir = args.base_dir if args.base_dir else os.path.dirname(os.path.abspath(__file__))
     
     # Filter archives based on patterns if provided
     archives_to_generate = filter_archives(SAMPLE_ARCHIVES, args.patterns)
@@ -305,10 +308,9 @@ if __name__ == "__main__":
         print("No matching archives found.")
         exit(1)
 
-    os.makedirs(output_dir, exist_ok=True)
-
     logger.info(f"Generating {len(archives_to_generate)} archives:")
     for archive in archives_to_generate:
-        create_archive(archive, output_dir)
-        logger.info(f"  - {archive.filename}")
+        create_archive(archive, base_dir)
+        bullet = "-" if archive.generation_method != GenerationMethod.EXTERNAL else "s"
+        logger.info(f"  {bullet} {archive.filename}")
     
