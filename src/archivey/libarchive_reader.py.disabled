@@ -1,0 +1,203 @@
+import io
+from archivey.utils import decode_bytes_with_fallback
+import libarchive.adapters.archive_entry
+import libarchive.public
+import libarchive.exception
+
+from typing import List, Iterator
+
+from archivey.formats import CompressionFormat, detect_archive_format_by_filename
+
+
+def decode_libarchive_path(raw_pathname: bytes) -> str:
+    """
+    Try to decode a raw archive pathname using likely encodings.
+
+    Args:
+        raw_pathname (bytes): The raw byte string representing the file name.
+
+    Returns:
+        str: The best-effort decoded filename.
+    """
+    return decode_bytes_with_fallback(raw_pathname, ['utf-8', 'cp437', 'cp1252', 'latin-1'])
+
+
+class LibArchiveEntryReader(io.IOBase):
+    """A file-like object that reads from a libarchive entry's blocks."""
+    
+    def __init__(self, entry: libarchive.adapters.archive_entry.ArchiveEntry):
+        self.entry = entry
+        self._block_iterator = self.entry.get_blocks()
+        print("BLOCK ITERATOR", self._block_iterator)
+        self._position = 0
+        self._size = 0
+        self._buffer = bytearray()
+
+    def _add_next_block(self) -> bool:
+        """Add the next block to the buffer."""
+        print("ADDING NEXT BLOCK")
+        next_block = next(self._block_iterator, None)
+        print("NEXT BLOCK", next_block)
+        if next_block is None:
+            return False
+        self._buffer.extend(next_block)
+        self._size += len(next_block)
+        return True
+            
+    def read(self, size: int = -1) -> bytes:
+        """Read at most size bytes from the entry.
+        
+        Args:
+            size: Maximum number of bytes to read. If -1, read until EOF.
+            
+        Returns:
+            The bytes read, or b'' if at EOF.
+        """
+        print("READING", size)
+        if size == -1:
+            # Read all remaining data
+            while self._add_next_block():
+                pass
+            result = self._buffer
+            self._buffer = bytearray()
+            return result
+
+        while len(self._buffer) < size:
+            print("Current buffer size", len(self._buffer), "Current size", self._size)
+            if not self._add_next_block():
+                break
+
+        result = self._buffer[:size]
+        self._buffer = self._buffer[size:]
+        return result
+
+
+class LibArchiveReader(ArchiveReader):
+    """Reader for various archive formats using libarchive."""
+    
+    def __init__(self, archive_path: str):
+        self.archive_path = archive_path
+        self._members = None
+        self._format_info = None
+
+    def close(self) -> None:
+        """Close the archive and release any resources."""
+        pass
+        # if self._archive:
+        #     # self._archive.close()
+        #     self._archive = None
+        #     self._members = None
+
+    def get_format(self) -> CompressionFormat:
+        """Get the compression format of the archive.
+        
+        Returns:
+            CompressionFormat: The format of the archive as detected by libarchive
+        """
+        return detect_archive_format_by_filename(self.archive_path)
+
+    def get_archive_info(self) -> ArchiveInfo:
+        """Get detailed information about the archive's format.
+        
+        Returns:
+            ArchiveInfo: Detailed format information
+        """
+        if self._format_info is None:
+            format = self.get_format()
+
+            self._format_info = ArchiveInfo(
+                format=format,
+                # is_solid=self.is_solid(),
+                # extra={
+                #     "format_name": self._archive.format_name,
+                #     "format_version": self._archive.format_version if hasattr(self._archive, "format_version") else None,
+                #     "compression_level": self._archive.compression_level if hasattr(self._archive, "compression_level") else None,
+                #     "is_encrypted": self._archive.is_encrypted if hasattr(self._archive, "is_encrypted") else None
+                # }
+            )
+        return self._format_info
+
+    # def is_solid(self) -> bool:
+    #     """Check if the archive is solid (all files compressed together).
+        
+    #     Returns:
+    #         bool: True if the archive is solid, False otherwise
+    #     """
+    #     # Check if the archive is solid based on format
+    #     format = self.get_format()
+    #     if format == CompressionFormat.RAR:
+    #         # RAR archives can be solid
+    #         return bool(self._archive.is_solid) if hasattr(self._archive, "is_solid") else False
+    #     elif format == CompressionFormat.SEVENZIP:
+    #         # 7-Zip archives can be solid
+    #         return bool(self._archive.is_solid) if hasattr(self._archive, "is_solid") else False
+    #     return False
+
+    def get_members(self) -> List[ArchiveMember]:
+        return list(self.iter_members())
+
+    def iter_members(self) -> Iterator[ArchiveMember]:
+        self._archive_entries = {}
+        self._archive_data = {}
+
+        with libarchive.public.file_reader(self.archive_path) as archive:
+            for entry in archive:
+                # print(entry.pathname, entry.filetype, entry)
+                # continue
+                member = ArchiveMember(
+                    filename=entry.pathname, # decode_libarchive_path(entry.pathname),
+                    size=entry.size,
+                    mtime=entry.mtime,
+                    type=(MemberType.DIR if entry.filetype.IFDIR else
+                          MemberType.FILE if entry.filetype.IFREG else
+                          MemberType.LINK if entry.filetype.IFLNK else
+                          MemberType.OTHER),
+                    crc32=entry.crc32 if hasattr(entry, "crc32") else None,
+                    compression_method=entry.compression_name.lower() if hasattr(entry, "compression_name") else None,
+                    link_target=entry.symlink_targetpath if entry.filetype.IFLNK else None,
+                    extra={
+                        # "linkname": decode_libarchive_path(entry.linkname) if entry.issym or entry.islnk else None,
+                        "uname": entry.uname if hasattr(entry, "uname") else None,
+                        "gname": entry.gname if hasattr(entry, "gname") else None,
+                        "mode": entry.mode if hasattr(entry, "mode") else None
+                    }
+                )
+
+                self._archive_entries[member.filename] = entry
+
+                # if member.is_file:
+                #     data = bytearray()
+                #     for block in entry.get_blocks():
+                #         data += block
+
+                #     self._archive_data[member.filename] = data
+                # print("MEMBER", member)
+                yield member
+
+    def open(self, member: ArchiveMember) -> io.IOBase:
+        """Open a member for reading.
+        
+        Args:
+            member: Either the member name or an ArchiveMember object
+            
+        Returns:
+            A file-like object for reading the member's contents
+            
+        Raises:
+            ArchiveMemberNotFoundError: If the member doesn't exist
+            ArchiveError: For other archive-related errors
+        """
+        if member.filename in self._archive_data:
+            return io.BytesIO(self._archive_data[member.filename])
+
+        entry = self._archive_entries.get(member.filename)
+        if entry is None:
+            raise ArchiveMemberNotFoundError(f"Member {member.filename} not found in archive")
+        
+        # print("OPENING", member.filename)
+        data = bytearray()
+        for block in entry.get_blocks():
+            data += block
+
+        return io.BytesIO(data)
+            
