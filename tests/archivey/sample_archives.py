@@ -75,15 +75,30 @@ BASIC_FILES = [
         contents=b"Hello, universe!",
     ),
     FileInfo(
-        name="abc.txt",
+        name="implicit_subdir/file3.txt",
         mtime=_fake_mtime(5),
+        contents=b"Hello there!",
+    ),
+]
+
+COMMENT_FILES = [
+    FileInfo(
+        name="abc.txt",
+        mtime=_fake_mtime(1),
         contents=b"ABC",
         comment="Contains some letters",
     ),
     FileInfo(
-        name="implicit_subdir/file3.txt",
-        mtime=_fake_mtime(6),
-        contents=b"Hello there!",
+        name="subdir/",
+        mtime=_fake_mtime(7),
+        type=MemberType.DIR,
+        comment="Contains some files",
+    ),
+    FileInfo(
+        name="subdir/123.txt",
+        mtime=_fake_mtime(8),
+        contents=b"1234567890",
+        comment="Contains some numbers",
     ),
 ]
 
@@ -165,7 +180,7 @@ ENCODING_FILES = [
     ),
 ]
 
-COMPRESSION_METHOD_FILES = [
+COMPRESSION_METHODS_FILES = [
     FileInfo(
         name="store.txt",
         contents=b"I am stored\n" * 1000,
@@ -186,74 +201,12 @@ COMPRESSION_METHOD_FILES = [
     ),
 ]
 
-COMPRESSION_METHOD_FILES_LZMA = COMPRESSION_METHOD_FILES + [
+COMPRESSION_METHOD_FILES_LZMA = COMPRESSION_METHODS_FILES + [
     FileInfo(
         name="lzma.txt",
         contents=b"I am lzma'd\n" * 1000,
         mtime=_fake_mtime(4),
         compression_method="lzma",
-    ),
-]
-
-
-TAR_BASIC_FILES = [
-    FileInfo(
-        name="file1.txt",
-        mtime=_fake_mtime(1),
-        contents=b"Hello, world!",
-    ),
-    FileInfo(
-        name="subdir/",
-        mtime=_fake_mtime(2),
-        type=MemberType.DIR,
-    ),
-    FileInfo(
-        name="empty_subdir/",
-        mtime=_fake_mtime(3),
-        type=MemberType.DIR,
-    ),
-    FileInfo(
-        name="subdir/file2.txt",
-        mtime=_fake_mtime(4),
-        contents=b"Hello, universe!",
-    ),
-    FileInfo(
-        name="abc.txt",
-        mtime=_fake_mtime(5),
-        contents=b"ABC",
-    ),
-    FileInfo(
-        name="implicit_subdir/file3.txt",
-        mtime=_fake_mtime(6),
-        contents=b"Hello there!",
-    ),
-]
-
-TAR_SYMLINK_FILES = [
-    FileInfo(name="file1.txt", contents=b"Hello, world!", mtime=_fake_mtime(1)),
-    FileInfo(
-        name="symlink_to_file1.txt",
-        mtime=_fake_mtime(2),
-        type=MemberType.LINK,
-        link_target="file1.txt",
-    ),
-    FileInfo(
-        name="subdir/",
-        mtime=_fake_mtime(3),
-        type=MemberType.DIR,
-    ),
-    FileInfo(
-        name="subdir/link_to_file1.txt",
-        mtime=_fake_mtime(4),
-        type=MemberType.LINK,
-        link_target="../file1.txt",
-    ),
-    FileInfo(
-        name="subdir_link",
-        mtime=_fake_mtime(5),
-        type=MemberType.LINK,
-        link_target="subdir",
-        link_target_type=MemberType.DIR,
     ),
 ]
 
@@ -264,13 +217,25 @@ SAMPLE_ARCHIVES = [
         generation_method=GenerationMethod.ZIPFILE,
         format=CompressionFormat.ZIP,
         files=BASIC_FILES,
-        archive_comment="This is a\nmulti-line comment",
     ),
     ArchiveInfo(
         filename="basic_infozip.zip",
         generation_method=GenerationMethod.INFOZIP,
         format=CompressionFormat.ZIP,
         files=BASIC_FILES,
+    ),
+    ArchiveInfo(
+        filename="comment_zipfile.zip",
+        generation_method=GenerationMethod.ZIPFILE,
+        format=CompressionFormat.ZIP,
+        files=COMMENT_FILES,
+        archive_comment="This is a\nmulti-line comment",
+    ),
+    ArchiveInfo(
+        filename="comment_infozip.zip",
+        generation_method=GenerationMethod.INFOZIP,
+        format=CompressionFormat.ZIP,
+        files=COMMENT_FILES,
         archive_comment="This is a\nmulti-line comment",
     ),
     # zipfile does not support writing encrypted files
@@ -303,50 +268,51 @@ SAMPLE_ARCHIVES = [
     ),
     # info-zip does not support LZMA
     ArchiveInfo(
-        filename="compression_method_zipfile.zip",
+        filename="compression_methods_zipfile.zip",
         generation_method=GenerationMethod.ZIPFILE,
         format=CompressionFormat.ZIP,
         files=COMPRESSION_METHOD_FILES_LZMA,
     ),
     ArchiveInfo(
-        filename="compression_method_infozip.zip",
+        filename="compression_methods_infozip.zip",
         generation_method=GenerationMethod.INFOZIP,
         format=CompressionFormat.ZIP,
-        files=COMPRESSION_METHOD_FILES,
+        files=COMPRESSION_METHODS_FILES,
     ),
     ArchiveInfo(
-        filename="basic_tar.tar",
+        filename="basic.tar",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
         format=CompressionFormat.TAR,
-        files=TAR_BASIC_FILES,
-        archive_comment=None,
+        files=BASIC_FILES,
     ),
     ArchiveInfo(
-        filename="symlinks_tar.tar",
+        filename="symlinks.tar",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
         format=CompressionFormat.TAR,
-        files=TAR_SYMLINK_FILES,
-        archive_comment=None,
+        files=SYMLINK_FILES,
     ),
     ArchiveInfo(
-        filename="basic_tar_gz.tar.gz",
+        filename="encoding.tar",
+        generation_method=GenerationMethod.TAR_COMMAND_LINE,
+        format=CompressionFormat.TAR,
+        files=ENCODING_FILES,
+    ),
+    ArchiveInfo(
+        filename="basic.tar.gz",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
         format=CompressionFormat.TAR_GZ,
-        files=TAR_BASIC_FILES,
-        archive_comment=None,
+        files=BASIC_FILES,
     ),
     ArchiveInfo(
-        filename="basic_tar_bz2.tar.bz2",
+        filename="basic.tar.bz2",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
         format=CompressionFormat.TAR_BZ2,
-        files=TAR_BASIC_FILES,
-        archive_comment=None,
+        files=BASIC_FILES,
     ),
     ArchiveInfo(
-        filename="basic_tar_xz.tar.xz",
+        filename="basic.tar.xz",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
         format=CompressionFormat.TAR_XZ,
-        files=TAR_BASIC_FILES,
-        archive_comment=None,
+        files=BASIC_FILES,
     ),
 ]

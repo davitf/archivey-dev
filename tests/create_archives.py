@@ -1,9 +1,12 @@
 from datetime import datetime
+import logging
 import os
 import subprocess
 import tempfile
 from typing import Generator
 import zipfile
+import argparse
+import fnmatch
 from archivey.types import MemberType, CompressionFormat
 
 from tests.archivey.sample_archives import (
@@ -23,6 +26,8 @@ _COMPRESSION_METHOD_TO_ZIPFILE_VALUE = {
 
 DEFAULT_ZIP_COMPRESSION_METHOD = "store"
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def write_files_to_dir(dir: str, files: list[FileInfo]):
     # Leave directories for last, so that their timestamps are not affected by the creation of the files inside them.
@@ -52,11 +57,11 @@ def write_files_to_dir(dir: str, files: list[FileInfo]):
 
         os.utime(
             full_path,
-            (datetime.now().timestamp(), file.mtime.timestamp()),
+            (file.mtime.timestamp(), file.mtime.timestamp()),
             follow_symlinks=False,
         )
 
-    subprocess.run(["ls", "-l", dir])
+    # subprocess.run(["ls", "-l", dir])
 
     # write_file_to_dir(dir, file)
 
@@ -104,26 +109,28 @@ def create_zip_archive_with_zipfile(
                 assert file.type != MemberType.LINK, (
                     "Links are not supported in zipfile"
                 )
+                
                 if file.type == MemberType.DIR:
-                    info = zipfile.ZipInfo(
-                        file.name if file.name.endswith("/") else file.name + "/",
-                        date_time=file.mtime.timetuple()[:6],
-                    )
-                    zipf.writestr(info, "")
-                    continue
+                    filename = file.name if file.name.endswith("/") else file.name + "/"
+                    contents = b""
+                else:
+                    filename = file.name
+                    assert file.contents is not None, "File contents are required"
+                    contents = file.contents
 
-                assert file.contents is not None, "File contents are required"
+                info = zipfile.ZipInfo(
+                    filename,
+                    date_time=file.mtime.timetuple()[:6],
+                )
 
-                # zipf.setpassword((file.password or "").encode("utf-8"))
-                info = zipfile.ZipInfo(file.name, date_time=file.mtime.timetuple()[:6])
+                info = zipfile.ZipInfo(filename, date_time=file.mtime.timetuple()[:6])
                 info.compress_type = _COMPRESSION_METHOD_TO_ZIPFILE_VALUE[
                     file.compression_method
                     if file.compression_method is not None
                     else DEFAULT_ZIP_COMPRESSION_METHOD
                 ]
                 info.comment = (file.comment or "").encode("utf-8")
-
-                zipf.writestr(info, file.contents)
+                zipf.writestr(info, contents)
 
 
 def create_zip_archive_with_infozip_command_line(
@@ -182,7 +189,7 @@ def create_zip_archive_with_infozip_command_line(
 
         if comment_file_names:
             command = ["zip", "-c", archive_path] + comment_file_names
-            print("Running command:", " ".join(command))
+            logger.info("Running command: %s", " ".join(command))
             subprocess.run(
                 command,
                 check=True,
@@ -199,10 +206,7 @@ def create_tar_archive_with_command_line(
     """
     Create a tar archive using the tar command line tool.
     """
-    if archive_comment:
-        # TAR format does not support archive comments.
-        # We could log a warning here if a logging mechanism is in place.
-        pass
+    assert archive_comment is None, "TAR format does not support archive comments"
 
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(archive_path):
@@ -232,18 +236,7 @@ def create_tar_archive_with_command_line(
         for file_info in files:
             command.append(file_info.name)
         
-        try:
-            subprocess.run(command, check=True, cwd=tempdir)
-        except FileNotFoundError:
-            # Handle case where tar command is not found
-            # For testing purposes, we might want to skip tests or raise a specific exception
-            print(f"Command 'tar' not found. Skipping TAR archive creation for {archive_path}")
-            # Depending on requirements, could raise an error:
-            # raise OSError("tar command not found, cannot create TAR archive.")
-        except subprocess.CalledProcessError as e:
-            print(f"Error creating TAR archive {archive_path}: {e}")
-            # Optionally re-raise or handle as a test failure
-            raise
+        subprocess.run(command, check=True, cwd=tempdir)
 
 
 GENERATION_METHODS_TO_GENERATOR = {
@@ -273,12 +266,49 @@ def create_archive(archive_info: ArchiveInfo, base_dir: str):
         generator(full_path, archive_info.files, archive_info.archive_comment)
 
 
-def create_archives(archives: list[ArchiveInfo], base_dir: str):
-    for archive_info in archives:
-        create_archive(archive_info, base_dir)
+def filter_archives(archives: list[ArchiveInfo], patterns: list[str] | None) -> list[ArchiveInfo]:
+    """
+    Filter archives based on filename patterns.
+    If patterns is None or empty, return all archives.
+    Takes the basename of each pattern to match against archive filenames.
+    """
+    if not patterns:
+        return archives
+    
+    # Convert patterns to their basenames
+    pattern_basenames = [os.path.basename(pattern) for pattern in patterns]
+    
+    filtered = []
+    for archive in archives:
+        if any(fnmatch.fnmatch(archive.filename, pattern) for pattern in pattern_basenames):
+            filtered.append(archive)
+    return filtered
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Generate test archives")
+    parser.add_argument(
+        "patterns",
+        nargs="*",
+        help="Optional list of file patterns to generate. If not specified, generates all archives.",
+    )
+    args = parser.parse_args()
+
     # Get the directory of the script
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    create_archives(SAMPLE_ARCHIVES, script_dir + "/test_archives")
+    output_dir = os.path.join(script_dir, "test_archives")
+    
+    # Filter archives based on patterns if provided
+    archives_to_generate = filter_archives(SAMPLE_ARCHIVES, args.patterns)
+    
+    if not archives_to_generate:
+        print("No matching archives found.")
+        exit(1)
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    logger.info(f"Generating {len(archives_to_generate)} archives:")
+    for archive in archives_to_generate:
+        create_archive(archive, output_dir)
+        logger.info(f"  - {archive.filename}")
+    
