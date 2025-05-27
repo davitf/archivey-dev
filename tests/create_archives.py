@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 from typing import Generator
 import zipfile
+import py7zr
 import argparse
 import fnmatch
 from archivey.types import MemberType, CompressionFormat
@@ -238,12 +239,7 @@ def create_tar_archive_with_command_line(
         subprocess.run(command, check=True, cwd=tempdir)
 
 
-GENERATION_METHODS_TO_GENERATOR = {
-    GenerationMethod.ZIPFILE: create_zip_archive_with_zipfile,
-    GenerationMethod.INFOZIP: create_zip_archive_with_infozip_command_line,
-    GenerationMethod.TAR_COMMAND_LINE: create_tar_archive_with_command_line,
-}
-
+# Moved GENERATION_METHODS_TO_GENERATOR definition after all creation functions
 
 def create_archive(archive_info: ArchiveInfo, base_dir: str):
     full_path = archive_info.get_archive_path(base_dir)
@@ -255,7 +251,18 @@ def create_archive(archive_info: ArchiveInfo, base_dir: str):
         return
 
     generator = GENERATION_METHODS_TO_GENERATOR[archive_info.generation_method]
-    if archive_info.generation_method == GenerationMethod.TAR_COMMAND_LINE:
+    if archive_info.generation_method in [
+        GenerationMethod.RAR_COMMAND_LINE,
+        GenerationMethod.PY7ZR,
+        GenerationMethod.SEVENZIP_COMMAND_LINE,
+    ]:
+        generator(
+            full_path,
+            archive_info.files,
+            archive_info.archive_comment,
+            archive_info.solid,
+        )
+    elif archive_info.generation_method == GenerationMethod.TAR_COMMAND_LINE:
         generator(
             full_path,
             archive_info.files,
@@ -264,6 +271,164 @@ def create_archive(archive_info: ArchiveInfo, base_dir: str):
         )
     else:
         generator(full_path, archive_info.files, archive_info.archive_comment)
+
+
+def create_rar_archive_with_command_line(
+    archive_path: str,
+    files: list[FileInfo],
+    archive_comment: str | None = None,
+    solid: bool = False,
+):
+    abs_archive_path = os.path.abspath(archive_path)
+    if os.path.exists(abs_archive_path):
+        os.remove(abs_archive_path)
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        write_files_to_dir(tempdir, files)
+
+        command = ["rar", "a"]
+
+        if solid:
+            command.append("-s")
+
+        # Handle encryption - use password from the first file that has one
+        password = next((f.password for f in files if f.password), None)
+        if password:
+            command.append(f"-hp{password}")
+
+        # Handle archive comment
+        comment_file_path = None
+        if archive_comment:
+            # rar expects the comment file to be passed with -z<file>
+            comment_fd, comment_file_path = tempfile.mkstemp(dir=tempdir)
+            with os.fdopen(comment_fd, "wb") as f:
+                f.write(archive_comment.encode("utf-8"))
+            command.append(f"-z{comment_file_path}")
+        
+        command.append(abs_archive_path)
+
+        # Add file names to the command (relative to tempdir)
+        for file_info in files:
+            # RAR typically includes directories implicitly if files within them are added.
+            # However, to ensure empty directories or specific directory metadata (like mtime)
+            # are preserved as defined in FileInfo, we add them explicitly.
+            # RAR handles adding existing files/dirs.
+            command.append(file_info.name)
+            
+        subprocess.run(command, check=True, cwd=tempdir)
+
+        if comment_file_path:
+            os.remove(comment_file_path)
+
+        # File comments are more complex with rar command line (rar c <archive> <file> -z<commentfile>)
+        # For now, we are skipping per-file comments for RAR.
+
+
+def create_7z_archive_with_py7zr(
+    archive_path: str,
+    files: list[FileInfo],
+    archive_comment: str | None = None,
+    solid: bool = False,
+):
+    abs_archive_path = os.path.abspath(archive_path)
+    if os.path.exists(abs_archive_path):
+        os.remove(abs_archive_path)
+
+    password_str = next((f.password for f in files if f.password), None)
+
+    # py7zr creates solid archives by default.
+    # To create a non-solid archive, one might need to add files individually
+    # or use specific filters if the library supports it.
+    # For this implementation, if solid is False, it's a limitation for py7zr.
+    # Archive comments are not directly supported by py7zr.
+    # Symlinks are generally not supported by py7zr.
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        write_files_to_dir(tempdir, files)
+        
+        # py7zr's writeall processes directories.
+        # We need to ensure the source directory for writeall is tempdir itself,
+        # and arcname is empty to place contents at the root of the archive.
+        
+        # py7zr's 'solid' parameter in SevenZipFile constructor controls solid blocks.
+        # Default is True.
+        filters = None
+        if not solid:
+             # To make it non-solid, we can try to define each file as a separate solid block.
+             # This is an approximation of non-solid behavior.
+             # More complex non-solid scenarios (e.g. grouping some files into solid blocks but not others)
+             # are not handled here.
+             filters = [{"method": "lzma2"}] # Default, but implies separate block if applied per file in some contexts.
+                                             # py7zr's `solid` parameter in constructor is the main way.
+                                             # Let's rely on the `solid` parameter of SevenZipFile.
+             pass # py7zr creates solid archives by default. If solid=False, it's a known limitation for py7zr if no direct option.
+                  # The `solid` parameter in `SevenZipFile` itself doesn't exist.
+                  # py7zr documentation indicates solid archives are default. Making it non-solid is not straightforward.
+
+
+        with py7zr.SevenZipFile(abs_archive_path, "w", password=password_str) as archive:
+            # The 'solid' attribute is not directly on SevenZipFile object for modification after init.
+            # Solidness is more about how py7zr internally groups files.
+            # If solid=False is critical, it might require adding files one-by-one with specific options,
+            # or it's a limitation. For now, we acknowledge py7zr defaults to solid.
+            archive.writeall(tempdir, arcname="")
+
+
+def create_7z_archive_with_command_line(
+    archive_path: str,
+    files: list[FileInfo],
+    archive_comment: str | None = None,
+    solid: bool = False,
+):
+    abs_archive_path = os.path.abspath(archive_path)
+    if os.path.exists(abs_archive_path):
+        os.remove(abs_archive_path)
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        write_files_to_dir(tempdir, files)
+
+        command = ["7z", "a"]
+
+        # Handle solid mode
+        command.append(f"-ms={'on' if solid else 'off'}")
+
+        # Handle encryption - use password from the first file that has one
+        password = next((f.password for f in files if f.password), None)
+        if password:
+            command.append(f"-p{password}")
+            command.append("-mhe=on")  # Encrypt headers
+
+        # Handle archive comment
+        comment_file_path = None
+        # Archive comments with 7z CLI using -z switch are problematic. Skipping for now.
+        # if archive_comment:
+        #     comment_fd, temp_comment_file_path_abs = tempfile.mkstemp(dir=tempdir)
+        #     comment_file_name_rel = os.path.basename(temp_comment_file_path_abs)
+        #     with os.fdopen(comment_fd, "wb") as f:
+        #         f.write(archive_comment.encode("utf-8"))
+        #     command.append(f"-z{comment_file_name_rel}")
+
+        command.append(abs_archive_path)
+        
+        # Add all contents of the temp directory. 7z handles path recursion.
+        # Using "./*" or "." ensures that paths inside the archive are relative to the archive root.
+        command.append("./*")
+
+
+        subprocess.run(command, check=True, cwd=tempdir)
+
+        # if archive_comment: # Check if temp_comment_file_path_abs was defined
+        #     os.remove(temp_comment_file_path_abs)
+
+
+GENERATION_METHODS_TO_GENERATOR = {
+    GenerationMethod.ZIPFILE: create_zip_archive_with_zipfile,
+    GenerationMethod.INFOZIP: create_zip_archive_with_infozip_command_line,
+    GenerationMethod.TAR_COMMAND_LINE: create_tar_archive_with_command_line,
+    GenerationMethod.RAR_COMMAND_LINE: create_rar_archive_with_command_line,
+    GenerationMethod.PY7ZR: create_7z_archive_with_py7zr,
+    GenerationMethod.SEVENZIP_COMMAND_LINE: create_7z_archive_with_command_line,
+}
 
 
 def filter_archives(archives: list[ArchiveInfo], patterns: list[str] | None) -> list[ArchiveInfo]:

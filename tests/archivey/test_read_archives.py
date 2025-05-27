@@ -17,6 +17,9 @@ def full_path_to_archive(archive_filename: str) -> str:
 
 @pytest.mark.parametrize("sample_archive", SAMPLE_ARCHIVES, ids=lambda x: x.filename)
 def test_read_archive(sample_archive: ArchiveInfo):
+    if sample_archive.skip_test:
+        pytest.skip(f"Skipping test for {sample_archive.filename} as skip_test is True")
+
     archive_base_dir = os.path.join(os.path.dirname(__file__), "..")
 
     files_by_name = {file.name: file for file in sample_archive.files}

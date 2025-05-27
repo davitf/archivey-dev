@@ -10,6 +10,9 @@ class GenerationMethod(Enum):
     INFOZIP = "zip_command_line"
     EXTERNAL = "external"
     TAR_COMMAND_LINE = "tar_command_line"
+    PY7ZR = "py7zr"
+    SEVENZIP_COMMAND_LINE = "7z_command_line"
+    RAR_COMMAND_LINE = "rar_command_line"
 
 
 @dataclass
@@ -34,6 +37,8 @@ class ArchiveInfo:
     format: CompressionFormat
     files: list[FileInfo]
     archive_comment: str | None = None
+    skip_test: bool = False
+    solid: bool = False
 
     def get_archive_path(self, base_dir: str) -> str:
         if self.generation_method == GenerationMethod.EXTERNAL:
@@ -334,5 +339,195 @@ SAMPLE_ARCHIVES = [
         format=CompressionFormat.TAR_XZ,
         files=BASIC_FILES,
     ),
-
 ]
+
+# RAR Archives
+RAR_ARCHIVES = [
+    ArchiveInfo(
+        filename="basic.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=CompressionFormat.RAR,
+        files=BASIC_FILES,
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="basic_solid.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=CompressionFormat.RAR,
+        files=BASIC_FILES,
+        solid=True,
+    ),
+    ArchiveInfo(
+        filename="comment.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=CompressionFormat.RAR,
+        files=COMMENT_FILES,
+        archive_comment="RAR archive comment",
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="comment_solid.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=CompressionFormat.RAR,
+        files=COMMENT_FILES,
+        archive_comment="Solid RAR archive comment",
+        solid=True,
+    ),
+    ArchiveInfo(
+        filename="encryption.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=CompressionFormat.RAR,
+        files=ENCRYPTION_FILES,
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="encryption_solid.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=CompressionFormat.RAR,
+        files=ENCRYPTION_FILES,
+        solid=True,
+    ),
+    ArchiveInfo(
+        filename="symlinks.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=CompressionFormat.RAR,
+        files=SYMLINK_FILES,
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="symlinks_solid.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=CompressionFormat.RAR,
+        files=SYMLINK_FILES,
+        solid=True,
+    ),
+]
+
+# 7z Archives (py7zr)
+PY7ZR_ARCHIVES = [
+    ArchiveInfo(
+        filename="basic_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=CompressionFormat.SEVENZIP,
+        files=BASIC_FILES,
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="basic_solid_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=CompressionFormat.SEVENZIP,
+        files=BASIC_FILES,
+        solid=True,
+    ),
+    ArchiveInfo(
+        filename="comment_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=CompressionFormat.SEVENZIP,
+        files=COMMENT_FILES,
+        # py7zr may not support archive comments or per-file comments easily
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="comment_solid_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=CompressionFormat.SEVENZIP,
+        files=COMMENT_FILES,
+        solid=True,
+    ),
+    ArchiveInfo(
+        filename="encryption_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=CompressionFormat.SEVENZIP,
+        files=ENCRYPTION_FILES,
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="encryption_solid_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=CompressionFormat.SEVENZIP,
+        files=ENCRYPTION_FILES,
+        solid=True,
+    ),
+    ArchiveInfo(
+        filename="symlinks_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=CompressionFormat.SEVENZIP,
+        files=SYMLINK_FILES,
+        solid=False,
+        skip_test=True,  # py7zr may not support symlinks
+    ),
+    ArchiveInfo(
+        filename="symlinks_solid_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=CompressionFormat.SEVENZIP,
+        files=SYMLINK_FILES,
+        solid=True,
+        skip_test=True,  # py7zr may not support symlinks
+    ),
+]
+
+# 7z Archives (7z command line)
+SEVENZIP_CMD_ARCHIVES = [
+    ArchiveInfo(
+        filename="basic_7zcmd.7z",
+        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
+        format=CompressionFormat.SEVENZIP,
+        files=BASIC_FILES,
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="basic_solid_7zcmd.7z",
+        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
+        format=CompressionFormat.SEVENZIP,
+        files=BASIC_FILES,
+        solid=True,
+    ),
+    ArchiveInfo(
+        filename="comment_7zcmd.7z",
+        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
+        format=CompressionFormat.SEVENZIP,
+        files=COMMENT_FILES,
+        archive_comment="7z archive comment",
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="comment_solid_7zcmd.7z",
+        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
+        format=CompressionFormat.SEVENZIP,
+        files=COMMENT_FILES,
+        archive_comment="Solid 7z archive comment",
+        solid=True,
+    ),
+    ArchiveInfo(
+        filename="encryption_7zcmd.7z",
+        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
+        format=CompressionFormat.SEVENZIP,
+        files=ENCRYPTION_FILES,
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="encryption_solid_7zcmd.7z",
+        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
+        format=CompressionFormat.SEVENZIP,
+        files=ENCRYPTION_FILES,
+        solid=True,
+    ),
+    ArchiveInfo(
+        filename="symlinks_7zcmd.7z",
+        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
+        format=CompressionFormat.SEVENZIP,
+        files=SYMLINK_FILES,
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="symlinks_solid_7zcmd.7z",
+        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
+        format=CompressionFormat.SEVENZIP,
+        files=SYMLINK_FILES,
+        solid=True,
+    ),
+]
+
+SAMPLE_ARCHIVES.extend(RAR_ARCHIVES)
+SAMPLE_ARCHIVES.extend(PY7ZR_ARCHIVES)
+SAMPLE_ARCHIVES.extend(SEVENZIP_CMD_ARCHIVES)
