@@ -1,4 +1,3 @@
-
 import sys
 
 if sys.version_info >= (3, 11):
@@ -13,6 +12,7 @@ from datetime import datetime
 
 class CompressionFormat(StrEnum):
     """Supported compression formats."""
+
     ZIP = "zip"
     RAR = "rar"
     SEVENZIP = "7z"
@@ -40,6 +40,7 @@ class MemberType(StrEnum):
 @dataclass
 class ArchiveInfo:
     """Detailed information about an archive's format."""
+
     format: str  # Will be CompressionFormat from formats.py
     version: Optional[str] = None  # e.g. "4" for RAR4, "5" for RAR5
     is_solid: bool = False
@@ -50,6 +51,7 @@ class ArchiveInfo:
 @dataclass
 class ArchiveMember:
     """Represents a file within an archive."""
+
     filename: str
     size: int
     mtime: Optional[datetime]
@@ -71,7 +73,14 @@ class ArchiveMember:
         """Returns the date and time as a tuple."""
         if self.mtime is None:
             return None
-        return self.mtime.year, self.mtime.month, self.mtime.day, self.mtime.hour, self.mtime.minute, self.mtime.second
+        return (
+            self.mtime.year,
+            self.mtime.month,
+            self.mtime.day,
+            self.mtime.hour,
+            self.mtime.minute,
+            self.mtime.second,
+        )
 
     @property
     def is_file(self) -> bool:
@@ -80,11 +89,11 @@ class ArchiveMember:
     @property
     def is_dir(self) -> bool:
         return self.type == MemberType.DIR
-    
+
     @property
     def is_link(self) -> bool:
         return self.type == MemberType.LINK
 
     @property
     def is_other(self) -> bool:
-        return self.type == MemberType.OTHER 
+        return self.type == MemberType.OTHER

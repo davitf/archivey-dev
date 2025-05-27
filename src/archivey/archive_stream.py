@@ -278,11 +278,10 @@ class ArchiveStream:
         for member in self._reader.iter_members():
             self.extract(member, path, preserve_ownership, preserve_links)
 
-
     @property
     def comment(self) -> str | None:
         """Get the comment for the archive.
-        
+
         Added for compatibility with zipfile.ZipFile.
         """
         return self._reader.get_archive_info().comment

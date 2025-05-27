@@ -22,6 +22,7 @@ class FileInfo:
     link_target_type: MemberType | None = MemberType.FILE
     compression_method: str | None = None
 
+
 @dataclass
 class ArchiveInfo:
     filename: str
@@ -113,9 +114,7 @@ ENCRYPTION_FILES = [
 ]
 
 SYMLINK_FILES = [
-    FileInfo(
-        name="file1.txt", contents=b"Hello, world!", mtime=_fake_mtime(1)
-    ),
+    FileInfo(name="file1.txt", contents=b"Hello, world!", mtime=_fake_mtime(1)),
     FileInfo(
         name="symlink_to_file1.txt",
         mtime=_fake_mtime(2),
@@ -196,7 +195,6 @@ COMPRESSION_METHOD_FILES_LZMA = COMPRESSION_METHOD_FILES + [
 ]
 
 
-
 SAMPLE_ARCHIVES = [
     ArchiveInfo(
         filename="basic_zipfile.zip",
@@ -212,7 +210,6 @@ SAMPLE_ARCHIVES = [
         files=BASIC_FILES,
         archive_comment="This is a\nmulti-line comment",
     ),
-
     # zipfile does not support writing encrypted files
     ArchiveInfo(
         filename="encryption.zip",
@@ -220,7 +217,6 @@ SAMPLE_ARCHIVES = [
         format=CompressionFormat.ZIP,
         files=ENCRYPTION_FILES,
     ),
-
     # zipfile does not support symlinks
     ArchiveInfo(
         filename="symlinks.zip",
@@ -228,7 +224,6 @@ SAMPLE_ARCHIVES = [
         format=CompressionFormat.ZIP,
         files=SYMLINK_FILES,
     ),
-
     ArchiveInfo(
         filename="encoding_zipfile.zip",
         generation_method=GenerationMethod.ZIPFILE,
@@ -243,7 +238,6 @@ SAMPLE_ARCHIVES = [
         files=ENCODING_FILES,
         archive_comment="Comentário em português 😀",
     ),
-
     # info-zip does not support LZMA
     ArchiveInfo(
         filename="compression_method_zipfile.zip",
@@ -258,4 +252,3 @@ SAMPLE_ARCHIVES = [
         files=COMPRESSION_METHOD_FILES,
     ),
 ]
-

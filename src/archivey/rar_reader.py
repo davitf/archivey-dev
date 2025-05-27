@@ -175,7 +175,9 @@ class CRCMismatchError(ArchiveCorruptedError):
 
 
 class RarSolidMemberFile(io.RawIOBase, IO[bytes]):
-    def __init__(self, member: ArchiveMember, shared_stream: IO[bytes], lock: threading.Lock):
+    def __init__(
+        self, member: ArchiveMember, shared_stream: IO[bytes], lock: threading.Lock
+    ):
         super().__init__()
         self._stream = shared_stream
         self._remaining = member.size
@@ -267,7 +269,7 @@ class RarStreamReader(BaseRarReader):
             )
             if self._proc.stdout is None:
                 raise RuntimeError("Could not open unrar output stream")
-            self._stream = self._proc.stdout # type: ignore
+            self._stream = self._proc.stdout  # type: ignore
         except Exception as e:
             raise ArchiveError(f"Error opening RAR archive {archive_path}: {e}")
 

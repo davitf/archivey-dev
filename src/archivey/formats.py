@@ -2,17 +2,20 @@ import io
 
 from archivey.types import CompressionFormat
 
-def detect_archive_format_by_signature(path_or_file: str | bytes | io.IOBase) -> CompressionFormat:
+
+def detect_archive_format_by_signature(
+    path_or_file: str | bytes | io.IOBase,
+) -> CompressionFormat:
     SIGNATURES = [
-        (b"\x50\x4B\x03\x04", CompressionFormat.ZIP),
-        (b"\x52\x61\x72\x21\x1A\x07\x00", CompressionFormat.RAR),  # RAR4
-        (b"\x52\x61\x72\x21\x1A\x07\x01\x00", CompressionFormat.RAR),  # RAR5
-        (b"\x37\x7A\xBC\xAF\x27\x1C", CompressionFormat.SEVENZIP),
-        (b"\x1F\x8B", CompressionFormat.GZIP),
-        (b"\x42\x5A\x68", CompressionFormat.BZIP2),
-        (b"\xFD\x37\x7A\x58\x5A\x00", CompressionFormat.XZ),
-        (b"\x28\xB5\x2F\xFD", CompressionFormat.ZSTD),
-        (b"\x04\x22\x4D\x18", CompressionFormat.LZ4),
+        (b"\x50\x4b\x03\x04", CompressionFormat.ZIP),
+        (b"\x52\x61\x72\x21\x1a\x07\x00", CompressionFormat.RAR),  # RAR4
+        (b"\x52\x61\x72\x21\x1a\x07\x01\x00", CompressionFormat.RAR),  # RAR5
+        (b"\x37\x7a\xbc\xaf\x27\x1c", CompressionFormat.SEVENZIP),
+        (b"\x1f\x8b", CompressionFormat.GZIP),
+        (b"\x42\x5a\x68", CompressionFormat.BZIP2),
+        (b"\xfd\x37\x7a\x58\x5a\x00", CompressionFormat.XZ),
+        (b"\x28\xb5\x2f\xfd", CompressionFormat.ZSTD),
+        (b"\x04\x22\x4d\x18", CompressionFormat.LZ4),
     ]
 
     # Support both file paths and file-like objects
@@ -45,7 +48,8 @@ def detect_archive_format_by_signature(path_or_file: str | bytes | io.IOBase) ->
             return CompressionFormat.TAR
         f.seek(pos)
 
-    return CompressionFormat.UNKNOWN 
+    return CompressionFormat.UNKNOWN
+
 
 _EXTENSION_TO_FORMAT = {
     ".tar.gz": CompressionFormat.TAR_GZ,
@@ -66,11 +70,11 @@ _EXTENSION_TO_FORMAT = {
     ".tar": CompressionFormat.TAR,
 }
 
+
 def detect_archive_format_by_filename(filename: str) -> CompressionFormat:
     """Detect the compression format of an archive based on its filename."""
     filename_lower = filename.lower()
-    for (ext, format) in _EXTENSION_TO_FORMAT.items():
+    for ext, format in _EXTENSION_TO_FORMAT.items():
         if filename_lower.endswith(ext):
             return format
     return CompressionFormat.UNKNOWN
-

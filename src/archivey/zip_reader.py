@@ -15,7 +15,7 @@ from archivey.types import ArchiveInfo, ArchiveMember, MemberType
 from archivey.utils import decode_bytes_with_fallback
 
 # TODO: check if this is correct
-_ZIP_ENCODINGS = ['utf-8', 'cp437', 'cp1252', 'latin-1']
+_ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]
 
 
 def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
@@ -91,7 +91,11 @@ class ZipReader(ArchiveReader):
             self._format_info = ArchiveInfo(
                 format=CompressionFormat.ZIP,
                 is_solid=False,  # ZIP archives are never solid
-                comment=decode_bytes_with_fallback(self._archive.comment, _ZIP_ENCODINGS) if self._archive.comment else None,
+                comment=decode_bytes_with_fallback(
+                    self._archive.comment, _ZIP_ENCODINGS
+                )
+                if self._archive.comment
+                else None,
                 extra={
                     "is_encrypted": any(
                         info.flag_bits & 0x1 for info in self._archive.infolist()
@@ -152,7 +156,9 @@ class ZipReader(ArchiveReader):
                     else MemberType.FILE,
                     crc32=info.CRC if hasattr(info, "CRC") else None,
                     compression_method=compression_method,
-                    comment=decode_bytes_with_fallback(info.comment, _ZIP_ENCODINGS) if info.comment else None,
+                    comment=decode_bytes_with_fallback(info.comment, _ZIP_ENCODINGS)
+                    if info.comment
+                    else None,
                     encrypted=bool(info.flag_bits & 0x1),
                     extra={
                         "compress_type": info.compress_type,

@@ -16,6 +16,7 @@ from archivey.formats import (
 import argparse
 from tqdm import tqdm
 
+
 def get_member_checksums(member_file: IO[bytes]) -> Tuple[str, str]:
     """
     Compute both CRC32 and SHA256 checksums for a file within an archive.
@@ -29,7 +30,6 @@ def get_member_checksums(member_file: IO[bytes]) -> Tuple[str, str]:
         crc32_value = zlib.crc32(block, crc32_value)
         sha256.update(block)
     return format(crc32_value & 0xFFFFFFFF, "08x"), sha256.hexdigest()
-
 
 
 parser = argparse.ArgumentParser(
@@ -47,9 +47,7 @@ parser.add_argument(
     help="Use the RAR stream reader for RAR files",
 )
 parser.add_argument("--stream", action="store_true", help="Stream the archive")
-parser.add_argument(
-    "--info", action="store_true", help="Print info about the archive"
-)
+parser.add_argument("--info", action="store_true", help="Print info about the archive")
 
 args = parser.parse_args()
 

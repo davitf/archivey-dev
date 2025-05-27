@@ -9,8 +9,14 @@ from datetime import datetime
 import struct
 from typing import Iterator, List
 from archivey.base import (
-    ArchiveEOFError, ArchiveInfo, ArchiveReader, ArchiveMember, ArchiveError,
-    ArchiveCorruptedError, ArchiveFormatError, MemberType
+    ArchiveEOFError,
+    ArchiveInfo,
+    ArchiveReader,
+    ArchiveMember,
+    ArchiveError,
+    ArchiveCorruptedError,
+    ArchiveFormatError,
+    MemberType,
 )
 from archivey.formats import CompressionFormat
 
@@ -19,10 +25,11 @@ def _read_null_terminated_bytes(f: io.BufferedReader) -> bytes:
     str_bytes = bytearray()
     while True:
         b = f.read(1)
-        if not b or b == b'\x00':
+        if not b or b == b"\x00":
             break
         str_bytes.extend(b)
     return str_bytes
+
 
 def read_gzip_metadata(path: str, member: ArchiveMember):
     """
@@ -42,7 +49,7 @@ def read_gzip_metadata(path: str, member: ArchiveMember):
     with open(path, "rb") as f:
         # Read the fixed 10-byte GZIP header
         header = f.read(10)
-        if len(header) != 10 or header[:2] != b'\x1f\x8b':
+        if len(header) != 10 or header[:2] != b"\x1f\x8b":
             raise ArchiveFormatError("Not a valid GZIP file")
 
         # Parse header fields
@@ -51,26 +58,28 @@ def read_gzip_metadata(path: str, member: ArchiveMember):
         member.mtime = datetime.fromtimestamp(mtime_timestamp)
 
         # Add compression method and level
-        extra_fields['compress_type'] = cm  # 8 = deflate, consistent with ZIP
-        extra_fields['compress_level'] = xfl  # Compression level (0-9)
+        extra_fields["compress_type"] = cm  # 8 = deflate, consistent with ZIP
+        extra_fields["compress_level"] = xfl  # Compression level (0-9)
 
         # Add operating system
-        extra_fields['create_system'] = os  # 0 = FAT, 3 = Unix, etc.
+        extra_fields["create_system"] = os  # 0 = FAT, 3 = Unix, etc.
 
         # Handle optional fields
         if flg & 0x04:  # FEXTRA
             # The extra field contains a 2-byte length and then the data
             xlen = struct.unpack("<H", f.read(2))[0]
-            extra_fields['extra'] = f.read(xlen)  # Store raw extra field data
+            extra_fields["extra"] = f.read(xlen)  # Store raw extra field data
 
         if flg & 0x08:  # FNAME
             # The filename is a null-terminated string
             name_bytes = _read_null_terminated_bytes(f)
-            extra_fields['original_filename'] = name_bytes.decode("utf-8", errors="replace")
+            extra_fields["original_filename"] = name_bytes.decode(
+                "utf-8", errors="replace"
+            )
 
         if flg & 0x10:  # FCOMMENT
             comment_bytes = _read_null_terminated_bytes(f)
-            extra_fields['comment'] = comment_bytes.decode("utf-8", errors="replace")
+            extra_fields["comment"] = comment_bytes.decode("utf-8", errors="replace")
 
         if flg & 0x02:  # FHCRC
             f.read(2)  # Skip CRC16
@@ -89,10 +98,10 @@ def read_gzip_metadata(path: str, member: ArchiveMember):
 
 class BZ2Wrapper(io.IOBase):
     """Wrapper for bz2 file objects that converts OSError to ArchiveCorruptedError."""
-    
+
     def __init__(self, fileobj):
         self._fileobj = fileobj
-        
+
     def read(self, size=-1):
         try:
             return self._fileobj.read(size)
@@ -100,41 +109,41 @@ class BZ2Wrapper(io.IOBase):
             raise ArchiveCorruptedError("BZ2 file is corrupted") from e
         except EOFError as e:
             raise ArchiveEOFError("BZ2 file is truncated") from e
-            
+
     def close(self):
         self._fileobj.close()
 
 
 class CompressedReader(ArchiveReader):
     """Reader for raw compressed files (gz, bz2, xz)."""
-    
+
     def __init__(self, archive_path: str, **kwargs):
         """Initialize the reader.
-        
+
         Args:
             archive_path: Path to the compressed file
             **kwargs: Additional options (ignored)
         """
         self.archive_path = archive_path
         self.ext = os.path.splitext(archive_path)[1].lower()
-        
+
         # Get the base name without compression extension
         self.member_name = os.path.splitext(os.path.basename(archive_path))[0]
-        
+
         # Open the appropriate decompressor based on file extension
-        if self.ext == '.gz':
+        if self.ext == ".gz":
             self.format = CompressionFormat.GZIP
             self.decompressor = gzip.open
-        elif self.ext == '.bz2':
+        elif self.ext == ".bz2":
             self.format = CompressionFormat.BZIP2
             self.decompressor = bz2.open
-        elif self.ext == '.xz':
+        elif self.ext == ".xz":
             self.format = CompressionFormat.XZ
             self.decompressor = lzma.open
-        elif self.ext == '.zstd':
+        elif self.ext == ".zstd":
             self.format = CompressionFormat.ZSTD
             self.decompressor = zstd.open
-        elif self.ext == '.lz4':
+        elif self.ext == ".lz4":
             self.format = CompressionFormat.LZ4
             self.decompressor = lz4.open
         else:
@@ -146,7 +155,7 @@ class CompressedReader(ArchiveReader):
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
             filename=self.member_name,
-            size=-1, # This will be updated when we read the file
+            size=-1,  # This will be updated when we read the file
             mtime=self.mtime,
             type=MemberType.FILE,
             compression_method=self.format.value,
@@ -154,7 +163,7 @@ class CompressedReader(ArchiveReader):
             extra=None,
         )
 
-        if self.ext == '.gz':
+        if self.ext == ".gz":
             read_gzip_metadata(archive_path, self.member)
 
     def close(self) -> None:
@@ -173,14 +182,14 @@ class CompressedReader(ArchiveReader):
         return ArchiveInfo(
             format=self.format.value,
             is_solid=True,  # Single-file compressed formats are effectively solid
-            extra=None
+            extra=None,
         )
 
     def open(self, member: ArchiveMember) -> io.IOBase:
         if member != self.member:
             raise ValueError("Requested member is not part of this archive")
         fileobj = self.decompressor(self.archive_path)
-        if self.ext == '.bz2':
+        if self.ext == ".bz2":
             return BZ2Wrapper(fileobj)
         return fileobj
 
