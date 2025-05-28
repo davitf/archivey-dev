@@ -7,7 +7,11 @@ import zlib
 from datetime import datetime
 from typing import List, Iterator, Optional, IO, Iterable, Any
 from archivey.base_reader import ArchiveReader
-from archivey.exceptions import ArchiveCorruptedError, ArchiveError
+from archivey.exceptions import (
+    ArchiveCorruptedError,
+    ArchiveEncryptedError,
+    ArchiveError,
+)
 from archivey.formats import ArchiveFormat
 from archivey.types import ArchiveInfo, ArchiveMember, MemberType
 from archivey.io_wrappers import ExceptionTranslatingIO
@@ -34,11 +38,8 @@ class BaseRarReader(ArchiveReader):
 
         try:
             self._archive = rarfile.RarFile(archive_path, "r")
-            self._is_solid = (
-                bool(self._archive.solid) if hasattr(self._archive, "solid") else False
-            )
-            # if self._archive.needs_password():
-            #     raise ArchiveEncryptedError(f"RAR archive {archive_path} is encrypted")
+            if pwd:
+                self._archive.setpassword(pwd)
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(f"Invalid RAR archive {archive_path}: {e}")
         except rarfile.NotRarFile as e:
@@ -47,6 +48,10 @@ class BaseRarReader(ArchiveReader):
             raise ArchiveError(
                 f"Need first volume of multi-volume RAR archive {archive_path}: {e}"
             )
+        except rarfile.RarWrongPassword as e:
+            raise ArchiveEncryptedError(
+                f"Wrong password specified for {archive_path}"
+            ) from e
 
     def close(self):
         if self._archive:
@@ -139,7 +144,7 @@ class BaseRarReader(ArchiveReader):
             self._format_info = ArchiveInfo(
                 format=ArchiveFormat.RAR,
                 version=version,
-                is_solid=self._is_solid,
+                is_solid=self._archive.is_solid(),
                 comment=self._archive.comment,
                 extra={
                     # "is_multivolume": self._archive.is_multivolume(),

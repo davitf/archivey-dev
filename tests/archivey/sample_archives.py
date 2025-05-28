@@ -437,6 +437,22 @@ RAR_ARCHIVES = [
         solid=True,
     ),
     ArchiveInfo(
+        filename="encrypted_header.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=ArchiveFormat.RAR,
+        files=BASIC_FILES,
+        solid=False,
+        header_password="header_password",
+    ),
+    ArchiveInfo(
+        filename="encrypted_header_solid.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=ArchiveFormat.RAR,
+        files=BASIC_FILES,
+        solid=True,
+        header_password="header_password",
+    ),
+    ArchiveInfo(
         filename="symlinks.rar",
         generation_method=GenerationMethod.RAR_COMMAND_LINE,
         format=ArchiveFormat.RAR,
@@ -449,22 +465,6 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=SYMLINK_FILES,
         solid=True,
-    ),
-    ArchiveInfo(
-        filename="header_password.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=BASIC_FILES,
-        solid=False,
-        header_password="password",
-    ),
-    ArchiveInfo(
-        filename="header_password_solid.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=BASIC_FILES,
-        solid=True,
-        header_password="password",
     ),
 ]
 
