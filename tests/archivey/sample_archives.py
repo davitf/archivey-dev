@@ -120,7 +120,7 @@ COMMENT_FILES = [
     ),
 ]
 
-ENCRYPTION_FILES = [
+ENCRYPTION_SEVERAL_PASSWORDS_FILES = [
     FileInfo(
         name="plain.txt",
         mtime=_fake_mtime(1),
@@ -168,6 +168,14 @@ ENCRYPTION_SINGLE_PASSWORD_FILES = [
         mtime=_fake_mtime(2),
         contents=b"This is also secret",
         password="password",
+    ),
+]
+
+ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES = ENCRYPTION_SINGLE_PASSWORD_FILES + [
+    FileInfo(
+        name="not_secret.txt",
+        mtime=_fake_mtime(3),
+        contents=b"This is not secret",
     ),
 ]
 
@@ -307,7 +315,13 @@ ZIP_ARCHIVES = [
         filename="encryption.zip",
         generation_method=GenerationMethod.INFOZIP,
         format=ArchiveFormat.ZIP,
-        files=ENCRYPTION_FILES,
+        files=ENCRYPTION_SINGLE_PASSWORD_FILES,
+    ),
+    ArchiveInfo(
+        filename="encryption_several_passwords.zip",
+        generation_method=GenerationMethod.INFOZIP,
+        format=ArchiveFormat.ZIP,
+        files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
     ),
     # zipfile does not support symlinks
     ArchiveInfo(
@@ -400,7 +414,6 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=BASIC_FILES,
         solid=False,
-        skip_test=True,
     ),
     ArchiveInfo(
         filename="basic_solid.rar",
@@ -408,7 +421,6 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=BASIC_FILES,
         solid=True,
-        skip_test=True,
     ),
     ArchiveInfo(
         filename="comment.rar",
@@ -417,7 +429,6 @@ RAR_ARCHIVES = [
         files=COMMENT_FILES,
         archive_comment="RAR archive comment",
         solid=False,
-        skip_test=True,
     ),
     ArchiveInfo(
         filename="comment_solid.rar",
@@ -426,15 +437,20 @@ RAR_ARCHIVES = [
         files=COMMENT_FILES,
         archive_comment="Solid RAR archive comment",
         solid=True,
-        skip_test=True,
     ),
     ArchiveInfo(
         filename="encryption.rar",
         generation_method=GenerationMethod.RAR_COMMAND_LINE,
         format=ArchiveFormat.RAR,
-        files=ENCRYPTION_FILES,
+        files=ENCRYPTION_SINGLE_PASSWORD_FILES,
         solid=False,
-        skip_test=True,
+    ),
+    ArchiveInfo(
+        filename="encryption_with_plain.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=ArchiveFormat.RAR,
+        files=ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES,
+        solid=False,
     ),
     ArchiveInfo(
         filename="encryption_solid.rar",
@@ -442,7 +458,13 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=ENCRYPTION_SINGLE_PASSWORD_FILES,
         solid=True,
-        skip_test=True,
+    ),
+    ArchiveInfo(
+        filename="encryption_several_passwords.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=ArchiveFormat.RAR,
+        files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
+        solid=False,
     ),
     ArchiveInfo(
         filename="encrypted_header.rar",
@@ -451,7 +473,6 @@ RAR_ARCHIVES = [
         files=BASIC_FILES,
         solid=False,
         header_password="header_password",
-        skip_test=True,
     ),
     ArchiveInfo(
         filename="encrypted_header_solid.rar",
@@ -460,7 +481,6 @@ RAR_ARCHIVES = [
         files=BASIC_FILES,
         solid=True,
         header_password="header_password",
-        skip_test=True,
     ),
     ArchiveInfo(
         filename="symlinks.rar",
@@ -468,7 +488,6 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=SYMLINK_FILES,
         solid=False,
-        skip_test=True,
     ),
     ArchiveInfo(
         filename="symlinks_solid.rar",
@@ -476,7 +495,6 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=SYMLINK_FILES,
         solid=True,
-        skip_test=True,
     ),
 ]
 
@@ -500,14 +518,28 @@ SEVENZIP_PY7ZR_ARCHIVES = [
         filename="encryption_py7zr.7z",
         generation_method=GenerationMethod.PY7ZR,
         format=ArchiveFormat.SEVENZIP,
-        files=ENCRYPTION_FILES,
+        files=ENCRYPTION_SINGLE_PASSWORD_FILES,
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="encryption_with_plain_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=ArchiveFormat.SEVENZIP,
+        files=ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES,
+        solid=False,
+    ),
+    ArchiveInfo(
+        filename="encryption_several_passwords_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=ArchiveFormat.SEVENZIP,
+        files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
         solid=False,
     ),
     ArchiveInfo(
         filename="encryption_solid_py7zr.7z",
         generation_method=GenerationMethod.PY7ZR,
         format=ArchiveFormat.SEVENZIP,
-        files=ENCRYPTION_FILES,
+        files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
         solid=True,
         skip_test=True,
     ),
@@ -561,10 +593,12 @@ SEVENZIP_CMD_ARCHIVES = [
         files=archive_info.files,
         solid=archive_info.solid,
         header_password=archive_info.header_password,
-        skip_test=archive_info.skip_test or archive_info.filename in (
-            "symlinks_py7zr.7z", # already skipped
-            "symlinks_solid_py7zr.7z" # already skipped
-        ) # Propagate skip_test for symlinks
+        skip_test=archive_info.skip_test
+        or archive_info.filename
+        in (
+            "symlinks_py7zr.7z",  # already skipped
+            "symlinks_solid_py7zr.7z",  # already skipped
+        ),  # Propagate skip_test for symlinks
     )
     for archive_info in SEVENZIP_PY7ZR_ARCHIVES
 ]
