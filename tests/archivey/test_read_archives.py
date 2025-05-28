@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import logging
 import os
 import pytest
@@ -5,6 +6,7 @@ import pytest
 from archivey.archive_stream import ArchiveStream
 from archivey.types import MemberType
 from sample_archives import SAMPLE_ARCHIVES, ArchiveInfo, GenerationMethod
+from archivey.types import ArchiveFormat
 
 
 def normalize_newlines(s: str | None) -> str | None:
@@ -15,8 +17,23 @@ def full_path_to_archive(archive_filename: str) -> str:
     return os.path.join(os.path.dirname(__file__), "../test_archives", archive_filename)
 
 
-@pytest.mark.parametrize("sample_archive", SAMPLE_ARCHIVES, ids=lambda x: x.filename)
-def test_read_archive(sample_archive: ArchiveInfo):
+@dataclass
+class ArchiveFormatFeatures:
+    dir_entries: bool = True
+    file_comments: bool = True
+
+
+FORMAT_FEATURES = {
+    ArchiveFormat.RAR: ArchiveFormatFeatures(dir_entries=False, file_comments=False),
+    ArchiveFormat.SEVENZIP: ArchiveFormatFeatures(
+        dir_entries=False, file_comments=False
+    ),
+}
+
+DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
+
+
+def check_read_archive(sample_archive: ArchiveInfo, features: ArchiveFormatFeatures):
     if sample_archive.skip_test:
         pytest.skip(f"Skipping test for {sample_archive.filename} as skip_test is True")
 
@@ -27,13 +44,16 @@ def test_read_archive(sample_archive: ArchiveInfo):
         sample_archive.generation_method == GenerationMethod.ZIPFILE
     )
 
-    with ArchiveStream(sample_archive.get_archive_path(archive_base_dir)) as archive:
+    with ArchiveStream(
+        sample_archive.get_archive_path(archive_base_dir),
+        pwd=sample_archive.header_password,
+    ) as archive:
         assert archive.get_format() == sample_archive.format
         format_info = archive.get_archive_info()
         assert normalize_newlines(format_info.comment) == normalize_newlines(
             sample_archive.archive_comment
         )
-        member_names: list[str] = []
+        actual_filenames: list[str] = []
 
         for member in archive.info_iter():
             sample_file = files_by_name.get(member.filename, None)
@@ -48,13 +68,26 @@ def test_read_archive(sample_archive: ArchiveInfo):
                         f"Archive {sample_archive.filename} contains unexpected file {member.filename}"
                     )
 
-            member_names.append(member.filename)
+            actual_filenames.append(member.filename)
 
             if sample_file.compression_method is not None:
                 assert member.compression_method == sample_file.compression_method
 
-            assert member.comment == sample_file.comment
+            if features.file_comments:
+                assert member.comment == sample_file.comment
+            else:
+                assert member.comment is None
+
             assert member.mtime is not None
+            if member.is_file:
+                assert member.size == len(sample_file.contents or b"")
+
+            assert member.encrypted == (
+                sample_file.password is not None
+                or (member.is_file and sample_archive.header_password is not None)
+            ), (
+                f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
+            )
 
             if allow_timestamp_rounding_error:
                 assert (
@@ -67,16 +100,30 @@ def test_read_archive(sample_archive: ArchiveInfo):
                     f"Timestamp mismatch for {member.filename}: {member.mtime} != {sample_file.mtime}"
                 )
 
-            assert member.encrypted == (sample_file.password is not None)
-            password = (
-                (sample_file.password or "").encode("utf-8")
-                if member.encrypted
-                else None
-            )
-
             if sample_file.type == MemberType.FILE:
-                with archive.open(member, pwd=password) as f:
+                with archive.open(
+                    member,
+                    pwd=sample_file.password
+                    if sample_archive.header_password is None
+                    else None,
+                ) as f:
                     contents = f.read()
                     assert contents == sample_file.contents
 
-        assert set(member_names) == set(files_by_name.keys())
+        expected_filenames = set(
+            file.name
+            for file in sample_archive.files
+            if features.dir_entries or file.type != MemberType.DIR
+        )
+
+        missing_files = expected_filenames - set(actual_filenames)
+        extra_files = set(actual_filenames) - expected_filenames
+
+        assert not missing_files, f"Missing files: {missing_files}"
+        assert not extra_files, f"Extra files: {extra_files}"
+
+
+@pytest.mark.parametrize("sample_archive", SAMPLE_ARCHIVES, ids=lambda x: x.filename)
+def test_read_archive(sample_archive: ArchiveInfo):
+    features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
+    check_read_archive(sample_archive, features)

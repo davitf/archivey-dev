@@ -38,5 +38,8 @@ dev = [
 testpaths = ["tests"]
 
 [tool.hatch.envs.default.scripts]
-lint = "ruff check --fix . && npx pyright ."
+lint = "ruff check --fix . && ruff format . && npx pyright ."
 test = "pytest"
+
+[tool.ruff]
+target-version = "py310"

@@ -1,4 +1,5 @@
 import io
+from archivey.utils import bytes_to_str
 import rarfile
 import subprocess
 import threading
@@ -7,8 +8,9 @@ from datetime import datetime
 from typing import List, Iterator, Optional, IO, Iterable, Any
 from archivey.base_reader import ArchiveReader
 from archivey.exceptions import ArchiveCorruptedError, ArchiveError
-from archivey.formats import CompressionFormat
+from archivey.formats import ArchiveFormat
 from archivey.types import ArchiveInfo, ArchiveMember, MemberType
+from archivey.io_wrappers import ExceptionTranslatingIO
 
 
 _RAR_COMPRESSION_METHODS = {
@@ -24,10 +26,11 @@ _RAR_COMPRESSION_METHODS = {
 class BaseRarReader(ArchiveReader):
     """Base class for RAR archive readers."""
 
-    def __init__(self, archive_path: str):
+    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
         self.archive_path = archive_path
         self._members: Optional[list[ArchiveMember]] = None
         self._format_info: Optional[ArchiveInfo] = None
+        self._pwd = pwd
 
         try:
             self._archive = rarfile.RarFile(archive_path, "r")
@@ -106,13 +109,13 @@ class BaseRarReader(ArchiveReader):
     def iter_members(self) -> Iterator[ArchiveMember]:
         return iter(self.get_members())
 
-    def get_format(self) -> CompressionFormat:
+    def get_format(self) -> ArchiveFormat:
         """Get the compression format of the archive.
 
         Returns:
-            CompressionFormat: Always returns CompressionFormat.RAR
+            ArchiveFormat: Always returns ArchiveFormat.RAR
         """
-        return CompressionFormat.RAR
+        return ArchiveFormat.RAR
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -134,15 +137,13 @@ class BaseRarReader(ArchiveReader):
                 )
 
             self._format_info = ArchiveInfo(
-                format=CompressionFormat.RAR,
+                format=ArchiveFormat.RAR,
                 version=version,
                 is_solid=self._is_solid,
+                comment=self._archive.comment,
                 extra={
                     # "is_multivolume": self._archive.is_multivolume(),
                     "needs_password": self._archive.needs_password(),
-                    "comment": self._archive.comment
-                    if hasattr(self._archive, "comment")
-                    else None,
                 },
             )
 
@@ -152,15 +153,26 @@ class BaseRarReader(ArchiveReader):
 class RarReader(BaseRarReader):
     """Reader for RAR archives using rarfile."""
 
-    def __init__(self, archive_path: str):
-        super().__init__(archive_path)
+    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
+        super().__init__(archive_path, pwd=pwd)
 
-    def open(self, member: ArchiveMember) -> IO[bytes]:
+    def _exception_translator(self, e: Exception) -> Optional[Exception]:
+        if isinstance(e, rarfile.BadRarFile):
+            return ArchiveCorruptedError(f"Error reading member {self.archive_path}")
+        return None
+
+    def open(
+        self, member: ArchiveMember, *, pwd: Optional[str | bytes] = None
+    ) -> IO[bytes]:
         if self._archive is None:
-            raise ArchiveError("Archive is closed")
+            raise ValueError("Archive is closed")
 
         try:
-            return self._archive.open(member.filename)
+            # Apparently pwd can be either bytes or str
+            inner = self._archive.open(
+                member.filename, pwd=bytes_to_str(pwd or self._pwd)
+            )
+            return ExceptionTranslatingIO(inner, self._exception_translator)
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(
                 f"Error reading member {member.filename}"
@@ -252,8 +264,11 @@ class RarSolidMemberFile(io.RawIOBase, IO[bytes]):
 class RarStreamReader(BaseRarReader):
     """Reader for RAR archives using the solid stream reader."""
 
-    def __init__(self, archive_path: str):
+    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
         super().__init__(archive_path)
+        if pwd is not None:
+            raise NotImplementedError("RarStreamReader does not support passwords yet")
+
         self._proc = None
         self._stream: IO[bytes]
         self._lock = threading.Lock()

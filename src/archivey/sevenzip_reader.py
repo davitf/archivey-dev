@@ -1,36 +1,63 @@
 import io
+import logging
+import lzma
+from archivey.base_reader import ArchiveReader
+from archivey.utils import bytes_to_str
 import py7zr
-from typing import List, Iterator
-from archivey.base import (
-    ArchiveReader,
+import py7zr.helpers
+import py7zr.exceptions
+import py7zr.compressor
+
+from py7zr.py7zr import ArchiveFile
+
+from typing import List, Iterator, cast
+from archivey.types import (
     ArchiveMember,
-    ArchiveEncryptedError,
-    ArchiveCorruptedError,
     ArchiveInfo,
     MemberType,
 )
-from archivey.formats import CompressionFormat
+from archivey.formats import ArchiveFormat
+from archivey.exceptions import ArchiveCorruptedError, ArchiveEncryptedError
+
+logger = logging.getLogger(__name__)
 
 
 class SevenZipReader(ArchiveReader):
     """Reader for 7-Zip archives."""
 
-    def __init__(self, archive_path: str):
+    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
         self.archive_path = archive_path
         self._members = None
         self._format_info = None
         try:
-            self._archive = py7zr.SevenZipFile(archive_path, "r")
-            if self._archive.password_protected:
-                raise ArchiveEncryptedError(
-                    f"7-Zip archive {archive_path} is encrypted"
-                )
+            self._archive = py7zr.SevenZipFile(
+                archive_path, "r", password=bytes_to_str(pwd)
+            )
+
         except py7zr.Bad7zFile as e:
             raise ArchiveCorruptedError(f"Invalid 7-Zip archive {archive_path}") from e
         except py7zr.PasswordRequired as e:
             raise ArchiveEncryptedError(
                 f"7-Zip archive {archive_path} is encrypted"
             ) from e
+        except TypeError as e:
+            if "Unknown field" in str(e):
+                raise ArchiveCorruptedError(
+                    f"Corrupted header data or wrong password for {archive_path}"
+                ) from e
+            else:
+                raise
+        except EOFError as e:
+            raise ArchiveCorruptedError(f"Invalid 7-Zip archive {archive_path}") from e
+        except lzma.LZMAError as e:
+            if "Corrupt input data" in str(e) and pwd is not None:
+                raise ArchiveEncryptedError(
+                    f"Corrupted header data or wrong password for {archive_path}"
+                ) from e
+            else:
+                raise ArchiveCorruptedError(
+                    f"Invalid 7-Zip archive {archive_path}"
+                ) from e
 
     def close(self) -> None:
         """Close the archive and release any resources."""
@@ -39,7 +66,18 @@ class SevenZipReader(ArchiveReader):
             self._archive = None
             self._members = None
 
+    def _is_member_encrypted(self, file: ArchiveFile) -> bool:
+        # This information is not directly exposed by py7zr, so we need to use an
+        # internal function to infer it.
+        if file.folder is None:
+            return False
+
+        return py7zr.compressor.SupportedMethods.needs_password(file.folder.coders)
+
     def get_members(self) -> List[ArchiveMember]:
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
         if self._members is None:
             self._members = []
 
@@ -48,8 +86,12 @@ class SevenZipReader(ArchiveReader):
             for file in self._archive.files:
                 member = ArchiveMember(
                     filename=file.filename,
-                    size=file.uncompressed,
-                    mtime=py7zr.helpers.filetime_to_dt(file.lastwritetime)
+                    # The uncompressed field is wrongly typed in py7zr as list[int].
+                    # It's actually an int.
+                    size=file.uncompressed,  # type: ignore
+                    mtime=py7zr.helpers.filetime_to_dt(file.lastwritetime).replace(
+                        tzinfo=None
+                    )
                     if file.lastwritetime
                     else None,
                     type=(
@@ -63,42 +105,69 @@ class SevenZipReader(ArchiveReader):
                     ),
                     crc32=file.crc32,
                     compression_method=None,  # Not exposed by py7zr
-                    encrypted=False,  # If encrypted, __init__ will raise an exception
+                    encrypted=self._is_member_encrypted(file),
                     raw_info=file,
                 )
+
                 if member.is_link:
                     links_to_resolve[member.filename] = member
                 self._members.append(member)
 
             if links_to_resolve:
                 self._archive.reset()
+                # Wrong type in py7zr: read() actually always returns a dict.
                 files = self._archive.read(list(links_to_resolve.keys()))
-                for filename, file in files.items():
+                for filename, file in files.items():  # type: ignore
                     links_to_resolve[filename].link_target = file.read().decode("utf-8")
 
         return self._members
 
-    def open(self, member: ArchiveMember) -> io.IOBase:
+    def open(self, member: ArchiveMember, *, pwd: str | None = None) -> io.IOBase:
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
         self._archive.reset()  # Needed after each read() call
 
         # TODO: can we pass all files to read() at once and return the IO objects for each file?
         # Will it decompress all files at once, or only when each IO object is read?
 
         try:
-            return self._archive.read([member.filename])[member.filename]
+            # Hack: py7zr only supports setting a password when creating the
+            # SevenZipFile object, not when reaading a specific file. When uncompressing
+            # a file, the password is read from the file's folder, so we can set it
+            # there directly.
+            file_info = cast(ArchiveFile, member.raw_info)
+            if pwd is not None and file_info.folder is not None:
+                previous_password = file_info.folder.password
+                file_info.folder.password = bytes_to_str(pwd)
+
+            # Wrong type in py7zr: read() actually always returns a dict.
+            return self._archive.read([member.filename])[member.filename]  # type: ignore
         except py7zr.exceptions.ArchiveError as e:
             raise ArchiveCorruptedError(f"Error reading member {member.filename}: {e}")
+        except py7zr.PasswordRequired as e:
+            raise ArchiveEncryptedError(
+                f"Password required to read member {member.filename}"
+            ) from e
+        except lzma.LZMAError as e:
+            raise ArchiveCorruptedError(
+                f"Error reading member {member.filename}: {e}"
+            ) from e
+        finally:
+            # Restore the folder to its previous state, to avoid side effects.
+            if pwd is not None and file_info.folder is not None:
+                file_info.folder.password = previous_password
 
     def iter_members(self) -> Iterator[ArchiveMember]:
         return iter(self.get_members())
 
-    def get_format(self) -> CompressionFormat:
+    def get_format(self) -> ArchiveFormat:
         """Get the compression format of the archive.
 
         Returns:
-            CompressionFormat: Always returns CompressionFormat.SEVENZIP for SevenZipReader
+            ArchiveFormat: Always returns ArchiveFormat.SEVENZIP for SevenZipReader
         """
-        return CompressionFormat.SEVENZIP
+        return ArchiveFormat.SEVENZIP
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -106,30 +175,17 @@ class SevenZipReader(ArchiveReader):
         Returns:
             ArchiveInfo: Detailed format information
         """
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
+        sevenzip_info = self._archive.archiveinfo()
+
         if self._format_info is None:
             self._format_info = ArchiveInfo(
-                format=CompressionFormat.SEVENZIP,
-                is_solid=self.is_solid(),
+                format=ArchiveFormat.SEVENZIP,
+                is_solid=sevenzip_info.solid,
                 extra={
                     "is_encrypted": self._archive.password_protected,
-                    "header_compressed": self._archive.header_compressed
-                    if hasattr(self._archive, "header_compressed")
-                    else None,
-                    "header_crc": self._archive.header_crc
-                    if hasattr(self._archive, "header_crc")
-                    else None,
-                    "version": self._archive.version
-                    if hasattr(self._archive, "version")
-                    else None,
                 },
             )
         return self._format_info
-
-    def is_solid(self) -> bool:
-        """Check if the archive is solid (all files compressed together).
-
-        Returns:
-            bool: True if the archive is solid, False otherwise
-        """
-        # 7-Zip archives are solid if they have the solid flag set
-        return bool(self._archive.solid) if hasattr(self._archive, "solid") else False

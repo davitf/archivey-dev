@@ -22,3 +22,17 @@ def decode_bytes_with_fallback(data: bytes | None, encodings: list[str]) -> str 
 
     logging.warning(f"Failed to decode {data!r}, falling back to utf-8")
     return data.decode("utf-8", errors="replace")
+
+
+def str_to_bytes(s: str | bytes | None) -> bytes | None:
+    if s is None or isinstance(s, bytes):
+        return s
+    assert isinstance(s, str), f"Expected str, got {type(s)}"
+    return s.encode("utf-8")
+
+
+def bytes_to_str(b: str | bytes | None) -> str | None:
+    if b is None or isinstance(b, str):
+        return b
+    assert isinstance(b, bytes), f"Expected bytes, got {type(b)}"
+    return b.decode("utf-8")

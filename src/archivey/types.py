@@ -10,7 +10,7 @@ from typing import Optional, Any, Tuple
 from datetime import datetime
 
 
-class CompressionFormat(StrEnum):
+class ArchiveFormat(StrEnum):
     """Supported compression formats."""
 
     ZIP = "zip"
@@ -41,7 +41,7 @@ class MemberType(StrEnum):
 class ArchiveInfo:
     """Detailed information about an archive's format."""
 
-    format: str  # Will be CompressionFormat from formats.py
+    format: str  # Will be ArchiveFormat from formats.py
     version: Optional[str] = None  # e.g. "4" for RAR4, "5" for RAR5
     is_solid: bool = False
     extra: Optional[dict[str, Any]] = None

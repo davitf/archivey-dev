@@ -8,7 +8,7 @@ from archivey.exceptions import (
     ArchiveMemberNotFoundError,
     ArchiveNotSupportedError,
 )
-from archivey.types import ArchiveMember, ArchiveInfo, CompressionFormat
+from archivey.types import ArchiveMember, ArchiveInfo, ArchiveFormat
 
 
 def create_archive_reader(
@@ -91,6 +91,7 @@ class ArchiveStream:
         filename: str,
         use_libarchive: bool = False,
         use_rar_stream: bool = False,
+        pwd: str | None = None,
         **kwargs: dict[str, Any],
     ):
         """Initialize the archive stream.
@@ -99,6 +100,7 @@ class ArchiveStream:
             filename: Path to the archive file
             use_libarchive: Whether to use libarchive for reading
             use_rar_stream: Whether to use the RAR stream reader for RAR files
+            pwd: Password to use for decryption
             **kwargs: Additional options passed to the reader
         """
         self._reader: ArchiveReader
@@ -117,32 +119,34 @@ class ArchiveStream:
             if use_rar_stream:
                 from archivey.rar_reader import RarStreamReader
 
-                self._reader = RarStreamReader(filename)
+                self._reader = RarStreamReader(filename, pwd=pwd, **kwargs)
             else:
                 from archivey.rar_reader import RarReader
 
-                self._reader = RarReader(filename, **kwargs)
+                self._reader = RarReader(filename, pwd=pwd, **kwargs)
         elif ext == ".zip":
             from archivey.zip_reader import ZipReader
 
-            self._reader = ZipReader(filename, **kwargs)
+            self._reader = ZipReader(filename, pwd=pwd, **kwargs)
         elif ext == ".7z":
             from archivey.sevenzip_reader import SevenZipReader
 
-            self._reader = SevenZipReader(filename, **kwargs)
+            self._reader = SevenZipReader(filename, pwd=pwd, **kwargs)
         elif ext == ".tar":
             from archivey.tar_reader import TarReader
 
-            self._reader = TarReader(filename, **kwargs)
+            self._reader = TarReader(filename, pwd=pwd, **kwargs)
         elif ext in [".gz", ".bz2", ".xz", ".tgz", ".tbz", ".txz"]:
             # Check if it's a tar archive based on full name (e.g. xxx.tar.gz) or specific extension
             member_name = os.path.splitext(os.path.basename(filename))[0]
             if ext in [".tgz", ".tbz", ".txz"] or member_name.lower().endswith(".tar"):
                 from archivey.tar_reader import TarReader
-                self._reader = TarReader(filename, **kwargs)
+
+                self._reader = TarReader(filename, pwd=pwd, **kwargs)
             else:
                 from archivey.compressed_reader import CompressedReader
-                self._reader = CompressedReader(filename, **kwargs)
+
+                self._reader = CompressedReader(filename, pwd=pwd, **kwargs)
         else:
             raise ArchiveNotSupportedError(f"Unsupported archive format: {ext}")
 
@@ -166,7 +170,7 @@ class ArchiveStream:
         """Get an iterator over ArchiveMember objects for all members in the archive."""
         return self._reader.iter_members()
 
-    def get_format(self) -> CompressionFormat:
+    def get_format(self) -> ArchiveFormat:
         """Get the format of the archive."""
         return self._reader.get_format()
 
@@ -191,7 +195,7 @@ class ArchiveStream:
                 return member
         raise ArchiveMemberNotFoundError(f"Member not found: {name}")
 
-    def open(self, name: ArchiveMember, *, pwd: bytes | None = None) -> IO[bytes]:
+    def open(self, name: ArchiveMember, *, pwd: bytes | str | None = None) -> IO[bytes]:
         """Open a member for reading.
 
         Args:

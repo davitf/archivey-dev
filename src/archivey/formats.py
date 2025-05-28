@@ -1,21 +1,21 @@
 import io
 
-from archivey.types import CompressionFormat
+from archivey.types import ArchiveFormat
 
 
 def detect_archive_format_by_signature(
     path_or_file: str | bytes | io.IOBase,
-) -> CompressionFormat:
+) -> ArchiveFormat:
     SIGNATURES = [
-        (b"\x50\x4b\x03\x04", CompressionFormat.ZIP),
-        (b"\x52\x61\x72\x21\x1a\x07\x00", CompressionFormat.RAR),  # RAR4
-        (b"\x52\x61\x72\x21\x1a\x07\x01\x00", CompressionFormat.RAR),  # RAR5
-        (b"\x37\x7a\xbc\xaf\x27\x1c", CompressionFormat.SEVENZIP),
-        (b"\x1f\x8b", CompressionFormat.GZIP),
-        (b"\x42\x5a\x68", CompressionFormat.BZIP2),
-        (b"\xfd\x37\x7a\x58\x5a\x00", CompressionFormat.XZ),
-        (b"\x28\xb5\x2f\xfd", CompressionFormat.ZSTD),
-        (b"\x04\x22\x4d\x18", CompressionFormat.LZ4),
+        (b"\x50\x4b\x03\x04", ArchiveFormat.ZIP),
+        (b"\x52\x61\x72\x21\x1a\x07\x00", ArchiveFormat.RAR),  # RAR4
+        (b"\x52\x61\x72\x21\x1a\x07\x01\x00", ArchiveFormat.RAR),  # RAR5
+        (b"\x37\x7a\xbc\xaf\x27\x1c", ArchiveFormat.SEVENZIP),
+        (b"\x1f\x8b", ArchiveFormat.GZIP),
+        (b"\x42\x5a\x68", ArchiveFormat.BZIP2),
+        (b"\xfd\x37\x7a\x58\x5a\x00", ArchiveFormat.XZ),
+        (b"\x28\xb5\x2f\xfd", ArchiveFormat.ZSTD),
+        (b"\x04\x22\x4d\x18", ArchiveFormat.LZ4),
     ]
 
     # Support both file paths and file-like objects
@@ -40,41 +40,41 @@ def detect_archive_format_by_signature(
         with open(path_or_file, "rb") as tf:
             tf.seek(257)
             if tf.read(5) == b"ustar":
-                return CompressionFormat.TAR
+                return ArchiveFormat.TAR
     else:
         pos = f.tell()
         f.seek(257)
         if f.read(5) == b"ustar":
-            return CompressionFormat.TAR
+            return ArchiveFormat.TAR
         f.seek(pos)
 
-    return CompressionFormat.UNKNOWN
+    return ArchiveFormat.UNKNOWN
 
 
 _EXTENSION_TO_FORMAT = {
-    ".tar.gz": CompressionFormat.TAR_GZ,
-    ".tgz": CompressionFormat.TAR_GZ,
-    ".tar.bz2": CompressionFormat.TAR_BZ2,
-    ".tbz2": CompressionFormat.TAR_BZ2,
-    ".tar.xz": CompressionFormat.TAR_XZ,
-    ".txz": CompressionFormat.TAR_XZ,
-    ".tar.zstd": CompressionFormat.TAR_ZSTD,
-    ".tzst": CompressionFormat.TAR_ZSTD,
-    ".tar.lz4": CompressionFormat.TAR_LZ4,
-    ".tlz4": CompressionFormat.TAR_LZ4,
-    ".zip": CompressionFormat.ZIP,
-    ".rar": CompressionFormat.RAR,
-    ".7z": CompressionFormat.SEVENZIP,
-    ".gz": CompressionFormat.GZIP,
-    ".bz2": CompressionFormat.BZIP2,
-    ".tar": CompressionFormat.TAR,
+    ".tar.gz": ArchiveFormat.TAR_GZ,
+    ".tgz": ArchiveFormat.TAR_GZ,
+    ".tar.bz2": ArchiveFormat.TAR_BZ2,
+    ".tbz2": ArchiveFormat.TAR_BZ2,
+    ".tar.xz": ArchiveFormat.TAR_XZ,
+    ".txz": ArchiveFormat.TAR_XZ,
+    ".tar.zstd": ArchiveFormat.TAR_ZSTD,
+    ".tzst": ArchiveFormat.TAR_ZSTD,
+    ".tar.lz4": ArchiveFormat.TAR_LZ4,
+    ".tlz4": ArchiveFormat.TAR_LZ4,
+    ".zip": ArchiveFormat.ZIP,
+    ".rar": ArchiveFormat.RAR,
+    ".7z": ArchiveFormat.SEVENZIP,
+    ".gz": ArchiveFormat.GZIP,
+    ".bz2": ArchiveFormat.BZIP2,
+    ".tar": ArchiveFormat.TAR,
 }
 
 
-def detect_archive_format_by_filename(filename: str) -> CompressionFormat:
+def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
     """Detect the compression format of an archive based on its filename."""
     filename_lower = filename.lower()
     for ext, format in _EXTENSION_TO_FORMAT.items():
         if filename_lower.endswith(ext):
             return format
-    return CompressionFormat.UNKNOWN
+    return ArchiveFormat.UNKNOWN

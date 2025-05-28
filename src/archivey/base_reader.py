@@ -17,11 +17,14 @@ class ArchiveReader(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def open(self, member: ArchiveMember, *, pwd: bytes | None = None) -> IO[bytes]:
+    def open(
+        self, member: ArchiveMember, *, pwd: bytes | str | None = None
+    ) -> IO[bytes]:
         """Open a member for reading.
 
         Args:
             member: The member to open
+            pwd: Password to use for decryption
 
         Returns:
             A file-like object for reading the member's contents
@@ -37,7 +40,7 @@ class ArchiveReader(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_format(self) -> str:  # Will be CompressionFormat from formats.py
+    def get_format(self) -> str:  # Will be ArchiveFormat from formats.py
         """Get the compression format of the archive.
 
         Returns:

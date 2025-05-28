@@ -8,7 +8,7 @@ from archivey.exceptions import (
     ArchiveMemberNotFoundError,
     ArchiveNotSupportedError,
 )
-from archivey.types import ArchiveMember, ArchiveInfo, MemberType, CompressionFormat
+from archivey.types import ArchiveMember, ArchiveInfo, MemberType, ArchiveFormat
 from archivey.formats import detect_archive_format_by_signature
 
 __all__ = [
@@ -22,7 +22,7 @@ __all__ = [
     "ArchiveNotSupportedError",
     "ArchiveMember",
     "ArchiveInfo",
-    "CompressionFormat",
+    "ArchiveFormat",
     "detect_archive_format_by_signature",
     "MemberType",
 ]

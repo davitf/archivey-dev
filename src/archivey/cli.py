@@ -2,6 +2,7 @@
 
 from datetime import datetime
 import hashlib
+import logging
 from typing import Tuple, IO
 import zlib
 from archivey.archive_stream import ArchiveStream
@@ -15,6 +16,8 @@ from archivey.formats import (
 
 import argparse
 from tqdm import tqdm
+
+logging.basicConfig(level=logging.INFO)
 
 
 def get_member_checksums(member_file: IO[bytes]) -> Tuple[str, str]:
@@ -48,6 +51,7 @@ parser.add_argument(
 )
 parser.add_argument("--stream", action="store_true", help="Stream the archive")
 parser.add_argument("--info", action="store_true", help="Print info about the archive")
+parser.add_argument("--password", help="Password for encrypted archives")
 
 args = parser.parse_args()
 
@@ -62,6 +66,7 @@ for archive_path in args.files:
             archive_path,
             use_libarchive=args.use_libarchive,
             use_rar_stream=args.use_rar_stream,
+            pwd=args.password,
         ) as archive:
             print(
                 f"Archive format: {archive.get_format()} {archive.get_archive_info()}"
@@ -72,6 +77,8 @@ for archive_path in args.files:
             members = archive.infolist() if not args.stream else archive.info_iter()
 
             for member in tqdm(members, desc="Computing checksums"):
+                encrypted_str = "E" if member.encrypted else " "
+
                 if member.is_file:
                     assert isinstance(member.filename, str)
                     assert isinstance(member.mtime, datetime)
@@ -81,13 +88,16 @@ for archive_path in args.files:
                         continue
 
                     try:
-                        with archive.open(member) as f:
+                        with archive.open(member, pwd=args.password) as f:
                             crc32, sha256 = get_member_checksums(f)
                         print(
-                            f"{member.size:12d} {crc32} {sha256} {member.filename} {member.mtime}"
+                            f"{encrypted_str} {member.size:12d} {crc32} {sha256} {member.filename} {member.mtime}"
                         )
+
                     except ArchiveError as e:
-                        print(f"Error processing {member.filename}: {repr(e)}")
+                        print(
+                            f"{encrypted_str} {member.size:12d} {member.crc32:08x} {member.filename} {member.mtime} -- ERROR: {repr(e)}"
+                        )
 
                 elif member.is_link:
                     assert (
@@ -95,11 +105,11 @@ for archive_path in args.files:
                         or member.link_target is None
                     )
                     print(
-                        f"{member.size:12d} {member.type.upper()} {member.filename} {member.mtime} {member.link_target}"
+                        f"{encrypted_str} {member.size:12d} {member.type.upper()} {member.filename} {member.mtime} {member.link_target}"
                     )
                 else:
                     print(
-                        f"{member.size:12d} {member.type.upper()} {member.filename} {member.mtime}"
+                        f"{encrypted_str} {member.size:12d} {member.type.upper()} {member.filename} {member.mtime}"
                     )
                 if member.comment:
                     print(f"    Comment: {member.comment}")

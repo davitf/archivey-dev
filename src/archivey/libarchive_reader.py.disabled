@@ -6,7 +6,7 @@ import libarchive.exception
 
 from typing import List, Iterator
 
-from archivey.formats import CompressionFormat, detect_archive_format_by_filename
+from archivey.formats import ArchiveFormat, detect_archive_format_by_filename
 
 
 def decode_libarchive_path(raw_pathname: bytes) -> str:
@@ -88,11 +88,11 @@ class LibArchiveReader(ArchiveReader):
         #     self._archive = None
         #     self._members = None
 
-    def get_format(self) -> CompressionFormat:
+    def get_format(self) -> ArchiveFormat:
         """Get the compression format of the archive.
         
         Returns:
-            CompressionFormat: The format of the archive as detected by libarchive
+            ArchiveFormat: The format of the archive as detected by libarchive
         """
         return detect_archive_format_by_filename(self.archive_path)
 
@@ -125,10 +125,10 @@ class LibArchiveReader(ArchiveReader):
     #     """
     #     # Check if the archive is solid based on format
     #     format = self.get_format()
-    #     if format == CompressionFormat.RAR:
+    #     if format == ArchiveFormat.RAR:
     #         # RAR archives can be solid
     #         return bool(self._archive.is_solid) if hasattr(self._archive, "is_solid") else False
-    #     elif format == CompressionFormat.SEVENZIP:
+    #     elif format == ArchiveFormat.SEVENZIP:
     #         # 7-Zip archives can be solid
     #         return bool(self._archive.is_solid) if hasattr(self._archive, "is_solid") else False
     #     return False

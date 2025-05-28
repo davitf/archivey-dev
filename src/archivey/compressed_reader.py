@@ -19,7 +19,7 @@ from archivey.exceptions import (
 from archivey.types import (
     ArchiveInfo,
     ArchiveMember,
-    CompressionFormat,
+    ArchiveFormat,
     MemberType,
 )
 
@@ -120,13 +120,16 @@ class BZ2Wrapper(io.IOBase):
 class CompressedReader(ArchiveReader):
     """Reader for raw compressed files (gz, bz2, xz)."""
 
-    def __init__(self, archive_path: str, **kwargs):
+    def __init__(self, archive_path: str, *, pwd: bytes | None = None, **kwargs):
         """Initialize the reader.
 
         Args:
             archive_path: Path to the compressed file
+            pwd: Password for decryption (not supported for compressed files)
             **kwargs: Additional options (ignored)
         """
+        if pwd is not None:
+            raise ValueError("Compressed files do not support password protection")
         self.archive_path = archive_path
         self.ext = os.path.splitext(archive_path)[1].lower()
 
@@ -135,19 +138,19 @@ class CompressedReader(ArchiveReader):
 
         # Open the appropriate decompressor based on file extension
         if self.ext == ".gz":
-            self.format = CompressionFormat.GZIP
+            self.format = ArchiveFormat.GZIP
             self.decompressor = gzip.open
         elif self.ext == ".bz2":
-            self.format = CompressionFormat.BZIP2
+            self.format = ArchiveFormat.BZIP2
             self.decompressor = bz2.open
         elif self.ext == ".xz":
-            self.format = CompressionFormat.XZ
+            self.format = ArchiveFormat.XZ
             self.decompressor = lzma.open
         elif self.ext == ".zstd":
-            self.format = CompressionFormat.ZSTD
+            self.format = ArchiveFormat.ZSTD
             self.decompressor = zstd.open
         elif self.ext == ".lz4":
-            self.format = CompressionFormat.LZ4
+            self.format = ArchiveFormat.LZ4
             self.decompressor = lz4.open
         else:
             raise ArchiveError(f"Unsupported compression format: {self.ext}")
@@ -177,7 +180,7 @@ class CompressedReader(ArchiveReader):
         """Get a list of all members in the archive."""
         return [self.member]
 
-    def get_format(self) -> CompressionFormat:
+    def get_format(self) -> ArchiveFormat:
         return self.format
 
     def get_archive_info(self) -> ArchiveInfo:
@@ -188,7 +191,9 @@ class CompressedReader(ArchiveReader):
             extra=None,
         )
 
-    def open(self, member: ArchiveMember) -> io.IOBase:
+    def open(self, member: ArchiveMember, *, pwd: bytes | None = None) -> io.IOBase:
+        if pwd is not None:
+            raise ValueError("Compressed files do not support password protection")
         if member != self.member:
             raise ValueError("Requested member is not part of this archive")
         fileobj = self.decompressor(self.archive_path)

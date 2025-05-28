@@ -11,22 +11,29 @@ from archivey.base_reader import (
     ArchiveInfo,
 )
 from archivey.exceptions import ArchiveCorruptedError, ArchiveMemberNotFoundError
-from archivey.types import CompressionFormat, MemberType
+from archivey.types import ArchiveFormat, MemberType
 
 
 class TarReader(ArchiveReader):
     """Reader for TAR archives and compressed TAR archives."""
 
-    def __init__(self, archive_path: str):
+    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
         self.archive_path = archive_path
         self._members = None
         self._format_info = None
+        if pwd is not None:
+            raise ValueError("TAR format does not support password protection.")
+
         try:
             # Determine if this is a compressed TAR
             ext = os.path.splitext(archive_path)[1].lower()
-            mode = "r" if ext == ".tar" else f"r:{ext[1:]}"  # r:gz, r:bz2, r:xz
+            mode: str = "r" if ext == ".tar" else f"r:{ext[1:]}"  # r:gz, r:bz2, r:xz
 
-            self._archive = tarfile.open(archive_path, mode)
+            # Pylance knows the mode argument can only accept some specific values,
+            # and doesn't understand that we're building one of them above.
+            # (possible Pylance or typeshed bug: it's not actually listing all possible values)
+            self._archive = tarfile.open(archive_path, mode)  # type: ignore
+
         except tarfile.ReadError as e:
             raise ArchiveCorruptedError(f"Invalid TAR archive {archive_path}: {e}")
         except (gzip.BadGzipFile, lzma.LZMAError) as e:
@@ -42,24 +49,27 @@ class TarReader(ArchiveReader):
             self._members = None
 
     def get_members(self) -> List[ArchiveMember]:
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
         if self._members is None:
             self._members = []
             for info in self._archive.getmembers():
                 # Get compression method based on format
                 compression_method = None
-                if self.get_format() != CompressionFormat.TAR:
+                if self.get_format() != ArchiveFormat.TAR:
                     if hasattr(self._archive, "compression"):
                         compression_method = self._archive.compression
                     else:
                         # Map format to compression method
                         compression_method = {
-                            CompressionFormat.TAR_GZ: CompressionFormat.GZIP,
-                            CompressionFormat.TAR_BZ2: CompressionFormat.BZIP2,
-                            CompressionFormat.TAR_XZ: CompressionFormat.XZ,
-                            CompressionFormat.TAR_ZSTD: CompressionFormat.ZSTD,
-                            CompressionFormat.TAR_LZ4: CompressionFormat.LZ4,
+                            ArchiveFormat.TAR_GZ: ArchiveFormat.GZIP,
+                            ArchiveFormat.TAR_BZ2: ArchiveFormat.BZIP2,
+                            ArchiveFormat.TAR_XZ: ArchiveFormat.XZ,
+                            ArchiveFormat.TAR_ZSTD: ArchiveFormat.ZSTD,
+                            ArchiveFormat.TAR_LZ4: ArchiveFormat.LZ4,
                         }.get(self.get_format())
-                
+
                 filename = info.name
                 if info.isdir() and not filename.endswith("/"):
                     filename += "/"
@@ -98,9 +108,15 @@ class TarReader(ArchiveReader):
 
         return self._members
 
-    def open(self, member: Union[str, ArchiveMember], *, pwd: bytes | None = None) -> io.IOBase:
+    def open(
+        self, member: Union[str, ArchiveMember], *, pwd: bytes | str | None = None
+    ) -> io.IOBase:
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
         if pwd is not None:
             raise ValueError("TAR format does not support password protection.")
+
         if isinstance(member, str):
             try:
                 info = self._archive.getmember(member)
@@ -124,26 +140,26 @@ class TarReader(ArchiveReader):
     def iter_members(self) -> Iterator[ArchiveMember]:
         return iter(self.get_members())
 
-    def get_format(self) -> CompressionFormat:
+    def get_format(self) -> ArchiveFormat:
         """Get the compression format of the archive.
 
         Returns:
-            CompressionFormat: The format of the archive (TAR or compressed TAR)
+            ArchiveFormat: The format of the archive (TAR or compressed TAR)
         """
         ext = os.path.splitext(self.archive_path)[1].lower()
         if ext == ".tar":
-            return CompressionFormat.TAR
+            return ArchiveFormat.TAR
         elif ext == ".gz" or self.archive_path.endswith(".tgz"):
-            return CompressionFormat.TAR_GZ
+            return ArchiveFormat.TAR_GZ
         elif ext == ".bz2" or self.archive_path.endswith(".tbz"):
-            return CompressionFormat.TAR_BZ2
+            return ArchiveFormat.TAR_BZ2
         elif ext == ".xz" or self.archive_path.endswith(".txz"):
-            return CompressionFormat.TAR_XZ
+            return ArchiveFormat.TAR_XZ
         elif ext == ".zst":
-            return CompressionFormat.TAR_ZSTD
+            return ArchiveFormat.TAR_ZSTD
         elif ext == ".lz4":
-            return CompressionFormat.TAR_LZ4
-        return CompressionFormat.TAR
+            return ArchiveFormat.TAR_LZ4
+        return ArchiveFormat.TAR
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -151,12 +167,15 @@ class TarReader(ArchiveReader):
         Returns:
             ArchiveInfo: Detailed format information
         """
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
         if self._format_info is None:
             format = self.get_format()
             self._format_info = ArchiveInfo(
                 format=format,
                 is_solid=format
-                != CompressionFormat.TAR,  # True for all compressed TAR formats
+                != ArchiveFormat.TAR,  # True for all compressed TAR formats
                 extra={
                     "format_version": self._archive.format
                     if hasattr(self._archive, "format")
@@ -176,4 +195,4 @@ class TarReader(ArchiveReader):
         """
         # Compressed TAR formats are effectively solid as they require sequential decompression
         format = self.get_format()
-        return format != CompressionFormat.TAR  # True for all compressed TAR formats
+        return format != ArchiveFormat.TAR  # True for all compressed TAR formats

@@ -10,9 +10,9 @@ from archivey.exceptions import (
     ArchiveEncryptedError,
     ArchiveError,
 )
-from archivey.formats import CompressionFormat
+from archivey.formats import ArchiveFormat
 from archivey.types import ArchiveInfo, ArchiveMember, MemberType
-from archivey.utils import decode_bytes_with_fallback
+from archivey.utils import decode_bytes_with_fallback, str_to_bytes
 
 # TODO: check if this is correct
 _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]
@@ -54,10 +54,11 @@ def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
 class ZipReader(ArchiveReader):
     """Reader for ZIP archives."""
 
-    def __init__(self, archive_path: str):
+    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
         self.archive_path = archive_path
         self._members: list[ArchiveMember] | None = None
         self._format_info: ArchiveInfo | None = None
+        self._pwd = pwd
         try:
             self._archive = zipfile.ZipFile(archive_path, "r")
         except zipfile.BadZipFile as e:
@@ -70,13 +71,13 @@ class ZipReader(ArchiveReader):
             self._archive = None
             self._members = None
 
-    def get_format(self) -> CompressionFormat:
+    def get_format(self) -> ArchiveFormat:
         """Get the compression format of the archive.
 
         Returns:
-            CompressionFormat: Always returns CompressionFormat.ZIP
+            ArchiveFormat: Always returns ArchiveFormat.ZIP
         """
-        return CompressionFormat.ZIP
+        return ArchiveFormat.ZIP
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -89,7 +90,7 @@ class ZipReader(ArchiveReader):
 
         if self._format_info is None:
             self._format_info = ArchiveInfo(
-                format=CompressionFormat.ZIP,
+                format=ArchiveFormat.ZIP,
                 is_solid=False,  # ZIP archives are never solid
                 comment=decode_bytes_with_fallback(
                     self._archive.comment, _ZIP_ENCODINGS
@@ -176,12 +177,16 @@ class ZipReader(ArchiveReader):
 
         return self._members
 
-    def open(self, member: ArchiveMember, pwd: Optional[bytes] = None) -> IO[bytes]:
+    def open(
+        self, member: ArchiveMember, pwd: Optional[bytes | str] = None
+    ) -> IO[bytes]:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
         try:
-            return self._archive.open(member.filename, pwd=pwd)
+            return self._archive.open(
+                member.filename, pwd=str_to_bytes(pwd or self._pwd)
+            )
         except RuntimeError as e:
             if "password required" in str(e):
                 raise ArchiveEncryptedError(

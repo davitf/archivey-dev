@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 import os
-from archivey.types import CompressionFormat, MemberType
+from archivey.types import ArchiveFormat, MemberType
 
 
 class GenerationMethod(Enum):
@@ -27,18 +27,21 @@ class FileInfo:
     link_target_type: MemberType | None = MemberType.FILE
     compression_method: str | None = None
 
+
 TEST_ARCHIVES_DIR = "test_archives"
 TEST_ARCHIVES_EXTERNAL_DIR = "test_archives_external"
+
 
 @dataclass
 class ArchiveInfo:
     filename: str
     generation_method: GenerationMethod
-    format: CompressionFormat
+    format: ArchiveFormat
     files: list[FileInfo]
     archive_comment: str | None = None
     skip_test: bool = False
     solid: bool = False
+    header_password: str | None = None
 
     def get_archive_path(self, base_dir: str) -> str:
         if self.generation_method == GenerationMethod.EXTERNAL:
@@ -122,6 +125,9 @@ ENCRYPTION_FILES = [
         mtime=_fake_mtime(1),
         contents=b"This is plain",
     ),
+    # For 7zip archives to be considered solid, they need to have at least two files
+    # in the same folder. To make that possible, we need two consecutive files with the
+    # same password.
     FileInfo(
         name="secret.txt",
         mtime=_fake_mtime(2),
@@ -129,19 +135,62 @@ ENCRYPTION_FILES = [
         password="password",
     ),
     FileInfo(
-        name="not_secret.txt",
+        name="also_secret.txt",
         mtime=_fake_mtime(3),
+        contents=b"This is also secret",
+        password="password",
+    ),
+    FileInfo(
+        name="not_secret.txt",
+        mtime=_fake_mtime(4),
         contents=b"This is not secret",
         comment="Contains some information",
     ),
     FileInfo(
         name="very_secret.txt",
         contents=b"This is very secret",
-        mtime=_fake_mtime(4),
+        mtime=_fake_mtime(5),
         password="very_secret_password",
         comment="Contains some very secret information",
     ),
 ]
+
+ENCRYPTION_SINGLE_PASSWORD_FILES = [
+    FileInfo(
+        name="secret.txt",
+        mtime=_fake_mtime(1),
+        contents=b"This is secret",
+        password="password",
+    ),
+    FileInfo(
+        name="also_secret.txt",
+        mtime=_fake_mtime(2),
+        contents=b"This is also secret",
+        password="password",
+    ),
+]
+
+# SOME_TEST_SOLID_FILES = [
+#     FileInfo(
+#         name="plain.txt",
+#         mtime=_fake_mtime(1),
+#         contents=b"This is plain",
+#         password="password",
+#     ),
+#     FileInfo(
+#         name="secret.txt",
+#         mtime=_fake_mtime(1),
+#         contents=b"This is secret",
+#         # password="password",
+#     ),
+#     FileInfo(
+#         name="also_secret.txt",
+#         mtime=_fake_mtime(2),
+#         contents=b"This is also secret",
+#         # password="password",
+#     ),
+# ]
+
 
 SYMLINK_FILES = [
     FileInfo(name="file1.txt", contents=b"Hello, world!", mtime=_fake_mtime(1)),
@@ -225,30 +274,30 @@ COMPRESSION_METHOD_FILES_LZMA = COMPRESSION_METHODS_FILES + [
 ]
 
 
-SAMPLE_ARCHIVES = [
+ZIP_ARCHIVES = [
     ArchiveInfo(
         filename="basic_zipfile.zip",
         generation_method=GenerationMethod.ZIPFILE,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=BASIC_FILES,
     ),
     ArchiveInfo(
         filename="basic_infozip.zip",
         generation_method=GenerationMethod.INFOZIP,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=BASIC_FILES,
     ),
     ArchiveInfo(
         filename="comment_zipfile.zip",
         generation_method=GenerationMethod.ZIPFILE,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=COMMENT_FILES,
         archive_comment="This is a\nmulti-line comment",
     ),
     ArchiveInfo(
         filename="comment_infozip.zip",
         generation_method=GenerationMethod.INFOZIP,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=COMMENT_FILES,
         archive_comment="This is a\nmulti-line comment",
     ),
@@ -256,87 +305,87 @@ SAMPLE_ARCHIVES = [
     ArchiveInfo(
         filename="encryption.zip",
         generation_method=GenerationMethod.INFOZIP,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=ENCRYPTION_FILES,
     ),
     # zipfile does not support symlinks
     ArchiveInfo(
         filename="symlinks.zip",
         generation_method=GenerationMethod.INFOZIP,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=SYMLINK_FILES,
     ),
     ArchiveInfo(
         filename="encoding_zipfile.zip",
         generation_method=GenerationMethod.ZIPFILE,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=ENCODING_FILES,
         archive_comment="Comentário em português 😀",
     ),
     ArchiveInfo(
         filename="encoding_infozip.zip",
         generation_method=GenerationMethod.INFOZIP,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=ENCODING_FILES,
         archive_comment="Comentário em português 😀",
     ),
-
-
     ArchiveInfo(
         filename="encoding_infozip_jules.zip",
         generation_method=GenerationMethod.EXTERNAL,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=ENCODING_FILES,
         archive_comment="Comentário em português 😀",
     ),
-
     # info-zip does not support LZMA
     ArchiveInfo(
         filename="compression_methods_zipfile.zip",
         generation_method=GenerationMethod.ZIPFILE,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=COMPRESSION_METHOD_FILES_LZMA,
     ),
     ArchiveInfo(
         filename="compression_methods_infozip.zip",
         generation_method=GenerationMethod.INFOZIP,
-        format=CompressionFormat.ZIP,
+        format=ArchiveFormat.ZIP,
         files=COMPRESSION_METHODS_FILES,
     ),
+]
+
+TAR_ARCHIVES = [
     ArchiveInfo(
         filename="basic.tar",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=CompressionFormat.TAR,
+        format=ArchiveFormat.TAR,
         files=BASIC_FILES,
     ),
     ArchiveInfo(
         filename="symlinks.tar",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=CompressionFormat.TAR,
+        format=ArchiveFormat.TAR,
         files=SYMLINK_FILES,
     ),
     ArchiveInfo(
         filename="encoding.tar",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=CompressionFormat.TAR,
+        format=ArchiveFormat.TAR,
         files=ENCODING_FILES,
     ),
     ArchiveInfo(
         filename="basic.tar.gz",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=CompressionFormat.TAR_GZ,
+        format=ArchiveFormat.TAR_GZ,
         files=BASIC_FILES,
     ),
     ArchiveInfo(
         filename="basic.tar.bz2",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=CompressionFormat.TAR_BZ2,
+        format=ArchiveFormat.TAR_BZ2,
         files=BASIC_FILES,
     ),
     ArchiveInfo(
         filename="basic.tar.xz",
         generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=CompressionFormat.TAR_XZ,
+        format=ArchiveFormat.TAR_XZ,
         files=BASIC_FILES,
     ),
 ]
@@ -346,21 +395,21 @@ RAR_ARCHIVES = [
     ArchiveInfo(
         filename="basic.rar",
         generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=CompressionFormat.RAR,
+        format=ArchiveFormat.RAR,
         files=BASIC_FILES,
         solid=False,
     ),
     ArchiveInfo(
         filename="basic_solid.rar",
         generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=CompressionFormat.RAR,
+        format=ArchiveFormat.RAR,
         files=BASIC_FILES,
         solid=True,
     ),
     ArchiveInfo(
         filename="comment.rar",
         generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=CompressionFormat.RAR,
+        format=ArchiveFormat.RAR,
         files=COMMENT_FILES,
         archive_comment="RAR archive comment",
         solid=False,
@@ -368,7 +417,7 @@ RAR_ARCHIVES = [
     ArchiveInfo(
         filename="comment_solid.rar",
         generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=CompressionFormat.RAR,
+        format=ArchiveFormat.RAR,
         files=COMMENT_FILES,
         archive_comment="Solid RAR archive comment",
         solid=True,
@@ -376,82 +425,106 @@ RAR_ARCHIVES = [
     ArchiveInfo(
         filename="encryption.rar",
         generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=CompressionFormat.RAR,
+        format=ArchiveFormat.RAR,
         files=ENCRYPTION_FILES,
         solid=False,
     ),
     ArchiveInfo(
         filename="encryption_solid.rar",
         generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=CompressionFormat.RAR,
-        files=ENCRYPTION_FILES,
+        format=ArchiveFormat.RAR,
+        files=ENCRYPTION_SINGLE_PASSWORD_FILES,
         solid=True,
     ),
     ArchiveInfo(
         filename="symlinks.rar",
         generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=CompressionFormat.RAR,
+        format=ArchiveFormat.RAR,
         files=SYMLINK_FILES,
         solid=False,
     ),
     ArchiveInfo(
         filename="symlinks_solid.rar",
         generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=CompressionFormat.RAR,
+        format=ArchiveFormat.RAR,
         files=SYMLINK_FILES,
         solid=True,
+    ),
+    ArchiveInfo(
+        filename="header_password.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=ArchiveFormat.RAR,
+        files=BASIC_FILES,
+        solid=False,
+        header_password="password",
+    ),
+    ArchiveInfo(
+        filename="header_password_solid.rar",
+        generation_method=GenerationMethod.RAR_COMMAND_LINE,
+        format=ArchiveFormat.RAR,
+        files=BASIC_FILES,
+        solid=True,
+        header_password="password",
     ),
 ]
 
 # 7z Archives (py7zr)
-PY7ZR_ARCHIVES = [
+SEVENZIP_PY7ZR_ARCHIVES = [
     ArchiveInfo(
         filename="basic_py7zr.7z",
         generation_method=GenerationMethod.PY7ZR,
-        format=CompressionFormat.SEVENZIP,
+        format=ArchiveFormat.SEVENZIP,
         files=BASIC_FILES,
         solid=False,
     ),
     ArchiveInfo(
         filename="basic_solid_py7zr.7z",
         generation_method=GenerationMethod.PY7ZR,
-        format=CompressionFormat.SEVENZIP,
+        format=ArchiveFormat.SEVENZIP,
         files=BASIC_FILES,
-        solid=True,
-    ),
-    ArchiveInfo(
-        filename="comment_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=CompressionFormat.SEVENZIP,
-        files=COMMENT_FILES,
-        # py7zr may not support archive comments or per-file comments easily
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="comment_solid_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=CompressionFormat.SEVENZIP,
-        files=COMMENT_FILES,
         solid=True,
     ),
     ArchiveInfo(
         filename="encryption_py7zr.7z",
         generation_method=GenerationMethod.PY7ZR,
-        format=CompressionFormat.SEVENZIP,
+        format=ArchiveFormat.SEVENZIP,
         files=ENCRYPTION_FILES,
         solid=False,
     ),
     ArchiveInfo(
         filename="encryption_solid_py7zr.7z",
         generation_method=GenerationMethod.PY7ZR,
-        format=CompressionFormat.SEVENZIP,
+        format=ArchiveFormat.SEVENZIP,
         files=ENCRYPTION_FILES,
         solid=True,
+    ),
+    # ArchiveInfo(
+    #     filename="some_test_solid_py7zr.7z",
+    #     generation_method=GenerationMethod.PY7ZR,
+    #     format=ArchiveFormat.SEVENZIP,
+    #     files=SOME_TEST_SOLID_FILES,
+    #     solid=True,
+    # ),
+    ArchiveInfo(
+        filename="encrypted_header_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=ArchiveFormat.SEVENZIP,
+        files=BASIC_FILES,
+        solid=False,
+        header_password="header_password",
+    ),
+    ArchiveInfo(
+        filename="encrypted_header_solid_py7zr.7z",
+        generation_method=GenerationMethod.PY7ZR,
+        format=ArchiveFormat.SEVENZIP,
+        files=BASIC_FILES,
+        solid=True,
+        header_password="header_password",
     ),
     ArchiveInfo(
         filename="symlinks_py7zr.7z",
         generation_method=GenerationMethod.PY7ZR,
-        format=CompressionFormat.SEVENZIP,
+        format=ArchiveFormat.SEVENZIP,
         files=SYMLINK_FILES,
         solid=False,
         skip_test=True,  # py7zr may not support symlinks
@@ -459,7 +532,7 @@ PY7ZR_ARCHIVES = [
     ArchiveInfo(
         filename="symlinks_solid_py7zr.7z",
         generation_method=GenerationMethod.PY7ZR,
-        format=CompressionFormat.SEVENZIP,
+        format=ArchiveFormat.SEVENZIP,
         files=SYMLINK_FILES,
         solid=True,
         skip_test=True,  # py7zr may not support symlinks
@@ -469,65 +542,22 @@ PY7ZR_ARCHIVES = [
 # 7z Archives (7z command line)
 SEVENZIP_CMD_ARCHIVES = [
     ArchiveInfo(
-        filename="basic_7zcmd.7z",
+        filename=archive_info.filename.replace("_py7zr.7z", "_7zcmd.7z"),
         generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
-        format=CompressionFormat.SEVENZIP,
-        files=BASIC_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="basic_solid_7zcmd.7z",
-        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
-        format=CompressionFormat.SEVENZIP,
-        files=BASIC_FILES,
-        solid=True,
-    ),
-    ArchiveInfo(
-        filename="comment_7zcmd.7z",
-        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
-        format=CompressionFormat.SEVENZIP,
-        files=COMMENT_FILES,
-        archive_comment="7z archive comment",
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="comment_solid_7zcmd.7z",
-        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
-        format=CompressionFormat.SEVENZIP,
-        files=COMMENT_FILES,
-        archive_comment="Solid 7z archive comment",
-        solid=True,
-    ),
-    ArchiveInfo(
-        filename="encryption_7zcmd.7z",
-        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
-        format=CompressionFormat.SEVENZIP,
-        files=ENCRYPTION_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="encryption_solid_7zcmd.7z",
-        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
-        format=CompressionFormat.SEVENZIP,
-        files=ENCRYPTION_FILES,
-        solid=True,
-    ),
-    ArchiveInfo(
-        filename="symlinks_7zcmd.7z",
-        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
-        format=CompressionFormat.SEVENZIP,
-        files=SYMLINK_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="symlinks_solid_7zcmd.7z",
-        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
-        format=CompressionFormat.SEVENZIP,
-        files=SYMLINK_FILES,
-        solid=True,
-    ),
+        format=ArchiveFormat.SEVENZIP,
+        files=archive_info.files,
+        solid=archive_info.solid,
+        header_password=archive_info.header_password,
+    )
+    for archive_info in SEVENZIP_PY7ZR_ARCHIVES
 ]
 
-SAMPLE_ARCHIVES.extend(RAR_ARCHIVES)
-SAMPLE_ARCHIVES.extend(PY7ZR_ARCHIVES)
-SAMPLE_ARCHIVES.extend(SEVENZIP_CMD_ARCHIVES)
+assert all(archive.filename.endswith("_7zcmd.7z") for archive in SEVENZIP_CMD_ARCHIVES)
+
+SAMPLE_ARCHIVES = (
+    ZIP_ARCHIVES
+    + TAR_ARCHIVES
+    + RAR_ARCHIVES
+    + SEVENZIP_PY7ZR_ARCHIVES
+    + SEVENZIP_CMD_ARCHIVES
+)
