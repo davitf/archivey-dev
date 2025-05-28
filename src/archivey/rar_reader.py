@@ -12,6 +12,7 @@ from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveError,
+    MissingToolError,
 )
 from archivey.formats import ArchiveFormat
 from archivey.types import ArchiveInfo, ArchiveMember, MemberType
@@ -42,6 +43,11 @@ class BaseRarReader(ArchiveReader):
             self._archive = rarfile.RarFile(archive_path, "r")
             if pwd:
                 self._archive.setpassword(pwd)
+        except rarfile.NoRarTool as e: # Specific exception for missing tool
+            raise MissingToolError(
+                "rarfile could not find the unrar tool. Please install unrar and ensure it's in your PATH, "
+                "or configure rarfile if using a custom unrar path."
+            ) from e
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(f"Invalid RAR archive {archive_path}: {e}")
         except rarfile.NotRarFile as e:
@@ -352,11 +358,14 @@ class RarStreamReader(BaseRarReader):
                 stdout=subprocess.PIPE,
                 bufsize=1024 * 1024,
             )
-            if self._proc.stdout is None:
-                raise RuntimeError("Could not open unrar output stream")
-            self._stream = self._proc.stdout  # type: ignore
+        except FileNotFoundError:
+            raise MissingToolError("unrar command not found. Please install unrar and ensure it is in your PATH.")
         except Exception as e:
             raise ArchiveError(f"Error opening RAR archive {self.archive_path}: {e}")
+        
+        if self._proc.stdout is None:
+            raise RuntimeError("Could not open unrar output stream")
+        self._stream = self._proc.stdout  # type: ignore
 
     def open(
         self, member: ArchiveMember, *, pwd: Optional[str | bytes] = None

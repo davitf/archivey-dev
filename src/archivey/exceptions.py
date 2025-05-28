@@ -39,3 +39,15 @@ class ArchiveNotSupportedError(ArchiveError):
     """Raised when the archive format is not supported."""
 
     pass
+
+
+class MissingDependencyError(ArchiveError):
+    """Raised when a required optional library is not installed."""
+
+    pass
+
+
+class MissingToolError(ArchiveError):
+    """Raised when a required external tool is not found."""
+
+    pass
