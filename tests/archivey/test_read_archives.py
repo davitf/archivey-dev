@@ -2,11 +2,16 @@ from dataclasses import dataclass
 import logging
 import os
 import pytest
+from datetime import datetime
 
 from archivey.archive_stream import ArchiveStream
 from archivey.types import MemberType
 from sample_archives import SAMPLE_ARCHIVES, ArchiveInfo, GenerationMethod
 from archivey.types import ArchiveFormat
+
+# Special mtime value to indicate that the member's mtime should be compared
+# against the archive file's mtime.
+SPECIAL_MTIME_FOR_ARCHIVE_MTIME_CHECK = datetime(1970, 1, 1, 0, 0, 0)
 
 
 def normalize_newlines(s: str | None) -> str | None:
@@ -89,7 +94,16 @@ def check_read_archive(sample_archive: ArchiveInfo, features: ArchiveFormatFeatu
                 f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
             )
 
-            if allow_timestamp_rounding_error:
+            if sample_file.mtime == SPECIAL_MTIME_FOR_ARCHIVE_MTIME_CHECK:
+                archive_file_mtime_ts = os.path.getmtime(sample_archive.get_archive_path(archive_base_dir))
+                # Convert member.mtime to timestamp for comparison, allowing for a small tolerance
+                # This is primarily for GZip, BZip2, XZ where member mtime should be file's original mtime,
+                # and the archive file's mtime is also set to this.
+                assert abs(member.mtime.timestamp() - archive_file_mtime_ts) <= 2, (
+                    f"Timestamp mismatch for {member.filename} (special check): "
+                    f"member mtime {member.mtime.timestamp()} vs archive mtime {archive_file_mtime_ts}"
+                )
+            elif allow_timestamp_rounding_error:
                 assert (
                     abs(member.mtime.timestamp() - sample_file.mtime.timestamp()) <= 1
                 ), (

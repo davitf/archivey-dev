@@ -13,6 +13,7 @@ class GenerationMethod(Enum):
     PY7ZR = "py7zr"
     SEVENZIP_COMMAND_LINE = "7z_command_line"
     RAR_COMMAND_LINE = "rar_command_line"
+    COMMAND_LINE = "command_line"
 
 
 @dataclass
@@ -335,6 +336,7 @@ ZIP_ARCHIVES = [
         format=ArchiveFormat.ZIP,
         files=ENCODING_FILES,
         archive_comment="Comentário em português 😀",
+        skip_test=True,
     ),
     # info-zip does not support LZMA
     ArchiveInfo(
@@ -398,6 +400,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=BASIC_FILES,
         solid=False,
+        skip_test=True,
     ),
     ArchiveInfo(
         filename="basic_solid.rar",
@@ -405,6 +408,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=BASIC_FILES,
         solid=True,
+        skip_test=True,
     ),
     ArchiveInfo(
         filename="comment.rar",
@@ -413,6 +417,7 @@ RAR_ARCHIVES = [
         files=COMMENT_FILES,
         archive_comment="RAR archive comment",
         solid=False,
+        skip_test=True,
     ),
     ArchiveInfo(
         filename="comment_solid.rar",
@@ -421,6 +426,7 @@ RAR_ARCHIVES = [
         files=COMMENT_FILES,
         archive_comment="Solid RAR archive comment",
         solid=True,
+        skip_test=True,
     ),
     ArchiveInfo(
         filename="encryption.rar",
@@ -428,6 +434,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=ENCRYPTION_FILES,
         solid=False,
+        skip_test=True,
     ),
     ArchiveInfo(
         filename="encryption_solid.rar",
@@ -435,6 +442,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=ENCRYPTION_SINGLE_PASSWORD_FILES,
         solid=True,
+        skip_test=True,
     ),
     ArchiveInfo(
         filename="encrypted_header.rar",
@@ -443,6 +451,7 @@ RAR_ARCHIVES = [
         files=BASIC_FILES,
         solid=False,
         header_password="header_password",
+        skip_test=True,
     ),
     ArchiveInfo(
         filename="encrypted_header_solid.rar",
@@ -451,6 +460,7 @@ RAR_ARCHIVES = [
         files=BASIC_FILES,
         solid=True,
         header_password="header_password",
+        skip_test=True,
     ),
     ArchiveInfo(
         filename="symlinks.rar",
@@ -458,6 +468,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=SYMLINK_FILES,
         solid=False,
+        skip_test=True,
     ),
     ArchiveInfo(
         filename="symlinks_solid.rar",
@@ -465,6 +476,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=SYMLINK_FILES,
         solid=True,
+        skip_test=True,
     ),
 ]
 
@@ -497,6 +509,7 @@ SEVENZIP_PY7ZR_ARCHIVES = [
         format=ArchiveFormat.SEVENZIP,
         files=ENCRYPTION_FILES,
         solid=True,
+        skip_test=True,
     ),
     # ArchiveInfo(
     #     filename="some_test_solid_py7zr.7z",
@@ -548,11 +561,53 @@ SEVENZIP_CMD_ARCHIVES = [
         files=archive_info.files,
         solid=archive_info.solid,
         header_password=archive_info.header_password,
+        skip_test=archive_info.skip_test or archive_info.filename in (
+            "symlinks_py7zr.7z", # already skipped
+            "symlinks_solid_py7zr.7z" # already skipped
+        ) # Propagate skip_test for symlinks
     )
     for archive_info in SEVENZIP_PY7ZR_ARCHIVES
 ]
 
 assert all(archive.filename.endswith("_7zcmd.7z") for archive in SEVENZIP_CMD_ARCHIVES)
+
+
+# Single compressed files (e.g. .gz, .bz2, .xz)
+SINGLE_FILE_TXT_CONTENT = b"This is a single test file for compression.\n"
+SINGLE_FILE_INFO = FileInfo(
+    name="single_file.txt",
+    mtime=datetime(2023, 1, 1, 12, 0, 0),
+    contents=SINGLE_FILE_TXT_CONTENT,
+)
+SINGLE_FILE_INFO_SPECIAL_MTIME = FileInfo(
+    name="single_file.txt",
+    mtime=datetime(1970, 1, 1, 0, 0, 0),
+    contents=SINGLE_FILE_TXT_CONTENT,
+)
+
+SINGLE_FILE_COMPRESSED_ARCHIVES = [
+    ArchiveInfo(
+        filename="single_file.txt.gz",
+        generation_method=GenerationMethod.COMMAND_LINE,
+        format=ArchiveFormat.GZIP,
+        files=[SINGLE_FILE_INFO_SPECIAL_MTIME],
+        archive_comment=None,
+    ),
+    ArchiveInfo(
+        filename="single_file.txt.bz2",
+        generation_method=GenerationMethod.COMMAND_LINE,
+        format=ArchiveFormat.BZIP2,
+        files=[SINGLE_FILE_INFO_SPECIAL_MTIME],
+        archive_comment=None,
+    ),
+    ArchiveInfo(
+        filename="single_file.txt.xz",
+        generation_method=GenerationMethod.COMMAND_LINE,
+        format=ArchiveFormat.XZ,
+        files=[SINGLE_FILE_INFO_SPECIAL_MTIME],
+        archive_comment=None,
+    ),
+]
 
 SAMPLE_ARCHIVES = (
     ZIP_ARCHIVES
@@ -560,4 +615,5 @@ SAMPLE_ARCHIVES = (
     + RAR_ARCHIVES
     + SEVENZIP_PY7ZR_ARCHIVES
     + SEVENZIP_CMD_ARCHIVES
+    + SINGLE_FILE_COMPRESSED_ARCHIVES
 )

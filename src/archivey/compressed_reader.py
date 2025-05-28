@@ -3,8 +3,6 @@ import os
 import gzip
 import bz2
 import lzma
-import zstd
-import lz4
 from datetime import datetime
 import struct
 from typing import Iterator, List
@@ -137,6 +135,7 @@ class CompressedReader(ArchiveReader):
         self.member_name = os.path.splitext(os.path.basename(archive_path))[0]
 
         # Open the appropriate decompressor based on file extension
+        # Note: zstd and lz4 imports are conditional below to avoid ModuleNotFoundError if not installed.
         if self.ext == ".gz":
             self.format = ArchiveFormat.GZIP
             self.decompressor = gzip.open
@@ -148,10 +147,18 @@ class CompressedReader(ArchiveReader):
             self.decompressor = lzma.open
         elif self.ext == ".zstd":
             self.format = ArchiveFormat.ZSTD
-            self.decompressor = zstd.open
+            try:
+                import zstd
+                self.decompressor = zstd.open
+            except ImportError:
+                raise RuntimeError("zstd module not found, required for Zstandard archives") from None
         elif self.ext == ".lz4":
             self.format = ArchiveFormat.LZ4
-            self.decompressor = lz4.open
+            try:
+                import lz4 
+                self.decompressor = lz4.open
+            except ImportError:
+                raise RuntimeError("lz4 module not found, required for LZ4 archives") from None
         else:
             raise ArchiveError(f"Unsupported compression format: {self.ext}")
 
