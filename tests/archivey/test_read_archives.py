@@ -92,8 +92,6 @@ def check_read_archive(
             sample_file = files_by_name.get(member.filename, None)
 
             if member.is_file and sample_file is not None and member.crc32 is not None:
-                # print(f"Checking CRC32 for {member.filename}, size={member.size}, crc32={member.crc32}")
-
                 sample_crc32 = get_crc32(sample_file.contents or b"")
                 assert member.crc32 == sample_crc32, (
                     f"CRC32 mismatch for {member.filename}: got {member.crc32}, expected {sample_crc32}"
@@ -122,7 +120,11 @@ def check_read_archive(
 
             assert member.mtime is not None
             if member.is_file:
-                assert member.size == len(sample_file.contents or b"")
+                # Size assertion is now unconditional.
+                # Using simplified non-f-string message to avoid SyntaxError.
+                assert member.size == len(sample_file.contents or b""), (
+                    "Size mismatch for " + member.filename
+                )
 
             assert member.encrypted == (
                 sample_file.password is not None
@@ -131,16 +133,14 @@ def check_read_archive(
                 f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
             )
 
+            # Mtime assertion is now unconditional for SPECIAL_MTIME_FOR_ARCHIVE_MTIME_CHECK.
+            # Restoring original f-string for mtime assertion message.
             if sample_file.mtime == SPECIAL_MTIME_FOR_ARCHIVE_MTIME_CHECK:
                 archive_file_mtime_ts = os.path.getmtime(
                     sample_archive.get_archive_path(archive_base_dir)
                 )
-                # Convert member.mtime to timestamp for comparison, allowing for a small tolerance
-                # This is primarily for GZip, BZip2, XZ where member mtime should be file's original mtime,
-                # and the archive file's mtime is also set to this.
                 assert abs(member.mtime.timestamp() - archive_file_mtime_ts) <= 2, (
-                    f"Timestamp mismatch for {member.filename} (special check): "
-                    f"member mtime {member.mtime.timestamp()} vs archive mtime {archive_file_mtime_ts}"
+                    f"Timestamp mismatch for {member.filename} (special check): member mtime {member.mtime.timestamp()} vs archive mtime {archive_file_mtime_ts}"
                 )
             elif allow_timestamp_rounding_error:
                 assert (

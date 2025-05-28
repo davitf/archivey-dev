@@ -39,3 +39,10 @@ class ArchiveNotSupportedError(ArchiveError):
     """Raised when the archive format is not supported."""
 
     pass
+
+
+class UnrarNotInstalledError(ArchiveError):
+    """Raised when unrar command is not found."""
+
+    def __init__(self, message="unrar command not found. Please install unrar and ensure it is in your PATH. It can usually be installed via your system's package manager (e.g., `apt-get install unrar` or `brew install unrar`)."):
+        super().__init__(message)

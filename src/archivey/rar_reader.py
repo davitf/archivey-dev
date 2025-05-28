@@ -1,5 +1,6 @@
 import io
 import logging
+import shutil # Added shutil import
 from archivey.utils import bytes_to_str
 import rarfile
 import subprocess
@@ -12,12 +13,101 @@ from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveError,
+    UnrarNotInstalledError,
 )
 from archivey.formats import ArchiveFormat
 from archivey.types import ArchiveInfo, ArchiveMember, MemberType
-from archivey.io_wrappers import ExceptionTranslatingIO
+# Removed: from archivey.io_wrappers import ExceptionTranslatingIO
 
 logger = logging.getLogger(__name__)
+
+
+class ExceptionTranslatingIO(io.RawIOBase):
+    """
+    A file-like object that wraps another file-like object (inner_io)
+    and translates exceptions raised by its methods using a provided
+    exception_translator function.
+    """
+
+    def __init__(self, inner_io: IO[bytes], exception_translator: callable):
+        self.inner_io = inner_io
+        self.exception_translator = exception_translator
+        super().__init__()
+
+    def _translate_exception(self, e: Exception) -> Exception:
+        translated_exception = self.exception_translator(e)
+        if translated_exception:
+            return translated_exception
+        return e
+
+    def read(self, size: int = -1) -> bytes | None:
+        try:
+            return self.inner_io.read(size)
+        except Exception as e:
+            raise self._translate_exception(e) from e
+
+    def readable(self) -> bool:
+        try:
+            return self.inner_io.readable()
+        except Exception as e:
+            # Readability checks usually don't raise, but for safety:
+            raise self._translate_exception(e) from e
+
+    def writable(self) -> bool:
+        # Assuming the wrapped stream is for reading, so not writable.
+        # If self.inner_io has a writable method, it could be called here.
+        return False
+
+    def seekable(self) -> bool:
+        try:
+            return self.inner_io.seekable()
+        except Exception as e:
+            raise self._translate_exception(e) from e
+
+    def close(self) -> None:
+        try:
+            self.inner_io.close()
+        except Exception as e:
+            raise self._translate_exception(e) from e
+        finally:
+            super().close()
+
+
+    def tell(self) -> int:
+        try:
+            return self.inner_io.tell()
+        except Exception as e:
+            raise self._translate_exception(e) from e
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        try:
+            return self.inner_io.seek(offset, whence)
+        except Exception as e:
+            raise self._translate_exception(e) from e
+
+    # Other RawIOBase methods that might be needed if not provided by inner_io
+    # or if inner_io is not already a RawIOBase compliant stream.
+    # For rarfile.RarExtFile, the above should mostly cover interactions.
+    # fileno() is unlikely to be supportable.
+
+    # Required by RawIOBase if inner_io doesn't implement them,
+    # but rarfile.RarExtFile should.
+    # If inner_io is a TextIOWrapper or similar, these might not be present,
+    # but rarfile.open gives a binary stream.
+
+    # def readinto(self, b):
+    #     try:
+    #         # Check if inner_io has readinto, otherwise simulate with read
+    #         if hasattr(self.inner_io, 'readinto'):
+    #             return self.inner_io.readinto(b)
+    #         else:
+    #             data = self.read(len(b))
+    #             if data is None:
+    #                 return 0 # Or handle as appropriate for EOF
+    #             b[:len(data)] = data
+    #             return len(data)
+    #     except Exception as e:
+    #         raise self._translate_exception(e) from e
 
 
 _RAR_COMPRESSION_METHODS = {
@@ -42,6 +132,15 @@ class BaseRarReader(ArchiveReader):
             self._archive = rarfile.RarFile(archive_path, "r")
             if pwd:
                 self._archive.setpassword(pwd)
+        except rarfile.UNRAR_TOOL_MISSING_ERROR as e: # Attempting to catch the specific error
+            raise UnrarNotInstalledError() from e
+        except FileNotFoundError as e: # Fallback if unrar command is not found directly by OS
+            raise UnrarNotInstalledError() from e
+        except OSError as e: # Broader fallback for other OS-related errors if unrar is missing
+            # Check if the error message indicates the unrar tool is missing
+            if 'unrar' in str(e).lower() and ('not found' in str(e).lower() or 'cannot find' in str(e).lower()):
+                raise UnrarNotInstalledError() from e
+            raise # Re-raise if it's a different OSError
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(f"Invalid RAR archive {archive_path}: {e}")
         except rarfile.NotRarFile as e:
@@ -199,8 +298,8 @@ class RarReader(BaseRarReader):
 
         try:
             # Apparently pwd can be either bytes or str
-            inner = self._archive.open(member.filename, pwd=bytes_to_str(pwd))
-            return ExceptionTranslatingIO(inner, self._exception_translator)  # type: ignore[arg-type]
+            inner_stream = self._archive.open(member.filename, pwd=bytes_to_str(pwd))
+            return ExceptionTranslatingIO(inner_stream, self._exception_translator) # type: ignore[arg-type]
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(
                 f"Error reading member {member.filename}"
@@ -341,6 +440,10 @@ class RarStreamReader(BaseRarReader):
 
     def _open_stream(self) -> None:
         try:
+            # Check if unrar command is available
+            if shutil.which('unrar') is None:
+                raise UnrarNotInstalledError()
+
             # Open an unrar process that outputs the contents of all files in the archive to stdout.
             password_args = ["-p" + self._pwd] if self._pwd else ["-p-"]
             cmd = ["unrar", "p", "-inul", *password_args, self.archive_path]

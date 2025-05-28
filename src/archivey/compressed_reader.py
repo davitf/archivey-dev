@@ -1,6 +1,7 @@
 import io
 import os
 import gzip
+import logging # Added logging import
 import bz2
 import lzma
 from datetime import datetime
@@ -56,7 +57,12 @@ def read_gzip_metadata(path: str, member: ArchiveMember):
         # Parse header fields
         id1, id2, cm, flg, mtime_timestamp, xfl, os = struct.unpack("<3BIBBB", header)
 
-        member.mtime = datetime.fromtimestamp(mtime_timestamp)
+        logging.warning(f"GZIP_DEBUG: Header mtime_timestamp for {path}: {mtime_timestamp}")
+        logging.warning(f"GZIP_DEBUG: member.mtime before logic for {path}: {member.mtime}")
+        if mtime_timestamp != 0:
+            member.mtime = datetime.fromtimestamp(mtime_timestamp)
+        # else: member.mtime (already set from os.path.getmtime in __init__) is used
+        logging.warning(f"GZIP_DEBUG: member.mtime after logic for {path}: {member.mtime}")
 
         # Add compression method and level
         extra_fields["compress_type"] = cm  # 8 = deflate, consistent with ZIP
@@ -169,7 +175,10 @@ class CompressedReader(ArchiveReader):
             raise ArchiveError(f"Unsupported compression format: {self.ext}")
 
         # Get file metadata
-        self.mtime = datetime.fromtimestamp(os.path.getmtime(archive_path))
+        fs_mtime_ts = os.path.getmtime(self.archive_path)
+        logging.warning(f"GZIP_DEBUG: Initial fs_mtime_ts for {self.archive_path}: {fs_mtime_ts}")
+        self.mtime = datetime.fromtimestamp(fs_mtime_ts)
+        logging.warning(f"GZIP_DEBUG: Initial self.mtime for {self.archive_path}: {self.mtime}")
 
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(

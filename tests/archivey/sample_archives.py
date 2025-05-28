@@ -414,6 +414,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=BASIC_FILES,
         solid=False,
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="basic_solid.rar",
@@ -421,6 +422,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=BASIC_FILES,
         solid=True,
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="comment.rar",
@@ -429,6 +431,7 @@ RAR_ARCHIVES = [
         files=COMMENT_FILES,
         archive_comment="RAR archive comment",
         solid=False,
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="comment_solid.rar",
@@ -437,6 +440,7 @@ RAR_ARCHIVES = [
         files=COMMENT_FILES,
         archive_comment="Solid RAR archive comment",
         solid=True,
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="encryption.rar",
@@ -444,6 +448,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=ENCRYPTION_SINGLE_PASSWORD_FILES,
         solid=False,
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="encryption_with_plain.rar",
@@ -451,6 +456,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES,
         solid=False,
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="encryption_solid.rar",
@@ -458,6 +464,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=ENCRYPTION_SINGLE_PASSWORD_FILES,
         solid=True,
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="encryption_several_passwords.rar",
@@ -465,6 +472,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
         solid=False,
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="encrypted_header.rar",
@@ -473,6 +481,7 @@ RAR_ARCHIVES = [
         files=BASIC_FILES,
         solid=False,
         header_password="header_password",
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="encrypted_header_solid.rar",
@@ -481,6 +490,7 @@ RAR_ARCHIVES = [
         files=BASIC_FILES,
         solid=True,
         header_password="header_password",
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="symlinks.rar",
@@ -488,6 +498,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=SYMLINK_FILES,
         solid=False,
+        skip_test=False,  # Changed from True
     ),
     ArchiveInfo(
         filename="symlinks_solid.rar",
@@ -495,6 +506,7 @@ RAR_ARCHIVES = [
         format=ArchiveFormat.RAR,
         files=SYMLINK_FILES,
         solid=True,
+        skip_test=False,  # Changed from True
     ),
 ]
 
