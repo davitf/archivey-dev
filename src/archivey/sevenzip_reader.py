@@ -3,29 +3,40 @@ import logging
 import lzma
 from archivey.base_reader import ArchiveReader
 from archivey.utils import bytes_to_str
-import py7zr
-import py7zr.helpers
-import py7zr.exceptions
-import py7zr.compressor
-
-from py7zr.py7zr import ArchiveFile
-
-from typing import List, Iterator, cast
+from archivey.exceptions import ArchiveCorruptedError, ArchiveEncryptedError, MissingDependencyError
 from archivey.types import (
     ArchiveMember,
     ArchiveInfo,
     MemberType,
 )
 from archivey.formats import ArchiveFormat
-from archivey.exceptions import ArchiveCorruptedError, ArchiveEncryptedError
 
 logger = logging.getLogger(__name__)
+
+try:
+    import py7zr
+    import py7zr.helpers
+    import py7zr.exceptions
+    import py7zr.compressor
+    from py7zr.py7zr import ArchiveFile # Keep this if ArchiveFile is used directly
+    PY7ZR_AVAILABLE = True
+except ImportError:
+    PY7ZR_AVAILABLE = False
+    # Define dummy/placeholder types if necessary for type hinting or class structure,
+    # though for this case, just setting the flag is enough if the class init checks it first.
+    ArchiveFile = type('ArchiveFile', (), {}) # Dummy type
+
+from typing import List, Iterator, cast
 
 
 class SevenZipReader(ArchiveReader):
     """Reader for 7-Zip archives."""
 
     def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
+        if not PY7ZR_AVAILABLE:
+            raise MissingDependencyError(
+                "py7zr library is not installed. Please install it with 'pip install archivey[optional]' or 'pip install py7zr'."
+            )
         self.archive_path = archive_path
         self._members = None
         self._format_info = None

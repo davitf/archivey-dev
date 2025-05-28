@@ -13,6 +13,7 @@ from archivey.exceptions import (
     ArchiveError,
     ArchiveCorruptedError,
     ArchiveFormatError,
+    MissingDependencyError,
 )
 from archivey.types import (
     ArchiveInfo,
@@ -147,14 +148,8 @@ class CompressedReader(ArchiveReader):
             self.decompressor = lzma.open
         elif self.ext == ".zstd":
             self.format = ArchiveFormat.ZSTD
-            try:
-                import zstd
-
-                self.decompressor = zstd.open
-            except ImportError:
-                raise RuntimeError(
-                    "zstd module not found, required for Zstandard archives"
-                ) from None
+            self.format = ArchiveFormat.ZSTD
+            self.decompressor = None
         elif self.ext == ".lz4":
             self.format = ArchiveFormat.LZ4
             try:
@@ -205,6 +200,14 @@ class CompressedReader(ArchiveReader):
         )
 
     def open(self, member: ArchiveMember, *, pwd: bytes | None = None) -> io.IOBase:
+        if self.ext == ".zstd" and self.decompressor is None:
+            try:
+                import zstd
+                self.decompressor = zstd.open
+            except ImportError:
+                raise MissingDependencyError(
+                    "zstd library is not installed. Please install it with 'pip install archivey[optional]' or 'pip install zstd'."
+                ) from None
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
         if member != self.member:

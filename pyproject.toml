@@ -19,6 +19,7 @@ archivey = "archivey:main"
 optional = [
     "py7zr>=0.22.0",
     "rarfile>=4.2",
+    "zstd>=1.5",
 ]
 
 [build-system]
