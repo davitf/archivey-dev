@@ -1,12 +1,22 @@
 from dataclasses import dataclass
 import logging
 import os
+import zlib
 import pytest
 from datetime import datetime
 
 from archivey.archive_stream import ArchiveStream
 from archivey.types import MemberType
-from sample_archives import SAMPLE_ARCHIVES, ArchiveInfo, GenerationMethod
+from sample_archives import (
+    ArchiveInfo,
+    GenerationMethod,
+    ZIP_ARCHIVES,
+    TAR_ARCHIVES,
+    RAR_ARCHIVES,
+    SEVENZIP_PY7ZR_ARCHIVES,
+    SEVENZIP_CMD_ARCHIVES,
+    SINGLE_FILE_COMPRESSED_ARCHIVES,
+)
 from archivey.types import ArchiveFormat
 
 # Special mtime value to indicate that the member's mtime should be compared
@@ -38,7 +48,24 @@ FORMAT_FEATURES = {
 DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
 
 
-def check_read_archive(sample_archive: ArchiveInfo, features: ArchiveFormatFeatures):
+def get_crc32(data: bytes) -> int:
+    """
+    Compute CRC32 checksum for a file within an archive.
+    Returns a hex string.
+    """
+    crc32_value: int = 0
+
+    # Read the file in chunks
+    crc32_value = zlib.crc32(data, crc32_value)
+    return crc32_value & 0xFFFFFFFF
+
+
+def check_read_archive(
+    sample_archive: ArchiveInfo,
+    features: ArchiveFormatFeatures,
+    use_rar_stream: bool = False,
+):
+    # print("STARTING TEST", sample_archive.filename)
     if sample_archive.skip_test:
         pytest.skip(f"Skipping test for {sample_archive.filename} as skip_test is True")
 
@@ -52,6 +79,7 @@ def check_read_archive(sample_archive: ArchiveInfo, features: ArchiveFormatFeatu
     with ArchiveStream(
         sample_archive.get_archive_path(archive_base_dir),
         pwd=sample_archive.header_password,
+        use_rar_stream=use_rar_stream,
     ) as archive:
         assert archive.get_format() == sample_archive.format
         format_info = archive.get_archive_info()
@@ -62,6 +90,15 @@ def check_read_archive(sample_archive: ArchiveInfo, features: ArchiveFormatFeatu
 
         for member in archive.info_iter():
             sample_file = files_by_name.get(member.filename, None)
+
+            if member.is_file and sample_file is not None and member.crc32 is not None:
+                # print(f"Checking CRC32 for {member.filename}, size={member.size}, crc32={member.crc32}")
+
+                sample_crc32 = get_crc32(sample_file.contents or b"")
+                assert member.crc32 == sample_crc32, (
+                    f"CRC32 mismatch for {member.filename}: got {member.crc32}, expected {sample_crc32}"
+                )
+
             if sample_file is None:
                 if member.type == MemberType.DIR:
                     logging.warning(
@@ -95,7 +132,9 @@ def check_read_archive(sample_archive: ArchiveInfo, features: ArchiveFormatFeatu
             )
 
             if sample_file.mtime == SPECIAL_MTIME_FOR_ARCHIVE_MTIME_CHECK:
-                archive_file_mtime_ts = os.path.getmtime(sample_archive.get_archive_path(archive_base_dir))
+                archive_file_mtime_ts = os.path.getmtime(
+                    sample_archive.get_archive_path(archive_base_dir)
+                )
                 # Convert member.mtime to timestamp for comparison, allowing for a small tolerance
                 # This is primarily for GZip, BZip2, XZ where member mtime should be file's original mtime,
                 # and the archive file's mtime is also set to this.
@@ -137,7 +176,38 @@ def check_read_archive(sample_archive: ArchiveInfo, features: ArchiveFormatFeatu
         assert not extra_files, f"Extra files: {extra_files}"
 
 
-@pytest.mark.parametrize("sample_archive", SAMPLE_ARCHIVES, ids=lambda x: x.filename)
-def test_read_archive(sample_archive: ArchiveInfo):
+@pytest.mark.parametrize("sample_archive", ZIP_ARCHIVES, ids=lambda x: x.filename)
+def test_read_zip_archives(sample_archive: ArchiveInfo):
+    features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
+    check_read_archive(sample_archive, features)
+
+
+@pytest.mark.parametrize("sample_archive", TAR_ARCHIVES, ids=lambda x: x.filename)
+def test_read_tar_archives(sample_archive: ArchiveInfo):
+    features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
+    check_read_archive(sample_archive, features)
+
+
+@pytest.mark.parametrize("sample_archive", RAR_ARCHIVES, ids=lambda x: x.filename)
+@pytest.mark.parametrize("use_rar_stream", [True, False])
+def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
+    features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
+    check_read_archive(sample_archive, features, use_rar_stream=use_rar_stream)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    SEVENZIP_PY7ZR_ARCHIVES + SEVENZIP_CMD_ARCHIVES,
+    ids=lambda x: x.filename,
+)
+def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo):
+    features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
+    check_read_archive(sample_archive, features)
+
+
+@pytest.mark.parametrize(
+    "sample_archive", SINGLE_FILE_COMPRESSED_ARCHIVES, ids=lambda x: x.filename
+)
+def test_read_single_file_compressed_archives(sample_archive: ArchiveInfo):
     features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
     check_read_archive(sample_archive, features)

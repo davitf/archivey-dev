@@ -20,7 +20,7 @@ from tqdm import tqdm
 logging.basicConfig(level=logging.INFO)
 
 
-def get_member_checksums(member_file: IO[bytes]) -> Tuple[str, str]:
+def get_member_checksums(member_file: IO[bytes]) -> Tuple[int, str]:
     """
     Compute both CRC32 and SHA256 checksums for a file within an archive.
     Returns a tuple of (crc32, sha256) as hex strings.
@@ -32,7 +32,7 @@ def get_member_checksums(member_file: IO[bytes]) -> Tuple[str, str]:
     for block in iter(lambda: member_file.read(65536), b""):
         crc32_value = zlib.crc32(block, crc32_value)
         sha256.update(block)
-    return format(crc32_value & 0xFFFFFFFF, "08x"), sha256.hexdigest()
+    return crc32_value & 0xFFFFFFFF, sha256.hexdigest()
 
 
 parser = argparse.ArgumentParser(
@@ -90,13 +90,22 @@ for archive_path in args.files:
                     try:
                         with archive.open(member, pwd=args.password) as f:
                             crc32, sha256 = get_member_checksums(f)
+                            if member.crc32 is not None and member.crc32 != crc32:
+                                crc_error = f" != {member.crc32:08x}"
+                            else:
+                                crc_error = ""
                         print(
-                            f"{encrypted_str} {member.size:12d} {crc32} {sha256} {member.filename} {member.mtime}"
+                            f"{encrypted_str} {member.size:12d} {crc32:08x}{crc_error} {sha256} {member.filename} {member.mtime}"
                         )
 
                     except ArchiveError as e:
+                        formated_crc = (
+                            f"{member.crc32:08x}"
+                            if member.crc32 is not None
+                            else "?" * 8
+                        )
                         print(
-                            f"{encrypted_str} {member.size:12d} {member.crc32:08x} {member.filename} {member.mtime} -- ERROR: {repr(e)}"
+                            f"{encrypted_str} {member.size:12d} {formated_crc} {member.filename} {member.mtime} -- ERROR: {repr(e)}"
                         )
 
                 elif member.is_link:

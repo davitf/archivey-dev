@@ -149,16 +149,22 @@ class CompressedReader(ArchiveReader):
             self.format = ArchiveFormat.ZSTD
             try:
                 import zstd
+
                 self.decompressor = zstd.open
             except ImportError:
-                raise RuntimeError("zstd module not found, required for Zstandard archives") from None
+                raise RuntimeError(
+                    "zstd module not found, required for Zstandard archives"
+                ) from None
         elif self.ext == ".lz4":
             self.format = ArchiveFormat.LZ4
             try:
-                import lz4 
+                import lz4
+
                 self.decompressor = lz4.open
             except ImportError:
-                raise RuntimeError("lz4 module not found, required for LZ4 archives") from None
+                raise RuntimeError(
+                    "lz4 module not found, required for LZ4 archives"
+                ) from None
         else:
             raise ArchiveError(f"Unsupported compression format: {self.ext}")
 
