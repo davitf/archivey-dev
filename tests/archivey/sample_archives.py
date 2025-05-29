@@ -271,11 +271,7 @@ SEVENZIP_FORMATS = [
 ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
 
 # Skip test filenames
-SKIP_TEST_FILENAMES = {
-    "symlinks__py7zr.7z",
-    "symlinks_solid__py7zr.7z",
-    "encryption_solid__py7zr.7z",
-}
+SKIP_TEST_FILENAMES = set()
 
 TEST_ARCHIVES_DIR = "test_archives"
 TEST_ARCHIVES_EXTERNAL_DIR = "test_archives_external"

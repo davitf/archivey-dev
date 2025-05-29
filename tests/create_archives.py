@@ -30,8 +30,8 @@ _COMPRESSION_METHOD_TO_ZIPFILE_VALUE = {
 
 DEFAULT_ZIP_COMPRESSION_METHOD = "store"
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 def write_files_to_dir(dir: str, files: list[FileInfo]):
@@ -585,9 +585,19 @@ def create_7z_archive_with_command_line(
     with tempfile.TemporaryDirectory() as tempdir:
         write_files_to_dir(tempdir, contents.files)
 
-        for i, (password, compression_method, group_files) in enumerate(
+        file_groups = list(
             group_files_by_password_and_compression_method(contents.files)
+        )
+        logger.info("File groups: %s", file_groups)
+        if len(file_groups) > 1 and any(
+            file.type == MemberType.LINK for file in contents.files
         ):
+            # There are some issues passing symlinks (specifically to directories) to 7z
+            # command line, so we can't use the approach of passing the individual
+            # filenames.
+            raise ValueError("There are issues passing symlinks to 7z command line. ")
+
+        for i, (password, compression_method, group_files) in enumerate(file_groups):
             command = ["7z", "a"]
 
             # Handle solid mode
@@ -601,11 +611,18 @@ def create_7z_archive_with_command_line(
 
             command.append(abs_archive_path)
 
-            # Add all contents of the temp directory. 7z handles path recursion.
-            # Using "./*" or "." ensures that paths inside the archive are relative to the archive root.
-            for file in group_files:
-                command.append(file.name)
+            if len(file_groups) > 1:
+                # Add only the files in this group, so that they get added with the
+                # provided password.
+                # With this approach, 7z may follow symlinks to directories and add
+                # their contents instead of a symlink, so it doesn't work for all cases.
+                for file in group_files:
+                    command.append(file.name)
+            else:
+                # Just add the current dir, and 7z will add all the contents.
+                command.append(".")
 
+            logger.info("Running command: %s", " ".join(command))
             subprocess.run(command, check=True, cwd=tempdir)
 
 

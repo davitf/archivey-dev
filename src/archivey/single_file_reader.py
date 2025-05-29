@@ -32,7 +32,7 @@ def _read_null_terminated_bytes(f: io.BufferedReader) -> bytes:
         if not b or b == b"\x00":
             break
         str_bytes.extend(b)
-    return str_bytes
+    return bytes(str_bytes)
 
 
 def read_gzip_metadata(
