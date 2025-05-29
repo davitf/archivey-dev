@@ -320,7 +320,8 @@ def create_tar_archive_with_tarfile(
     else:
         raise ValueError(f"Unsupported tar compression format: {compression_format}")
 
-    with tarfile.open(abs_archive_path, tar_mode) as tf:
+    # typing doesn't know all possible tar modes
+    with tarfile.open(abs_archive_path, tar_mode) as tf:  # type: ignore[reportArgumentType]
         for sample_file in contents.files:
             tarinfo = tarfile.TarInfo(name=sample_file.name)
             tarinfo.mtime = int(sample_file.mtime.timestamp())
