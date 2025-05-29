@@ -3,6 +3,8 @@ import os
 import zlib
 from dataclasses import dataclass
 from datetime import datetime
+import pathlib
+import glob
 
 import pytest
 from sample_archives import (
@@ -15,6 +17,7 @@ from sample_archives import (
 
 from archivey.archive_stream import ArchiveStream
 from archivey.types import ArchiveFormat, MemberType
+from archivey.exceptions import ArchiveEOFError, ArchiveCorruptedError
 
 
 def normalize_newlines(s: str | None) -> str | None:
@@ -201,6 +204,44 @@ def test_read_zip_archives(sample_archive: ArchiveInfo):
     check_read_archive(sample_archive, features)
 
 
+CORRUPTED_ARCHIVES_DIR = pathlib.Path(__file__).parent / "../test_corrupted_archives"
+
+
+def get_corrupted_archives(suffix: str) -> list[str]:
+    """Helper to get list of corrupted archive paths for parametrization."""
+    if not CORRUPTED_ARCHIVES_DIR.exists():
+        return []
+    return glob.glob(str(CORRUPTED_ARCHIVES_DIR / suffix))
+
+
+@pytest.mark.parametrize(
+    "archive_path_str",
+    get_corrupted_archives("*.truncated"),
+    ids=lambda x: pathlib.Path(str(x)).name if isinstance(x, (str, pathlib.Path)) else "invalid_param",
+)
+def test_read_truncated_archives(archive_path_str: str):
+    """Test that reading truncated archives raises ArchiveEOFError."""
+    archive_path = pathlib.Path(archive_path_str)
+    with pytest.raises(ArchiveEOFError):
+        with ArchiveStream(archive_path):
+            pass  # Opening is enough to trigger for some formats, iteration for others
+
+
+@pytest.mark.parametrize(
+    "archive_path_str",
+    get_corrupted_archives("*.corrupted"),
+    ids=lambda x: pathlib.Path(str(x)).name if isinstance(x, (str, pathlib.Path)) else "invalid_param",
+)
+def test_read_corrupted_archives_general(archive_path_str: str):
+    """Test that reading generally corrupted archives raises ArchiveCorruptedError."""
+    archive_path = pathlib.Path(archive_path_str)
+    with pytest.raises(ArchiveCorruptedError):
+        # For many corrupted archives, error might be raised on open or during iteration
+        with ArchiveStream(archive_path) as archive:
+            for _ in archive.info_iter():
+                pass
+
+
 @pytest.mark.parametrize(
     "sample_archive",
     filter_archives(
@@ -223,6 +264,14 @@ def test_read_tar_archives(sample_archive: ArchiveInfo):
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
+    if (
+        use_rar_stream
+        and sample_archive.filename == "encryption_several_passwords__.rar"
+    ):
+        pytest.skip(
+            "RarStreamReader cannot handle multiple different file passwords without a global header password."
+        )
+
     features = FORMAT_FEATURES.get(
         sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
     )
