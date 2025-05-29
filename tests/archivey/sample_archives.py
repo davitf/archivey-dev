@@ -69,6 +69,7 @@ class ArchiveInfo:
     contents: ArchiveContents
     format_info: ArchiveFormatInfo
     skip_test: bool = False
+    generate_corrupted_variants: bool = False
 
     def get_archive_path(self, base_dir: str) -> str:
         if self.format_info.generation_method == GenerationMethod.EXTERNAL:
@@ -530,11 +531,20 @@ def build_archive_infos() -> list[ArchiveInfo]:
     for contents, format_infos in ARCHIVE_DEFINITIONS:
         for format_info in format_infos:
             filename = f"{contents.file_basename}__{format_info.file_suffix}"
+            generate_corrupted_variants = False
+            if filename in (
+                "basic_nonsolid__zipfile.zip",
+                "basic_solid__tarfile.tar.gz",
+                "basic_nonsolid__.rar",
+                "basic_nonsolid__py7zr.7z",
+            ):
+                generate_corrupted_variants = True
             archive_info = ArchiveInfo(
                 filename=filename,
                 contents=contents,
                 format_info=format_info,
                 skip_test=filename in SKIP_TEST_FILENAMES,
+                generate_corrupted_variants=generate_corrupted_variants,
             )
 
             if any(
