@@ -222,8 +222,51 @@ def create_zip_archive_with_infozip_command_line(
                 input="\n".join(comment_file_comments).encode("utf-8"),
             )
 
+def create_tar_archive_with_command_line(
+    archive_path: str,
+    files: list[FileInfo],
+    archive_comment: str | None = None,
+    compression_format: ArchiveFormat = ArchiveFormat.TAR,
+):
+    """
+    Create a tar archive using the tar command line tool.
+    """
+    assert archive_comment is None, "TAR format does not support archive comments"
 
-def _create_tar_archive_with_tarfile( # Renamed and implemented with tarfile module
+    abs_archive_path = os.path.abspath(archive_path)
+    if os.path.exists(archive_path):
+        os.remove(archive_path)
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        write_files_to_dir(tempdir, files)
+
+        command = ["tar"]
+        command.append("-c")  # Create a new archive
+        command.append("-f")  # Specify the archive file
+        command.append(abs_archive_path)
+
+        # Add compression flag based on the compression_format
+        if compression_format == ArchiveFormat.TAR_GZ:
+            command.append("-z")  # gzip
+        elif compression_format == ArchiveFormat.TAR_BZ2:
+            command.append("-j")  # bzip2
+        elif compression_format == ArchiveFormat.TAR_XZ:
+            command.append("-J")  # xz
+        elif compression_format != ArchiveFormat.TAR:
+            # This case should ideally not be reached if enums are used correctly
+            raise ValueError(
+                f"Unsupported tar compression format: {compression_format}"
+            )
+
+        # Add file names to the command
+        # These names must be relative to the temporary directory
+        for file_info in files:
+            command.append(file_info.name)
+
+        subprocess.run(command, check=True, cwd=tempdir)
+        
+
+def create_tar_archive_with_tarfile(
     archive_path: str,
     files: list[FileInfo],
     archive_comment: str | None = None,
@@ -282,13 +325,16 @@ def _create_tar_archive_with_tarfile( # Renamed and implemented with tarfile mod
                 tf.addfile(tarinfo, io.BytesIO(file_contents_bytes))
 
 
-def create_gz_archive_with_command_line(
-    archive_path: str, files: list[FileInfo], archive_comment: str | None = None
+def create_single_file_compressed_archive_with_command_line(
+    archive_path: str,
+    files: list[FileInfo],
+    archive_comment: str | None = None,
+    compression_cmd: str = "gzip",
 ):
-    assert len(files) == 1, "Gzip archives only support a single file."
+    assert len(files) == 1, f"{compression_cmd} archives only support a single file."
     file_info = files[0]
-    assert file_info.type == MemberType.FILE, "Only files are supported for gzip."
-    assert archive_comment is None, "Gzip format does not support archive comments."
+    assert file_info.type == MemberType.FILE, f"Only files are supported for {compression_cmd}."
+    assert archive_comment is None, f"{compression_cmd} format does not support archive comments."
 
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
@@ -297,16 +343,16 @@ def create_gz_archive_with_command_line(
     with tempfile.TemporaryDirectory() as tempdir:
         temp_file_path = os.path.join(tempdir, file_info.name)
         with open(temp_file_path, "wb") as f:
-            f.write(file_info.contents)
+            f.write(file_info.contents or b"")
         os.utime(
             temp_file_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
         )
 
-        # gzip creates <temp_file_path>.gz and by default preserves mtime of source in the member.
-        # --no-name prevents storing original filename/timestamp if different, but content mtime is kept.
-        subprocess.run(["gzip", "--no-name", temp_file_path], check=True, cwd=tempdir)
+        # Run the compression command
+        subprocess.run([compression_cmd, temp_file_path], check=True, cwd=tempdir)
 
-        compressed_file_on_temp = temp_file_path + ".gz"
+        # Get the compressed file path based on the command
+        compressed_file_on_temp = temp_file_path + os.path.splitext(archive_path)[1]
         os.rename(compressed_file_on_temp, abs_archive_path)
 
         # Explicitly set the mtime of the archive file itself
@@ -314,69 +360,25 @@ def create_gz_archive_with_command_line(
             abs_archive_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
         )
 
+def create_gz_archive_with_command_line(
+    archive_path: str, files: list[FileInfo], archive_comment: str | None = None
+):
+    create_single_file_compressed_archive_with_command_line(archive_path, files, archive_comment, "gzip")
 
 def create_bz2_archive_with_command_line(
     archive_path: str, files: list[FileInfo], archive_comment: str | None = None
 ):
-    assert len(files) == 1, "Bzip2 archives only support a single file."
-    file_info = files[0]
-    assert file_info.type == MemberType.FILE, "Only files are supported for bzip2."
-    assert archive_comment is None, "Bzip2 format does not support archive comments."
-
-    abs_archive_path = os.path.abspath(archive_path)
-    if os.path.exists(abs_archive_path):
-        os.remove(abs_archive_path)
-
-    with tempfile.TemporaryDirectory() as tempdir:
-        temp_file_path = os.path.join(tempdir, file_info.name)
-        with open(temp_file_path, "wb") as f:
-            f.write(file_info.contents)
-        os.utime(
-            temp_file_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
-        )
-
-        # bzip2 creates <temp_file_path>.bz2 and preserves mtime.
-        subprocess.run(["bzip2", temp_file_path], check=True, cwd=tempdir)
-
-        compressed_file_on_temp = temp_file_path + ".bz2"
-        os.rename(compressed_file_on_temp, abs_archive_path)
-
-        # Explicitly set the mtime of the archive file itself
-        os.utime(
-            abs_archive_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
-        )
-
+    create_single_file_compressed_archive_with_command_line(archive_path, files, archive_comment, "bzip2")
 
 def create_xz_archive_with_command_line(
     archive_path: str, files: list[FileInfo], archive_comment: str | None = None
 ):
-    assert len(files) == 1, "XZ archives only support a single file."
-    file_info = files[0]
-    assert file_info.type == MemberType.FILE, "Only files are supported for xz."
-    assert archive_comment is None, "XZ format does not support archive comments."
+    create_single_file_compressed_archive_with_command_line(archive_path, files, archive_comment, "xz")
 
-    abs_archive_path = os.path.abspath(archive_path)
-    if os.path.exists(abs_archive_path):
-        os.remove(abs_archive_path)
-
-    with tempfile.TemporaryDirectory() as tempdir:
-        temp_file_path = os.path.join(tempdir, file_info.name)
-        with open(temp_file_path, "wb") as f:
-            f.write(file_info.contents)
-        os.utime(
-            temp_file_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
-        )
-
-        # xz creates <temp_file_path>.xz and preserves mtime.
-        subprocess.run(["xz", temp_file_path], check=True, cwd=tempdir)
-
-        compressed_file_on_temp = temp_file_path + ".xz"
-        os.rename(compressed_file_on_temp, abs_archive_path)
-
-        # Explicitly set the mtime of the archive file itself
-        os.utime(
-            abs_archive_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
-        )
+def create_zstd_archive_with_command_line(
+    archive_path: str, files: list[FileInfo], archive_comment: str | None = None
+):
+    create_single_file_compressed_archive_with_command_line(archive_path, files, archive_comment, "zstd")
 
 
 def create_archive(archive_info: ArchiveInfo, base_dir: str):
@@ -411,6 +413,10 @@ def create_archive(archive_info: ArchiveInfo, base_dir: str):
             )
         elif archive_info.format == ArchiveFormat.XZ:
             create_xz_archive_with_command_line(
+                full_path, archive_info.files, archive_info.archive_comment
+            )
+        elif archive_info.format == ArchiveFormat.ZSTD:
+            create_zstd_archive_with_command_line(
                 full_path, archive_info.files, archive_info.archive_comment
             )
         else:
@@ -614,7 +620,7 @@ def create_7z_archive_with_command_line(
 GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.ZIPFILE: create_zip_archive_with_zipfile,
     GenerationMethod.INFOZIP: create_zip_archive_with_infozip_command_line,
-    GenerationMethod.TAR_COMMAND_LINE: _create_tar_archive_with_tarfile, # Updated to use the new function
+    GenerationMethod.TAR_COMMAND_LINE: create_tar_archive_with_tarfile, # Updated to use the new function
     GenerationMethod.RAR_COMMAND_LINE: create_rar_archive_with_command_line,
     GenerationMethod.PY7ZR: create_7z_archive_with_py7zr,
     GenerationMethod.SEVENZIP_COMMAND_LINE: create_7z_archive_with_command_line,

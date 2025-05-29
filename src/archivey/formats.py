@@ -1,6 +1,7 @@
 import io
-
-from archivey.types import ArchiveFormat
+import os
+import logging
+from archivey.types import COMPRESSION_FORMAT_TO_TAR_FORMAT, ArchiveFormat
 
 
 def detect_archive_format_by_signature(
@@ -53,22 +54,36 @@ def detect_archive_format_by_signature(
 
 _EXTENSION_TO_FORMAT = {
     ".tar.gz": ArchiveFormat.TAR_GZ,
-    ".tgz": ArchiveFormat.TAR_GZ,
     ".tar.bz2": ArchiveFormat.TAR_BZ2,
-    ".tbz2": ArchiveFormat.TAR_BZ2,
     ".tar.xz": ArchiveFormat.TAR_XZ,
-    ".txz": ArchiveFormat.TAR_XZ,
     ".tar.zstd": ArchiveFormat.TAR_ZSTD,
-    ".tzst": ArchiveFormat.TAR_ZSTD,
     ".tar.lz4": ArchiveFormat.TAR_LZ4,
-    ".tlz4": ArchiveFormat.TAR_LZ4,
+
     ".zip": ArchiveFormat.ZIP,
     ".rar": ArchiveFormat.RAR,
     ".7z": ArchiveFormat.SEVENZIP,
     ".gz": ArchiveFormat.GZIP,
     ".bz2": ArchiveFormat.BZIP2,
     ".tar": ArchiveFormat.TAR,
+    ".xz": ArchiveFormat.XZ,
+    ".zst": ArchiveFormat.ZSTD,
+
+    ".tgz": ArchiveFormat.TAR_GZ,
+    ".tbz2": ArchiveFormat.TAR_BZ2,
+    ".txz": ArchiveFormat.TAR_XZ,
+    ".tzst": ArchiveFormat.TAR_ZSTD,
+    ".tlz4": ArchiveFormat.TAR_LZ4,
 }
+
+_TAR_EXTENSIONS = [".tar", ".tgz", ".tbz2", ".txz", ".tzst", ".tlz4"]
+
+def has_tar_extension(filename: str) -> bool:
+    last_ext = os.path.splitext(filename)[1].lower()
+    if last_ext in _TAR_EXTENSIONS:
+        return True
+    if filename.lower().endswith(".tar"):
+        return True
+    return False
 
 
 def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
@@ -78,3 +93,20 @@ def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
         if filename_lower.endswith(ext):
             return format
     return ArchiveFormat.UNKNOWN
+
+logger = logging.getLogger(__name__)
+
+def detect_archive_format(filename: str) -> ArchiveFormat:
+    format_by_signature = detect_archive_format_by_signature(filename)
+    format_by_filename = detect_archive_format_by_filename(filename)
+
+    if format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT and has_tar_extension(filename):
+        format = COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]
+    else:
+        format = format_by_signature
+        
+    if format != format_by_filename:
+        logger.warning(f"{filename}: Format by signature ({format_by_signature}) and format by filename ({format_by_filename}) differ")
+
+    return format
+    

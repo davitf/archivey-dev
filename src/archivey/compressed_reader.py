@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import gzip
 import bz2
@@ -21,6 +22,7 @@ from archivey.types import (
     MemberType,
 )
 
+logger = logging.getLogger(__name__)
 
 def _read_null_terminated_bytes(f: io.BufferedReader) -> bytes:
     str_bytes = bytearray()
@@ -97,6 +99,70 @@ def read_gzip_metadata(path: str, member: ArchiveMember):
         member.size = isize
 
 
+def _read_xz_multibyte_integer(data: bytes, offset: int) -> tuple[int, int]:
+    """
+    Read a multi-byte integer from the data at the given offset.
+    """
+    value = 0
+    shift = 0
+    while True:
+        b = data[offset]
+        offset += 1
+        value |= (b & 0x7F) << shift
+        if b & 0x80 == 0:
+            break
+        shift += 7
+    
+    return value, offset
+
+
+XZ_MAGIC_FOOTER = b"YZ"
+XZ_STREAM_HEADER_MAGIC = b"\xfd7zXZ\x00"
+
+def read_xz_metadata(path: str, member: ArchiveMember):
+    logger.info(f"Reading XZ metadata for {path}")
+    with open(path, "rb") as f:
+        f.seek(-12, 2)  # Footer is always 12 bytes
+        footer = f.read(12)
+
+        if footer[-2:] != XZ_MAGIC_FOOTER:
+            raise ValueError("Invalid XZ footer")
+
+        # Stream flags are in bytes 8–9 of the footer
+        stream_flags = footer[8:10]
+        check_type = stream_flags[1] & 0x0F  # only lower 4 bits used
+
+        # Backward Size (first 4 bytes) tells how far back the Index is, in 4-byte units minus 1
+        backward_size_field = struct.unpack("<I", footer[4:8])[0]
+        index_size = (backward_size_field + 1) * 4
+        logger.info(f"XZ metadata: index_size={index_size}, backward_size_field={backward_size_field}")
+
+        f.seek(-12 - index_size, 2)
+        index_data = f.read(index_size)
+
+        # Skip index indicator byte and reserved bits (first byte)
+        if index_data[0] != 0x00:
+            raise ValueError("Invalid XZ index indicator")
+
+        # Next 2–10 bytes are variable-length field counts and sizes
+        # We just want the uncompressed size (encoded as a multi-byte integer)
+
+        # Decode the first count (number of records)
+        blocks = []
+        total_uncompressed_size = 0
+
+        offset = 1
+        number_of_blocks, offset = _read_xz_multibyte_integer(index_data, offset)
+
+        for _ in range(number_of_blocks):
+            count, offset = _read_xz_multibyte_integer(index_data, offset)
+            uncompressed_size, offset = _read_xz_multibyte_integer(index_data, offset)
+            blocks.append((uncompressed_size, offset))
+            total_uncompressed_size += uncompressed_size
+
+        member.size = total_uncompressed_size
+        logger.debug(f"XZ metadata: total_size={total_uncompressed_size}, num_blocks={number_of_blocks}, blocks={blocks}")
+
 class BZ2Wrapper(io.IOBase):
     """Wrapper for bz2 file objects that converts OSError to ArchiveCorruptedError."""
 
@@ -118,7 +184,7 @@ class BZ2Wrapper(io.IOBase):
 class CompressedReader(ArchiveReader):
     """Reader for raw compressed files (gz, bz2, xz)."""
 
-    def __init__(self, archive_path: str, *, pwd: bytes | None = None, **kwargs):
+    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None, **kwargs):
         """Initialize the reader.
 
         Args:
@@ -174,7 +240,7 @@ class CompressedReader(ArchiveReader):
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
             filename=self.member_name,
-            size=-1,  # This will be updated when we read the file
+            size=None,  # Not available for all formats
             mtime=self.mtime,
             type=MemberType.FILE,
             compression_method=self.format.value,
@@ -184,6 +250,8 @@ class CompressedReader(ArchiveReader):
 
         if self.ext == ".gz":
             read_gzip_metadata(archive_path, self.member)
+        elif self.ext == ".xz":
+            read_xz_metadata(archive_path, self.member)
 
     def close(self) -> None:
         """Close the archive and release any resources."""
@@ -200,7 +268,7 @@ class CompressedReader(ArchiveReader):
         """Get detailed information about the archive's format."""
         return ArchiveInfo(
             format=self.format.value,
-            is_solid=True,  # Single-file compressed formats are effectively solid
+            is_solid=False,
             extra=None,
         )
 

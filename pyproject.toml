@@ -17,8 +17,10 @@ archivey = "archivey:main"
 
 [project.optional-dependencies]
 optional = [
+    "lz4>=4.4.4",
     "py7zr>=0.22.0",
     "rarfile>=4.2",
+    "zstd>=1.5.7.0",
 ]
 
 [build-system]

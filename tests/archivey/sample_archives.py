@@ -626,7 +626,7 @@ SINGLE_FILE_COMPRESSED_ARCHIVES = [
         filename="single_file.txt.gz",
         generation_method=GenerationMethod.COMMAND_LINE,
         format=ArchiveFormat.GZIP,
-        files=[SINGLE_FILE_INFO_SPECIAL_MTIME],
+        files=[SINGLE_FILE_INFO],
         archive_comment=None,
     ),
     ArchiveInfo(
@@ -640,6 +640,13 @@ SINGLE_FILE_COMPRESSED_ARCHIVES = [
         filename="single_file.txt.xz",
         generation_method=GenerationMethod.COMMAND_LINE,
         format=ArchiveFormat.XZ,
+        files=[SINGLE_FILE_INFO_SPECIAL_MTIME],
+        archive_comment=None,
+    ),
+    ArchiveInfo(
+        filename="single_file.txt.zst",
+        generation_method=GenerationMethod.COMMAND_LINE,
+        format=ArchiveFormat.ZSTD,
         files=[SINGLE_FILE_INFO_SPECIAL_MTIME],
         archive_comment=None,
     ),

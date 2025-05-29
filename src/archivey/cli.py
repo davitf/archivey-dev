@@ -87,6 +87,7 @@ for archive_path in args.files:
                         print("SKIPPING", member.filename)
                         continue
 
+                    size_str = "ERROR!      "
                     try:
                         with archive.open(member, pwd=args.password) as f:
                             crc32, sha256 = get_member_checksums(f)
@@ -94,8 +95,11 @@ for archive_path in args.files:
                                 crc_error = f" != {member.crc32:08x}"
                             else:
                                 crc_error = ""
+
+                        size_str = "?" * 12 if member.size is None else f"{member.size:12d}"
+
                         print(
-                            f"{encrypted_str} {member.size:12d} {crc32:08x}{crc_error} {sha256} {member.filename} {member.mtime}"
+                            f"{encrypted_str} {size_str} {crc32:08x}{crc_error} {sha256} {member.filename} {member.mtime}"
                         )
 
                     except ArchiveError as e:
@@ -105,7 +109,7 @@ for archive_path in args.files:
                             else "?" * 8
                         )
                         print(
-                            f"{encrypted_str} {member.size:12d} {formated_crc} {member.filename} {member.mtime} -- ERROR: {repr(e)}"
+                            f"{encrypted_str} {size_str} {formated_crc} {member.filename} {member.mtime} -- ERROR: {repr(e)}"
                         )
 
                 elif member.is_link:
@@ -114,11 +118,11 @@ for archive_path in args.files:
                         or member.link_target is None
                     )
                     print(
-                        f"{encrypted_str} {member.size:12d} {member.type.upper()} {member.filename} {member.mtime} {member.link_target}"
+                        f"{encrypted_str} {size_str} {member.type.upper()} {member.filename} {member.mtime} {member.link_target}"
                     )
                 else:
                     print(
-                        f"{encrypted_str} {member.size:12d} {member.type.upper()} {member.filename} {member.mtime}"
+                        f"{encrypted_str} {size_str} {member.type.upper()} {member.filename} {member.mtime}"
                     )
                 if member.comment:
                     print(f"    Comment: {member.comment}")

@@ -1,5 +1,6 @@
 # A zipfile-like interface for reading all the files in an archive.
 
+import logging
 import io
 import os
 from typing import IO, Any, Iterator, List, Union
@@ -8,8 +9,10 @@ from archivey.exceptions import (
     ArchiveMemberNotFoundError,
     ArchiveNotSupportedError,
 )
-from archivey.types import ArchiveMember, ArchiveInfo, ArchiveFormat
+from archivey.formats import detect_archive_format, detect_archive_format_by_filename, detect_archive_format_by_signature, has_tar_extension
+from archivey.types import SINGLE_FILE_COMPRESSED_FORMATS, TAR_COMPRESSED_FORMATS, ArchiveMember, ArchiveInfo, ArchiveFormat
 
+logger = logging.getLogger(__name__)
 
 def create_archive_reader(
     archive_path: str,
@@ -108,14 +111,18 @@ class ArchiveStream:
         if not os.path.exists(filename):
             raise FileNotFoundError(f"Archive file not found: {filename}")
 
-        ext = os.path.splitext(filename)[1].lower()
+        format = detect_archive_format(filename)
 
         if use_libarchive:
             raise NotImplementedError("LibArchiveReader is not implemented")
             # from archivey.libarchive_reader import LibArchiveReader
 
             # self._reader = LibArchiveReader(filename, **kwargs)
-        elif ext == ".rar":
+        elif format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
+            from archivey.tar_reader import TarReader
+            self._reader = TarReader(filename, pwd=pwd, **kwargs)
+
+        elif format == ArchiveFormat.RAR:
             if use_rar_stream:
                 from archivey.rar_reader import RarStreamReader
 
@@ -124,31 +131,20 @@ class ArchiveStream:
                 from archivey.rar_reader import RarReader
 
                 self._reader = RarReader(filename, pwd=pwd, **kwargs)
-        elif ext == ".zip":
+        elif format == ArchiveFormat.ZIP:
             from archivey.zip_reader import ZipReader
 
             self._reader = ZipReader(filename, pwd=pwd, **kwargs)
-        elif ext == ".7z":
+        elif format == ArchiveFormat.SEVENZIP:
             from archivey.sevenzip_reader import SevenZipReader
 
             self._reader = SevenZipReader(filename, pwd=pwd, **kwargs)
-        elif ext == ".tar":
-            from archivey.tar_reader import TarReader
+        elif format in SINGLE_FILE_COMPRESSED_FORMATS:
+            from archivey.compressed_reader import CompressedReader
 
-            self._reader = TarReader(filename, pwd=pwd, **kwargs)
-        elif ext in [".gz", ".bz2", ".xz", ".tgz", ".tbz", ".txz"]:
-            # Check if it's a tar archive based on full name (e.g. xxx.tar.gz) or specific extension
-            member_name = os.path.splitext(os.path.basename(filename))[0]
-            if ext in [".tgz", ".tbz", ".txz"] or member_name.lower().endswith(".tar"):
-                from archivey.tar_reader import TarReader
-
-                self._reader = TarReader(filename, pwd=pwd, **kwargs)
-            else:
-                from archivey.compressed_reader import CompressedReader
-
-                self._reader = CompressedReader(filename, pwd=pwd, **kwargs)
+            self._reader = CompressedReader(filename, pwd=pwd, **kwargs)
         else:
-            raise ArchiveNotSupportedError(f"Unsupported archive format: {ext}")
+            raise ArchiveNotSupportedError(f"Unsupported archive format: {filename} {format}")
 
     def __enter__(self) -> "ArchiveStream":
         """Return self for context manager protocol."""
