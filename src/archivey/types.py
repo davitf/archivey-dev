@@ -56,6 +56,7 @@ class ArchiveMember:
     size: int
     mtime: Optional[datetime]
     type: MemberType
+    permissions: Optional[int] = None
     crc32: Optional[int] = None
     compression_method: Optional[str] = None  # e.g. "deflate", "lzma", etc.
     comment: Optional[str] = None

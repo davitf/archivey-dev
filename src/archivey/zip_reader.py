@@ -155,6 +155,7 @@ class ZipReader(ArchiveReader):
                     else MemberType.LINK
                     if is_link
                     else MemberType.FILE,
+                    permissions=stat.S_IMODE(info.external_attr >> 16) if hasattr(info, 'external_attr') and info.external_attr != 0 else None,
                     crc32=info.CRC if hasattr(info, "CRC") else None,
                     compression_method=compression_method,
                     comment=decode_bytes_with_fallback(info.comment, _ZIP_ENCODINGS)

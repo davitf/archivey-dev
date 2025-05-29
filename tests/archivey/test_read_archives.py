@@ -124,6 +124,32 @@ def check_read_archive(
             if member.is_file:
                 assert member.size == len(sample_file.contents or b"")
 
+            # Check permissions
+            if sample_file.mode is not None:
+                if sample_archive.format in [
+                    ArchiveFormat.TAR,
+                    ArchiveFormat.TAR_GZ,
+                    ArchiveFormat.TAR_BZ2,
+                    ArchiveFormat.TAR_XZ,
+                    ArchiveFormat.ZIP,
+                ]:
+                    assert member.permissions is not None, (
+                        f"Permissions not set for {member.filename} in {sample_archive.filename} "
+                        f"(expected {oct(sample_file.mode)})"
+                    )
+                    assert member.permissions == sample_file.mode, (
+                        f"Permission mismatch for {member.filename} in {sample_archive.filename}: "
+                        f"got {oct(member.permissions) if member.permissions is not None else 'None'}, "
+                        f"expected {oct(sample_file.mode)}"
+                    )
+                elif member.permissions is not None:
+                    # For other formats, if permissions happen to be set by the library
+                    # and we have an expected mode, check it.
+                    assert member.permissions == sample_file.mode, (
+                        f"Permission mismatch for {member.filename} in {sample_archive.filename} (optional check): "
+                        f"got {oct(member.permissions)}, expected {oct(sample_file.mode)}"
+                    )
+
             assert member.encrypted == (
                 sample_file.password is not None
                 or (member.is_file and sample_archive.header_password is not None)

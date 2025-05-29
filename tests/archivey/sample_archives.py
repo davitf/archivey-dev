@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 import os
+from typing import Optional
 from archivey.types import ArchiveFormat, MemberType
 
 
@@ -27,6 +28,7 @@ class FileInfo:
     link_target: str | None = None
     link_target_type: MemberType | None = MemberType.FILE
     compression_method: str | None = None
+    mode: Optional[int] = None
 
 
 TEST_ARCHIVES_DIR = "test_archives"
@@ -650,4 +652,50 @@ SAMPLE_ARCHIVES = (
     + SEVENZIP_PY7ZR_ARCHIVES
     + SEVENZIP_CMD_ARCHIVES
     + SINGLE_FILE_COMPRESSED_ARCHIVES
+)
+
+TEST_PERMISSIONS_FILES = [
+    FileInfo(
+        name="standard.txt",
+        mtime=_fake_mtime(1),
+        contents=b"Standard permissions.",
+        mode=0o644,
+    ),
+    FileInfo(
+        name="readonly.txt",
+        mtime=_fake_mtime(2),
+        contents=b"Read-only permissions.",
+        mode=0o444,
+    ),
+    FileInfo(
+        name="executable.sh",
+        mtime=_fake_mtime(3),
+        contents=b"#!/bin/sh\necho 'Executable permissions.'",
+        mode=0o755,
+    ),
+]
+
+TEST_PERMISSIONS_ARCHIVE_TAR = ArchiveInfo(
+    filename="permissions.tar",
+    generation_method=GenerationMethod.TAR_COMMAND_LINE,
+    format=ArchiveFormat.TAR,
+    files=TEST_PERMISSIONS_FILES,
+)
+
+TEST_PERMISSIONS_ARCHIVE_ZIP = ArchiveInfo(
+    filename="permissions_zipfile.zip",
+    generation_method=GenerationMethod.ZIPFILE,
+    format=ArchiveFormat.ZIP,
+    files=TEST_PERMISSIONS_FILES,
+)
+
+# Update SAMPLE_ARCHIVES to include the new test archives
+SAMPLE_ARCHIVES = (
+    ZIP_ARCHIVES
+    + TAR_ARCHIVES
+    + RAR_ARCHIVES
+    + SEVENZIP_PY7ZR_ARCHIVES
+    + SEVENZIP_CMD_ARCHIVES
+    + SINGLE_FILE_COMPRESSED_ARCHIVES
+    + [TEST_PERMISSIONS_ARCHIVE_TAR, TEST_PERMISSIONS_ARCHIVE_ZIP]
 )
