@@ -595,7 +595,9 @@ def create_7z_archive_with_command_line(
             # There are some issues passing symlinks (specifically to directories) to 7z
             # command line, so we can't use the approach of passing the individual
             # filenames.
-            raise ValueError("There are issues passing symlinks to 7z command line. ")
+            raise ValueError(
+                "Can't create 7z archive with symlinks to directories and multiple passwords."
+            )
 
         for i, (password, compression_method, group_files) in enumerate(file_groups):
             command = ["7z", "a"]
