@@ -119,29 +119,22 @@ def check_read_archive(
 
             # Check permissions
             if sample_file.permissions is not None:
-                if sample_archive.format_info.format in [
-                    ArchiveFormat.TAR,
-                    ArchiveFormat.TAR_GZ,
-                    ArchiveFormat.TAR_BZ2,
-                    ArchiveFormat.TAR_XZ,
-                    ArchiveFormat.ZIP,
-                ]:
-                    assert member.permissions is not None, (
-                        f"Permissions not set for {member.filename} in {sample_archive.filename} "
-                        f"(expected {oct(sample_file.permissions)})"
-                    )
-                    assert member.permissions == sample_file.permissions, (
-                        f"Permission mismatch for {member.filename} in {sample_archive.filename}: "
-                        f"got {oct(member.permissions) if member.permissions is not None else 'None'}, "
-                        f"expected {oct(sample_file.permissions)}"
-                    )
-                elif member.permissions is not None:
-                    # For other formats, if permissions happen to be set by the library
-                    # and we have an expected mode, check it.
-                    assert member.permissions == sample_file.permissions, (
-                        f"Permission mismatch for {member.filename} in {sample_archive.filename} (optional check): "
-                        f"got {oct(member.permissions)}, expected {oct(sample_file.permissions)}"
-                    )
+                assert member.permissions is not None, (
+                    f"Permissions not set for {member.filename} in {sample_archive.filename} "
+                    f"(expected {oct(sample_file.permissions)})"
+                )
+                assert member.permissions == sample_file.permissions, (
+                    f"Permission mismatch for {member.filename} in {sample_archive.filename}: "
+                    f"got {oct(member.permissions) if member.permissions is not None else 'None'}, "
+                    f"expected {oct(sample_file.permissions)}"
+                )
+            # elif member.permissions is not None:
+            #         # For other formats, if permissions happen to be set by the library
+            #         # and we have an expected mode, check it.
+            #         assert member.permissions == sample_file.permissions, (
+            #             f"Permission mismatch for {member.filename} in {sample_archive.filename} (optional check): "
+            #             f"got {oct(member.permissions)}, expected {oct(sample_file.permissions)}"
+            #         )
 
             assert member.encrypted == (
                 sample_file.password is not None

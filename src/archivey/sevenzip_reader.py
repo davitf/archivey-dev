@@ -1,7 +1,6 @@
 import io
 import logging
 import lzma
-import stat
 from typing import Iterator, List, cast
 
 import py7zr
@@ -105,13 +104,7 @@ class SevenZipReader(ArchiveReader):
                         if file.is_junction or file.is_socket
                         else MemberType.FILE
                     ),
-                    permissions=(
-                        stat.S_IMODE(file.header.attributes)
-                        if hasattr(file, "header")
-                        and hasattr(file.header, "attributes")
-                        and isinstance(file.header.attributes, int)
-                        else None
-                    ),
+                    permissions=file.posix_mode,
                     crc32=file.crc32,
                     compression_method=None,  # Not exposed by py7zr
                     encrypted=self._is_member_encrypted(file),

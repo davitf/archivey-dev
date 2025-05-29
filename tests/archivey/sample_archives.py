@@ -515,6 +515,12 @@ TEST_PERMISSIONS_FILES = [
         contents=b"#!/bin/sh\necho 'Executable permissions.'",
         permissions=0o755,
     ),
+    FileInfo(
+        name="world_readable.txt",
+        mtime=_fake_mtime(4),
+        contents=b"World readable permissions.",
+        permissions=0o666,
+    ),
 ]
 
 
