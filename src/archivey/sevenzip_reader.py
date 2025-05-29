@@ -1,6 +1,7 @@
 import io
 import logging
 import lzma
+import stat
 from archivey.base_reader import ArchiveReader
 from archivey.utils import bytes_to_str
 import py7zr
@@ -102,6 +103,11 @@ class SevenZipReader(ArchiveReader):
                         else MemberType.OTHER
                         if file.is_junction or file.is_socket
                         else MemberType.FILE
+                    ),
+                    permissions=(
+                        stat.S_IMODE(file.header.attributes)
+                        if hasattr(file, "header") and hasattr(file.header, "attributes") and isinstance(file.header.attributes, int)
+                        else None
                     ),
                     crc32=file.crc32,
                     compression_method=None,  # Not exposed by py7zr

@@ -1,5 +1,6 @@
 import io
 import logging
+import stat
 from archivey.utils import bytes_to_str
 import rarfile
 import subprocess
@@ -118,6 +119,7 @@ class BaseRarReader(ArchiveReader):
                         if info.is_symlink()
                         else MemberType.OTHER
                     ),
+                    permissions=stat.S_IMODE(info.mode) if hasattr(info, 'mode') and isinstance(info.mode, int) else None,
                     crc32=info.CRC if not has_encrypted_crc else None,
                     compression_method=compression_method,
                     comment=info.comment,
