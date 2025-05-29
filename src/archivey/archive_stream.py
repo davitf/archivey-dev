@@ -89,9 +89,9 @@ def create_archive_reader(
 
             return TarReader(archive_path, pwd=pwd)
         else:
-            from archivey.compressed_reader import CompressedReader
+            from archivey.single_file_reader import SingleFileReader
 
-            return CompressedReader(archive_path, pwd=pwd)
+            return SingleFileReader(archive_path, pwd=pwd)
 
     raise ArchiveNotSupportedError(f"Unsupported archive format: {ext}")
 
@@ -105,6 +105,7 @@ class ArchiveStream:
         use_libarchive: bool = False,
         use_rar_stream: bool = False,
         pwd: str | None = None,
+        use_single_file_stored_metadata: bool = False,
         **kwargs: dict[str, Any],
     ):
         """Initialize the archive stream.
@@ -122,7 +123,7 @@ class ArchiveStream:
             raise FileNotFoundError(f"Archive file not found: {filename}")
 
         format = detect_archive_format(filename)
-        logger.info(f"Archive format for {filename}: {format}")
+        logger.debug(f"Archive format for {filename}: {format}")
 
         if use_libarchive:
             raise NotImplementedError("LibArchiveReader is not implemented")
@@ -152,9 +153,14 @@ class ArchiveStream:
 
             self._reader = SevenZipReader(filename, pwd=pwd)
         elif format in SINGLE_FILE_COMPRESSED_FORMATS:
-            from archivey.compressed_reader import CompressedReader
+            from archivey.single_file_reader import SingleFileReader
 
-            self._reader = CompressedReader(filename, pwd=pwd, format=format)
+            self._reader = SingleFileReader(
+                filename,
+                pwd=pwd,
+                format=format,
+                use_stored_metadata=use_single_file_stored_metadata,
+            )
         else:
             raise ArchiveNotSupportedError(
                 f"Unsupported archive format: {filename} {format}"

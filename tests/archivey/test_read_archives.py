@@ -8,16 +8,13 @@ from datetime import datetime
 from archivey.archive_stream import ArchiveStream
 from archivey.types import MemberType
 from sample_archives import (
+    MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
     ArchiveInfo,
     GenerationMethod,
     filter_archives,
 )
 from archivey.types import ArchiveFormat
-
-# Special mtime value to indicate that the member's mtime should be compared
-# against the archive file's mtime.
-SPECIAL_MTIME_FOR_ARCHIVE_MTIME_CHECK = datetime(1970, 1, 1, 0, 0, 0)
 
 
 def normalize_newlines(s: str | None) -> str | None:
@@ -76,6 +73,7 @@ def check_read_archive(
         sample_archive.get_archive_path(archive_base_dir),
         pwd=sample_archive.contents.header_password,
         use_rar_stream=use_rar_stream,
+        use_single_file_stored_metadata=True,
     ) as archive:
         assert archive.get_format() == sample_archive.format_info.format
         format_info = archive.get_archive_info()
@@ -116,12 +114,11 @@ def check_read_archive(
             else:
                 assert member.comment is None
 
-            assert member.mtime is not None
-            if member.is_file:
+            if member.is_file and member.size is not None:
                 assert member.size == len(sample_file.contents or b"")
 
             # Check permissions
-            if sample_file.mode is not None:
+            if sample_file.permissions is not None:
                 if sample_archive.format_info.format in [
                     ArchiveFormat.TAR,
                     ArchiveFormat.TAR_GZ,
@@ -131,19 +128,19 @@ def check_read_archive(
                 ]:
                     assert member.permissions is not None, (
                         f"Permissions not set for {member.filename} in {sample_archive.filename} "
-                        f"(expected {oct(sample_file.mode)})"
+                        f"(expected {oct(sample_file.permissions)})"
                     )
-                    assert member.permissions == sample_file.mode, (
+                    assert member.permissions == sample_file.permissions, (
                         f"Permission mismatch for {member.filename} in {sample_archive.filename}: "
                         f"got {oct(member.permissions) if member.permissions is not None else 'None'}, "
-                        f"expected {oct(sample_file.mode)}"
+                        f"expected {oct(sample_file.permissions)}"
                     )
                 elif member.permissions is not None:
                     # For other formats, if permissions happen to be set by the library
                     # and we have an expected mode, check it.
-                    assert member.permissions == sample_file.mode, (
+                    assert member.permissions == sample_file.permissions, (
                         f"Permission mismatch for {member.filename} in {sample_archive.filename} (optional check): "
-                        f"got {oct(member.permissions)}, expected {oct(sample_file.mode)}"
+                        f"got {oct(member.permissions)}, expected {oct(sample_file.permissions)}"
                     )
 
             assert member.encrypted == (
@@ -156,16 +153,14 @@ def check_read_archive(
                 f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
             )
 
-            if sample_file.mtime == SPECIAL_MTIME_FOR_ARCHIVE_MTIME_CHECK:
-                archive_file_mtime_ts = os.path.getmtime(
-                    sample_archive.get_archive_path(archive_base_dir)
+            assert member.mtime is not None
+            if sample_file.mtime == MARKER_MTIME_BASED_ON_ARCHIVE_NAME:
+                archive_file_mtime = datetime.fromtimestamp(
+                    os.path.getmtime(sample_archive.get_archive_path(archive_base_dir))
                 )
-                # Convert member.mtime to timestamp for comparison, allowing for a small tolerance
-                # This is primarily for GZip, BZip2, XZ where member mtime should be file's original mtime,
-                # and the archive file's mtime is also set to this.
-                assert abs(member.mtime.timestamp() - archive_file_mtime_ts) <= 2, (
+                assert member.mtime == archive_file_mtime, (
                     f"Timestamp mismatch for {member.filename} (special check): "
-                    f"member mtime {member.mtime.timestamp()} vs archive mtime {archive_file_mtime_ts}"
+                    f"member mtime {member.mtime} vs archive mtime {archive_file_mtime}"
                 )
             elif allow_timestamp_rounding_error:
                 assert (
@@ -255,7 +250,9 @@ def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo):
 
 @pytest.mark.parametrize(
     "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, prefixes=["single_file"]),
+    filter_archives(
+        SAMPLE_ARCHIVES, prefixes=["single_file", "single_file_with_metadata"]
+    ),
     ids=lambda x: x.filename,
 )
 def test_read_single_file_compressed_archives(sample_archive: ArchiveInfo):

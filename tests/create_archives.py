@@ -2,7 +2,7 @@ import logging
 import os
 import subprocess
 import tempfile
-from typing import Generator
+from typing import Any, Generator
 import zipfile
 import tarfile
 import io
@@ -65,6 +65,14 @@ def write_files_to_dir(dir: str, files: list[FileInfo]):
             (file.mtime.timestamp(), file.mtime.timestamp()),
             follow_symlinks=False,
         )
+
+        # set permissions
+        default_permissions_by_type = {
+            MemberType.DIR: 0o755,
+            MemberType.LINK: 0o777,
+            MemberType.FILE: 0o644,
+        }
+        os.chmod(full_path, file.permissions or default_permissions_by_type[file.type])
 
     # subprocess.run(["ls", "-l", dir])
 
@@ -144,13 +152,14 @@ def create_zip_archive_with_zipfile(
                 ]
                 info.comment = (file.comment or "").encode("utf-8")
 
-                if file.mode is not None:
-                    if file.type == MemberType.DIR:
-                        info.external_attr = (stat.S_IFDIR | file.mode) << 16
-                    elif file.type == MemberType.LINK:
-                        info.external_attr = (stat.S_IFLNK | file.mode) << 16
-                    else:  # MemberType.FILE or other treated as file
-                        info.external_attr = (stat.S_IFREG | file.mode) << 16
+                if file.type == MemberType.LINK:
+                    info.external_attr |= (stat.S_IFLNK | 0o777) << 16
+                elif file.type == MemberType.DIR:
+                    info.external_attr |= (stat.S_IFDIR | 0o775) << 16
+                else:
+                    info.external_attr |= (
+                        stat.S_IFREG | (file.permissions or 0o644)
+                    ) << 16
 
                 if file_contents is None and file.type == MemberType.FILE:
                     assert False, f"File contents are required for {file.name}"
@@ -316,14 +325,14 @@ def create_tar_archive_with_tarfile(
             tarinfo = tarfile.TarInfo(name=sample_file.name)
             tarinfo.mtime = int(sample_file.mtime.timestamp())
 
-            if sample_file.mode is not None:
-                tarinfo.mode = sample_file.mode
+            if sample_file.permissions is not None:
+                tarinfo.mode = sample_file.permissions
 
             file_contents_bytes = sample_file.contents
 
             if sample_file.type == MemberType.DIR:
                 tarinfo.type = tarfile.DIRTYPE
-                if sample_file.mode is None:
+                if sample_file.permissions is None:
                     tarinfo.mode = 0o755  # Default mode for directories
                 tf.addfile(tarinfo)  # No fileobj for directories
             elif sample_file.type == MemberType.LINK:
@@ -332,7 +341,7 @@ def create_tar_archive_with_tarfile(
                     f"Link target required for {sample_file.name}"
                 )
                 tarinfo.linkname = sample_file.link_target
-                if sample_file.mode is None:
+                if sample_file.permissions is None:
                     tarinfo.mode = 0o777  # Default mode for symlinks
                 tf.addfile(tarinfo)  # No fileobj for symlinks
             else:  # MemberType.FILE
@@ -341,7 +350,7 @@ def create_tar_archive_with_tarfile(
                 )
                 tarinfo.type = tarfile.REGTYPE
                 tarinfo.size = len(file_contents_bytes)
-                if sample_file.mode is None:
+                if sample_file.permissions is None:
                     tarinfo.mode = 0o644  # Default mode for regular files
                 tf.addfile(tarinfo, io.BytesIO(file_contents_bytes))
 
@@ -351,6 +360,7 @@ def create_single_file_compressed_archive_with_library(
     contents: ArchiveContents,
     compression_format: ArchiveFormat,
     opener,
+    opener_kwargs: dict[str, Any] = {},
 ):
     assert compression_format in [
         ArchiveFormat.GZIP,
@@ -371,7 +381,7 @@ def create_single_file_compressed_archive_with_library(
         f"Single-file archives do not support comments. ({archive_path})"
     )
 
-    with opener(archive_path, mode="wb") as out_stream:
+    with opener(archive_path, mode="wb", **opener_kwargs) as out_stream:
         out_stream.write(file_info.contents or b"")
 
 
@@ -380,6 +390,7 @@ def create_single_file_compressed_archive_with_command_line(
     contents: ArchiveContents,
     compression_format: ArchiveFormat,
     compression_cmd: str = "gzip",
+    cmd_args: list[str] = [],
 ):
     assert compression_format in [
         ArchiveFormat.GZIP,
@@ -414,18 +425,21 @@ def create_single_file_compressed_archive_with_command_line(
         os.utime(
             temp_file_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
         )
+        subprocess.run(["ls", "-l", temp_file_path])
 
         # Run the compression command
-        subprocess.run([compression_cmd, temp_file_path], check=True, cwd=tempdir)
+        subprocess.run(
+            [compression_cmd, *cmd_args, temp_file_path], check=True, cwd=tempdir
+        )
 
         # Get the compressed file path based on the command
         compressed_file_on_temp = temp_file_path + os.path.splitext(archive_path)[1]
         os.rename(compressed_file_on_temp, abs_archive_path)
 
         # Explicitly set the mtime of the archive file itself
-        os.utime(
-            abs_archive_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
-        )
+        # os.utime(
+        #     abs_archive_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
+        # )
 
 
 def create_rar_archive_with_command_line(

@@ -1,4 +1,5 @@
 import bz2
+import copy
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -36,7 +37,7 @@ class FileInfo:
     link_target: str | None = None
     link_target_type: MemberType | None = MemberType.FILE
     compression_method: str | None = None
-    mode: Optional[int] = None
+    permissions: Optional[int] = None
 
 
 @dataclass
@@ -158,8 +159,16 @@ GZIP_CMD = ArchiveFormatInfo(
     file_suffix="cmd.gz",
     format=ArchiveFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
-    generation_method_options={"compression_cmd": "gzip"},
+    # Dp not preserve filename and timestamp
+    generation_method_options={"compression_cmd": "gzip", "cmd_args": ["-n"]},
 )
+GZIP_CMD_PRESERVE_METADATA = ArchiveFormatInfo(
+    file_suffix="cmd.gz",
+    format=ArchiveFormat.GZIP,
+    generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
+    generation_method_options={"compression_cmd": "gzip", "cmd_args": ["-N"]},
+)
+
 BZIP2_CMD = ArchiveFormatInfo(
     file_suffix="cmd.bz2",
     format=ArchiveFormat.BZIP2,
@@ -189,7 +198,7 @@ GZIP_LIBRARY = ArchiveFormatInfo(
     file_suffix="lib.gz",
     format=ArchiveFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    generation_method_options={"opener": gzip.GzipFile},
+    generation_method_options={"opener": gzip.GzipFile, "opener_kwargs": {"mtime": 0}},
 )
 BZIP2_LIBRARY = ArchiveFormatInfo(
     file_suffix="lib.bz2",
@@ -473,16 +482,19 @@ COMPRESSION_METHOD_FILES_LZMA = COMPRESSION_METHODS_FILES + [
     ),
 ]
 
+MARKER_FILENAME_BASED_ON_ARCHIVE_NAME = "SINGLE_FILE_MARKER"
+MARKER_MTIME_BASED_ON_ARCHIVE_NAME = datetime(3141, 5, 9, 2, 6, 53)
+
 # Single compressed files (e.g. .gz, .bz2, .xz)
 SINGLE_FILE_TXT_CONTENT = b"This is a single test file for compression.\n"
-SINGLE_FILE_INFO = FileInfo(
-    name="single_file.txt",
-    mtime=datetime(2023, 1, 1, 12, 0, 0),
+SINGLE_FILE_INFO_FIXED_FILENAME_AND_MTIME = FileInfo(
+    name="single_file_fixed.txt",
+    mtime=_fake_mtime(1),
     contents=SINGLE_FILE_TXT_CONTENT,
 )
-SINGLE_FILE_INFO_SPECIAL_MTIME = FileInfo(
-    name="single_file.txt",
-    mtime=datetime(1970, 1, 1, 0, 0, 0),
+SINGLE_FILE_INFO_NO_METADATA = FileInfo(
+    name=MARKER_FILENAME_BASED_ON_ARCHIVE_NAME,
+    mtime=MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     contents=SINGLE_FILE_TXT_CONTENT,
 )
 
@@ -491,19 +503,19 @@ TEST_PERMISSIONS_FILES = [
         name="standard.txt",
         mtime=_fake_mtime(1),
         contents=b"Standard permissions.",
-        mode=0o644,
+        permissions=0o644,
     ),
     FileInfo(
         name="readonly.txt",
         mtime=_fake_mtime(2),
         contents=b"Read-only permissions.",
-        mode=0o444,
+        permissions=0o444,
     ),
     FileInfo(
         name="executable.sh",
         mtime=_fake_mtime(3),
         contents=b"#!/bin/sh\necho 'Executable permissions.'",
-        mode=0o755,
+        permissions=0o755,
     ),
 ]
 
@@ -514,14 +526,26 @@ def build_archive_infos() -> list[ArchiveInfo]:
     for contents, format_infos in ARCHIVE_DEFINITIONS:
         for format_info in format_infos:
             filename = f"{contents.file_basename}__{format_info.file_suffix}"
-            archives.append(
-                ArchiveInfo(
-                    filename=filename,
-                    contents=contents,
-                    format_info=format_info,
-                    skip_test=filename in SKIP_TEST_FILENAMES,
-                )
+            archive_info = ArchiveInfo(
+                filename=filename,
+                contents=contents,
+                format_info=format_info,
+                skip_test=filename in SKIP_TEST_FILENAMES,
             )
+
+            if any(
+                MARKER_FILENAME_BASED_ON_ARCHIVE_NAME in a.name
+                for a in archive_info.contents.files
+            ):
+                archive_info.contents = copy.deepcopy(archive_info.contents)
+                for file in archive_info.contents.files:
+                    if file.name == MARKER_FILENAME_BASED_ON_ARCHIVE_NAME:
+                        archive_name_without_ext = os.path.splitext(
+                            archive_info.filename
+                        )[0]
+                        file.name = archive_name_without_ext
+
+            archives.append(archive_info)
 
     # Verify all skip test filenames were created
     created_filenames = {a.filename for a in archives}
@@ -692,8 +716,15 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveFormatInfo]]] = [
     ),
     (
         ArchiveContents(
+            file_basename="single_file_with_metadata",
+            files=[SINGLE_FILE_INFO_FIXED_FILENAME_AND_MTIME],
+        ),
+        [GZIP_CMD_PRESERVE_METADATA],
+    ),
+    (
+        ArchiveContents(
             file_basename="single_file",
-            files=[SINGLE_FILE_INFO],
+            files=[SINGLE_FILE_INFO_NO_METADATA],
         ),
         ALL_SINGLE_FILE_FORMATS,
     ),

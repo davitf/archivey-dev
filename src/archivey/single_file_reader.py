@@ -35,7 +35,9 @@ def _read_null_terminated_bytes(f: io.BufferedReader) -> bytes:
     return str_bytes
 
 
-def read_gzip_metadata(path: str, member: ArchiveMember):
+def read_gzip_metadata(
+    path: str, member: ArchiveMember, use_stored_metadata: bool = False
+):
     """
     Extract metadata from a .gz file without decompressing and update the ArchiveMember:
     - original internal filename (if present) goes into extra field
@@ -57,9 +59,15 @@ def read_gzip_metadata(path: str, member: ArchiveMember):
             raise ArchiveFormatError("Not a valid GZIP file")
 
         # Parse header fields
-        id1, id2, cm, flg, mtime_timestamp, xfl, os = struct.unpack("<3BIBBB", header)
+        id1, id2, cm, flg, mtime_timestamp, xfl, os = struct.unpack("<4BIBB", header)
 
-        member.mtime = datetime.fromtimestamp(mtime_timestamp)
+        if mtime_timestamp != 0:
+            extra_fields["mtime"] = datetime.fromtimestamp(mtime_timestamp)
+            logger.info(
+                f"GZIP metadata: mtime_timestamp={mtime_timestamp}, mtime={extra_fields['mtime']}"
+            )
+            if use_stored_metadata:
+                member.mtime = extra_fields["mtime"]
 
         # Add compression method and level
         extra_fields["compress_type"] = cm  # 8 = deflate, consistent with ZIP
@@ -80,6 +88,8 @@ def read_gzip_metadata(path: str, member: ArchiveMember):
             extra_fields["original_filename"] = name_bytes.decode(
                 "utf-8", errors="replace"
             )
+            if use_stored_metadata:
+                member.filename = extra_fields["original_filename"]
 
         if flg & 0x10:  # FCOMMENT
             comment_bytes = _read_null_terminated_bytes(f)
@@ -184,8 +194,8 @@ class BZ2Wrapper(io.IOBase):
         self._fileobj.close()
 
 
-class CompressedReader(ArchiveReader):
-    """Reader for raw compressed files (gz, bz2, xz)."""
+class SingleFileReader(ArchiveReader):
+    """Reader for raw compressed files (gz, bz2, xz, zstd, lz4)."""
 
     def __init__(
         self,
@@ -193,6 +203,7 @@ class CompressedReader(ArchiveReader):
         format: ArchiveFormat,
         *,
         pwd: bytes | str | None = None,
+        use_stored_metadata: bool = False,
         **kwargs,
     ):
         """Initialize the reader.
@@ -208,6 +219,7 @@ class CompressedReader(ArchiveReader):
             raise ValueError("Compressed files do not support password protection")
         self.archive_path = archive_path
         self.ext = os.path.splitext(archive_path)[1].lower()
+        self.use_stored_metadata = use_stored_metadata
 
         # Get the base name without compression extension
         self.member_name = os.path.splitext(os.path.basename(archive_path))[0]
@@ -244,13 +256,14 @@ class CompressedReader(ArchiveReader):
             raise ArchiveError(f"Unsupported compression format: {self.ext}")
 
         # Get file metadata
-        self.mtime = datetime.fromtimestamp(os.path.getmtime(archive_path))
+        mtime = datetime.fromtimestamp(os.path.getmtime(archive_path))
+        logger.info(f"Compressed file {archive_path} mtime: {mtime}")
 
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
             filename=self.member_name,
             size=None,  # Not available for all formats
-            mtime=self.mtime,
+            mtime=mtime,
             type=MemberType.FILE,
             compression_method=self.get_format().value,
             crc32=None,
@@ -258,7 +271,7 @@ class CompressedReader(ArchiveReader):
         )
 
         if self.ext == ".gz":
-            read_gzip_metadata(archive_path, self.member)
+            read_gzip_metadata(archive_path, self.member, self.use_stored_metadata)
         elif self.ext == ".xz":
             read_xz_metadata(archive_path, self.member)
 

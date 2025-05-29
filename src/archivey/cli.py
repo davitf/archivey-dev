@@ -9,15 +9,32 @@ from archivey.archive_stream import ArchiveStream
 from archivey.exceptions import (
     ArchiveError,
 )
-from archivey.formats import (
-    detect_archive_format_by_signature,
-    detect_archive_format_by_filename,
-)
 
 import argparse
+from archivey.types import MemberType
 from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
+
+
+def format_mode(member_type: MemberType, mode: int) -> str:
+    permissions = mode & 0o777
+    type_char = (
+        "d"
+        if member_type == MemberType.DIR
+        else "l"
+        if member_type == MemberType.LINK
+        else "-"
+    )
+    # Convert permissions to rwxrwxrwx format
+    permissions_str = type_char
+    letters = "xwr" * 3
+    for bit in range(8, -1, -1):
+        if permissions & (1 << bit):
+            permissions_str += letters[bit]
+        else:
+            permissions_str += "-"
+    return permissions_str
 
 
 def get_member_checksums(member_file: IO[bytes]) -> Tuple[int, str]:
@@ -52,20 +69,23 @@ parser.add_argument(
 parser.add_argument("--stream", action="store_true", help="Stream the archive")
 parser.add_argument("--info", action="store_true", help="Print info about the archive")
 parser.add_argument("--password", help="Password for encrypted archives")
+parser.add_argument("--hide-progress", action="store_true", help="Hide progress bar")
+parser.add_argument(
+    "--use-stored-metadata",
+    action="store_true",
+    help="Use stored metadata for single file archives",
+)
 
 args = parser.parse_args()
 
 for archive_path in args.files:
     try:
         print(f"\nProcessing {archive_path}:")
-        format_by_signature = detect_archive_format_by_signature(archive_path)
-        print(f"Format by signature: {format_by_signature}")
-        format_by_filename = detect_archive_format_by_filename(archive_path)
-        print(f"Format by filename: {format_by_filename}")
         with ArchiveStream(
             archive_path,
             use_libarchive=args.use_libarchive,
             use_rar_stream=args.use_rar_stream,
+            use_single_file_stored_metadata=args.use_stored_metadata,
             pwd=args.password,
         ) as archive:
             print(
@@ -76,8 +96,12 @@ for archive_path in args.files:
 
             members = archive.infolist() if not args.stream else archive.info_iter()
 
-            for member in tqdm(members, desc="Computing checksums"):
+            for member in tqdm(
+                members, desc="Computing checksums", disable=args.hide_progress
+            ):
                 encrypted_str = "E" if member.encrypted else " "
+                size_str = "?" * 12 if member.size is None else f"{member.size:12d}"
+                format_str = format_mode(member.type, member.permissions or 0)
 
                 if member.is_file:
                     assert isinstance(member.filename, str)
@@ -87,7 +111,6 @@ for archive_path in args.files:
                         print("SKIPPING", member.filename)
                         continue
 
-                    size_str = "ERROR!      "
                     try:
                         with archive.open(member, pwd=args.password) as f:
                             crc32, sha256 = get_member_checksums(f)
@@ -96,12 +119,8 @@ for archive_path in args.files:
                             else:
                                 crc_error = ""
 
-                        size_str = (
-                            "?" * 12 if member.size is None else f"{member.size:12d}"
-                        )
-
                         print(
-                            f"{encrypted_str} {size_str} {crc32:08x}{crc_error} {sha256} {member.filename} {member.mtime}"
+                            f"{encrypted_str}  {size_str}  {format_str}  {crc32:08x}{crc_error}  {sha256[:16]}  {member.mtime}  {member.filename}"
                         )
 
                     except ArchiveError as e:
@@ -111,7 +130,7 @@ for archive_path in args.files:
                             else "?" * 8
                         )
                         print(
-                            f"{encrypted_str} {size_str} {formated_crc} {member.filename} {member.mtime} -- ERROR: {repr(e)}"
+                            f"{encrypted_str}  {size_str}  {format_str}  {formated_crc}  {' ' * 16}  {member.mtime}  {member.filename} -- ERROR: {repr(e)}"
                         )
 
                 elif member.is_link:
@@ -120,11 +139,11 @@ for archive_path in args.files:
                         or member.link_target is None
                     )
                     print(
-                        f"{encrypted_str} {size_str} {member.type.upper()} {member.filename} {member.mtime} {member.link_target}"
+                        f"{encrypted_str}  {size_str}  {format_str}  {' ' * 8}  {' ' * 16}  {member.mtime}  {member.filename} -> {member.link_target}"
                     )
                 else:
                     print(
-                        f"{encrypted_str} {size_str} {member.type.upper()} {member.filename} {member.mtime}"
+                        f"{encrypted_str}  {size_str}  {format_str}  {' ' * 8}  {' ' * 16}  {member.mtime}  {member.filename} {member.type.upper()}"
                     )
                 if member.comment:
                     print(f"    Comment: {member.comment}")

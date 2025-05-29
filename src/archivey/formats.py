@@ -1,7 +1,11 @@
 import io
 import os
 import logging
-from archivey.types import COMPRESSION_FORMAT_TO_TAR_FORMAT, ArchiveFormat
+from archivey.types import (
+    COMPRESSION_FORMAT_TO_TAR_FORMAT,
+    TAR_COMPRESSED_FORMATS,
+    ArchiveFormat,
+)
 
 
 def detect_archive_format_by_signature(
@@ -53,36 +57,33 @@ def detect_archive_format_by_signature(
 
 
 _EXTENSION_TO_FORMAT = {
+    ".tar": ArchiveFormat.TAR,
     ".tar.gz": ArchiveFormat.TAR_GZ,
     ".tar.bz2": ArchiveFormat.TAR_BZ2,
     ".tar.xz": ArchiveFormat.TAR_XZ,
     ".tar.zst": ArchiveFormat.TAR_ZSTD,
     ".tar.lz4": ArchiveFormat.TAR_LZ4,
-    ".zip": ArchiveFormat.ZIP,
-    ".rar": ArchiveFormat.RAR,
-    ".7z": ArchiveFormat.SEVENZIP,
-    ".gz": ArchiveFormat.GZIP,
-    ".bz2": ArchiveFormat.BZIP2,
-    ".tar": ArchiveFormat.TAR,
-    ".xz": ArchiveFormat.XZ,
-    ".zst": ArchiveFormat.ZSTD,
     ".tgz": ArchiveFormat.TAR_GZ,
     ".tbz2": ArchiveFormat.TAR_BZ2,
     ".txz": ArchiveFormat.TAR_XZ,
     ".tzst": ArchiveFormat.TAR_ZSTD,
     ".tlz4": ArchiveFormat.TAR_LZ4,
+    ".gz": ArchiveFormat.GZIP,
+    ".bz2": ArchiveFormat.BZIP2,
+    ".xz": ArchiveFormat.XZ,
+    ".zst": ArchiveFormat.ZSTD,
+    ".lz4": ArchiveFormat.LZ4,
+    ".zip": ArchiveFormat.ZIP,
+    ".rar": ArchiveFormat.RAR,
+    ".7z": ArchiveFormat.SEVENZIP,
 }
-
-_TAR_EXTENSIONS = [".tar", ".tgz", ".tbz2", ".txz", ".tzst", ".tlz4"]
 
 
 def has_tar_extension(filename: str) -> bool:
     base_filename, ext = os.path.splitext(filename.lower())
-    if ext in _TAR_EXTENSIONS:
-        return True
-    if base_filename.endswith(".tar"):
-        return True
-    return False
+    return _EXTENSION_TO_FORMAT.get(
+        ext
+    ) in TAR_COMPRESSED_FORMATS or base_filename.endswith(".tar")
 
 
 def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
