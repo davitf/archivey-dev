@@ -123,13 +123,12 @@ def create_zip_archive_with_zipfile(
                 if file.type == MemberType.DIR:
                     if not filename.endswith("/"):
                         filename += "/"
-                    contents = b"" # Directories have no content
+                    contents = b""  # Directories have no content
 
                 elif file.type == MemberType.LINK:
                     # For zipfile, if we have to write a link, we write its target path as content.
                     # The external_attr will mark it as a link.
-                    contents = (file.link_target or "").encode('utf-8')
-
+                    contents = (file.link_target or "").encode("utf-8")
 
                 info = zipfile.ZipInfo(filename, date_time=file.mtime.timetuple()[:6])
                 info.compress_type = _COMPRESSION_METHOD_TO_ZIPFILE_VALUE[
@@ -146,15 +145,14 @@ def create_zip_archive_with_zipfile(
                         info.external_attr = (stat.S_IFLNK | file.mode) << 16
                     else:  # MemberType.FILE or other treated as file
                         info.external_attr = (stat.S_IFREG | file.mode) << 16
-                
+
                 # Ensure directory names end with a slash for ZipInfo
                 # This is now handled when setting filename above for MemberType.DIR
                 # if file.type == MemberType.DIR and not info.filename.endswith('/'):
                 #    info.filename += '/'
-                
+
                 if contents is None and file.type == MemberType.FILE:
                     assert False, f"File contents are required for {file.name}"
-
 
                 zipf.writestr(info, contents if contents is not None else b"")
 
@@ -222,6 +220,7 @@ def create_zip_archive_with_infozip_command_line(
                 input="\n".join(comment_file_comments).encode("utf-8"),
             )
 
+
 def create_tar_archive_with_command_line(
     archive_path: str,
     files: list[FileInfo],
@@ -264,7 +263,7 @@ def create_tar_archive_with_command_line(
             command.append(file_info.name)
 
         subprocess.run(command, check=True, cwd=tempdir)
-        
+
 
 def create_tar_archive_with_tarfile(
     archive_path: str,
@@ -290,7 +289,7 @@ def create_tar_archive_with_tarfile(
     elif compression_format == ArchiveFormat.TAR_XZ:
         tar_mode = "w:xz"
     elif compression_format == ArchiveFormat.TAR:
-        tar_mode = "w" # plain tar
+        tar_mode = "w"  # plain tar
     else:
         raise ValueError(f"Unsupported tar compression format: {compression_format}")
 
@@ -301,7 +300,7 @@ def create_tar_archive_with_tarfile(
 
             if sample_file.mode is not None:
                 tarinfo.mode = sample_file.mode
-            
+
             file_contents_bytes = sample_file.contents
 
             if sample_file.type == MemberType.DIR:
@@ -311,13 +310,17 @@ def create_tar_archive_with_tarfile(
                 tf.addfile(tarinfo)  # No fileobj for directories
             elif sample_file.type == MemberType.LINK:
                 tarinfo.type = tarfile.SYMTYPE
-                assert sample_file.link_target is not None, f"Link target required for {sample_file.name}"
+                assert sample_file.link_target is not None, (
+                    f"Link target required for {sample_file.name}"
+                )
                 tarinfo.linkname = sample_file.link_target
                 if sample_file.mode is None:
                     tarinfo.mode = 0o777  # Default mode for symlinks
                 tf.addfile(tarinfo)  # No fileobj for symlinks
             else:  # MemberType.FILE
-                assert file_contents_bytes is not None, f"Contents required for file {sample_file.name}"
+                assert file_contents_bytes is not None, (
+                    f"Contents required for file {sample_file.name}"
+                )
                 tarinfo.type = tarfile.REGTYPE
                 tarinfo.size = len(file_contents_bytes)
                 if sample_file.mode is None:
@@ -333,8 +336,12 @@ def create_single_file_compressed_archive_with_command_line(
 ):
     assert len(files) == 1, f"{compression_cmd} archives only support a single file."
     file_info = files[0]
-    assert file_info.type == MemberType.FILE, f"Only files are supported for {compression_cmd}."
-    assert archive_comment is None, f"{compression_cmd} format does not support archive comments."
+    assert file_info.type == MemberType.FILE, (
+        f"Only files are supported for {compression_cmd}."
+    )
+    assert archive_comment is None, (
+        f"{compression_cmd} format does not support archive comments."
+    )
 
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
@@ -360,25 +367,37 @@ def create_single_file_compressed_archive_with_command_line(
             abs_archive_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
         )
 
+
 def create_gz_archive_with_command_line(
     archive_path: str, files: list[FileInfo], archive_comment: str | None = None
 ):
-    create_single_file_compressed_archive_with_command_line(archive_path, files, archive_comment, "gzip")
+    create_single_file_compressed_archive_with_command_line(
+        archive_path, files, archive_comment, "gzip"
+    )
+
 
 def create_bz2_archive_with_command_line(
     archive_path: str, files: list[FileInfo], archive_comment: str | None = None
 ):
-    create_single_file_compressed_archive_with_command_line(archive_path, files, archive_comment, "bzip2")
+    create_single_file_compressed_archive_with_command_line(
+        archive_path, files, archive_comment, "bzip2"
+    )
+
 
 def create_xz_archive_with_command_line(
     archive_path: str, files: list[FileInfo], archive_comment: str | None = None
 ):
-    create_single_file_compressed_archive_with_command_line(archive_path, files, archive_comment, "xz")
+    create_single_file_compressed_archive_with_command_line(
+        archive_path, files, archive_comment, "xz"
+    )
+
 
 def create_zstd_archive_with_command_line(
     archive_path: str, files: list[FileInfo], archive_comment: str | None = None
 ):
-    create_single_file_compressed_archive_with_command_line(archive_path, files, archive_comment, "zstd")
+    create_single_file_compressed_archive_with_command_line(
+        archive_path, files, archive_comment, "zstd"
+    )
 
 
 def create_archive(archive_info: ArchiveInfo, base_dir: str):
@@ -620,7 +639,7 @@ def create_7z_archive_with_command_line(
 GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.ZIPFILE: create_zip_archive_with_zipfile,
     GenerationMethod.INFOZIP: create_zip_archive_with_infozip_command_line,
-    GenerationMethod.TAR_COMMAND_LINE: create_tar_archive_with_tarfile, # Updated to use the new function
+    GenerationMethod.TAR_COMMAND_LINE: create_tar_archive_with_tarfile,  # Updated to use the new function
     GenerationMethod.RAR_COMMAND_LINE: create_rar_archive_with_command_line,
     GenerationMethod.PY7ZR: create_7z_archive_with_py7zr,
     GenerationMethod.SEVENZIP_COMMAND_LINE: create_7z_archive_with_command_line,

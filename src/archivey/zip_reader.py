@@ -55,6 +55,7 @@ class ZipReader(ArchiveReader):
     """Reader for ZIP archives."""
 
     def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
+        super().__init__(ArchiveFormat.ZIP)
         self.archive_path = archive_path
         self._members: list[ArchiveMember] | None = None
         self._format_info: ArchiveInfo | None = None
@@ -71,14 +72,6 @@ class ZipReader(ArchiveReader):
             self._archive = None
             self._members = None
 
-    def get_format(self) -> ArchiveFormat:
-        """Get the compression format of the archive.
-
-        Returns:
-            ArchiveFormat: Always returns ArchiveFormat.ZIP
-        """
-        return ArchiveFormat.ZIP
-
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
 
@@ -90,7 +83,7 @@ class ZipReader(ArchiveReader):
 
         if self._format_info is None:
             self._format_info = ArchiveInfo(
-                format=ArchiveFormat.ZIP,
+                format=self.get_format(),
                 is_solid=False,  # ZIP archives are never solid
                 comment=decode_bytes_with_fallback(
                     self._archive.comment, _ZIP_ENCODINGS
@@ -155,7 +148,9 @@ class ZipReader(ArchiveReader):
                     else MemberType.LINK
                     if is_link
                     else MemberType.FILE,
-                    permissions=stat.S_IMODE(info.external_attr >> 16) if hasattr(info, 'external_attr') and info.external_attr != 0 else None,
+                    permissions=stat.S_IMODE(info.external_attr >> 16)
+                    if hasattr(info, "external_attr") and info.external_attr != 0
+                    else None,
                     crc32=info.CRC if hasattr(info, "CRC") else None,
                     compression_method=compression_method,
                     comment=decode_bytes_with_fallback(info.comment, _ZIP_ENCODINGS)

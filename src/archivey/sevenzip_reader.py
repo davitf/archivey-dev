@@ -27,9 +27,10 @@ class SevenZipReader(ArchiveReader):
     """Reader for 7-Zip archives."""
 
     def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
+        super().__init__(ArchiveFormat.SEVENZIP)
         self.archive_path = archive_path
-        self._members = None
-        self._format_info = None
+        self._members: list[ArchiveMember] | None = None
+        self._format_info: ArchiveInfo | None = None
         try:
             self._archive = py7zr.SevenZipFile(
                 archive_path, "r", password=bytes_to_str(pwd)
@@ -106,7 +107,9 @@ class SevenZipReader(ArchiveReader):
                     ),
                     permissions=(
                         stat.S_IMODE(file.header.attributes)
-                        if hasattr(file, "header") and hasattr(file.header, "attributes") and isinstance(file.header.attributes, int)
+                        if hasattr(file, "header")
+                        and hasattr(file.header, "attributes")
+                        and isinstance(file.header.attributes, int)
                         else None
                     ),
                     crc32=file.crc32,
@@ -167,14 +170,6 @@ class SevenZipReader(ArchiveReader):
     def iter_members(self) -> Iterator[ArchiveMember]:
         return iter(self.get_members())
 
-    def get_format(self) -> ArchiveFormat:
-        """Get the compression format of the archive.
-
-        Returns:
-            ArchiveFormat: Always returns ArchiveFormat.SEVENZIP for SevenZipReader
-        """
-        return ArchiveFormat.SEVENZIP
-
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
 
@@ -188,7 +183,7 @@ class SevenZipReader(ArchiveReader):
 
         if self._format_info is None:
             self._format_info = ArchiveInfo(
-                format=ArchiveFormat.SEVENZIP,
+                format=self.get_format(),
                 is_solid=sevenzip_info.solid,
                 extra={
                     "is_encrypted": self._archive.password_protected,

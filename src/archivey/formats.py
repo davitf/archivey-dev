@@ -58,7 +58,6 @@ _EXTENSION_TO_FORMAT = {
     ".tar.xz": ArchiveFormat.TAR_XZ,
     ".tar.zstd": ArchiveFormat.TAR_ZSTD,
     ".tar.lz4": ArchiveFormat.TAR_LZ4,
-
     ".zip": ArchiveFormat.ZIP,
     ".rar": ArchiveFormat.RAR,
     ".7z": ArchiveFormat.SEVENZIP,
@@ -67,7 +66,6 @@ _EXTENSION_TO_FORMAT = {
     ".tar": ArchiveFormat.TAR,
     ".xz": ArchiveFormat.XZ,
     ".zst": ArchiveFormat.ZSTD,
-
     ".tgz": ArchiveFormat.TAR_GZ,
     ".tbz2": ArchiveFormat.TAR_BZ2,
     ".txz": ArchiveFormat.TAR_XZ,
@@ -76,6 +74,7 @@ _EXTENSION_TO_FORMAT = {
 }
 
 _TAR_EXTENSIONS = [".tar", ".tgz", ".tbz2", ".txz", ".tzst", ".tlz4"]
+
 
 def has_tar_extension(filename: str) -> bool:
     last_ext = os.path.splitext(filename)[1].lower()
@@ -94,19 +93,24 @@ def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
             return format
     return ArchiveFormat.UNKNOWN
 
+
 logger = logging.getLogger(__name__)
+
 
 def detect_archive_format(filename: str) -> ArchiveFormat:
     format_by_signature = detect_archive_format_by_signature(filename)
     format_by_filename = detect_archive_format_by_filename(filename)
 
-    if format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT and has_tar_extension(filename):
+    if format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT and has_tar_extension(
+        filename
+    ):
         format = COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]
     else:
         format = format_by_signature
-        
+
     if format != format_by_filename:
-        logger.warning(f"{filename}: Format by signature ({format_by_signature}) and format by filename ({format_by_filename}) differ")
+        logger.warning(
+            f"{filename}: Format by signature ({format_by_signature}) and format by filename ({format_by_filename}) differ"
+        )
 
     return format
-    

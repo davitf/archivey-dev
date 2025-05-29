@@ -33,8 +33,20 @@ class ArchiveFormat(StrEnum):
     UNKNOWN = "unknown"
 
 
-SINGLE_FILE_COMPRESSED_FORMATS = [ArchiveFormat.GZIP, ArchiveFormat.BZIP2, ArchiveFormat.XZ, ArchiveFormat.ZSTD, ArchiveFormat.LZ4]
-TAR_COMPRESSED_FORMATS = [ArchiveFormat.TAR_GZ, ArchiveFormat.TAR_BZ2, ArchiveFormat.TAR_XZ, ArchiveFormat.TAR_ZSTD, ArchiveFormat.TAR_LZ4]
+SINGLE_FILE_COMPRESSED_FORMATS = [
+    ArchiveFormat.GZIP,
+    ArchiveFormat.BZIP2,
+    ArchiveFormat.XZ,
+    ArchiveFormat.ZSTD,
+    ArchiveFormat.LZ4,
+]
+TAR_COMPRESSED_FORMATS = [
+    ArchiveFormat.TAR_GZ,
+    ArchiveFormat.TAR_BZ2,
+    ArchiveFormat.TAR_XZ,
+    ArchiveFormat.TAR_ZSTD,
+    ArchiveFormat.TAR_LZ4,
+]
 
 COMPRESSION_FORMAT_TO_TAR_FORMAT = {
     ArchiveFormat.GZIP: ArchiveFormat.TAR_GZ,
@@ -43,6 +55,7 @@ COMPRESSION_FORMAT_TO_TAR_FORMAT = {
     ArchiveFormat.ZSTD: ArchiveFormat.TAR_ZSTD,
     ArchiveFormat.LZ4: ArchiveFormat.TAR_LZ4,
 }
+
 
 class MemberType(StrEnum):
     FILE = "file"

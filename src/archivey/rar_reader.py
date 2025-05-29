@@ -35,6 +35,7 @@ class BaseRarReader(ArchiveReader):
     """Base class for RAR archive readers."""
 
     def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
+        super().__init__(ArchiveFormat.RAR)
         self.archive_path = archive_path
         self._members: Optional[list[ArchiveMember]] = None
         self._format_info: Optional[ArchiveInfo] = None
@@ -119,7 +120,9 @@ class BaseRarReader(ArchiveReader):
                         if info.is_symlink()
                         else MemberType.OTHER
                     ),
-                    permissions=stat.S_IMODE(info.mode) if hasattr(info, 'mode') and isinstance(info.mode, int) else None,
+                    permissions=stat.S_IMODE(info.mode)
+                    if hasattr(info, "mode") and isinstance(info.mode, int)
+                    else None,
                     crc32=info.CRC if not has_encrypted_crc else None,
                     compression_method=compression_method,
                     comment=info.comment,
@@ -134,14 +137,6 @@ class BaseRarReader(ArchiveReader):
 
     def iter_members(self) -> Iterator[ArchiveMember]:
         return iter(self.get_members())
-
-    def get_format(self) -> ArchiveFormat:
-        """Get the compression format of the archive.
-
-        Returns:
-            ArchiveFormat: Always returns ArchiveFormat.RAR
-        """
-        return ArchiveFormat.RAR
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -168,7 +163,7 @@ class BaseRarReader(ArchiveReader):
             )
 
             self._format_info = ArchiveInfo(
-                format=ArchiveFormat.RAR,
+                format=self.get_format(),
                 version=version,
                 is_solid=self._archive.is_solid(),
                 comment=self._archive.comment,

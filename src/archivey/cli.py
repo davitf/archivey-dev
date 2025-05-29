@@ -96,7 +96,9 @@ for archive_path in args.files:
                             else:
                                 crc_error = ""
 
-                        size_str = "?" * 12 if member.size is None else f"{member.size:12d}"
+                        size_str = (
+                            "?" * 12 if member.size is None else f"{member.size:12d}"
+                        )
 
                         print(
                             f"{encrypted_str} {size_str} {crc32:08x}{crc_error} {sha256} {member.filename} {member.mtime}"

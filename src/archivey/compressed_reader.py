@@ -24,6 +24,7 @@ from archivey.types import (
 
 logger = logging.getLogger(__name__)
 
+
 def _read_null_terminated_bytes(f: io.BufferedReader) -> bytes:
     str_bytes = bytearray()
     while True:
@@ -112,12 +113,13 @@ def _read_xz_multibyte_integer(data: bytes, offset: int) -> tuple[int, int]:
         if b & 0x80 == 0:
             break
         shift += 7
-    
+
     return value, offset
 
 
 XZ_MAGIC_FOOTER = b"YZ"
 XZ_STREAM_HEADER_MAGIC = b"\xfd7zXZ\x00"
+
 
 def read_xz_metadata(path: str, member: ArchiveMember):
     logger.info(f"Reading XZ metadata for {path}")
@@ -128,14 +130,12 @@ def read_xz_metadata(path: str, member: ArchiveMember):
         if footer[-2:] != XZ_MAGIC_FOOTER:
             raise ValueError("Invalid XZ footer")
 
-        # Stream flags are in bytes 8–9 of the footer
-        stream_flags = footer[8:10]
-        check_type = stream_flags[1] & 0x0F  # only lower 4 bits used
-
         # Backward Size (first 4 bytes) tells how far back the Index is, in 4-byte units minus 1
         backward_size_field = struct.unpack("<I", footer[4:8])[0]
         index_size = (backward_size_field + 1) * 4
-        logger.info(f"XZ metadata: index_size={index_size}, backward_size_field={backward_size_field}")
+        logger.info(
+            f"XZ metadata: index_size={index_size}, backward_size_field={backward_size_field}"
+        )
 
         f.seek(-12 - index_size, 2)
         index_data = f.read(index_size)
@@ -161,7 +161,10 @@ def read_xz_metadata(path: str, member: ArchiveMember):
             total_uncompressed_size += uncompressed_size
 
         member.size = total_uncompressed_size
-        logger.debug(f"XZ metadata: total_size={total_uncompressed_size}, num_blocks={number_of_blocks}, blocks={blocks}")
+        logger.debug(
+            f"XZ metadata: total_size={total_uncompressed_size}, num_blocks={number_of_blocks}, blocks={blocks}"
+        )
+
 
 class BZ2Wrapper(io.IOBase):
     """Wrapper for bz2 file objects that converts OSError to ArchiveCorruptedError."""
@@ -184,14 +187,23 @@ class BZ2Wrapper(io.IOBase):
 class CompressedReader(ArchiveReader):
     """Reader for raw compressed files (gz, bz2, xz)."""
 
-    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None, **kwargs):
+    def __init__(
+        self,
+        archive_path: str,
+        format: ArchiveFormat,
+        *,
+        pwd: bytes | str | None = None,
+        **kwargs,
+    ):
         """Initialize the reader.
 
         Args:
             archive_path: Path to the compressed file
             pwd: Password for decryption (not supported for compressed files)
+            format: The format of the archive. If None, will be detected from the file extension.
             **kwargs: Additional options (ignored)
         """
+        super().__init__(format)
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
         self.archive_path = archive_path
@@ -202,17 +214,15 @@ class CompressedReader(ArchiveReader):
 
         # Open the appropriate decompressor based on file extension
         # Note: zstd and lz4 imports are conditional below to avoid ModuleNotFoundError if not installed.
+
+        # Open the appropriate decompressor based on file extension
         if self.ext == ".gz":
-            self.format = ArchiveFormat.GZIP
             self.decompressor = gzip.open
         elif self.ext == ".bz2":
-            self.format = ArchiveFormat.BZIP2
             self.decompressor = bz2.open
         elif self.ext == ".xz":
-            self.format = ArchiveFormat.XZ
             self.decompressor = lzma.open
         elif self.ext == ".zstd":
-            self.format = ArchiveFormat.ZSTD
             try:
                 import zstd
 
@@ -222,7 +232,6 @@ class CompressedReader(ArchiveReader):
                     "zstd module not found, required for Zstandard archives"
                 ) from None
         elif self.ext == ".lz4":
-            self.format = ArchiveFormat.LZ4
             try:
                 import lz4
 
@@ -243,7 +252,7 @@ class CompressedReader(ArchiveReader):
             size=None,  # Not available for all formats
             mtime=self.mtime,
             type=MemberType.FILE,
-            compression_method=self.format.value,
+            compression_method=self.get_format().value,
             crc32=None,
             extra=None,
         )
@@ -261,13 +270,10 @@ class CompressedReader(ArchiveReader):
         """Get a list of all members in the archive."""
         return [self.member]
 
-    def get_format(self) -> ArchiveFormat:
-        return self.format
-
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format."""
         return ArchiveInfo(
-            format=self.format.value,
+            format=self.get_format().value,
             is_solid=False,
             extra=None,
         )

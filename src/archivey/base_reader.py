@@ -1,10 +1,18 @@
 import abc
 from typing import IO, Iterator, List
-from archivey.types import ArchiveMember, ArchiveInfo
+from archivey.types import ArchiveMember, ArchiveInfo, ArchiveFormat
 
 
 class ArchiveReader(abc.ABC):
     """Abstract base class for archive readers."""
+
+    def __init__(self, format: ArchiveFormat):
+        """Initialize the archive reader.
+
+        Args:
+            format: The format of the archive
+        """
+        self._format = format
 
     @abc.abstractmethod
     def close(self) -> None:
@@ -39,14 +47,13 @@ class ArchiveReader(abc.ABC):
         """Iterate over all members in the archive."""
         pass
 
-    @abc.abstractmethod
-    def get_format(self) -> str:  # Will be ArchiveFormat from formats.py
+    def get_format(self) -> ArchiveFormat:
         """Get the compression format of the archive.
 
         Returns:
             The format of the archive
         """
-        pass
+        return self._format
 
     @abc.abstractmethod
     def get_archive_info(self) -> ArchiveInfo:

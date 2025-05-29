@@ -1,18 +1,25 @@
 # A zipfile-like interface for reading all the files in an archive.
 
 import logging
-import io
 import os
+import shutil
 from typing import IO, Any, Iterator, List, Union
 from archivey.base_reader import ArchiveReader
 from archivey.exceptions import (
     ArchiveMemberNotFoundError,
     ArchiveNotSupportedError,
 )
-from archivey.formats import detect_archive_format, detect_archive_format_by_filename, detect_archive_format_by_signature, has_tar_extension
-from archivey.types import SINGLE_FILE_COMPRESSED_FORMATS, TAR_COMPRESSED_FORMATS, ArchiveMember, ArchiveInfo, ArchiveFormat
+from archivey.formats import detect_archive_format
+from archivey.types import (
+    SINGLE_FILE_COMPRESSED_FORMATS,
+    TAR_COMPRESSED_FORMATS,
+    ArchiveMember,
+    ArchiveInfo,
+    ArchiveFormat,
+)
 
 logger = logging.getLogger(__name__)
+
 
 def create_archive_reader(
     archive_path: str,
@@ -39,6 +46,9 @@ def create_archive_reader(
         raise FileNotFoundError(f"Archive file not found: {archive_path}")
 
     ext = os.path.splitext(archive_path)[1].lower()
+    pwd = kwargs.get("pwd")
+    if pwd is not None and not isinstance(pwd, (str, bytes)):
+        raise TypeError("Password must be a string or bytes")
 
     if use_libarchive:
         raise NotImplementedError("LibArchiveReader is not implemented")
@@ -50,26 +60,26 @@ def create_archive_reader(
         if use_rar_stream:
             from archivey.rar_reader import RarStreamReader
 
-            return RarStreamReader(archive_path)
+            return RarStreamReader(archive_path, pwd=pwd)
         else:
             from archivey.rar_reader import RarReader
 
-            return RarReader(archive_path, **kwargs)
+            return RarReader(archive_path, pwd=pwd)
 
     if ext == ".zip":
         from archivey.zip_reader import ZipReader
 
-        return ZipReader(archive_path, **kwargs)
+        return ZipReader(archive_path, pwd=pwd)
 
     if ext == ".7z":
         from archivey.sevenzip_reader import SevenZipReader
 
-        return SevenZipReader(archive_path, **kwargs)
+        return SevenZipReader(archive_path, pwd=pwd)
 
     if ext == ".tar":
         from archivey.tar_reader import TarReader
 
-        return TarReader(archive_path, **kwargs)
+        return TarReader(archive_path, pwd=pwd)
 
     if ext in [".gz", ".bz2", ".xz", ".tgz", ".tbz", ".txz"]:
         # Check if it's a tar archive
@@ -77,11 +87,11 @@ def create_archive_reader(
         if ext in [".tgz", ".tbz", ".txz"] or member_name.lower().endswith(".tar"):
             from archivey.tar_reader import TarReader
 
-            return TarReader(archive_path, **kwargs)
+            return TarReader(archive_path, pwd=pwd)
         else:
             from archivey.compressed_reader import CompressedReader
 
-            return CompressedReader(archive_path, **kwargs)
+            return CompressedReader(archive_path, pwd=pwd)
 
     raise ArchiveNotSupportedError(f"Unsupported archive format: {ext}")
 
@@ -120,31 +130,34 @@ class ArchiveStream:
             # self._reader = LibArchiveReader(filename, **kwargs)
         elif format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
             from archivey.tar_reader import TarReader
-            self._reader = TarReader(filename, pwd=pwd, **kwargs)
+
+            self._reader = TarReader(filename, pwd=pwd, format=format)
 
         elif format == ArchiveFormat.RAR:
             if use_rar_stream:
                 from archivey.rar_reader import RarStreamReader
 
-                self._reader = RarStreamReader(filename, pwd=pwd, **kwargs)
+                self._reader = RarStreamReader(filename, pwd=pwd)
             else:
                 from archivey.rar_reader import RarReader
 
-                self._reader = RarReader(filename, pwd=pwd, **kwargs)
+                self._reader = RarReader(filename, pwd=pwd)
         elif format == ArchiveFormat.ZIP:
             from archivey.zip_reader import ZipReader
 
-            self._reader = ZipReader(filename, pwd=pwd, **kwargs)
+            self._reader = ZipReader(filename, pwd=pwd)
         elif format == ArchiveFormat.SEVENZIP:
             from archivey.sevenzip_reader import SevenZipReader
 
-            self._reader = SevenZipReader(filename, pwd=pwd, **kwargs)
+            self._reader = SevenZipReader(filename, pwd=pwd)
         elif format in SINGLE_FILE_COMPRESSED_FORMATS:
             from archivey.compressed_reader import CompressedReader
 
-            self._reader = CompressedReader(filename, pwd=pwd, **kwargs)
+            self._reader = CompressedReader(filename, pwd=pwd, format=format)
         else:
-            raise ArchiveNotSupportedError(f"Unsupported archive format: {filename} {format}")
+            raise ArchiveNotSupportedError(
+                f"Unsupported archive format: {filename} {format}"
+            )
 
     def __enter__(self) -> "ArchiveStream":
         """Return self for context manager protocol."""
@@ -210,7 +223,7 @@ class ArchiveStream:
     def extract(
         self,
         member: Union[str, ArchiveMember],
-        path: str = None,
+        path: str | None = None,
         preserve_ownership: bool = False,
         preserve_links: bool = True,
     ) -> str:
@@ -253,7 +266,7 @@ class ArchiveStream:
 
         # Regular file
         with self.open(member) as src, open(target_path, "wb") as dst:
-            io.copyfileobj(src, dst)
+            shutil.copyfileobj(src, dst)
 
         # Preserve modification time
         if member.mtime:
