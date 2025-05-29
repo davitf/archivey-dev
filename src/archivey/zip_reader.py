@@ -1,9 +1,9 @@
 import stat
-
 import struct
 import zipfile
 from datetime import datetime
-from typing import List, Iterator, Optional, IO
+from typing import IO, Iterator, List, Optional
+
 from archivey.base_reader import ArchiveReader
 from archivey.exceptions import (
     ArchiveCorruptedError,

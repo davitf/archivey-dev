@@ -1,12 +1,10 @@
-from dataclasses import dataclass
 import logging
 import os
 import zlib
-import pytest
+from dataclasses import dataclass
 from datetime import datetime
 
-from archivey.archive_stream import ArchiveStream
-from archivey.types import MemberType
+import pytest
 from sample_archives import (
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
@@ -14,7 +12,9 @@ from sample_archives import (
     GenerationMethod,
     filter_archives,
 )
-from archivey.types import ArchiveFormat
+
+from archivey.archive_stream import ArchiveStream
+from archivey.types import ArchiveFormat, MemberType
 
 
 def normalize_newlines(s: str | None) -> str | None:

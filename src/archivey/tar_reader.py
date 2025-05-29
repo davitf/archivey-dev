@@ -1,14 +1,15 @@
+import gzip
 import io
+import lzma
 import stat
 import tarfile
-import gzip
-import lzma
 from datetime import datetime
-from typing import List, Iterator, Union
+from typing import Iterator, List, Union
+
 from archivey.base_reader import (
-    ArchiveReader,
-    ArchiveMember,
     ArchiveInfo,
+    ArchiveMember,
+    ArchiveReader,
 )
 from archivey.exceptions import ArchiveCorruptedError, ArchiveMemberNotFoundError
 from archivey.types import ArchiveFormat, MemberType

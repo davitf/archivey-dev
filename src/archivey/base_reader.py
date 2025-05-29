@@ -1,6 +1,7 @@
 import abc
 from typing import IO, Iterator, List
-from archivey.types import ArchiveMember, ArchiveInfo, ArchiveFormat
+
+from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember
 
 
 class ArchiveReader(abc.ABC):

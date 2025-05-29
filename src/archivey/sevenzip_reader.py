@@ -2,23 +2,23 @@ import io
 import logging
 import lzma
 import stat
-from archivey.base_reader import ArchiveReader
-from archivey.utils import bytes_to_str
-import py7zr
-import py7zr.helpers
-import py7zr.exceptions
-import py7zr.compressor
+from typing import Iterator, List, cast
 
+import py7zr
+import py7zr.compressor
+import py7zr.exceptions
+import py7zr.helpers
 from py7zr.py7zr import ArchiveFile
 
-from typing import List, Iterator, cast
+from archivey.base_reader import ArchiveReader
+from archivey.exceptions import ArchiveCorruptedError, ArchiveEncryptedError
+from archivey.formats import ArchiveFormat
 from archivey.types import (
-    ArchiveMember,
     ArchiveInfo,
+    ArchiveMember,
     MemberType,
 )
-from archivey.formats import ArchiveFormat
-from archivey.exceptions import ArchiveCorruptedError, ArchiveEncryptedError
+from archivey.utils import bytes_to_str
 
 logger = logging.getLogger(__name__)
 

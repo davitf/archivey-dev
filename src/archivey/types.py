@@ -6,8 +6,8 @@ else:
     from backports.strenum import StrEnum
 
 from dataclasses import dataclass
-from typing import Optional, Any, Tuple
 from datetime import datetime
+from typing import Any, Optional, Tuple
 
 
 class ArchiveFormat(StrEnum):

@@ -1,15 +1,17 @@
 import bz2
 import copy
+import gzip
+import lzma
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-import gzip
-import zstandard
-import lzma
-import os
-from typing import Optional, Any
-from archivey.types import ArchiveFormat, MemberType
+from typing import Any, Optional
+
 import lz4.frame
+import zstandard
+
+from archivey.types import ArchiveFormat, MemberType
 
 
 class GenerationMethod(Enum):

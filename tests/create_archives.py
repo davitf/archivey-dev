@@ -1,17 +1,18 @@
-import logging
-import os
-import subprocess
-import tempfile
-from typing import Any, Generator
-import zipfile
-import tarfile
-import io
-import stat
-import py7zr
 import argparse
 import fnmatch
-from archivey.types import MemberType, ArchiveFormat
+import io
+import logging
+import os
+import stat
+import subprocess
+import tarfile
+import tempfile
+import zipfile
+from typing import Any, Generator
 
+import py7zr
+
+from archivey.types import ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     ArchiveContents,
@@ -19,7 +20,6 @@ from tests.archivey.sample_archives import (
     FileInfo,
     GenerationMethod,
 )
-
 
 _COMPRESSION_METHOD_TO_ZIPFILE_VALUE = {
     "store": zipfile.ZIP_STORED,

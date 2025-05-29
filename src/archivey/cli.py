@@ -1,18 +1,19 @@
 # A zipfile-like interface for reading all the files in an archive.
 
-from datetime import datetime
+import argparse
 import hashlib
 import logging
-from typing import Tuple, IO
 import zlib
+from datetime import datetime
+from typing import IO, Tuple
+
+from tqdm import tqdm
+
 from archivey.archive_stream import ArchiveStream
 from archivey.exceptions import (
     ArchiveError,
 )
-
-import argparse
 from archivey.types import MemberType
-from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
 

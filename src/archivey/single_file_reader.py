@@ -1,24 +1,24 @@
+import bz2
+import gzip
 import io
 import logging
-import os
-import gzip
-import bz2
 import lzma
-from datetime import datetime
+import os
 import struct
+from datetime import datetime
 from typing import Iterator, List
 
 from archivey.base_reader import ArchiveReader
 from archivey.exceptions import (
+    ArchiveCorruptedError,
     ArchiveEOFError,
     ArchiveError,
-    ArchiveCorruptedError,
     ArchiveFormatError,
 )
 from archivey.types import (
+    ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
-    ArchiveFormat,
     MemberType,
 )
 

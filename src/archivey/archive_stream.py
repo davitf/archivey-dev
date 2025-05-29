@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 from typing import IO, Any, Iterator, List, Union
+
 from archivey.base_reader import ArchiveReader
 from archivey.exceptions import (
     ArchiveMemberNotFoundError,
@@ -13,9 +14,9 @@ from archivey.formats import detect_archive_format
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
-    ArchiveMember,
-    ArchiveInfo,
     ArchiveFormat,
+    ArchiveInfo,
+    ArchiveMember,
 )
 
 logger = logging.getLogger(__name__)

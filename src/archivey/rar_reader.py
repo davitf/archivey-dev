@@ -1,13 +1,14 @@
 import io
 import logging
 import stat
-from archivey.utils import bytes_to_str
-import rarfile
 import subprocess
 import threading
 import zlib
 from datetime import datetime
-from typing import List, Iterator, Optional, IO, Iterable, Any
+from typing import IO, Any, Iterable, Iterator, List, Optional
+
+import rarfile
+
 from archivey.base_reader import ArchiveReader
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -15,8 +16,9 @@ from archivey.exceptions import (
     ArchiveError,
 )
 from archivey.formats import ArchiveFormat
-from archivey.types import ArchiveInfo, ArchiveMember, MemberType
 from archivey.io_wrappers import ExceptionTranslatingIO
+from archivey.types import ArchiveInfo, ArchiveMember, MemberType
+from archivey.utils import bytes_to_str
 
 logger = logging.getLogger(__name__)
 

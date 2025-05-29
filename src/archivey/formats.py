@@ -1,6 +1,7 @@
 import io
-import os
 import logging
+import os
+
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
     TAR_COMPRESSED_FORMATS,
