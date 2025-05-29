@@ -1,20 +1,28 @@
-from dataclasses import dataclass
+import bz2
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+import gzip
+import zstandard
+import lzma
 import os
-from typing import Optional
+from typing import Optional, Any
 from archivey.types import ArchiveFormat, MemberType
+import lz4.frame
 
 
 class GenerationMethod(Enum):
     ZIPFILE = "zipfile"
-    INFOZIP = "zip_command_line"
-    EXTERNAL = "external"
-    TAR_COMMAND_LINE = "tar_command_line"
+    INFOZIP = "infozip"
+    TAR_COMMAND_LINE = "tar_cmd"
+    TAR_LIBRARY = "tarfile"
     PY7ZR = "py7zr"
-    SEVENZIP_COMMAND_LINE = "7z_command_line"
-    RAR_COMMAND_LINE = "rar_command_line"
-    COMMAND_LINE = "command_line"
+    SEVENZIP_COMMAND_LINE = "7z_cmd"
+    RAR_COMMAND_LINE = "rar_cmd"
+    SINGLE_FILE_COMMAND_LINE = "single_file_cmd"
+    SINGLE_FILE_LIBRARY = "single_file_lib"
+
+    EXTERNAL = "external"
 
 
 @dataclass
@@ -31,43 +39,246 @@ class FileInfo:
     mode: Optional[int] = None
 
 
-TEST_ARCHIVES_DIR = "test_archives"
-TEST_ARCHIVES_EXTERNAL_DIR = "test_archives_external"
+@dataclass
+class ArchiveContents:
+    file_basename: str  # Base name for the archive (e.g., "basic", "encryption")
+    files: list[FileInfo]  # List of files to include
+    archive_comment: str | None = None  # Optional archive comment
+    solid: bool = False  # Whether archive should be solid
+    header_password: str | None = None  # Optional header password
+
+
+@dataclass
+class ArchiveFormatInfo:
+    file_suffix: str  # e.g., ".zip", "py7zr.7z", "7zcmd.7z"
+    format: ArchiveFormat  # The archive format enum
+    generation_method: GenerationMethod  # How to generate the archive
+    generation_method_options: dict[str, Any] = field(
+        default_factory=dict
+    )  # Additional options for generation
 
 
 @dataclass
 class ArchiveInfo:
-    filename: str
-    generation_method: GenerationMethod
-    format: ArchiveFormat
-    files: list[FileInfo]
-    archive_comment: str | None = None
+    filename: (
+        str  # Will be constructed as f"{contents.file_basename}__{format.file_suffix}"
+    )
+    contents: ArchiveContents
+    format_info: ArchiveFormatInfo
     skip_test: bool = False
-    solid: bool = False
-    header_password: str | None = None
 
     def get_archive_path(self, base_dir: str) -> str:
-        if self.generation_method == GenerationMethod.EXTERNAL:
+        if self.format_info.generation_method == GenerationMethod.EXTERNAL:
             return os.path.join(base_dir, TEST_ARCHIVES_EXTERNAL_DIR, self.filename)
         else:
             return os.path.join(base_dir, TEST_ARCHIVES_DIR, self.filename)
+
+
+# Generation method constants
+ZIP_ZIPFILE = ArchiveFormatInfo(
+    file_suffix="zipfile.zip",
+    format=ArchiveFormat.ZIP,
+    generation_method=GenerationMethod.ZIPFILE,
+)
+ZIP_INFOZIP = ArchiveFormatInfo(
+    file_suffix="infozip.zip",
+    format=ArchiveFormat.ZIP,
+    generation_method=GenerationMethod.INFOZIP,
+)
+
+# 7z formats
+SEVENZIP_PY7ZR = ArchiveFormatInfo(
+    file_suffix="py7zr.7z",
+    format=ArchiveFormat.SEVENZIP,
+    generation_method=GenerationMethod.PY7ZR,
+)
+SEVENZIP_7ZCMD = ArchiveFormatInfo(
+    file_suffix="7zcmd.7z",
+    format=ArchiveFormat.SEVENZIP,
+    generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
+)
+
+# RAR format
+RAR_CMD = ArchiveFormatInfo(
+    file_suffix=".rar",
+    format=ArchiveFormat.RAR,
+    generation_method=GenerationMethod.RAR_COMMAND_LINE,
+)
+
+# TAR formats
+TAR_PLAIN_CMD = ArchiveFormatInfo(
+    file_suffix="tarcmd.tar",
+    format=ArchiveFormat.TAR,
+    generation_method=GenerationMethod.TAR_COMMAND_LINE,
+)
+
+# TAR formats
+TAR_PLAIN_TARFILE = ArchiveFormatInfo(
+    file_suffix="tarfile.tar",
+    format=ArchiveFormat.TAR,
+    generation_method=GenerationMethod.TAR_LIBRARY,
+)
+
+TAR_GZ_CMD = ArchiveFormatInfo(
+    file_suffix="tarcmd.tar.gz",
+    format=ArchiveFormat.TAR_GZ,
+    generation_method=GenerationMethod.TAR_COMMAND_LINE,
+)
+TAR_GZ_TARFILE = ArchiveFormatInfo(
+    file_suffix="tarfile.tar.gz",
+    format=ArchiveFormat.TAR_GZ,
+    generation_method=GenerationMethod.TAR_COMMAND_LINE,
+)
+
+# No need to test both tarfile and cmdline for the other formats, as there shouldn't
+# be significant differences that won't be caught by the gz format.
+TAR_BZ2 = ArchiveFormatInfo(
+    file_suffix=".tar.bz2",
+    format=ArchiveFormat.TAR_BZ2,
+    generation_method=GenerationMethod.TAR_LIBRARY,
+)
+TAR_XZ = ArchiveFormatInfo(
+    file_suffix=".tar.xz",
+    format=ArchiveFormat.TAR_XZ,
+    generation_method=GenerationMethod.TAR_LIBRARY,
+)
+TAR_ZSTD = ArchiveFormatInfo(
+    file_suffix=".tar.zst",
+    format=ArchiveFormat.TAR_ZSTD,
+    generation_method=GenerationMethod.TAR_LIBRARY,
+)
+TAR_LZ4 = ArchiveFormatInfo(
+    file_suffix=".tar.lz4",
+    format=ArchiveFormat.TAR_LZ4,
+    generation_method=GenerationMethod.TAR_LIBRARY,
+)
+
+# Single file compression formats
+GZIP_CMD = ArchiveFormatInfo(
+    file_suffix="cmd.gz",
+    format=ArchiveFormat.GZIP,
+    generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
+    generation_method_options={"compression_cmd": "gzip"},
+)
+BZIP2_CMD = ArchiveFormatInfo(
+    file_suffix="cmd.bz2",
+    format=ArchiveFormat.BZIP2,
+    generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
+    generation_method_options={"compression_cmd": "bzip2"},
+)
+XZ_CMD = ArchiveFormatInfo(
+    file_suffix="cmd.xz",
+    format=ArchiveFormat.XZ,
+    generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
+    generation_method_options={"compression_cmd": "xz"},
+)
+ZSTD_CMD = ArchiveFormatInfo(
+    file_suffix="cmd.zst",
+    format=ArchiveFormat.ZSTD,
+    generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
+    generation_method_options={"compression_cmd": "zstd"},
+)
+LZ4_CMD = ArchiveFormatInfo(
+    file_suffix="cmd.lz4",
+    format=ArchiveFormat.LZ4,
+    generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
+    generation_method_options={"compression_cmd": "lz4"},
+)
+
+GZIP_LIBRARY = ArchiveFormatInfo(
+    file_suffix="lib.gz",
+    format=ArchiveFormat.GZIP,
+    generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    generation_method_options={"opener": gzip.GzipFile},
+)
+BZIP2_LIBRARY = ArchiveFormatInfo(
+    file_suffix="lib.bz2",
+    format=ArchiveFormat.BZIP2,
+    generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    generation_method_options={"opener": bz2.BZ2File},
+)
+XZ_LIBRARY = ArchiveFormatInfo(
+    file_suffix="lib.xz",
+    format=ArchiveFormat.XZ,
+    generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    generation_method_options={"opener": lzma.LZMAFile},
+)
+ZSTD_LIBRARY = ArchiveFormatInfo(
+    file_suffix="lib.zst",
+    format=ArchiveFormat.ZSTD,
+    generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    generation_method_options={"opener": zstandard.open},
+)
+LZ4_LIBRARY = ArchiveFormatInfo(
+    file_suffix="lib.lz4",
+    format=ArchiveFormat.LZ4,
+    generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    generation_method_options={"opener": lz4.frame.open},
+)
+
+ALL_SINGLE_FILE_FORMATS = [
+    GZIP_CMD,
+    BZIP2_CMD,
+    XZ_CMD,
+    ZSTD_CMD,
+    LZ4_CMD,
+    GZIP_LIBRARY,
+    BZIP2_LIBRARY,
+    XZ_LIBRARY,
+    ZSTD_LIBRARY,
+    LZ4_LIBRARY,
+]
+
+BASIC_TAR_FORMATS = [
+    TAR_PLAIN_CMD,
+    TAR_PLAIN_TARFILE,
+    TAR_GZ_CMD,
+    TAR_GZ_TARFILE,
+]
+
+ALL_TAR_FORMATS = BASIC_TAR_FORMATS + [
+    TAR_BZ2,
+    TAR_XZ,
+    # TAR_ZSTD,
+    # TAR_LZ4,
+]
+
+ZIP_FORMATS = [
+    ZIP_ZIPFILE,
+    ZIP_INFOZIP,
+]
+
+RAR_FORMATS = [
+    RAR_CMD,
+]
+
+SEVENZIP_FORMATS = [
+    SEVENZIP_PY7ZR,
+    SEVENZIP_7ZCMD,
+]
+
+ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
+
+# Skip test filenames
+SKIP_TEST_FILENAMES = {
+    "symlinks__py7zr.7z",
+    "symlinks_solid__py7zr.7z",
+    "encryption_solid__py7zr.7z",
+}
+
+TEST_ARCHIVES_DIR = "test_archives"
+TEST_ARCHIVES_EXTERNAL_DIR = "test_archives_external"
 
 
 def _fake_mtime(i: int) -> datetime:
     def _mod_1(i: int, mod: int) -> int:
         return (i - 1) % mod + 1
 
-    years = [-1000, 1980, 1990, 2000, 2010]
     if i == 0:
         return datetime(1980, 1, 1, 0, 0, 0)
 
-    if i < len(years):
-        year = years[i]
-    else:
-        year = 2020 + (i - len(years))
-
     return datetime(
-        year, _mod_1(i, 12), _mod_1(i, 28), i % 24, (i + 1) % 60, (i + 2) % 60
+        2000 + i, _mod_1(i, 12), _mod_1(i, 28), i % 24, (i + 1) % 60, (i + 2) % 60
     )
 
 
@@ -181,28 +392,6 @@ ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES = ENCRYPTION_SINGLE_PASSWORD_FILES + [
     ),
 ]
 
-# SOME_TEST_SOLID_FILES = [
-#     FileInfo(
-#         name="plain.txt",
-#         mtime=_fake_mtime(1),
-#         contents=b"This is plain",
-#         password="password",
-#     ),
-#     FileInfo(
-#         name="secret.txt",
-#         mtime=_fake_mtime(1),
-#         contents=b"This is secret",
-#         # password="password",
-#     ),
-#     FileInfo(
-#         name="also_secret.txt",
-#         mtime=_fake_mtime(2),
-#         contents=b"This is also secret",
-#         # password="password",
-#     ),
-# ]
-
-
 SYMLINK_FILES = [
     FileInfo(name="file1.txt", contents=b"Hello, world!", mtime=_fake_mtime(1)),
     FileInfo(
@@ -284,330 +473,6 @@ COMPRESSION_METHOD_FILES_LZMA = COMPRESSION_METHODS_FILES + [
     ),
 ]
 
-
-ZIP_ARCHIVES = [
-    ArchiveInfo(
-        filename="basic_zipfile.zip",
-        generation_method=GenerationMethod.ZIPFILE,
-        format=ArchiveFormat.ZIP,
-        files=BASIC_FILES,
-    ),
-    ArchiveInfo(
-        filename="basic_infozip.zip",
-        generation_method=GenerationMethod.INFOZIP,
-        format=ArchiveFormat.ZIP,
-        files=BASIC_FILES,
-    ),
-    ArchiveInfo(
-        filename="comment_zipfile.zip",
-        generation_method=GenerationMethod.ZIPFILE,
-        format=ArchiveFormat.ZIP,
-        files=COMMENT_FILES,
-        archive_comment="This is a\nmulti-line comment",
-    ),
-    ArchiveInfo(
-        filename="comment_infozip.zip",
-        generation_method=GenerationMethod.INFOZIP,
-        format=ArchiveFormat.ZIP,
-        files=COMMENT_FILES,
-        archive_comment="This is a\nmulti-line comment",
-    ),
-    # zipfile does not support writing encrypted files
-    ArchiveInfo(
-        filename="encryption.zip",
-        generation_method=GenerationMethod.INFOZIP,
-        format=ArchiveFormat.ZIP,
-        files=ENCRYPTION_SINGLE_PASSWORD_FILES,
-    ),
-    ArchiveInfo(
-        filename="encryption_several_passwords.zip",
-        generation_method=GenerationMethod.INFOZIP,
-        format=ArchiveFormat.ZIP,
-        files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
-    ),
-    # zipfile does not support symlinks
-    ArchiveInfo(
-        filename="symlinks.zip",
-        generation_method=GenerationMethod.INFOZIP,
-        format=ArchiveFormat.ZIP,
-        files=SYMLINK_FILES,
-    ),
-    ArchiveInfo(
-        filename="encoding_zipfile.zip",
-        generation_method=GenerationMethod.ZIPFILE,
-        format=ArchiveFormat.ZIP,
-        files=ENCODING_FILES,
-        archive_comment="Comentário em português 😀",
-    ),
-    ArchiveInfo(
-        filename="encoding_infozip.zip",
-        generation_method=GenerationMethod.INFOZIP,
-        format=ArchiveFormat.ZIP,
-        files=ENCODING_FILES,
-        archive_comment="Comentário em português 😀",
-    ),
-    ArchiveInfo(
-        filename="encoding_infozip_jules.zip",
-        generation_method=GenerationMethod.EXTERNAL,
-        format=ArchiveFormat.ZIP,
-        files=ENCODING_FILES,
-        archive_comment="Comentário em português 😀",
-        skip_test=True,
-    ),
-    # info-zip does not support LZMA
-    ArchiveInfo(
-        filename="compression_methods_zipfile.zip",
-        generation_method=GenerationMethod.ZIPFILE,
-        format=ArchiveFormat.ZIP,
-        files=COMPRESSION_METHOD_FILES_LZMA,
-    ),
-    ArchiveInfo(
-        filename="compression_methods_infozip.zip",
-        generation_method=GenerationMethod.INFOZIP,
-        format=ArchiveFormat.ZIP,
-        files=COMPRESSION_METHODS_FILES,
-    ),
-]
-
-TAR_ARCHIVES = [
-    ArchiveInfo(
-        filename="basic.tar",
-        generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=ArchiveFormat.TAR,
-        files=BASIC_FILES,
-    ),
-    ArchiveInfo(
-        filename="symlinks.tar",
-        generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=ArchiveFormat.TAR,
-        files=SYMLINK_FILES,
-    ),
-    ArchiveInfo(
-        filename="encoding.tar",
-        generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=ArchiveFormat.TAR,
-        files=ENCODING_FILES,
-    ),
-    ArchiveInfo(
-        filename="basic.tar.gz",
-        generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=ArchiveFormat.TAR_GZ,
-        files=BASIC_FILES,
-    ),
-    ArchiveInfo(
-        filename="basic.tar.bz2",
-        generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=ArchiveFormat.TAR_BZ2,
-        files=BASIC_FILES,
-    ),
-    ArchiveInfo(
-        filename="basic.tar.xz",
-        generation_method=GenerationMethod.TAR_COMMAND_LINE,
-        format=ArchiveFormat.TAR_XZ,
-        files=BASIC_FILES,
-    ),
-]
-
-# RAR Archives
-RAR_ARCHIVES = [
-    ArchiveInfo(
-        filename="basic.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=BASIC_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="basic_solid.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=BASIC_FILES,
-        solid=True,
-    ),
-    ArchiveInfo(
-        filename="comment.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=COMMENT_FILES,
-        archive_comment="RAR archive comment",
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="comment_solid.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=COMMENT_FILES,
-        archive_comment="Solid RAR archive comment",
-        solid=True,
-    ),
-    ArchiveInfo(
-        filename="encryption.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=ENCRYPTION_SINGLE_PASSWORD_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="encryption_with_plain.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="encryption_solid.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=ENCRYPTION_SINGLE_PASSWORD_FILES,
-        solid=True,
-    ),
-    ArchiveInfo(
-        filename="encryption_several_passwords.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="encrypted_header.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=BASIC_FILES,
-        solid=False,
-        header_password="header_password",
-    ),
-    ArchiveInfo(
-        filename="encrypted_header_solid.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=BASIC_FILES,
-        solid=True,
-        header_password="header_password",
-    ),
-    ArchiveInfo(
-        filename="symlinks.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=SYMLINK_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="symlinks_solid.rar",
-        generation_method=GenerationMethod.RAR_COMMAND_LINE,
-        format=ArchiveFormat.RAR,
-        files=SYMLINK_FILES,
-        solid=True,
-    ),
-]
-
-# 7z Archives (py7zr)
-SEVENZIP_PY7ZR_ARCHIVES = [
-    ArchiveInfo(
-        filename="basic_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=ArchiveFormat.SEVENZIP,
-        files=BASIC_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="basic_solid_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=ArchiveFormat.SEVENZIP,
-        files=BASIC_FILES,
-        solid=True,
-    ),
-    ArchiveInfo(
-        filename="encryption_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=ArchiveFormat.SEVENZIP,
-        files=ENCRYPTION_SINGLE_PASSWORD_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="encryption_with_plain_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=ArchiveFormat.SEVENZIP,
-        files=ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="encryption_several_passwords_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=ArchiveFormat.SEVENZIP,
-        files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
-        solid=False,
-    ),
-    ArchiveInfo(
-        filename="encryption_solid_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=ArchiveFormat.SEVENZIP,
-        files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
-        solid=True,
-        skip_test=True,
-    ),
-    # ArchiveInfo(
-    #     filename="some_test_solid_py7zr.7z",
-    #     generation_method=GenerationMethod.PY7ZR,
-    #     format=ArchiveFormat.SEVENZIP,
-    #     files=SOME_TEST_SOLID_FILES,
-    #     solid=True,
-    # ),
-    ArchiveInfo(
-        filename="encrypted_header_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=ArchiveFormat.SEVENZIP,
-        files=BASIC_FILES,
-        solid=False,
-        header_password="header_password",
-    ),
-    ArchiveInfo(
-        filename="encrypted_header_solid_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=ArchiveFormat.SEVENZIP,
-        files=BASIC_FILES,
-        solid=True,
-        header_password="header_password",
-    ),
-    ArchiveInfo(
-        filename="symlinks_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=ArchiveFormat.SEVENZIP,
-        files=SYMLINK_FILES,
-        solid=False,
-        skip_test=True,  # py7zr may not support symlinks
-    ),
-    ArchiveInfo(
-        filename="symlinks_solid_py7zr.7z",
-        generation_method=GenerationMethod.PY7ZR,
-        format=ArchiveFormat.SEVENZIP,
-        files=SYMLINK_FILES,
-        solid=True,
-        skip_test=True,  # py7zr may not support symlinks
-    ),
-]
-
-# 7z Archives (7z command line)
-SEVENZIP_CMD_ARCHIVES = [
-    ArchiveInfo(
-        filename=archive_info.filename.replace("_py7zr.7z", "_7zcmd.7z"),
-        generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
-        format=ArchiveFormat.SEVENZIP,
-        files=archive_info.files,
-        solid=archive_info.solid,
-        header_password=archive_info.header_password,
-        skip_test=archive_info.skip_test
-        or archive_info.filename
-        in (
-            "symlinks_py7zr.7z",  # already skipped
-            "symlinks_solid_py7zr.7z",  # already skipped
-        ),  # Propagate skip_test for symlinks
-    )
-    for archive_info in SEVENZIP_PY7ZR_ARCHIVES
-]
-
-assert all(archive.filename.endswith("_7zcmd.7z") for archive in SEVENZIP_CMD_ARCHIVES)
-
-
 # Single compressed files (e.g. .gz, .bz2, .xz)
 SINGLE_FILE_TXT_CONTENT = b"This is a single test file for compression.\n"
 SINGLE_FILE_INFO = FileInfo(
@@ -619,46 +484,6 @@ SINGLE_FILE_INFO_SPECIAL_MTIME = FileInfo(
     name="single_file.txt",
     mtime=datetime(1970, 1, 1, 0, 0, 0),
     contents=SINGLE_FILE_TXT_CONTENT,
-)
-
-SINGLE_FILE_COMPRESSED_ARCHIVES = [
-    ArchiveInfo(
-        filename="single_file.txt.gz",
-        generation_method=GenerationMethod.COMMAND_LINE,
-        format=ArchiveFormat.GZIP,
-        files=[SINGLE_FILE_INFO],
-        archive_comment=None,
-    ),
-    ArchiveInfo(
-        filename="single_file.txt.bz2",
-        generation_method=GenerationMethod.COMMAND_LINE,
-        format=ArchiveFormat.BZIP2,
-        files=[SINGLE_FILE_INFO_SPECIAL_MTIME],
-        archive_comment=None,
-    ),
-    ArchiveInfo(
-        filename="single_file.txt.xz",
-        generation_method=GenerationMethod.COMMAND_LINE,
-        format=ArchiveFormat.XZ,
-        files=[SINGLE_FILE_INFO_SPECIAL_MTIME],
-        archive_comment=None,
-    ),
-    ArchiveInfo(
-        filename="single_file.txt.zst",
-        generation_method=GenerationMethod.COMMAND_LINE,
-        format=ArchiveFormat.ZSTD,
-        files=[SINGLE_FILE_INFO_SPECIAL_MTIME],
-        archive_comment=None,
-    ),
-]
-
-SAMPLE_ARCHIVES = (
-    ZIP_ARCHIVES
-    + TAR_ARCHIVES
-    + RAR_ARCHIVES
-    + SEVENZIP_PY7ZR_ARCHIVES
-    + SEVENZIP_CMD_ARCHIVES
-    + SINGLE_FILE_COMPRESSED_ARCHIVES
 )
 
 TEST_PERMISSIONS_FILES = [
@@ -682,27 +507,212 @@ TEST_PERMISSIONS_FILES = [
     ),
 ]
 
-TEST_PERMISSIONS_ARCHIVE_TAR = ArchiveInfo(
-    filename="permissions.tar",
-    generation_method=GenerationMethod.TAR_COMMAND_LINE,
-    format=ArchiveFormat.TAR,
-    files=TEST_PERMISSIONS_FILES,
-)
 
-TEST_PERMISSIONS_ARCHIVE_ZIP = ArchiveInfo(
-    filename="permissions_zipfile.zip",
-    generation_method=GenerationMethod.ZIPFILE,
-    format=ArchiveFormat.ZIP,
-    files=TEST_PERMISSIONS_FILES,
-)
+def build_archive_infos() -> list[ArchiveInfo]:
+    """Build all ArchiveInfo objects from the definitions."""
+    archives = []
+    for contents, format_infos in ARCHIVE_DEFINITIONS:
+        for format_info in format_infos:
+            filename = f"{contents.file_basename}__{format_info.file_suffix}"
+            archives.append(
+                ArchiveInfo(
+                    filename=filename,
+                    contents=contents,
+                    format_info=format_info,
+                    skip_test=filename in SKIP_TEST_FILENAMES,
+                )
+            )
 
-# Update SAMPLE_ARCHIVES to include the new test archives
-SAMPLE_ARCHIVES = (
-    ZIP_ARCHIVES
-    + TAR_ARCHIVES
-    + RAR_ARCHIVES
-    + SEVENZIP_PY7ZR_ARCHIVES
-    + SEVENZIP_CMD_ARCHIVES
-    + SINGLE_FILE_COMPRESSED_ARCHIVES
-    + [TEST_PERMISSIONS_ARCHIVE_TAR, TEST_PERMISSIONS_ARCHIVE_ZIP]
-)
+    # Verify all skip test filenames were created
+    created_filenames = {a.filename for a in archives}
+    missing_skip_tests = SKIP_TEST_FILENAMES - created_filenames
+    if missing_skip_tests:
+        raise ValueError(
+            f"Some skip test filenames were not created: {missing_skip_tests}"
+        )
+
+    return archives
+
+
+def filter_archives(
+    archives: list[ArchiveInfo],
+    prefixes: list[str] | None = None,
+    extensions: list[str] | None = None,
+) -> list[ArchiveInfo]:
+    """Filter archives by filename prefixes and/or extensions."""
+    filtered = archives
+    if prefixes:
+        # Add "__" to prefixes to avoid partial matches
+        prefix_patterns = [f"{p}__" for p in prefixes]
+        filtered = [
+            a
+            for a in filtered
+            if any(a.filename.startswith(p) for p in prefix_patterns)
+        ]
+    if extensions:
+        filtered = [
+            a for a in filtered if any(a.filename.endswith(e) for e in extensions)
+        ]
+
+    if not filtered:
+        raise ValueError("No archives match the filter criteria")
+
+    return filtered
+
+
+# Archive definitions
+ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveFormatInfo]]] = [
+    (
+        ArchiveContents(
+            file_basename="basic_nonsolid",
+            files=BASIC_FILES,
+        ),
+        ZIP_RAR_7Z_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="basic_solid",
+            files=BASIC_FILES,
+            solid=True,
+        ),
+        RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="comment",
+            files=COMMENT_FILES,
+            archive_comment="This is a\nmulti-line comment",
+        ),
+        ZIP_FORMATS + RAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="encryption",
+            files=ENCRYPTION_SINGLE_PASSWORD_FILES,
+            solid=False,
+        ),
+        # Zipfile library doesn't support writing encrypted archives.
+        [ZIP_INFOZIP] + RAR_FORMATS + SEVENZIP_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="encryption_several_passwords",
+            files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
+            solid=False,
+        ),
+        # Zipfile library doesn't support writing encrypted archives.
+        [ZIP_INFOZIP] + RAR_FORMATS + SEVENZIP_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="encryption_with_plain",
+            files=ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES,
+            solid=False,
+        ),
+        # Zipfile library doesn't support writing encrypted archives.
+        [ZIP_INFOZIP] + RAR_FORMATS + SEVENZIP_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="encryption_solid",
+            files=ENCRYPTION_SINGLE_PASSWORD_FILES,
+            solid=True,
+        ),
+        RAR_FORMATS + SEVENZIP_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="encrypted_header",
+            files=BASIC_FILES,
+            header_password="header_password",
+        ),
+        RAR_FORMATS + SEVENZIP_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="encrypted_header_solid",
+            files=BASIC_FILES,
+            solid=True,
+            header_password="header_password",
+        ),
+        RAR_FORMATS + SEVENZIP_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="symlinks",
+            files=SYMLINK_FILES,
+            solid=False,
+        ),
+        ZIP_RAR_7Z_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="symlinks_solid",
+            files=SYMLINK_FILES,
+            solid=True,
+        ),
+        RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="encoding",
+            files=ENCODING_FILES,
+        ),
+        ZIP_RAR_7Z_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="encoding",
+            files=ENCODING_FILES,
+            solid=True,
+        ),
+        BASIC_TAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="encoding_comment",
+            files=ENCODING_FILES,
+            archive_comment="Comentário em português 😀",
+        ),
+        ZIP_FORMATS + RAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="compression_methods",
+            files=COMPRESSION_METHODS_FILES,
+        ),
+        ZIP_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="compression_methods_lzma",
+            files=COMPRESSION_METHOD_FILES_LZMA,
+        ),
+        [ZIP_ZIPFILE],  # Infozip doesn't support lzma
+    ),
+    (
+        ArchiveContents(
+            file_basename="single_file",
+            files=[SINGLE_FILE_INFO],
+        ),
+        ALL_SINGLE_FILE_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="permissions",
+            files=TEST_PERMISSIONS_FILES,
+        ),
+        ZIP_RAR_7Z_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="permissions_solid",
+            files=TEST_PERMISSIONS_FILES,
+            solid=True,
+        ),
+        BASIC_TAR_FORMATS,
+    ),
+]
+
+# Build all archive infos
+SAMPLE_ARCHIVES = build_archive_infos()

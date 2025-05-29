@@ -122,6 +122,7 @@ class ArchiveStream:
             raise FileNotFoundError(f"Archive file not found: {filename}")
 
         format = detect_archive_format(filename)
+        logger.info(f"Archive format for {filename}: {format}")
 
         if use_libarchive:
             raise NotImplementedError("LibArchiveReader is not implemented")

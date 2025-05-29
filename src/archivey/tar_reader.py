@@ -1,5 +1,4 @@
 import io
-import os
 import stat
 import tarfile
 import gzip
@@ -41,9 +40,15 @@ class TarReader(ArchiveReader):
         self._format_info = None
 
         try:
-            # Determine if this is a compressed TAR
-            ext = os.path.splitext(archive_path)[1].lower()
-            mode: str = "r" if ext == ".tar" else f"r:{ext[1:]}"  # r:gz, r:bz2, r:xz
+            mode_dict = {
+                ArchiveFormat.TAR: "r",
+                ArchiveFormat.TAR_GZ: "r:gz",
+                ArchiveFormat.TAR_BZ2: "r:bz2",
+                ArchiveFormat.TAR_XZ: "r:xz",
+                ArchiveFormat.TAR_ZSTD: "r:zst",
+                ArchiveFormat.TAR_LZ4: "r:lz4",
+            }
+            mode: str = mode_dict.get(format, "r")
 
             # Pylance knows the mode argument can only accept some specific values,
             # and doesn't understand that we're building one of them above.
@@ -74,17 +79,14 @@ class TarReader(ArchiveReader):
                 # Get compression method based on format
                 compression_method = None
                 if self.get_format() != ArchiveFormat.TAR:
-                    if hasattr(self._archive, "compression"):
-                        compression_method = self._archive.compression
-                    else:
-                        # Map format to compression method
-                        compression_method = {
-                            ArchiveFormat.TAR_GZ: ArchiveFormat.GZIP,
-                            ArchiveFormat.TAR_BZ2: ArchiveFormat.BZIP2,
-                            ArchiveFormat.TAR_XZ: ArchiveFormat.XZ,
-                            ArchiveFormat.TAR_ZSTD: ArchiveFormat.ZSTD,
-                            ArchiveFormat.TAR_LZ4: ArchiveFormat.LZ4,
-                        }.get(self.get_format())
+                    # Map format to compression method
+                    compression_method = {
+                        ArchiveFormat.TAR_GZ: ArchiveFormat.GZIP,
+                        ArchiveFormat.TAR_BZ2: ArchiveFormat.BZIP2,
+                        ArchiveFormat.TAR_XZ: ArchiveFormat.XZ,
+                        ArchiveFormat.TAR_ZSTD: ArchiveFormat.ZSTD,
+                        ArchiveFormat.TAR_LZ4: ArchiveFormat.LZ4,
+                    }.get(self.get_format())
 
                 filename = info.name
                 if info.isdir() and not filename.endswith("/"):

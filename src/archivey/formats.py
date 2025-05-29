@@ -56,7 +56,7 @@ _EXTENSION_TO_FORMAT = {
     ".tar.gz": ArchiveFormat.TAR_GZ,
     ".tar.bz2": ArchiveFormat.TAR_BZ2,
     ".tar.xz": ArchiveFormat.TAR_XZ,
-    ".tar.zstd": ArchiveFormat.TAR_ZSTD,
+    ".tar.zst": ArchiveFormat.TAR_ZSTD,
     ".tar.lz4": ArchiveFormat.TAR_LZ4,
     ".zip": ArchiveFormat.ZIP,
     ".rar": ArchiveFormat.RAR,
@@ -77,10 +77,10 @@ _TAR_EXTENSIONS = [".tar", ".tgz", ".tbz2", ".txz", ".tzst", ".tlz4"]
 
 
 def has_tar_extension(filename: str) -> bool:
-    last_ext = os.path.splitext(filename)[1].lower()
-    if last_ext in _TAR_EXTENSIONS:
+    base_filename, ext = os.path.splitext(filename.lower())
+    if ext in _TAR_EXTENSIONS:
         return True
-    if filename.lower().endswith(".tar"):
+    if base_filename.endswith(".tar"):
         return True
     return False
 

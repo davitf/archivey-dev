@@ -8,14 +8,10 @@ from datetime import datetime
 from archivey.archive_stream import ArchiveStream
 from archivey.types import MemberType
 from sample_archives import (
+    SAMPLE_ARCHIVES,
     ArchiveInfo,
     GenerationMethod,
-    ZIP_ARCHIVES,
-    TAR_ARCHIVES,
-    RAR_ARCHIVES,
-    SEVENZIP_PY7ZR_ARCHIVES,
-    SEVENZIP_CMD_ARCHIVES,
-    SINGLE_FILE_COMPRESSED_ARCHIVES,
+    filter_archives,
 )
 from archivey.types import ArchiveFormat
 
@@ -71,20 +67,20 @@ def check_read_archive(
 
     archive_base_dir = os.path.join(os.path.dirname(__file__), "..")
 
-    files_by_name = {file.name: file for file in sample_archive.files}
+    files_by_name = {file.name: file for file in sample_archive.contents.files}
     allow_timestamp_rounding_error = (
-        sample_archive.generation_method == GenerationMethod.ZIPFILE
+        sample_archive.format_info.generation_method == GenerationMethod.ZIPFILE
     )
 
     with ArchiveStream(
         sample_archive.get_archive_path(archive_base_dir),
-        pwd=sample_archive.header_password,
+        pwd=sample_archive.contents.header_password,
         use_rar_stream=use_rar_stream,
     ) as archive:
-        assert archive.get_format() == sample_archive.format
+        assert archive.get_format() == sample_archive.format_info.format
         format_info = archive.get_archive_info()
         assert normalize_newlines(format_info.comment) == normalize_newlines(
-            sample_archive.archive_comment
+            sample_archive.contents.archive_comment
         )
         actual_filenames: list[str] = []
 
@@ -126,7 +122,7 @@ def check_read_archive(
 
             # Check permissions
             if sample_file.mode is not None:
-                if sample_archive.format in [
+                if sample_archive.format_info.format in [
                     ArchiveFormat.TAR,
                     ArchiveFormat.TAR_GZ,
                     ArchiveFormat.TAR_BZ2,
@@ -152,7 +148,10 @@ def check_read_archive(
 
             assert member.encrypted == (
                 sample_file.password is not None
-                or (member.is_file and sample_archive.header_password is not None)
+                or (
+                    member.is_file
+                    and sample_archive.contents.header_password is not None
+                )
             ), (
                 f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
             )
@@ -183,7 +182,7 @@ def check_read_archive(
                 with archive.open(
                     member,
                     pwd=sample_file.password
-                    if sample_archive.header_password is None
+                    if sample_archive.contents.header_password is None
                     else None,
                 ) as f:
                     contents = f.read()
@@ -191,7 +190,7 @@ def check_read_archive(
 
         expected_filenames = set(
             file.name
-            for file in sample_archive.files
+            for file in sample_archive.contents.files
             if features.dir_entries or file.type != MemberType.DIR
         )
 
@@ -202,38 +201,65 @@ def check_read_archive(
         assert not extra_files, f"Extra files: {extra_files}"
 
 
-@pytest.mark.parametrize("sample_archive", ZIP_ARCHIVES, ids=lambda x: x.filename)
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(SAMPLE_ARCHIVES, extensions=["zip"]),
+    ids=lambda x: x.filename,
+)
 def test_read_zip_archives(sample_archive: ArchiveInfo):
-    features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
+    features = FORMAT_FEATURES.get(
+        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
+    )
     check_read_archive(sample_archive, features)
 
 
-@pytest.mark.parametrize("sample_archive", TAR_ARCHIVES, ids=lambda x: x.filename)
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        extensions=["tar", "tar.gz", "tar.bz2", "tar.xz", "tar.zst", "tar.lz4"],
+    ),
+    ids=lambda x: x.filename,
+)
 def test_read_tar_archives(sample_archive: ArchiveInfo):
-    features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
+    features = FORMAT_FEATURES.get(
+        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
+    )
     check_read_archive(sample_archive, features)
 
 
-@pytest.mark.parametrize("sample_archive", RAR_ARCHIVES, ids=lambda x: x.filename)
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(SAMPLE_ARCHIVES, extensions=["rar"]),
+    ids=lambda x: x.filename,
+)
 @pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
-    features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
+    features = FORMAT_FEATURES.get(
+        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
+    )
     check_read_archive(sample_archive, features, use_rar_stream=use_rar_stream)
 
 
 @pytest.mark.parametrize(
     "sample_archive",
-    SEVENZIP_PY7ZR_ARCHIVES + SEVENZIP_CMD_ARCHIVES,
+    filter_archives(SAMPLE_ARCHIVES, extensions=["7z"]),
     ids=lambda x: x.filename,
 )
 def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo):
-    features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
+    features = FORMAT_FEATURES.get(
+        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
+    )
     check_read_archive(sample_archive, features)
 
 
 @pytest.mark.parametrize(
-    "sample_archive", SINGLE_FILE_COMPRESSED_ARCHIVES, ids=lambda x: x.filename
+    "sample_archive",
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["single_file"]),
+    ids=lambda x: x.filename,
 )
 def test_read_single_file_compressed_archives(sample_archive: ArchiveInfo):
-    features = FORMAT_FEATURES.get(sample_archive.format, DEFAULT_FORMAT_FEATURES)
+    features = FORMAT_FEATURES.get(
+        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
+    )
     check_read_archive(sample_archive, features)

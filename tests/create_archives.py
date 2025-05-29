@@ -14,6 +14,7 @@ from archivey.types import MemberType, ArchiveFormat
 
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
+    ArchiveContents,
     ArchiveInfo,
     FileInfo,
     GenerationMethod,
@@ -93,21 +94,26 @@ def group_files_by_password_and_compression_method(
 
 
 def create_zip_archive_with_zipfile(
-    archive_path: str, files: list[FileInfo], archive_comment: str | None = None
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
 ):
     """
     Create a zip archive using the zipfile module.
 
     This does not support symlinks.
     """
+    assert compression_format == ArchiveFormat.ZIP, (
+        f"Only ZIP format is supported, got {compression_format}"
+    )
+    assert not contents.solid, "Zipfile does not support solid archives"
+
     for i, (password, _, group_files) in enumerate(
-        group_files_by_password_and_compression_method(files)
+        group_files_by_password_and_compression_method(contents.files)
     ):
         assert password is None, "zipfile does not support writing encrypted files"
 
         with zipfile.ZipFile(archive_path, "w" if i == 0 else "a") as zipf:
             if i == 0:
-                zipf.comment = (archive_comment or "").encode("utf-8")
+                zipf.comment = (contents.archive_comment or "").encode("utf-8")
 
             for file in group_files:
                 # zipfile module does not directly support symlinks in a way that preserves them as symlinks.
@@ -118,17 +124,17 @@ def create_zip_archive_with_zipfile(
                 # )
 
                 filename = file.name
-                contents = file.contents
+                file_contents = file.contents
 
                 if file.type == MemberType.DIR:
                     if not filename.endswith("/"):
                         filename += "/"
-                    contents = b""  # Directories have no content
+                    file_contents = b""  # Directories have no content
 
                 elif file.type == MemberType.LINK:
                     # For zipfile, if we have to write a link, we write its target path as content.
                     # The external_attr will mark it as a link.
-                    contents = (file.link_target or "").encode("utf-8")
+                    file_contents = (file.link_target or "").encode("utf-8")
 
                 info = zipfile.ZipInfo(filename, date_time=file.mtime.timetuple()[:6])
                 info.compress_type = _COMPRESSION_METHOD_TO_ZIPFILE_VALUE[
@@ -146,19 +152,14 @@ def create_zip_archive_with_zipfile(
                     else:  # MemberType.FILE or other treated as file
                         info.external_attr = (stat.S_IFREG | file.mode) << 16
 
-                # Ensure directory names end with a slash for ZipInfo
-                # This is now handled when setting filename above for MemberType.DIR
-                # if file.type == MemberType.DIR and not info.filename.endswith('/'):
-                #    info.filename += '/'
-
-                if contents is None and file.type == MemberType.FILE:
+                if file_contents is None and file.type == MemberType.FILE:
                     assert False, f"File contents are required for {file.name}"
 
-                zipf.writestr(info, contents if contents is not None else b"")
+                zipf.writestr(info, file_contents if file_contents is not None else b"")
 
 
 def create_zip_archive_with_infozip_command_line(
-    archive_path: str, files: list[FileInfo], archive_comment: str | None = None
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
 ):
     """
     Create a zip archive using the zip command line tool.
@@ -166,17 +167,21 @@ def create_zip_archive_with_infozip_command_line(
     This supports symlinks, unlike the zipfile implementation. The files are written to
     the zip archive in the order of the files list.
     """
+    assert compression_format == ArchiveFormat.ZIP, (
+        f"Only ZIP format is supported, got {compression_format}"
+    )
+    assert not contents.solid, "Infozip does not support solid archives"
 
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(archive_path):
         os.remove(archive_path)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        write_files_to_dir(tempdir, files)
+        write_files_to_dir(tempdir, contents.files)
 
         # In order to apply the password to only the corresponding files, we need to use the --update option.
         for i, (password, compression_method, group_files) in enumerate(
-            group_files_by_password_and_compression_method(files)
+            group_files_by_password_and_compression_method(contents.files)
         ):
             command = ["zip", "-q"]
             if i > 0:
@@ -195,17 +200,17 @@ def create_zip_archive_with_infozip_command_line(
             # Run the command
             subprocess.run(command, check=True, cwd=tempdir)
 
-        if archive_comment:
+        if contents.archive_comment:
             command = ["zip", "-z", archive_path]
             subprocess.run(
                 command,
                 check=True,
-                input=archive_comment.encode("utf-8"),
+                input=contents.archive_comment.encode("utf-8"),
             )
 
         comment_file_names: list[str] = []
         comment_file_comments: list[str] = []
-        for file in files:
+        for file in contents.files:
             if file.comment:
                 assert "\n" not in file.comment, "File comments cannot contain newlines"
                 comment_file_names.append(file.name)
@@ -223,21 +228,24 @@ def create_zip_archive_with_infozip_command_line(
 
 def create_tar_archive_with_command_line(
     archive_path: str,
-    files: list[FileInfo],
-    archive_comment: str | None = None,
-    compression_format: ArchiveFormat = ArchiveFormat.TAR,
+    contents: ArchiveContents,
+    compression_format: ArchiveFormat,
 ):
     """
     Create a tar archive using the tar command line tool.
     """
-    assert archive_comment is None, "TAR format does not support archive comments"
+    assert contents.solid, "TAR archives are always solid"
+
+    assert contents.archive_comment is None, (
+        "TAR format does not support archive comments"
+    )
 
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(archive_path):
         os.remove(archive_path)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        write_files_to_dir(tempdir, files)
+        write_files_to_dir(tempdir, contents.files)
 
         command = ["tar"]
         command.append("-c")  # Create a new archive
@@ -259,7 +267,7 @@ def create_tar_archive_with_command_line(
 
         # Add file names to the command
         # These names must be relative to the temporary directory
-        for file_info in files:
+        for file_info in contents.files:
             command.append(file_info.name)
 
         subprocess.run(command, check=True, cwd=tempdir)
@@ -267,15 +275,21 @@ def create_tar_archive_with_command_line(
 
 def create_tar_archive_with_tarfile(
     archive_path: str,
-    files: list[FileInfo],
-    archive_comment: str | None = None,
-    compression_format: ArchiveFormat = ArchiveFormat.TAR,
+    contents: ArchiveContents,
+    compression_format: ArchiveFormat,
 ):
     """
     Create a tar archive using Python's tarfile module.
     Supports setting file modes and different compression formats.
     """
-    assert archive_comment is None, "TAR format does not support archive comments"
+    assert contents.solid, "TAR archives are always solid"
+    assert contents.archive_comment is None, (
+        "TAR format does not support archive comments"
+    )
+
+    logger.info(
+        f"Creating TAR archive {archive_path} with compression format {compression_format}"
+    )
 
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
@@ -288,13 +302,17 @@ def create_tar_archive_with_tarfile(
         tar_mode = "w:bz2"
     elif compression_format == ArchiveFormat.TAR_XZ:
         tar_mode = "w:xz"
+    elif compression_format == ArchiveFormat.TAR_ZSTD:
+        tar_mode = "w:zst"
+    elif compression_format == ArchiveFormat.TAR_LZ4:
+        tar_mode = "w:lz4"
     elif compression_format == ArchiveFormat.TAR:
         tar_mode = "w"  # plain tar
     else:
         raise ValueError(f"Unsupported tar compression format: {compression_format}")
 
     with tarfile.open(abs_archive_path, tar_mode) as tf:
-        for sample_file in files:
+        for sample_file in contents.files:
             tarinfo = tarfile.TarInfo(name=sample_file.name)
             tarinfo.mtime = int(sample_file.mtime.timestamp())
 
@@ -328,19 +346,61 @@ def create_tar_archive_with_tarfile(
                 tf.addfile(tarinfo, io.BytesIO(file_contents_bytes))
 
 
+def create_single_file_compressed_archive_with_library(
+    archive_path: str,
+    contents: ArchiveContents,
+    compression_format: ArchiveFormat,
+    opener,
+):
+    assert compression_format in [
+        ArchiveFormat.GZIP,
+        ArchiveFormat.BZIP2,
+        ArchiveFormat.XZ,
+        ArchiveFormat.ZSTD,
+        ArchiveFormat.LZ4,
+    ], f"Only supported compression formats are supported, got {compression_format}"
+    assert not contents.solid, f"Single-file archives are not solid. ({archive_path})"
+    assert len(contents.files) == 1, (
+        f"Single-file archives only support a single file. ({archive_path})"
+    )
+    file_info = contents.files[0]
+    assert file_info.type == MemberType.FILE, (
+        f"Only files are supported for single-file archives. ({archive_path})"
+    )
+    assert contents.archive_comment is None and file_info.comment is None, (
+        f"Single-file archives do not support comments. ({archive_path})"
+    )
+
+    with opener(archive_path, mode="wb") as out_stream:
+        out_stream.write(file_info.contents or b"")
+
+
 def create_single_file_compressed_archive_with_command_line(
     archive_path: str,
-    files: list[FileInfo],
-    archive_comment: str | None = None,
+    contents: ArchiveContents,
+    compression_format: ArchiveFormat,
     compression_cmd: str = "gzip",
 ):
-    assert len(files) == 1, f"{compression_cmd} archives only support a single file."
-    file_info = files[0]
+    assert compression_format in [
+        ArchiveFormat.GZIP,
+        ArchiveFormat.BZIP2,
+        ArchiveFormat.XZ,
+        ArchiveFormat.ZSTD,
+        ArchiveFormat.LZ4,
+    ], f"Only supported compression formats are supported, got {compression_format}"
+    assert not contents.solid, f"{compression_cmd} archives are not solid"
+    assert len(contents.files) == 1, (
+        f"{compression_cmd} archives only support a single file."
+    )
+    file_info = contents.files[0]
     assert file_info.type == MemberType.FILE, (
         f"Only files are supported for {compression_cmd}."
     )
-    assert archive_comment is None, (
+    assert contents.archive_comment is None, (
         f"{compression_cmd} format does not support archive comments."
+    )
+    assert contents.header_password is None, (
+        f"{compression_cmd} format does not support header passwords."
     )
 
     abs_archive_path = os.path.abspath(archive_path)
@@ -368,138 +428,37 @@ def create_single_file_compressed_archive_with_command_line(
         )
 
 
-def create_gz_archive_with_command_line(
-    archive_path: str, files: list[FileInfo], archive_comment: str | None = None
-):
-    create_single_file_compressed_archive_with_command_line(
-        archive_path, files, archive_comment, "gzip"
-    )
-
-
-def create_bz2_archive_with_command_line(
-    archive_path: str, files: list[FileInfo], archive_comment: str | None = None
-):
-    create_single_file_compressed_archive_with_command_line(
-        archive_path, files, archive_comment, "bzip2"
-    )
-
-
-def create_xz_archive_with_command_line(
-    archive_path: str, files: list[FileInfo], archive_comment: str | None = None
-):
-    create_single_file_compressed_archive_with_command_line(
-        archive_path, files, archive_comment, "xz"
-    )
-
-
-def create_zstd_archive_with_command_line(
-    archive_path: str, files: list[FileInfo], archive_comment: str | None = None
-):
-    create_single_file_compressed_archive_with_command_line(
-        archive_path, files, archive_comment, "zstd"
-    )
-
-
-def create_archive(archive_info: ArchiveInfo, base_dir: str):
-    full_path = archive_info.get_archive_path(base_dir)
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-
-    if archive_info.generation_method == GenerationMethod.EXTERNAL:
-        # Check that the archive file exists
-        if not os.path.exists(full_path):
-            raise FileNotFoundError(f"External archive {full_path} does not exist")
-        return
-
-    # Assert that header_password is None for formats that don't support it
-    if archive_info.generation_method in [
-        GenerationMethod.ZIPFILE,
-        GenerationMethod.INFOZIP,
-        GenerationMethod.TAR_COMMAND_LINE,
-        GenerationMethod.COMMAND_LINE,  # For gz, bz2, xz
-    ]:
-        assert archive_info.header_password is None, (
-            f"Header password not supported for {archive_info.generation_method} / {archive_info.format}"
-        )
-
-    if archive_info.generation_method == GenerationMethod.COMMAND_LINE:
-        if archive_info.format == ArchiveFormat.GZIP:
-            create_gz_archive_with_command_line(
-                full_path, archive_info.files, archive_info.archive_comment
-            )
-        elif archive_info.format == ArchiveFormat.BZIP2:
-            create_bz2_archive_with_command_line(
-                full_path, archive_info.files, archive_info.archive_comment
-            )
-        elif archive_info.format == ArchiveFormat.XZ:
-            create_xz_archive_with_command_line(
-                full_path, archive_info.files, archive_info.archive_comment
-            )
-        elif archive_info.format == ArchiveFormat.ZSTD:
-            create_zstd_archive_with_command_line(
-                full_path, archive_info.files, archive_info.archive_comment
-            )
-        else:
-            raise ValueError(
-                f"Unsupported format {archive_info.format} for GenerationMethod.COMMAND_LINE"
-            )
-        return
-
-    generator = GENERATION_METHODS_TO_GENERATOR[archive_info.generation_method]
-    if archive_info.generation_method in [
-        GenerationMethod.RAR_COMMAND_LINE,
-        GenerationMethod.PY7ZR,
-        GenerationMethod.SEVENZIP_COMMAND_LINE,
-    ]:
-        generator(
-            full_path,
-            archive_info.files,
-            archive_info.archive_comment,
-            archive_info.solid,
-            archive_info.header_password,
-        )
-    elif archive_info.generation_method == GenerationMethod.TAR_COMMAND_LINE:
-        generator(
-            full_path,
-            archive_info.files,
-            archive_info.archive_comment,
-            archive_info.format,
-        )
-    else:  # ZIPFILE, INFOZIP
-        generator(full_path, archive_info.files, archive_info.archive_comment)
-
-
 def create_rar_archive_with_command_line(
-    archive_path: str,
-    files: list[FileInfo],
-    archive_comment: str | None = None,
-    solid: bool = False,
-    header_password: str | None = None,
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
 ):
+    assert compression_format == ArchiveFormat.RAR, (
+        f"Only RAR format is supported, got {compression_format}"
+    )
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
         os.remove(abs_archive_path)
 
-    if solid and len(set(f.password for f in files)) > 1:
+    if contents.solid and len(set(f.password for f in contents.files)) > 1:
         raise ValueError("Solid archives do not support multiple passwords")
 
-    if solid and len(set(f.compression_method for f in files)) > 1:
+    if contents.solid and len(set(f.compression_method for f in contents.files)) > 1:
         raise ValueError("Solid archives do not support multiple compression methods")
 
     with tempfile.TemporaryDirectory() as tempdir:
-        write_files_to_dir(tempdir, files)
+        write_files_to_dir(tempdir, contents.files)
 
         for i, (password, compression_method, group_files) in enumerate(
-            group_files_by_password_and_compression_method(files)
+            group_files_by_password_and_compression_method(contents.files)
         ):
             command = ["rar", "a", "-oh", "-ol"]
 
-            if solid:
+            if contents.solid:
                 command.append("-s")
 
             # Handle header password
-            if header_password:
-                command.append(f"-hp{header_password}")
-                if password and password != header_password:
+            if contents.header_password:
+                command.append(f"-hp{contents.header_password}")
+                if password and password != contents.header_password:
                     raise ValueError(
                         "Header password and file password cannot be different"
                     )
@@ -510,11 +469,11 @@ def create_rar_archive_with_command_line(
 
             # Handle archive comment
             comment_file_path = None
-            if i == 0 and archive_comment:
+            if i == 0 and contents.archive_comment:
                 # rar expects the comment file to be passed with -z<file>
                 comment_fd, comment_file_path = tempfile.mkstemp(dir=tempdir)
                 with os.fdopen(comment_fd, "wb") as f:
-                    f.write(archive_comment.encode("utf-8"))
+                    f.write(contents.archive_comment.encode("utf-8"))
                 command.append(f"-z{comment_file_path}")
 
             command.append(abs_archive_path)
@@ -534,12 +493,11 @@ def create_rar_archive_with_command_line(
 
 
 def create_7z_archive_with_py7zr(
-    archive_path: str,
-    files: list[FileInfo],
-    archive_comment: str | None = None,
-    solid: bool = False,
-    header_password: str | None = None,
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
 ):
+    assert compression_format == ArchiveFormat.SEVENZIP, (
+        f"Only 7Z format is supported, got {compression_format}"
+    )
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
         os.remove(abs_archive_path)
@@ -553,17 +511,18 @@ def create_7z_archive_with_py7zr(
     # a non-solid archive, we need to add each file individually and close the archive
     # after each one.
 
-    if header_password and any(
-        f.password is not None and f.password != header_password for f in files
+    if contents.header_password and any(
+        f.password is not None and f.password != contents.header_password
+        for f in contents.files
     ):
         raise ValueError("Header password and file password cannot be different")
 
     with tempfile.TemporaryDirectory() as tempdir:
-        write_files_to_dir(tempdir, files)
+        write_files_to_dir(tempdir, contents.files)
 
         file_groups: list[list[FileInfo]]
-        if solid:
-            file_groups = [files]
+        if contents.solid:
+            file_groups = [contents.files]
         else:
             # Create a separate group for each file, so it doesn't get compressed in the
             # same folder as another. But group dirs and symlinks along with a file
@@ -571,7 +530,7 @@ def create_7z_archive_with_py7zr(
             # if we don't add at least one actual file.
             file_groups = [[]]
             last_group_has_file = False
-            for file in files:
+            for file in contents.files:
                 if file.type == MemberType.FILE and last_group_has_file:
                     file_groups.append([])
                     last_group_has_file = False
@@ -588,21 +547,20 @@ def create_7z_archive_with_py7zr(
                 with py7zr.SevenZipFile(
                     abs_archive_path,
                     "a",
-                    password=header_password or password,
-                    header_encryption=header_password is not None,
+                    password=contents.header_password or password,
+                    header_encryption=contents.header_password is not None,
                 ) as archive:
                     for file in group_files:
                         archive.write(os.path.join(tempdir, file.name), file.name)
 
 
 def create_7z_archive_with_command_line(
-    archive_path: str,
-    files: list[FileInfo],
-    archive_comment: str | None = None,
-    solid: bool = False,
-    header_password: str | None = None,
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
 ):
-    if archive_comment:
+    assert compression_format == ArchiveFormat.SEVENZIP, (
+        f"Only 7Z format is supported, got {compression_format}"
+    )
+    if contents.archive_comment:
         raise ValueError("Archive comments are not supported with 7z command line")
 
     abs_archive_path = os.path.abspath(archive_path)
@@ -610,18 +568,18 @@ def create_7z_archive_with_command_line(
         os.remove(abs_archive_path)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        write_files_to_dir(tempdir, files)
+        write_files_to_dir(tempdir, contents.files)
 
         for i, (password, compression_method, group_files) in enumerate(
-            group_files_by_password_and_compression_method(files)
+            group_files_by_password_and_compression_method(contents.files)
         ):
             command = ["7z", "a"]
 
             # Handle solid mode
-            command.append(f"-ms={'on' if solid else 'off'}")
+            command.append(f"-ms={'on' if contents.solid else 'off'}")
 
-            if header_password:
-                command.append(f"-p{header_password}")
+            if contents.header_password:
+                command.append(f"-p{contents.header_password}")
                 command.append("-mhe=on")  # Encrypt header
             elif password:
                 command.append(f"-p{password}")
@@ -639,11 +597,40 @@ def create_7z_archive_with_command_line(
 GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.ZIPFILE: create_zip_archive_with_zipfile,
     GenerationMethod.INFOZIP: create_zip_archive_with_infozip_command_line,
-    GenerationMethod.TAR_COMMAND_LINE: create_tar_archive_with_tarfile,  # Updated to use the new function
+    GenerationMethod.TAR_COMMAND_LINE: create_tar_archive_with_command_line,
+    GenerationMethod.TAR_LIBRARY: create_tar_archive_with_tarfile,
     GenerationMethod.RAR_COMMAND_LINE: create_rar_archive_with_command_line,
     GenerationMethod.PY7ZR: create_7z_archive_with_py7zr,
     GenerationMethod.SEVENZIP_COMMAND_LINE: create_7z_archive_with_command_line,
+    GenerationMethod.SINGLE_FILE_COMMAND_LINE: create_single_file_compressed_archive_with_command_line,
+    GenerationMethod.SINGLE_FILE_LIBRARY: create_single_file_compressed_archive_with_library,
 }
+
+
+def create_archive(archive_info: ArchiveInfo, base_dir: str):
+    full_path = archive_info.get_archive_path(base_dir)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+    if archive_info.format_info.generation_method == GenerationMethod.EXTERNAL:
+        # Check that the archive file exists
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"External archive {full_path} does not exist")
+        return
+
+    # Assert that header_password is None for formats that don't support it
+    generator = GENERATION_METHODS_TO_GENERATOR[
+        archive_info.format_info.generation_method
+    ]
+    try:
+        generator(
+            full_path,
+            contents=archive_info.contents,
+            compression_format=archive_info.format_info.format,
+            **archive_info.format_info.generation_method_options,
+        )
+    except Exception as e:
+        logger.error(f"Error creating archive {archive_info.filename}: {e}")
+        raise
 
 
 def filter_archives(
@@ -697,5 +684,9 @@ if __name__ == "__main__":
     logger.info(f"Generating {len(archives_to_generate)} archives:")
     for archive in archives_to_generate:
         create_archive(archive, base_dir)
-        bullet = "-" if archive.generation_method != GenerationMethod.EXTERNAL else "s"
+        bullet = (
+            "-"
+            if archive.format_info.generation_method != GenerationMethod.EXTERNAL
+            else "s"
+        )
         logger.info(f"  {bullet} {archive.filename}")

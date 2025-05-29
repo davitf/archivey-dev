@@ -213,29 +213,29 @@ class CompressedReader(ArchiveReader):
         self.member_name = os.path.splitext(os.path.basename(archive_path))[0]
 
         # Open the appropriate decompressor based on file extension
-        # Note: zstd and lz4 imports are conditional below to avoid ModuleNotFoundError if not installed.
+        # Note: zstandard and lz4 imports are conditional below to avoid ModuleNotFoundError if not installed.
 
         # Open the appropriate decompressor based on file extension
-        if self.ext == ".gz":
+        if format == ArchiveFormat.GZIP:
             self.decompressor = gzip.open
-        elif self.ext == ".bz2":
+        elif format == ArchiveFormat.BZIP2:
             self.decompressor = bz2.open
-        elif self.ext == ".xz":
+        elif format == ArchiveFormat.XZ:
             self.decompressor = lzma.open
-        elif self.ext == ".zstd":
+        elif format == ArchiveFormat.ZSTD:
             try:
-                import zstd
+                import zstandard
 
-                self.decompressor = zstd.open
+                self.decompressor = zstandard.open
             except ImportError:
                 raise RuntimeError(
-                    "zstd module not found, required for Zstandard archives"
+                    "zstandard module not found, required for Zstandard archives"
                 ) from None
-        elif self.ext == ".lz4":
+        elif format == ArchiveFormat.LZ4:
             try:
-                import lz4
+                import lz4.frame
 
-                self.decompressor = lz4.open
+                self.decompressor = lz4.frame.open
             except ImportError:
                 raise RuntimeError(
                     "lz4 module not found, required for LZ4 archives"
