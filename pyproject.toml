@@ -22,6 +22,13 @@ optional = [
     "rarfile>=4.2",
     "zstandard>=0.23.0",
 ]
+docs = [
+    "sphinx >= 7.0",
+    "furo",
+    "sphinx-autodoc-typehints >= 2.0",
+    "myst-parser >= 2.0",
+    "sphinx-copybutton >= 0.5",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -43,6 +50,7 @@ addopts = "--log-level=DEBUG"
 [tool.hatch.envs.default.scripts]
 lint = "ruff check --fix . && ruff format . && npx pyright ."
 test = "pytest"
+docs = "sphinx-build -b html docs docs/_build"
 
 [tool.ruff]
 target-version = "py310"
