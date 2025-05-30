@@ -80,10 +80,11 @@ class ArchiveMember:
     """Represents a file within an archive."""
 
     filename: str
-    size: Optional[int]
+    file_size: Optional[int]
+    compress_size: Optional[int]
     mtime: Optional[datetime]
     type: MemberType
-    permissions: Optional[int] = None
+    mode: Optional[int] = None
     crc32: Optional[int] = None
     compression_method: Optional[str] = None  # e.g. "deflate", "lzma", etc.
     comment: Optional[str] = None
@@ -125,3 +126,7 @@ class ArchiveMember:
     @property
     def is_other(self) -> bool:
         return self.type == MemberType.OTHER
+
+    @property
+    def CRC(self) -> Optional[int]:
+        return self.crc32

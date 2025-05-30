@@ -101,8 +101,10 @@ for archive_path in args.files:
                 members, desc="Computing checksums", disable=args.hide_progress
             ):
                 encrypted_str = "E" if member.encrypted else " "
-                size_str = "?" * 12 if member.size is None else f"{member.size:12d}"
-                format_str = format_mode(member.type, member.permissions or 0)
+                size_str = (
+                    "?" * 12 if member.file_size is None else f"{member.file_size:12d}"
+                )
+                format_str = format_mode(member.type, member.mode or 0)
 
                 if member.is_file:
                     assert isinstance(member.filename, str)

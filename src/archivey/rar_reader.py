@@ -1,3 +1,5 @@
+import enum
+import hashlib
 import io
 import logging
 import stat
@@ -5,7 +7,7 @@ import subprocess
 import threading
 import zlib
 from datetime import datetime
-from typing import IO, Any, Iterable, Iterator, List, Optional
+from typing import IO, Any, Iterable, Iterator, List, Optional, cast
 
 import rarfile
 
@@ -18,7 +20,7 @@ from archivey.exceptions import (
 from archivey.formats import ArchiveFormat
 from archivey.io_wrappers import ExceptionTranslatingIO
 from archivey.types import ArchiveInfo, ArchiveMember, MemberType
-from archivey.utils import bytes_to_str
+from archivey.utils import bytes_to_str, str_to_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,62 @@ _RAR_COMPRESSION_METHODS = {
     0x34: "good",
     0x35: "best",
 }
+
+
+class PasswordCheckResult(enum.Enum):
+    CORRECT = 1
+    INCORRECT = 2
+    UNKNOWN = 3
+
+
+def verify_rar5_password(
+    password: bytes | None, rar_info: rarfile.RarInfo
+) -> PasswordCheckResult:
+    """
+    Verifies whether the given password matches the check value in RAR5 encryption data.
+    Returns True if the password is correct, False if not.
+    """
+    if not rar_info.needs_password():
+        return PasswordCheckResult.CORRECT
+    if password is None:
+        return PasswordCheckResult.INCORRECT
+    if not isinstance(rar_info, rarfile.Rar5Info):
+        return (
+            PasswordCheckResult.UNKNOWN
+        )  # We can't know if the password is correct for non-RAR5 archives
+
+    assert rar_info.file_encryption is not None, rar_info
+    encdata = rar_info.file_encryption
+
+    logger.info("Encdata: %s", encdata)
+    (algo, flags, kdf_count, salt, iv, check_value) = encdata
+
+    # Mostly copied from RAR5Parser._check_password
+    RAR5_PW_CHECK_SIZE = 8
+    RAR5_PW_SUM_SIZE = 4
+
+    if len(check_value) != RAR5_PW_CHECK_SIZE + RAR5_PW_SUM_SIZE:
+        return PasswordCheckResult.UNKNOWN  # Unnown algorithm
+
+    hdr_check = check_value[:RAR5_PW_CHECK_SIZE]
+    hdr_sum = check_value[RAR5_PW_CHECK_SIZE:]
+    sum_hash = hashlib.sha256(hdr_check).digest()
+    if sum_hash[:RAR5_PW_SUM_SIZE] != hdr_sum:
+        # Unknown algorithm?
+        return PasswordCheckResult.UNKNOWN
+
+    kdf_count = (1 << kdf_count) + 32
+    pwd_hash = hashlib.pbkdf2_hmac("sha256", password, salt, kdf_count)
+
+    pwd_check = bytearray(RAR5_PW_CHECK_SIZE)
+    len_mask = RAR5_PW_CHECK_SIZE - 1
+    for i, v in enumerate(pwd_hash):
+        pwd_check[i & len_mask] ^= v
+
+    if pwd_check != hdr_check:
+        return PasswordCheckResult.INCORRECT
+
+    return PasswordCheckResult.CORRECT
 
 
 class BaseRarReader(ArchiveReader):
@@ -90,12 +148,6 @@ class BaseRarReader(ArchiveReader):
         # If "Encrypt file names" option is on, checksums are stored without modification,
         # because they can be accessed only after providing a valid password.
 
-        archive_info = self.get_archive_info()
-        may_have_encrypted_crc = (
-            not (archive_info.extra or {}).get("header_encrypted", False)
-            and archive_info.version == "5"
-        )
-
         if self._members is None:
             self._members = []
             rarinfos: list[rarfile.RarInfo] = self._archive.infolist()
@@ -106,12 +158,18 @@ class BaseRarReader(ArchiveReader):
                     else None
                 )
 
-                encrypted = info.needs_password()
-                has_encrypted_crc = encrypted and may_have_encrypted_crc
+                has_encrypted_crc: bool
+                if isinstance(info, rarfile.Rar5Info):
+                    enc_flags = info.file_encryption and info.file_encryption[1] or 0  # type: ignore
+                    RAR_TWEAKED_CHECKSUMS_FLAG = 0x2
+                    has_encrypted_crc = bool(enc_flags & RAR_TWEAKED_CHECKSUMS_FLAG)
+                else:
+                    has_encrypted_crc = False
 
                 member = ArchiveMember(
-                    filename=info.filename,
-                    size=info.file_size,
+                    filename=info.filename or "",  # Will never actually be None
+                    file_size=info.file_size,
+                    compress_size=info.compress_size,
                     mtime=datetime(*info.date_time) if info.date_time else None,
                     type=(
                         MemberType.DIR
@@ -122,7 +180,7 @@ class BaseRarReader(ArchiveReader):
                         if info.is_symlink()
                         else MemberType.OTHER
                     ),
-                    permissions=stat.S_IMODE(info.mode)
+                    mode=stat.S_IMODE(info.mode)
                     if hasattr(info, "mode") and isinstance(info.mode, int)
                     else None,
                     crc32=info.CRC if not has_encrypted_crc else None,
@@ -184,6 +242,7 @@ class RarReader(BaseRarReader):
 
     def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
         super().__init__(archive_path, pwd=pwd)
+        self._pwd = pwd
 
     def _exception_translator(self, e: Exception) -> Optional[Exception]:
         if isinstance(e, rarfile.BadRarFile):
@@ -193,6 +252,17 @@ class RarReader(BaseRarReader):
     def open(
         self, member: ArchiveMember, *, pwd: Optional[str | bytes] = None
     ) -> IO[bytes]:
+        if member.encrypted:
+            pwd_check = verify_rar5_password(
+                str_to_bytes(pwd or self._pwd), cast(rarfile.RarInfo, member.raw_info)
+            )
+            logger.info(
+                "Verifying password for %s and pwd %s: %s",
+                member.filename,
+                pwd,
+                pwd_check,
+            )
+
         if self._archive is None:
             raise ValueError("Archive is closed")
 
@@ -231,7 +301,7 @@ class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
     ):
         super().__init__()
         self._stream = shared_stream
-        self._remaining = member.size
+        self._remaining = member.file_size
         self._expected_crc = (
             member.crc32 & 0xFFFFFFFF if member.crc32 is not None else None
         )

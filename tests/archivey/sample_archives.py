@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import lz4.frame
 import zstandard
@@ -50,6 +50,11 @@ class ArchiveContents:
     solid: bool = False  # Whether archive should be solid
     header_password: str | None = None  # Optional header password
 
+    def has_password(self) -> bool:
+        return any(f.password is not None for f in self.files) or self.header_password is not None
+    
+    def has_multiple_passwords(self) -> bool:
+        return len({f.password for f in self.files if f.password is not None}) > 1
 
 @dataclass
 class ArchiveFormatInfo:
@@ -76,7 +81,6 @@ class ArchiveInfo:
             return os.path.join(base_dir, TEST_ARCHIVES_EXTERNAL_DIR, self.filename)
         else:
             return os.path.join(base_dir, TEST_ARCHIVES_DIR, self.filename)
-
 
 # Generation method constants
 ZIP_ZIPFILE = ArchiveFormatInfo(
@@ -576,6 +580,7 @@ def filter_archives(
     archives: list[ArchiveInfo],
     prefixes: list[str] | None = None,
     extensions: list[str] | None = None,
+    custom_filter: Callable[[ArchiveInfo], bool] | None = None,
 ) -> list[ArchiveInfo]:
     """Filter archives by filename prefixes and/or extensions."""
     filtered = archives
@@ -591,6 +596,9 @@ def filter_archives(
         filtered = [
             a for a in filtered if any(a.filename.endswith(e) for e in extensions)
         ]
+
+    if custom_filter:
+        filtered = [a for a in filtered if custom_filter(a)]
 
     if not filtered:
         raise ValueError("No archives match the filter criteria")

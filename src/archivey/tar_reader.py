@@ -95,7 +95,8 @@ class TarReader(ArchiveReader):
 
                 member = ArchiveMember(
                     filename=filename,
-                    size=info.size,
+                    file_size=info.size,
+                    compress_size=None,
                     mtime=datetime.fromtimestamp(info.mtime) if info.mtime else None,
                     type=(
                         MemberType.FILE
@@ -106,9 +107,7 @@ class TarReader(ArchiveReader):
                         if info.issym() or info.islnk()
                         else MemberType.OTHER
                     ),
-                    permissions=stat.S_IMODE(info.mode)
-                    if hasattr(info, "mode")
-                    else None,
+                    mode=stat.S_IMODE(info.mode) if hasattr(info, "mode") else None,
                     link_target=info.linkname if info.issym() or info.islnk() else None,
                     crc32=None,  # TAR doesn't have CRC
                     compression_method=compression_method,

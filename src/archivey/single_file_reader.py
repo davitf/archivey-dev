@@ -107,7 +107,7 @@ def read_gzip_metadata(
         f.seek(-8, 2)
         crc32, isize = struct.unpack("<II", f.read(8))
         member.crc32 = crc32
-        member.size = isize
+        member.file_size = isize
 
 
 def _read_xz_multibyte_integer(data: bytes, offset: int) -> tuple[int, int]:
@@ -170,7 +170,7 @@ def read_xz_metadata(path: str, member: ArchiveMember):
             blocks.append((uncompressed_size, offset))
             total_uncompressed_size += uncompressed_size
 
-        member.size = total_uncompressed_size
+        member.file_size = total_uncompressed_size
         logger.debug(
             f"XZ metadata: total_size={total_uncompressed_size}, num_blocks={number_of_blocks}, blocks={blocks}"
         )
@@ -262,7 +262,8 @@ class SingleFileReader(ArchiveReader):
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
             filename=self.member_name,
-            size=None,  # Not available for all formats
+            file_size=None,  # Not available for all formats
+            compress_size=os.path.getsize(archive_path),
             mtime=mtime,
             type=MemberType.FILE,
             compression_method=self.get_format().value,

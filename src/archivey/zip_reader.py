@@ -141,14 +141,15 @@ class ZipReader(ArchiveReader):
 
                 member = ArchiveMember(
                     filename=info.filename,
-                    size=info.file_size,
+                    file_size=info.file_size,
+                    compress_size=info.compress_size,
                     mtime=get_zipinfo_timestamp(info),
                     type=MemberType.DIR
                     if is_dir
                     else MemberType.LINK
                     if is_link
                     else MemberType.FILE,
-                    permissions=stat.S_IMODE(info.external_attr >> 16)
+                    mode=stat.S_IMODE(info.external_attr >> 16)
                     if hasattr(info, "external_attr") and info.external_attr != 0
                     else None,
                     crc32=info.CRC if hasattr(info, "CRC") else None,

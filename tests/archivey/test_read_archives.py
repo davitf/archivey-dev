@@ -1,10 +1,10 @@
+import glob
 import logging
 import os
+import pathlib
 import zlib
 from dataclasses import dataclass
 from datetime import datetime
-import pathlib
-import glob
 
 import pytest
 from sample_archives import (
@@ -16,8 +16,8 @@ from sample_archives import (
 )
 
 from archivey.archive_stream import ArchiveStream
+from archivey.exceptions import ArchiveCorruptedError, ArchiveEOFError
 from archivey.types import ArchiveFormat, MemberType
-from archivey.exceptions import ArchiveEOFError, ArchiveCorruptedError
 
 
 def normalize_newlines(s: str | None) -> str | None:
@@ -58,13 +58,16 @@ def get_crc32(data: bytes) -> int:
 
 def check_read_archive(
     sample_archive: ArchiveInfo,
-    features: ArchiveFormatFeatures,
     use_rar_stream: bool = False,
+    set_file_password_in_constructor: bool = False,
 ):
     # print("STARTING TEST", sample_archive.filename)
     if sample_archive.skip_test:
         pytest.skip(f"Skipping test for {sample_archive.filename} as skip_test is True")
 
+    features = FORMAT_FEATURES.get(
+        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
+    )
     archive_base_dir = os.path.join(os.path.dirname(__file__), "..")
 
     files_by_name = {file.name: file for file in sample_archive.contents.files}
@@ -72,9 +75,26 @@ def check_read_archive(
         sample_archive.format_info.generation_method == GenerationMethod.ZIPFILE
     )
 
+    constructor_password = sample_archive.contents.header_password
+
+    if set_file_password_in_constructor and sample_archive.contents.has_password():
+        assert constructor_password is None, (
+            "Can't set file password in constructor if header password is already set"
+        )
+        assert not sample_archive.contents.has_multiple_passwords(), (
+            "Can't set file password in constructor if there are multiple passwords"
+        )
+        constructor_password = next(
+            iter(
+                f.password
+                for f in sample_archive.contents.files
+                if f.password is not None
+            )
+        )
+
     with ArchiveStream(
         sample_archive.get_archive_path(archive_base_dir),
-        pwd=sample_archive.contents.header_password,
+        pwd=constructor_password,
         use_rar_stream=use_rar_stream,
         use_single_file_stored_metadata=True,
     ) as archive:
@@ -89,8 +109,6 @@ def check_read_archive(
             sample_file = files_by_name.get(member.filename, None)
 
             if member.is_file and sample_file is not None and member.crc32 is not None:
-                # print(f"Checking CRC32 for {member.filename}, size={member.size}, crc32={member.crc32}")
-
                 sample_crc32 = get_crc32(sample_file.contents or b"")
                 assert member.crc32 == sample_crc32, (
                     f"CRC32 mismatch for {member.filename}: got {member.crc32}, expected {sample_crc32}"
@@ -117,18 +135,18 @@ def check_read_archive(
             else:
                 assert member.comment is None
 
-            if member.is_file and member.size is not None:
-                assert member.size == len(sample_file.contents or b"")
+            if member.is_file and member.file_size is not None:
+                assert member.file_size == len(sample_file.contents or b"")
 
             # Check permissions
             if sample_file.permissions is not None:
-                assert member.permissions is not None, (
+                assert member.mode is not None, (
                     f"Permissions not set for {member.filename} in {sample_archive.filename} "
                     f"(expected {oct(sample_file.permissions)})"
                 )
-                assert member.permissions == sample_file.permissions, (
+                assert member.mode == sample_file.permissions, (
                     f"Permission mismatch for {member.filename} in {sample_archive.filename}: "
-                    f"got {oct(member.permissions) if member.permissions is not None else 'None'}, "
+                    f"got {oct(member.mode) if member.mode is not None else 'None'}, "
                     f"expected {oct(sample_file.permissions)}"
                 )
             # elif member.permissions is not None:
@@ -172,9 +190,7 @@ def check_read_archive(
             if sample_file.type == MemberType.FILE:
                 with archive.open(
                     member,
-                    pwd=sample_file.password
-                    if sample_archive.contents.header_password is None
-                    else None,
+                    pwd=sample_file.password if constructor_password is None else None,
                 ) as f:
                     contents = f.read()
                     assert contents == sample_file.contents
@@ -198,10 +214,7 @@ def check_read_archive(
     ids=lambda x: x.filename,
 )
 def test_read_zip_archives(sample_archive: ArchiveInfo):
-    features = FORMAT_FEATURES.get(
-        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
-    )
-    check_read_archive(sample_archive, features)
+    check_read_archive(sample_archive)
 
 
 CORRUPTED_ARCHIVES_DIR = pathlib.Path(__file__).parent / "../test_corrupted_archives"
@@ -217,7 +230,9 @@ def get_corrupted_archives(suffix: str) -> list[str]:
 @pytest.mark.parametrize(
     "archive_path_str",
     get_corrupted_archives("*.truncated"),
-    ids=lambda x: pathlib.Path(str(x)).name if isinstance(x, (str, pathlib.Path)) else "invalid_param",
+    ids=lambda x: pathlib.Path(str(x)).name
+    if isinstance(x, (str, pathlib.Path))
+    else "invalid_param",
 )
 def test_read_truncated_archives(archive_path_str: str):
     """Test that reading truncated archives raises ArchiveEOFError."""
@@ -230,14 +245,16 @@ def test_read_truncated_archives(archive_path_str: str):
 @pytest.mark.parametrize(
     "archive_path_str",
     get_corrupted_archives("*.corrupted"),
-    ids=lambda x: pathlib.Path(str(x)).name if isinstance(x, (str, pathlib.Path)) else "invalid_param",
+    ids=lambda x: pathlib.Path(str(x)).name
+    if isinstance(x, (str, pathlib.Path))
+    else "invalid_param",
 )
 def test_read_corrupted_archives_general(archive_path_str: str):
     """Test that reading generally corrupted archives raises ArchiveCorruptedError."""
     archive_path = pathlib.Path(archive_path_str)
     with pytest.raises(ArchiveCorruptedError):
         # For many corrupted archives, error might be raised on open or during iteration
-        with ArchiveStream(archive_path) as archive:
+        with ArchiveStream(str(archive_path)) as archive:
             for _ in archive.info_iter():
                 pass
 
@@ -251,10 +268,7 @@ def test_read_corrupted_archives_general(archive_path_str: str):
     ids=lambda x: x.filename,
 )
 def test_read_tar_archives(sample_archive: ArchiveInfo):
-    features = FORMAT_FEATURES.get(
-        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
-    )
-    check_read_archive(sample_archive, features)
+    check_read_archive(sample_archive)
 
 
 @pytest.mark.parametrize(
@@ -264,18 +278,66 @@ def test_read_tar_archives(sample_archive: ArchiveInfo):
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
-    if (
-        use_rar_stream
-        and sample_archive.filename == "encryption_several_passwords__.rar"
-    ):
-        pytest.skip(
-            "RarStreamReader cannot handle multiple different file passwords without a global header password."
-        )
+    has_password = sample_archive.contents.has_password()
+    has_multiple_passwords = sample_archive.contents.has_multiple_passwords()
+    first_file_has_password = sample_archive.contents.files[0].password is not None
 
-    features = FORMAT_FEATURES.get(
-        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
+    expect_failure = use_rar_stream and (
+        has_multiple_passwords
+        or (
+            has_password
+            and not first_file_has_password
+            and not sample_archive.contents.header_password
+        )
     )
-    check_read_archive(sample_archive, features, use_rar_stream=use_rar_stream)
+
+    if expect_failure:
+        with pytest.raises(ValueError):
+            check_read_archive(sample_archive, use_rar_stream=use_rar_stream)
+    else:
+        check_read_archive(sample_archive, use_rar_stream=use_rar_stream)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        extensions=["rar"],
+        custom_filter=lambda x: x.contents.has_password()
+        and not x.contents.has_multiple_passwords()
+        and x.contents.header_password is None,
+    ),
+    ids=lambda x: x.filename,
+)
+@pytest.mark.parametrize("use_rar_stream", [True, False])
+def test_read_rar_archives_with_password_in_constructor(
+    sample_archive: ArchiveInfo, use_rar_stream: bool
+):
+    check_read_archive(
+        sample_archive,
+        use_rar_stream=use_rar_stream,
+        set_file_password_in_constructor=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        extensions=["zip", "7z"],
+        custom_filter=lambda x: x.contents.has_password()
+        and not x.contents.has_multiple_passwords()
+        and x.contents.header_password is None,
+    ),
+    ids=lambda x: x.filename,
+)
+def test_read_zip_and_7z_archives_with_password_in_constructor(
+    sample_archive: ArchiveInfo,
+):
+    check_read_archive(
+        sample_archive,
+        set_file_password_in_constructor=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -284,10 +346,7 @@ def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
     ids=lambda x: x.filename,
 )
 def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo):
-    features = FORMAT_FEATURES.get(
-        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
-    )
-    check_read_archive(sample_archive, features)
+    check_read_archive(sample_archive)
 
 
 @pytest.mark.parametrize(
@@ -298,7 +357,4 @@ def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo):
     ids=lambda x: x.filename,
 )
 def test_read_single_file_compressed_archives(sample_archive: ArchiveInfo):
-    features = FORMAT_FEATURES.get(
-        sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
-    )
-    check_read_archive(sample_archive, features)
+    check_read_archive(sample_archive)

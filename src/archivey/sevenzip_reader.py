@@ -89,7 +89,8 @@ class SevenZipReader(ArchiveReader):
                     filename=file.filename,
                     # The uncompressed field is wrongly typed in py7zr as list[int].
                     # It's actually an int.
-                    size=file.uncompressed,  # type: ignore
+                    file_size=file.uncompressed,  # type: ignore
+                    compress_size=file.compressed,
                     mtime=py7zr.helpers.filetime_to_dt(file.lastwritetime).replace(
                         tzinfo=None
                     )
@@ -104,7 +105,7 @@ class SevenZipReader(ArchiveReader):
                         if file.is_junction or file.is_socket
                         else MemberType.FILE
                     ),
-                    permissions=file.posix_mode,
+                    mode=file.posix_mode,
                     crc32=file.crc32,
                     compression_method=None,  # Not exposed by py7zr
                     encrypted=self._is_member_encrypted(file),
