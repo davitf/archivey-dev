@@ -4,6 +4,7 @@ import os
 
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
+    SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
     ArchiveFormat,
 )
@@ -103,8 +104,12 @@ def detect_archive_format(filename: str) -> ArchiveFormat:
     format_by_signature = detect_archive_format_by_signature(filename)
     format_by_filename = detect_archive_format_by_filename(filename)
 
-    if format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT and has_tar_extension(
-        filename
+    # To detect cases like a .tar.gz file mistakenly having been renamed to .zip,
+    # assume it's a tar file if the compression format is supported by tar
+    # and the filename matches any multi-file format.
+    if (
+        format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT
+        and format_by_filename not in SINGLE_FILE_COMPRESSED_FORMATS
     ):
         format = COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]
     else:

@@ -1,12 +1,15 @@
+import collections
 import enum
+import functools
 import hashlib
+import hmac
 import io
 import logging
 import stat
+import struct
 import subprocess
 import threading
 import zlib
-from datetime import datetime
 from typing import IO, Any, Iterable, Iterator, List, Optional, cast
 
 import rarfile
@@ -34,6 +37,23 @@ _RAR_COMPRESSION_METHODS = {
     0x35: "best",
 }
 
+RAR_ENCDATA_FLAG_TWEAKED_CHECKSUMS = 0x2
+RAR_ENCDATA_FLAG_HAS_PASSWORD_CHECK_DATA = 0x1
+
+
+RarEncryptionInfo = collections.namedtuple(
+    "RarEncryptionInfo", ["algo", "flags", "kdf_count", "salt", "iv", "check_value"]
+)
+
+
+def get_encryption_info(rarinfo: rarfile.RarInfo) -> RarEncryptionInfo | None:
+    # The file_encryption attribute is not publicly defined, but it's there.
+    if not isinstance(rarinfo, rarfile.Rar5Info):
+        return None
+    if rarinfo.file_encryption is None:  # type: ignore[attr-defined]
+        return None
+    return RarEncryptionInfo(*rarinfo.file_encryption)  # type: ignore[attr-defined]
+
 
 class PasswordCheckResult(enum.Enum):
     CORRECT = 1
@@ -41,28 +61,10 @@ class PasswordCheckResult(enum.Enum):
     UNKNOWN = 3
 
 
-def verify_rar5_password(
-    password: bytes | None, rar_info: rarfile.RarInfo
+@functools.lru_cache(maxsize=128)
+def _verify_rar5_password_internal(
+    password: bytes, salt: bytes, kdf_count: int, check_value: bytes
 ) -> PasswordCheckResult:
-    """
-    Verifies whether the given password matches the check value in RAR5 encryption data.
-    Returns True if the password is correct, False if not.
-    """
-    if not rar_info.needs_password():
-        return PasswordCheckResult.CORRECT
-    if password is None:
-        return PasswordCheckResult.INCORRECT
-    if not isinstance(rar_info, rarfile.Rar5Info):
-        return (
-            PasswordCheckResult.UNKNOWN
-        )  # We can't know if the password is correct for non-RAR5 archives
-
-    assert rar_info.file_encryption is not None, rar_info
-    encdata = rar_info.file_encryption
-
-    logger.info("Encdata: %s", encdata)
-    (algo, flags, kdf_count, salt, iv, check_value) = encdata
-
     # Mostly copied from RAR5Parser._check_password
     RAR5_PW_CHECK_SIZE = 8
     RAR5_PW_SUM_SIZE = 4
@@ -77,8 +79,8 @@ def verify_rar5_password(
         # Unknown algorithm?
         return PasswordCheckResult.UNKNOWN
 
-    kdf_count = (1 << kdf_count) + 32
-    pwd_hash = hashlib.pbkdf2_hmac("sha256", password, salt, kdf_count)
+    iterations = (1 << kdf_count) + 32
+    pwd_hash = hashlib.pbkdf2_hmac("sha256", password, salt, iterations)
 
     pwd_check = bytearray(RAR5_PW_CHECK_SIZE)
     len_mask = RAR5_PW_CHECK_SIZE - 1
@@ -89,6 +91,83 @@ def verify_rar5_password(
         return PasswordCheckResult.INCORRECT
 
     return PasswordCheckResult.CORRECT
+
+
+def verify_rar5_password(
+    password: bytes | None, rar_info: rarfile.RarInfo
+) -> PasswordCheckResult:
+    """
+    Verifies whether the given password matches the check value in RAR5 encryption data.
+    Returns True if the password is correct, False if not.
+    """
+    if not rar_info.needs_password():
+        return PasswordCheckResult.CORRECT
+    if password is None:
+        return PasswordCheckResult.INCORRECT
+    encdata = get_encryption_info(rar_info)
+    if not encdata or not encdata.flags & RAR_ENCDATA_FLAG_HAS_PASSWORD_CHECK_DATA:
+        return PasswordCheckResult.UNKNOWN
+
+    return _verify_rar5_password_internal(
+        password, encdata.salt, encdata.kdf_count, encdata.check_value
+    )
+
+
+@functools.lru_cache(maxsize=128)
+def _rar_hash_key(password: bytes, salt: bytes, kdf_count: int) -> bytes:
+    iterations = 1 << kdf_count
+    return hashlib.pbkdf2_hmac("sha256", password, salt, iterations + 16)
+
+
+def convert_crc_to_encrypted(
+    crc: int, password: bytes, salt: bytes, kdf_count: int
+) -> int:
+    """Convert a CRC32 to the encrypted format used in RAR5 archives.
+
+    This implements the ConvertHashToMAC function from the RAR source code.
+    First creates a hash key using PBKDF2 with the password and salt,
+    then uses that key for HMAC-SHA256 of the CRC.
+    """
+    # Convert password to UTF-8 if it isn't already
+    if isinstance(password, str):
+        password = password.encode("utf-8")
+
+    hash_key = _rar_hash_key(password, salt, kdf_count)
+
+    # Convert CRC to bytes
+    raw_crc = crc.to_bytes(4, "little")
+
+    # Compute HMAC-SHA256 of the CRC using the hash key
+    digest = hmac.new(hash_key, raw_crc, hashlib.sha256).digest()
+
+    # logger.info(f"Digest: {password=} {salt=} crc={crc:08x} {raw_crc=} {digest.hex()}")
+
+    # XOR the digest bytes into the CRC
+    result = 0
+    for i in struct.iter_unpack("<I", digest):
+        result ^= i[0]
+
+    return result
+
+
+def check_rarinfo_crc(
+    rarinfo: rarfile.RarInfo, password: bytes | None, computed_crc: int
+) -> bool:
+    encryption_info = get_encryption_info(rarinfo)
+    if (
+        not encryption_info
+        or not encryption_info.flags & RAR_ENCDATA_FLAG_TWEAKED_CHECKSUMS
+    ):
+        return computed_crc == rarinfo.CRC
+
+    if password is None:
+        logger.warning(f"No password specified for checking {rarinfo.filename}")
+        return False
+
+    converted = convert_crc_to_encrypted(
+        computed_crc, password, encryption_info.salt, encryption_info.kdf_count
+    )
+    return converted == rarinfo.CRC
 
 
 class BaseRarReader(ArchiveReader):
@@ -159,10 +238,11 @@ class BaseRarReader(ArchiveReader):
                 )
 
                 has_encrypted_crc: bool
-                if isinstance(info, rarfile.Rar5Info):
-                    enc_flags = info.file_encryption and info.file_encryption[1] or 0  # type: ignore
-                    RAR_TWEAKED_CHECKSUMS_FLAG = 0x2
-                    has_encrypted_crc = bool(enc_flags & RAR_TWEAKED_CHECKSUMS_FLAG)
+                encryption_info = get_encryption_info(info)
+                if encryption_info:
+                    has_encrypted_crc = bool(
+                        encryption_info.flags & RAR_ENCDATA_FLAG_TWEAKED_CHECKSUMS
+                    )
                 else:
                     has_encrypted_crc = False
 
@@ -170,7 +250,7 @@ class BaseRarReader(ArchiveReader):
                     filename=info.filename or "",  # Will never actually be None
                     file_size=info.file_size,
                     compress_size=info.compress_size,
-                    mtime=datetime(*info.date_time) if info.date_time else None,
+                    mtime=info.mtime.replace(tzinfo=None) if info.mtime else None,
                     type=(
                         MemberType.DIR
                         if info.is_dir()
@@ -187,7 +267,6 @@ class BaseRarReader(ArchiveReader):
                     compression_method=compression_method,
                     comment=info.comment,
                     encrypted=info.needs_password(),
-                    extra=None,
                     raw_info=info,
                     link_target=self._get_link_target(info),
                 )
@@ -256,12 +335,10 @@ class RarReader(BaseRarReader):
             pwd_check = verify_rar5_password(
                 str_to_bytes(pwd or self._pwd), cast(rarfile.RarInfo, member.raw_info)
             )
-            logger.info(
-                "Verifying password for %s and pwd %s: %s",
-                member.filename,
-                pwd,
-                pwd_check,
-            )
+            if pwd_check == PasswordCheckResult.INCORRECT:
+                raise ArchiveEncryptedError(
+                    f"Wrong password specified for {member.filename}"
+                )
 
         if self._archive is None:
             raise ValueError("Archive is closed")
@@ -289,27 +366,37 @@ class RarReader(BaseRarReader):
 
 
 class CRCMismatchError(ArchiveCorruptedError):
-    def __init__(self, filename: str, expected: int, actual: int):
-        super().__init__(
-            f"CRC mismatch in {filename}: expected {expected:08x}, got {actual:08x}"
-        )
+    def __init__(self, filename: str):
+        super().__init__(f"CRC mismatch in {filename}")
 
 
 class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
     def __init__(
-        self, member: ArchiveMember, shared_stream: IO[bytes], lock: threading.Lock
+        self,
+        member: ArchiveMember,
+        shared_stream: IO[bytes],
+        lock: threading.Lock,
+        *,
+        pwd: bytes | None = None,
     ):
         super().__init__()
         self._stream = shared_stream
-        self._remaining = member.file_size
+        assert member.file_size is not None
+        self._remaining: int = member.file_size
         self._expected_crc = (
             member.crc32 & 0xFFFFFFFF if member.crc32 is not None else None
+        )
+        self._expected_encrypted_crc: int | None = (
+            member.extra.get("encrypted_crc", None) if member.extra else None
         )
         self._actual_crc = 0
         self._lock = lock
         self._closed = False
         self._filename = member.filename
         self._fully_read = False
+        self._member = member
+        self._pwd = pwd
+        self._crc_checked = False
 
     def read(self, n: int = -1) -> bytes:
         if self._closed:
@@ -329,7 +416,7 @@ class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
             self._actual_crc = zlib.crc32(data, self._actual_crc)
 
             logger.info(
-                f"Read {len(data)} bytes from {self._filename}, {self._remaining} remaining: {data}"
+                f"Read {len(data)} bytes from {self._filename}, {self._remaining} remaining: {data} ; crc={self._actual_crc:08x}"
             )
             if self._remaining == 0:
                 self._fully_read = True
@@ -338,10 +425,33 @@ class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
             return data
 
     def _check_crc(self):
-        if self._expected_crc is None:
+        if self._crc_checked:
             return
-        if (self._actual_crc & 0xFFFFFFFF) != self._expected_crc:
-            raise CRCMismatchError(self._filename, self._expected_crc, self._actual_crc)
+        self._crc_checked = True
+
+        matches = check_rarinfo_crc(
+            cast(rarfile.RarInfo, self._member.raw_info), self._pwd, self._actual_crc
+        )
+        if not matches:
+            raise CRCMismatchError(self._filename)
+
+        # if expected_crc is None and self._expected_encrypted_crc is not None:
+        #     if self._pwd is None:
+        #         logger.warning(f"No password available for encrypted CRC in {self._filename}")
+        #         return
+
+        #     # Convert the computed CRC to the encrypted format
+        #     actual_orig = actual_crc
+        #     assert self._member.extra is not None
+        #     actual_crc = convert_crc_to_encrypted(actual_crc, self._pwd, self._member.extra.get("encryption_salt", b""), self._member.extra.get("kdf_count", 15))
+        #     expected_crc = self._expected_encrypted_crc
+        #     logger.info(f"Converted CRC: {self._filename} {self._pwd=} {actual_orig:08x} -> {actual_crc:08x} ; expected {expected_crc:08x}")
+        #     return
+
+        # assert expected_crc is not None
+
+        # if actual_crc != expected_crc:
+        #     raise CRCMismatchError(self._filename, expected_crc, actual_crc)
 
     def readable(self) -> bool:
         return True
@@ -361,16 +471,38 @@ class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
     def close(self) -> None:
         if self._closed:
             return
-        with self._lock:
-            while self._remaining > 0:
-                chunk = self._stream.read(min(65536, self._remaining))
-                if not chunk:
-                    raise EOFError(f"Unexpected EOF while skipping {self._filename}")
-                self._actual_crc = zlib.crc32(chunk, self._actual_crc)
-                self._remaining -= len(chunk)
+        try:
+            with self._lock:
+                while self._remaining > 0:
+                    chunk = self.read(min(65536, self._remaining))
+                    if not chunk:
+                        raise EOFError(
+                            f"Unexpected EOF while skipping {self._filename}"
+                        )
+
             self._check_crc()
+        finally:
             self._closed = True
-        super().close()
+            super().close()
+
+
+class WrongPasswordMemberFile(RarStreamMemberFile):
+    def __init__(
+        self,
+        member: ArchiveMember,
+        shared_stream: IO[bytes],
+        lock: threading.Lock,
+        *,
+        pwd: bytes | None = None,
+    ):
+        super().__init__(member, shared_stream, lock, pwd=pwd)
+        self._closed = True
+
+    def read(self, n: int = -1) -> bytes:
+        raise ArchiveEncryptedError(f"Wrong password specified for {self._filename}")
+
+    def close(self) -> None:
+        pass
 
 
 class RarStreamReader(BaseRarReader):
@@ -406,7 +538,18 @@ class RarStreamReader(BaseRarReader):
 
     def _get_member_file(self, member: ArchiveMember) -> RarStreamMemberFile:
         assert self._stream is not None
-        return RarStreamMemberFile(member, self._stream, self._lock)
+        pwd_bytes = str_to_bytes(self._pwd) if self._pwd is not None else None
+        if (
+            member.encrypted
+            and verify_rar5_password(pwd_bytes, cast(rarfile.RarInfo, member.raw_info))
+            == PasswordCheckResult.INCORRECT
+        ):
+            # unrar silently skips encrypted files with incorrect passwords
+            return WrongPasswordMemberFile(
+                member, self._stream, self._lock, pwd=pwd_bytes
+            )
+
+        return RarStreamMemberFile(member, self._stream, self._lock, pwd=pwd_bytes)
 
     def _open_stream(self) -> None:
         try:
@@ -444,6 +587,17 @@ class RarStreamReader(BaseRarReader):
 
             elif pwd != self._pwd:
                 raise ValueError("RarStreamReader does not support different passwords")
+
+        if self._pwd is not None:
+            # Check if the password is correct for the member
+            if member.encrypted:
+                pwd_check = verify_rar5_password(
+                    str_to_bytes(self._pwd), cast(rarfile.RarInfo, member.raw_info)
+                )
+                if pwd_check == PasswordCheckResult.INCORRECT:
+                    raise ArchiveEncryptedError(
+                        f"Wrong password specified for {member.filename}"
+                    )
 
         if self._stream is None:
             self._open_stream()

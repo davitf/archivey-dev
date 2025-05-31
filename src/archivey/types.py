@@ -5,7 +5,7 @@ if sys.version_info >= (3, 11):
 else:
     from backports.strenum import StrEnum
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional, Tuple
 
@@ -89,7 +89,7 @@ class ArchiveMember:
     compression_method: Optional[str] = None  # e.g. "deflate", "lzma", etc.
     comment: Optional[str] = None
     encrypted: bool = False
-    extra: Optional[dict[str, Any]] = None
+    extra: dict[str, Any] = field(default_factory=dict)
     link_target: Optional[str] = None
     link_target_type: Optional[MemberType] = None
 

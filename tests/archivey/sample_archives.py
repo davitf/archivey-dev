@@ -51,10 +51,14 @@ class ArchiveContents:
     header_password: str | None = None  # Optional header password
 
     def has_password(self) -> bool:
-        return any(f.password is not None for f in self.files) or self.header_password is not None
-    
+        return (
+            any(f.password is not None for f in self.files)
+            or self.header_password is not None
+        )
+
     def has_multiple_passwords(self) -> bool:
         return len({f.password for f in self.files if f.password is not None}) > 1
+
 
 @dataclass
 class ArchiveFormatInfo:
@@ -81,6 +85,7 @@ class ArchiveInfo:
             return os.path.join(base_dir, TEST_ARCHIVES_EXTERNAL_DIR, self.filename)
         else:
             return os.path.join(base_dir, TEST_ARCHIVES_DIR, self.filename)
+
 
 # Generation method constants
 ZIP_ZIPFILE = ArchiveFormatInfo(

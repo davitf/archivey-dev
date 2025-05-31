@@ -115,6 +115,9 @@ for archive_path in args.files:
                         continue
 
                     try:
+                        if member.extra:
+                            print(f"{member.filename} {member.extra}")
+
                         with archive.open(member, pwd=args.password) as f:
                             crc32, sha256 = get_member_checksums(f)
                             if member.crc32 is not None and member.crc32 != crc32:

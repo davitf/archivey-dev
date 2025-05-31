@@ -46,7 +46,9 @@ def create_archive_reader(
     if not os.path.exists(archive_path):
         raise FileNotFoundError(f"Archive file not found: {archive_path}")
 
-    ext = os.path.splitext(archive_path)[1].lower()
+    format = detect_archive_format(archive_path)
+
+    # ext = os.path.splitext(archive_path)[1].lower()
     pwd = kwargs.get("pwd")
     if pwd is not None and not isinstance(pwd, (str, bytes)):
         raise TypeError("Password must be a string or bytes")
@@ -57,7 +59,7 @@ def create_archive_reader(
 
         # return LibArchiveReader(archive_path, **kwargs)
 
-    if ext == ".rar":
+    if format == ArchiveFormat.RAR:
         if use_rar_stream:
             from archivey.rar_reader import RarStreamReader
 
@@ -67,34 +69,27 @@ def create_archive_reader(
 
             return RarReader(archive_path, pwd=pwd)
 
-    if ext == ".zip":
+    if format == ArchiveFormat.ZIP:
         from archivey.zip_reader import ZipReader
 
         return ZipReader(archive_path, pwd=pwd)
 
-    if ext == ".7z":
+    if format == ArchiveFormat.SEVENZIP:
         from archivey.sevenzip_reader import SevenZipReader
 
         return SevenZipReader(archive_path, pwd=pwd)
 
-    if ext == ".tar":
+    if format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
         from archivey.tar_reader import TarReader
 
-        return TarReader(archive_path, pwd=pwd)
+        return TarReader(archive_path, pwd=pwd, format=format)
 
-    if ext in [".gz", ".bz2", ".xz", ".tgz", ".tbz", ".txz"]:
-        # Check if it's a tar archive
-        member_name = os.path.splitext(os.path.basename(archive_path))[0]
-        if ext in [".tgz", ".tbz", ".txz"] or member_name.lower().endswith(".tar"):
-            from archivey.tar_reader import TarReader
+    if format in SINGLE_FILE_COMPRESSED_FORMATS:
+        from archivey.single_file_reader import SingleFileReader
 
-            return TarReader(archive_path, pwd=pwd)
-        else:
-            from archivey.single_file_reader import SingleFileReader
+        return SingleFileReader(archive_path, pwd=pwd, format=format)
 
-            return SingleFileReader(archive_path, pwd=pwd)
-
-    raise ArchiveNotSupportedError(f"Unsupported archive format: {ext}")
+    raise ArchiveNotSupportedError(f"Unsupported archive format: {format}")
 
 
 class ArchiveStream:
