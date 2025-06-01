@@ -24,8 +24,8 @@ def detect_archive_format_by_signature(
         (b"\xfd\x37\x7a\x58\x5a\x00", 0, ArchiveFormat.XZ),
         (b"\x28\xb5\x2f\xfd", 0, ArchiveFormat.ZSTD),
         (b"\x04\x22\x4d\x18", 0, ArchiveFormat.LZ4),
-        (b"ustar", 257, ArchiveFormat.TAR), # TAR "ustar" magic
-        (b"CD001", 0x8001, ArchiveFormat.ISO), # ISO9660
+        (b"ustar", 257, ArchiveFormat.TAR),  # TAR "ustar" magic
+        (b"CD001", 0x8001, ArchiveFormat.ISO),  # ISO9660
     ]
 
     if isinstance(path_or_file, (str, bytes)):
@@ -36,7 +36,9 @@ def detect_archive_format_by_signature(
             f = open(path_or_file, "rb")
             close_after = True
         except FileNotFoundError:
-            return ArchiveFormat.UNKNOWN # Or raise error, depending on desired behavior
+            return (
+                ArchiveFormat.UNKNOWN
+            )  # Or raise error, depending on desired behavior
     elif hasattr(path_or_file, "read") and hasattr(path_or_file, "seek"):
         f = path_or_file
         # We can't check is_dir on a stream, assume it's not a folder for streams
@@ -44,7 +46,6 @@ def detect_archive_format_by_signature(
     else:
         # Not a path and not a stream
         return ArchiveFormat.UNKNOWN
-
 
     try:
         for magic, offset, fmt in SIGNATURES:

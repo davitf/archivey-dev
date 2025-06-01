@@ -8,10 +8,10 @@ from archivey.exceptions import (
     ArchiveMemberNotFoundError,
     ArchiveNotSupportedError,
 )
-from archivey.formats import detect_archive_format_by_signature
-from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
-from archivey.iso_reader import IsoReader
 from archivey.folder_reader import FolderReader
+from archivey.formats import detect_archive_format_by_signature
+from archivey.iso_reader import IsoReader
+from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 __all__ = [
     "ArchiveStream",
