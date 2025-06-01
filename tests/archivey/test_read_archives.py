@@ -372,6 +372,7 @@ BASIC_7Z_ARCHIVE = filter_archives(
 
 
 @patch("archivey.rar_reader.rarfile", None)
+@pytest.mark.missing_rarfile
 def test_rarfile_not_installed_raises_exception():
     """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
     with pytest.raises(PackageNotInstalledError) as excinfo:
@@ -380,6 +381,7 @@ def test_rarfile_not_installed_raises_exception():
 
 
 @patch("archivey.sevenzip_reader.py7zr", None)
+@pytest.mark.missing_py7zr
 def test_py7zr_not_installed_raises_exception():
     """Test that LibraryNotInstalledError is raised for .7z when py7zr is not installed."""
     with pytest.raises(PackageNotInstalledError) as excinfo:
@@ -388,6 +390,7 @@ def test_py7zr_not_installed_raises_exception():
 
 
 @patch("archivey.rar_reader.rarfile._have_crypto", 0)
+@pytest.mark.missing_crypto
 def test_rarfile_missing_cryptography_raises_exception():
     """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
     with pytest.raises(PackageNotInstalledError) as excinfo:
@@ -401,6 +404,7 @@ def test_rarfile_missing_cryptography_raises_exception():
 
 
 @patch("archivey.rar_reader.rarfile._have_crypto", 0)
+@pytest.mark.missing_crypto
 def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files():
     """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
     with ArchiveStream(
