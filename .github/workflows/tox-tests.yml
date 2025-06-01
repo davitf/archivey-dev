@@ -7,13 +7,13 @@ on:
     branches: [ main, master ] # Adjust if your main branch has a different name
 
 jobs:
-  test:
-    name: Tox tests - Python ${{ matrix.python-version }}
+  general-tests:
+    name: Tox - py${{ matrix.python-version }}-latest-deps
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"] # Add "3.13" and "3.14-beta" if available and stable with setup-python
+        python-version: ["3.10", "3.11", "3.12", "3.13"] # Add "3.14-beta" if available and stable with setup-python
 
     steps:
       - name: Check out code
@@ -33,5 +33,37 @@ jobs:
       - name: Run tox environment
         # We select a representative tox environment that uses the current Python version
         # and latest versions of rarfile and py7zr.
-        # You might want to run all environments or a different subset.
+        # For py310, py310-rarfilelatest-py7zrlatest is run. Other versions will use their respective latest.
         run: tox -e py${{ matrix.python-version }}-rarfilelatest-py7zrlatest
+
+  specific-py310-tests:
+    name: Tox - ${{ matrix.tox_env }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tox_env:
+          - py310-missing-crypto
+          - py310-rarfilenotinstalled-py7zrnotinstalled
+          - py310-rarfile40-py7zr0220
+          - py310-rarfile42-py7zr100rc3
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Install unrar (for rarfile tests)
+        # unrar is needed for py310-rarfile40-py7zr0220 and py310-rarfile42-py7zr100rc3
+        # It's not strictly needed for missing-crypto (mocks) or notinstalled (mocks)
+        # but including it for consistency in this job group is simpler.
+        run: sudo apt-get update && sudo apt-get install -y unrar
+
+      - name: Run tox environment
+        run: tox -e ${{ matrix.tox_env }}
