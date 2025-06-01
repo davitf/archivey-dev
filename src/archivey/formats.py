@@ -104,6 +104,8 @@ def detect_archive_format(filename: str) -> ArchiveFormat:
     format_by_signature = detect_archive_format_by_signature(filename)
     format_by_filename = detect_archive_format_by_filename(filename)
 
+    # The signature detection doesn't know if a .gz/.bz2/.xz file is a tar file,
+    # so we need to check the filename.
     # To detect cases like a .tar.gz file mistakenly having been renamed to .zip,
     # assume it's a tar file if the compression format is supported by tar
     # and the filename matches any multi-file format.
@@ -111,27 +113,25 @@ def detect_archive_format(filename: str) -> ArchiveFormat:
         format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT
         and format_by_filename not in SINGLE_FILE_COMPRESSED_FORMATS
     ):
-        format = COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]
-    effective_format: ArchiveFormat
+        format_by_signature = COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]
+
+    if (
+        format_by_filename == ArchiveFormat.UNKNOWN
+        and format_by_signature == ArchiveFormat.UNKNOWN
+    ):
+        logger.warning(f"{filename}: Can't detect format by signature or filename")
+        return ArchiveFormat.UNKNOWN
 
     if format_by_signature == ArchiveFormat.UNKNOWN:
-        effective_format = format_by_filename
-    elif format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT and \
-         format_by_filename == COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]:
-        # e.g. signature is GZIP, filename is TAR_GZ. Prefer TAR_GZ.
-        effective_format = format_by_filename
-    else:
-        effective_format = format_by_signature
-
-    if effective_format != format_by_filename and \
-       format_by_signature != ArchiveFormat.UNKNOWN and \
-       format_by_filename != ArchiveFormat.UNKNOWN and \
-       effective_format != ArchiveFormat.UNKNOWN:
-        # Log only if there's a meaningful discrepancy where both detections yielded a result,
-        # and they differed, and the effective_format isn't simply a fallback to UNKNOWN.
         logger.warning(
-            f"{filename}: Format by signature ({format_by_signature}) and "
-            f"format by filename ({format_by_filename}) differ. Effective format: {effective_format}"
+            f"{filename}: Couldn't detect format by signature. Assuming {format_by_filename}"
+        )
+        return format_by_filename
+    elif format_by_filename == ArchiveFormat.UNKNOWN:
+        logger.warning(f"{filename}: Unknown extension. Detected {format_by_signature}")
+    elif format_by_signature != format_by_filename:
+        logger.warning(
+            f"{filename}: Extension indicates {format_by_filename}, but detected ({format_by_signature})"
         )
 
-    return effective_format
+    return format_by_signature

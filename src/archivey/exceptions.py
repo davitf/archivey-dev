@@ -41,7 +41,7 @@ class ArchiveNotSupportedError(ArchiveError):
     pass
 
 
-class LibraryNotInstalledError(ArchiveError):
+class PackageNotInstalledError(ArchiveError):
     """Raised when a required library is not installed."""
 
     pass

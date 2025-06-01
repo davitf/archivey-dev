@@ -10,19 +10,22 @@ import struct
 import subprocess
 import threading
 import zlib
-from typing import IO, Any, Iterable, Iterator, List, Optional, cast
+from typing import IO, TYPE_CHECKING, Any, Iterable, Iterator, List, Optional, cast
 
-try:
+if TYPE_CHECKING:
     import rarfile
-except ImportError:
-    rarfile = None  # type: ignore[assignment]
+else:
+    try:
+        import rarfile
+    except ImportError:
+        rarfile = None  # type: ignore[assignment]
 
 from archivey.base_reader import ArchiveReader
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveError,
-    LibraryNotInstalledError,
+    PackageNotInstalledError,
 )
 from archivey.formats import ArchiveFormat
 from archivey.io_wrappers import ExceptionTranslatingIO
@@ -184,14 +187,21 @@ class BaseRarReader(ArchiveReader):
         self._format_info: Optional[ArchiveInfo] = None
 
         if rarfile is None:
-            raise LibraryNotInstalledError(
-                "rarfile library is not installed. Please install it to work with RAR archives."
+            raise PackageNotInstalledError(
+                "rarfile package is not installed. Please install it to work with RAR archives."
             )
 
         try:
             self._archive = rarfile.RarFile(archive_path, "r")
             if pwd:
                 self._archive.setpassword(pwd)
+            elif (
+                self._archive._file_parser is not None
+                and self._archive._file_parser.has_header_encryption()
+            ):
+                raise ArchiveEncryptedError(
+                    f"Archive {archive_path} has header encryption, password required to list files"
+                )
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(f"Invalid RAR archive {archive_path}: {e}")
         except rarfile.NotRarFile as e:
@@ -203,6 +213,10 @@ class BaseRarReader(ArchiveReader):
         except rarfile.RarWrongPassword as e:
             raise ArchiveEncryptedError(
                 f"Wrong password specified for {archive_path}"
+            ) from e
+        except rarfile.NoCrypto as e:
+            raise PackageNotInstalledError(
+                "cryptography package is not installed. Please install it to read RAR files with encrypted headers."
             ) from e
 
     def close(self):
@@ -313,7 +327,9 @@ class BaseRarReader(ArchiveReader):
             self._format_info = ArchiveInfo(
                 format=self.get_format(),
                 version=version,
-                is_solid=getattr(self._archive, "is_solid", lambda: False)(), # rarfile < 4.1 doesn't have is_solid
+                is_solid=getattr(
+                    self._archive, "is_solid", lambda: False
+                )(),  # rarfile < 4.1 doesn't have is_solid
                 comment=self._archive.comment,
                 extra={
                     # "is_multivolume": self._archive.is_multivolume(),

@@ -70,6 +70,14 @@ class ArchiveFormatInfo:
     )  # Additional options for generation
 
 
+DEFAULT_ARCHIVES_BASE_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..")
+)
+
+TEST_ARCHIVES_DIR = "test_archives"
+TEST_ARCHIVES_EXTERNAL_DIR = "test_archives_external"
+
+
 @dataclass
 class ArchiveInfo:
     filename: (
@@ -80,7 +88,7 @@ class ArchiveInfo:
     skip_test: bool = False
     generate_corrupted_variants: bool = False
 
-    def get_archive_path(self, base_dir: str) -> str:
+    def get_archive_path(self, base_dir: str = DEFAULT_ARCHIVES_BASE_DIR) -> str:
         if self.format_info.generation_method == GenerationMethod.EXTERNAL:
             return os.path.join(base_dir, TEST_ARCHIVES_EXTERNAL_DIR, self.filename)
         else:
@@ -282,9 +290,6 @@ ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
 
 # Skip test filenames
 SKIP_TEST_FILENAMES = set()
-
-TEST_ARCHIVES_DIR = "test_archives"
-TEST_ARCHIVES_EXTERNAL_DIR = "test_archives_external"
 
 
 def _fake_mtime(i: int) -> datetime:

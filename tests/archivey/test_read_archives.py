@@ -20,17 +20,13 @@ from archivey.archive_stream import ArchiveStream
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
-    LibraryNotInstalledError,
+    PackageNotInstalledError,
 )
 from archivey.types import ArchiveFormat, MemberType
 
 
 def normalize_newlines(s: str | None) -> str | None:
     return s.replace("\r\n", "\n") if s else None
-
-
-def full_path_to_archive(archive_filename: str) -> str:
-    return os.path.join(os.path.dirname(__file__), "../test_archives", archive_filename)
 
 
 @dataclass
@@ -73,7 +69,6 @@ def check_read_archive(
     features = FORMAT_FEATURES.get(
         sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
     )
-    archive_base_dir = os.path.join(os.path.dirname(__file__), "..")
 
     files_by_name = {file.name: file for file in sample_archive.contents.files}
     allow_timestamp_rounding_error = (
@@ -98,7 +93,7 @@ def check_read_archive(
         )
 
     with ArchiveStream(
-        sample_archive.get_archive_path(archive_base_dir),
+        sample_archive.get_archive_path(),
         pwd=constructor_password,
         use_rar_stream=use_rar_stream,
         use_single_file_stored_metadata=True,
@@ -154,13 +149,6 @@ def check_read_archive(
                     f"got {oct(member.mode) if member.mode is not None else 'None'}, "
                     f"expected {oct(sample_file.permissions)}"
                 )
-            # elif member.permissions is not None:
-            #         # For other formats, if permissions happen to be set by the library
-            #         # and we have an expected mode, check it.
-            #         assert member.permissions == sample_file.permissions, (
-            #             f"Permission mismatch for {member.filename} in {sample_archive.filename} (optional check): "
-            #             f"got {oct(member.permissions)}, expected {oct(sample_file.permissions)}"
-            #         )
 
             assert member.encrypted == (
                 sample_file.password is not None
@@ -175,7 +163,7 @@ def check_read_archive(
             assert member.mtime is not None
             if sample_file.mtime == MARKER_MTIME_BASED_ON_ARCHIVE_NAME:
                 archive_file_mtime = datetime.fromtimestamp(
-                    os.path.getmtime(sample_archive.get_archive_path(archive_base_dir))
+                    os.path.getmtime(sample_archive.get_archive_path())
                 )
                 assert member.mtime == archive_file_mtime, (
                     f"Timestamp mismatch for {member.filename} (special check): "
@@ -366,21 +354,57 @@ def test_read_single_file_compressed_archives(sample_archive: ArchiveInfo):
 
 
 # Tests for LibraryNotInstalledError
-DUMMY_RAR_PATH = full_path_to_archive("dummy.rar")
-DUMMY_7Z_PATH = full_path_to_archive("dummy.7z")
+BASIC_RAR_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["rar"]
+)[0]
+
+HEADER_ENCRYPTED_RAR_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["encrypted_header"], extensions=["rar"]
+)[0]
+
+NORMAL_ENCRYPTED_RAR_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["encryption"], extensions=["rar"]
+)[0]
+
+BASIC_7Z_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["7z"]
+)[0]
 
 
-@patch('archivey.rar_reader.rarfile', None)
+@patch("archivey.rar_reader.rarfile", None)
 def test_rarfile_not_installed_raises_exception():
     """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
-    with pytest.raises(LibraryNotInstalledError) as excinfo:
-        ArchiveStream(DUMMY_RAR_PATH)
-    assert str(excinfo.value) == "rarfile library is not installed. Please install it to work with RAR archives."
+    with pytest.raises(PackageNotInstalledError) as excinfo:
+        ArchiveStream(BASIC_RAR_ARCHIVE.get_archive_path())
+    assert "rarfile package is not installed" in str(excinfo.value)
 
 
-@patch('archivey.sevenzip_reader.py7zr', None)
+@patch("archivey.sevenzip_reader.py7zr", None)
 def test_py7zr_not_installed_raises_exception():
     """Test that LibraryNotInstalledError is raised for .7z when py7zr is not installed."""
-    with pytest.raises(LibraryNotInstalledError) as excinfo:
-        ArchiveStream(DUMMY_7Z_PATH)
-    assert str(excinfo.value) == "py7zr library is not installed. Please install it to work with 7-Zip archives."
+    with pytest.raises(PackageNotInstalledError) as excinfo:
+        ArchiveStream(BASIC_7Z_ARCHIVE.get_archive_path())
+    assert "py7zr package is not installed" in str(excinfo.value)
+
+
+@patch("archivey.rar_reader.rarfile._have_crypto", 0)
+def test_rarfile_missing_cryptography_raises_exception():
+    """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
+    with pytest.raises(PackageNotInstalledError) as excinfo:
+        with ArchiveStream(
+            HEADER_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
+            pwd=HEADER_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
+        ) as archive:
+            names = archive.namelist()
+            logging.info(f"Names: {names}")
+    assert "cryptography package is not installed" in str(excinfo.value)
+
+
+@patch("archivey.rar_reader.rarfile._have_crypto", 0)
+def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files():
+    """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
+    with ArchiveStream(
+        NORMAL_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
+        pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
+    ) as archive:
+        assert set(archive.namelist()) == {"secret.txt", "also_secret.txt"}
