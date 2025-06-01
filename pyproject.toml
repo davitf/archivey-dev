@@ -22,7 +22,6 @@ optional = [
     "py7zr>=0.22.0",
     "rarfile>=4.2",
     "zstandard>=0.23.0",
-    "pycryptodomex>=3.9.8", # For rarfile encryption
     "pycdlib>=1.14.0",
 ]
 
