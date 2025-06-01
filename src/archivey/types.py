@@ -30,6 +30,9 @@ class ArchiveFormat(StrEnum):
     TAR_ZSTD = "tar.zstd"
     TAR_LZ4 = "tar.lz4"
 
+    ISO = "iso"
+    FOLDER = "folder"
+
     UNKNOWN = "unknown"
 
 
