@@ -1,6 +1,6 @@
-import io
 import logging
 import os
+from typing import IO, cast
 
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
@@ -9,24 +9,42 @@ from archivey.types import (
     ArchiveFormat,
 )
 
+# Taken from the pycdlib code
+_ISO_MAGIC_BYTES = (
+    b"CD001",
+    b"CDW02",
+    b"BEA01",
+    b"NSR02",
+    b"NSR03",
+    b"TEA01",
+    b"BOOT2",
+)
+
 
 def detect_archive_format_by_signature(
-    path_or_file: str | bytes | io.IOBase,
+    path_or_file: str | bytes | IO[bytes],
 ) -> ArchiveFormat:
-    # Signature, offset, format
+    # [signature, ...], offset, format
     SIGNATURES = [
-        (b"\x50\x4b\x03\x04", 0, ArchiveFormat.ZIP),
-        (b"\x52\x61\x72\x21\x1a\x07\x00", 0, ArchiveFormat.RAR),  # RAR4
-        (b"\x52\x61\x72\x21\x1a\x07\x01\x00", 0, ArchiveFormat.RAR),  # RAR5
-        (b"\x37\x7a\xbc\xaf\x27\x1c", 0, ArchiveFormat.SEVENZIP),
-        (b"\x1f\x8b", 0, ArchiveFormat.GZIP),
-        (b"\x42\x5a\x68", 0, ArchiveFormat.BZIP2),
-        (b"\xfd\x37\x7a\x58\x5a\x00", 0, ArchiveFormat.XZ),
-        (b"\x28\xb5\x2f\xfd", 0, ArchiveFormat.ZSTD),
-        (b"\x04\x22\x4d\x18", 0, ArchiveFormat.LZ4),
-        (b"ustar", 257, ArchiveFormat.TAR),  # TAR "ustar" magic
-        (b"CD001", 0x8001, ArchiveFormat.ISO),  # ISO9660
+        ([b"\x50\x4b\x03\x04"], 0, ArchiveFormat.ZIP),
+        (
+            [
+                b"\x52\x61\x72\x21\x1a\x07\x00",  # RAR4
+                b"\x52\x61\x72\x21\x1a\x07\x01\x00",  # RAR5
+            ],
+            0,
+            ArchiveFormat.RAR,
+        ),
+        ([b"\x37\x7a\xbc\xaf\x27\x1c"], 0, ArchiveFormat.SEVENZIP),
+        ([b"\x1f\x8b"], 0, ArchiveFormat.GZIP),
+        ([b"\x42\x5a\x68"], 0, ArchiveFormat.BZIP2),
+        ([b"\xfd\x37\x7a\x58\x5a\x00"], 0, ArchiveFormat.XZ),
+        ([b"\x28\xb5\x2f\xfd"], 0, ArchiveFormat.ZSTD),
+        ([b"\x04\x22\x4d\x18"], 0, ArchiveFormat.LZ4),
+        ([b"ustar"], 257, ArchiveFormat.TAR),  # TAR "ustar" magic
+        (_ISO_MAGIC_BYTES, 0x8001, ArchiveFormat.ISO),  # ISO9660
     ]
+    f: IO[bytes]
 
     if isinstance(path_or_file, (str, bytes)):
         # If it's a path, check if it's a directory first
@@ -40,7 +58,7 @@ def detect_archive_format_by_signature(
                 ArchiveFormat.UNKNOWN
             )  # Or raise error, depending on desired behavior
     elif hasattr(path_or_file, "read") and hasattr(path_or_file, "seek"):
-        f = path_or_file
+        f = cast(IO[bytes], path_or_file)
         # We can't check is_dir on a stream, assume it's not a folder for streams
         close_after = False
     else:
@@ -48,11 +66,13 @@ def detect_archive_format_by_signature(
         return ArchiveFormat.UNKNOWN
 
     try:
-        for magic, offset, fmt in SIGNATURES:
+        for magics, offset, fmt in SIGNATURES:
+            bytes_to_read = max(len(magic) for magic in magics)
             f.seek(offset)
-            sig_len = len(magic)
-            if f.read(sig_len) == magic:
+            data = f.read(bytes_to_read)
+            if any(data.startswith(magic) for magic in magics):
                 return fmt
+
     finally:
         if close_after:
             f.close()

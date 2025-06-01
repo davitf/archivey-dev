@@ -4,6 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Iterator, List, Optional
 
+from archivey.exceptions import ArchiveError
+
 if TYPE_CHECKING:
     import pycdlib
 else:
@@ -12,11 +14,7 @@ else:
     except ImportError:
         pycdlib = None  # type: ignore[assignment]
 
-from archivey.base_reader import ArchiveReader, PathType
-from archivey.exceptions import (
-    ArchiveyError,
-    CorruptedArchiveError,
-)
+from archivey.base_reader import ArchiveReader
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 
@@ -31,30 +29,18 @@ class IsoReader(ArchiveReader):
 
     def __init__(
         self,
-        archive: PathType,
+        archive: str | bytes,
         password: Optional[str | bytes] = None,
         encoding: Optional[
             str
         ] = None,  # ISO 9660 typically uses its own encoding system.
     ):
-        super().__init__(archive, password=password, encoding=encoding)
-        self.iso: Optional[pycdlib.PyCdlib] = None
+        super().__init__(archive)
+        self.iso: Optional[pycdlib.pycdlib.PyCdlib] = None
         self.archive_path_obj: Optional[Path] = None
 
-        if isinstance(archive, (str, bytes, os.PathLike)):
-            self.archive_path_obj = Path(archive)
-            try:
-                self.iso = pycdlib.PyCdlib()
-                self.iso.open(archive)
-            except Exception as e:  # pycdlib can raise various errors
-                raise CorruptedArchiveError(f"Failed to open ISO file: {e}") from e
-        elif hasattr(archive, "read") and hasattr(archive, "seek"):
-            # pycdlib requires a filepath, it cannot work directly with streams.
-            # We could save the stream to a temporary file, but that adds complexity.
-            # For now, let's state that IsoReader expects a path.
-            raise ArchiveyError("IsoReader requires a file path, not a stream.")
-        else:
-            raise TypeError("archive must be a path-like object or a file-like object")
+        self.iso = pycdlib.pycdlib.PyCdlib()
+        self.iso.open(archive)
 
         if password:
             # ISO 9660 does not natively support encryption in a way pycdlib handles.
@@ -65,13 +51,15 @@ class IsoReader(ArchiveReader):
             pass  # Ignoring password as ISOs are not typically encrypted
 
     def _is_pycdlib_dir(
-        self, record: pycdlib.backends.pycdlibstructures.DirectoryRecord
+        self,
+        record,  #: pycdlib.DirectoryRecord
     ) -> bool:
         """Checks if a pycdlib DirectoryRecord is a directory."""
         return record.is_dir()
 
     def _is_pycdlib_symlink(
-        self, record: pycdlib.backends.pycdlibstructures.DirectoryRecord
+        self,
+        record,  #: pycdlib.pycdlib.backends.pycdlibstructures.DirectoryRecord
     ) -> bool:
         """Checks if a pycdlib DirectoryRecord is a symbolic link (using Rock Ridge)."""
         # pycdlib doesn't directly expose a simple is_symlink().
@@ -84,7 +72,9 @@ class IsoReader(ArchiveReader):
         return False
 
     def _convert_direntry_to_member(
-        self, path: str, record: pycdlib.backends.pycdlibstructures.DirectoryRecord
+        self,
+        path: str,
+        record,  #: pycdlib.backends.pycdlibstructures.DirectoryRecord
     ) -> ArchiveMember:
         """Converts a pycdlib DirectoryRecord to an ArchiveMember."""
         member_type = MemberType.OTHER
@@ -144,7 +134,7 @@ class IsoReader(ArchiveReader):
     ) -> Iterator[ArchiveMember]:
         """Helper to recursively walk the ISO directory structure."""
         if not self.iso:
-            raise ArchiveyError("ISO not opened")
+            raise ArchiveError("ISO not opened")
 
         try:
             for child_name_bytes, record in self.iso.list_dir(
@@ -192,18 +182,18 @@ class IsoReader(ArchiveReader):
                     )
                     yield from self._walk_iso(member_path, next_iso_path)
         except Exception as e:
-            raise CorruptedArchiveError(
+            raise ArchiveError(
                 f"Error walking ISO directory {current_iso_path}: {e}"
             ) from e
 
     def get_members(self) -> List[ArchiveMember]:
         if not self.iso:
-            raise ArchiveyError("ISO not opened")
+            raise ArchiveError("ISO not opened")
         return list(self.iter_members())
 
     def iter_members(self) -> Iterator[ArchiveMember]:
         if not self.iso:
-            raise ArchiveyError("ISO not opened")
+            raise ArchiveError("ISO not opened")
 
         # Yield the root directory itself, as it's a common convention
         # pycdlib doesn't explicitly list the root dir record in list_dir('/')
@@ -223,7 +213,7 @@ class IsoReader(ArchiveReader):
         self, member: ArchiveMember | str, *, pwd: Optional[str | bytes] = None
     ) -> IO[bytes]:
         if not self.iso:
-            raise ArchiveyError("ISO not opened")
+            raise ArchiveError("ISO not opened")
 
         member_name: str
         if isinstance(member, ArchiveMember):
@@ -263,13 +253,13 @@ class IsoReader(ArchiveReader):
             # This exception is often raised for "file not found"
             raise FileNotFoundError(f"File not found in ISO: {member_name}") from None
         except Exception as e:
-            raise ArchiveyError(
+            raise ArchiveError(
                 f"Failed to open member '{member_name}' from ISO: {e}"
             ) from e
 
     def get_archive_info(self) -> ArchiveInfo:
         if not self.iso:
-            raise ArchiveyError("ISO not opened")
+            raise ArchiveError("ISO not opened")
 
         # Basic info
         info = ArchiveInfo(format=self.format.value)
@@ -328,7 +318,7 @@ class IsoReader(ArchiveReader):
         self.close()
 
     @classmethod
-    def check_format_by_signature(cls, path_or_file: PathType) -> bool:
+    def check_format_by_signature(cls, path_or_file: str | bytes | IO[bytes]) -> bool:
         """
         Checks if the given file matches the ISO 9660 signature.
         """
@@ -367,7 +357,7 @@ class IsoReader(ArchiveReader):
                 f.close()
 
     @classmethod
-    def check_format_by_path(cls, path: PathType) -> bool:
+    def check_format_by_path(cls, path: str | bytes | os.PathLike) -> bool:
         """
         Checks if the given path has a common ISO extension.
         """
