@@ -13,47 +13,48 @@ from archivey.types import (
 def detect_archive_format_by_signature(
     path_or_file: str | bytes | io.IOBase,
 ) -> ArchiveFormat:
+    # Signature, offset, format
     SIGNATURES = [
-        (b"\x50\x4b\x03\x04", ArchiveFormat.ZIP),
-        (b"\x52\x61\x72\x21\x1a\x07\x00", ArchiveFormat.RAR),  # RAR4
-        (b"\x52\x61\x72\x21\x1a\x07\x01\x00", ArchiveFormat.RAR),  # RAR5
-        (b"\x37\x7a\xbc\xaf\x27\x1c", ArchiveFormat.SEVENZIP),
-        (b"\x1f\x8b", ArchiveFormat.GZIP),
-        (b"\x42\x5a\x68", ArchiveFormat.BZIP2),
-        (b"\xfd\x37\x7a\x58\x5a\x00", ArchiveFormat.XZ),
-        (b"\x28\xb5\x2f\xfd", ArchiveFormat.ZSTD),
-        (b"\x04\x22\x4d\x18", ArchiveFormat.LZ4),
+        (b"\x50\x4b\x03\x04", 0, ArchiveFormat.ZIP),
+        (b"\x52\x61\x72\x21\x1a\x07\x00", 0, ArchiveFormat.RAR),  # RAR4
+        (b"\x52\x61\x72\x21\x1a\x07\x01\x00", 0, ArchiveFormat.RAR),  # RAR5
+        (b"\x37\x7a\xbc\xaf\x27\x1c", 0, ArchiveFormat.SEVENZIP),
+        (b"\x1f\x8b", 0, ArchiveFormat.GZIP),
+        (b"\x42\x5a\x68", 0, ArchiveFormat.BZIP2),
+        (b"\xfd\x37\x7a\x58\x5a\x00", 0, ArchiveFormat.XZ),
+        (b"\x28\xb5\x2f\xfd", 0, ArchiveFormat.ZSTD),
+        (b"\x04\x22\x4d\x18", 0, ArchiveFormat.LZ4),
+        (b"ustar", 257, ArchiveFormat.TAR), # TAR "ustar" magic
+        (b"CD001", 0x8001, ArchiveFormat.ISO), # ISO9660
     ]
 
-    # Support both file paths and file-like objects
-    close_after = False
     if isinstance(path_or_file, (str, bytes)):
-        f = open(path_or_file, "rb")
-        close_after = True
-    else:
+        # If it's a path, check if it's a directory first
+        if os.path.isdir(path_or_file):
+            return ArchiveFormat.FOLDER
+        try:
+            f = open(path_or_file, "rb")
+            close_after = True
+        except FileNotFoundError:
+            return ArchiveFormat.UNKNOWN # Or raise error, depending on desired behavior
+    elif hasattr(path_or_file, "read") and hasattr(path_or_file, "seek"):
         f = path_or_file
-        f.seek(0)
-
-    sig = f.read(8)
-    if close_after:
-        f.close()
-
-    for magic, name in SIGNATURES:
-        if sig.startswith(magic):
-            return name
-
-    # Check for tar "ustar" magic at offset 257
-    if isinstance(path_or_file, (str, bytes)):
-        with open(path_or_file, "rb") as tf:
-            tf.seek(257)
-            if tf.read(5) == b"ustar":
-                return ArchiveFormat.TAR
+        # We can't check is_dir on a stream, assume it's not a folder for streams
+        close_after = False
     else:
-        pos = f.tell()
-        f.seek(257)
-        if f.read(5) == b"ustar":
-            return ArchiveFormat.TAR
-        f.seek(pos)
+        # Not a path and not a stream
+        return ArchiveFormat.UNKNOWN
+
+
+    try:
+        for magic, offset, fmt in SIGNATURES:
+            f.seek(offset)
+            sig_len = len(magic)
+            if f.read(sig_len) == magic:
+                return fmt
+    finally:
+        if close_after:
+            f.close()
 
     return ArchiveFormat.UNKNOWN
 
@@ -78,6 +79,7 @@ _EXTENSION_TO_FORMAT = {
     ".zip": ArchiveFormat.ZIP,
     ".rar": ArchiveFormat.RAR,
     ".7z": ArchiveFormat.SEVENZIP,
+    ".iso": ArchiveFormat.ISO,
 }
 
 
@@ -90,6 +92,8 @@ def has_tar_extension(filename: str) -> bool:
 
 def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
     """Detect the compression format of an archive based on its filename."""
+    if os.path.isdir(filename):
+        return ArchiveFormat.FOLDER
     filename_lower = filename.lower()
     for ext, format in _EXTENSION_TO_FORMAT.items():
         if filename_lower.endswith(ext):
@@ -101,6 +105,10 @@ logger = logging.getLogger(__name__)
 
 
 def detect_archive_format(filename: str) -> ArchiveFormat:
+    # Check if it's a directory first
+    if os.path.isdir(filename):
+        return ArchiveFormat.FOLDER
+
     format_by_signature = detect_archive_format_by_signature(filename)
     format_by_filename = detect_archive_format_by_filename(filename)
 

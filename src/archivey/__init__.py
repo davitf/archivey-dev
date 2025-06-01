@@ -10,9 +10,13 @@ from archivey.exceptions import (
 )
 from archivey.formats import detect_archive_format_by_signature
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
+from archivey.iso_reader import IsoReader
+from archivey.folder_reader import FolderReader
 
 __all__ = [
     "ArchiveStream",
+    "IsoReader",
+    "FolderReader",
     "ArchiveError",
     "ArchiveFormatError",
     "ArchiveCorruptedError",
