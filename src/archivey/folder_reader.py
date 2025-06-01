@@ -4,12 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any, Iterator, List, Optional
 
-from archivey.base_reader import ArchiveReader, PathType
-from archivey.exceptions import (
-    ArchiveyError,
-    CorruptedArchiveError,
-    MemberNotFoundError,
-)
+from archivey.base_reader import ArchiveReader
+from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 
@@ -24,7 +20,7 @@ class FolderReader(ArchiveReader):
 
     def __init__(
         self,
-        archive: PathType,  # Should be a path to a directory
+        archive: str | bytes | os.PathLike,
         password: Optional[str | bytes] = None,  # Not used for folders
         encoding: Optional[str] = None,  # Filesystem encoding is handled by OS
     ):
@@ -37,7 +33,7 @@ class FolderReader(ArchiveReader):
             raise TypeError("FolderReader requires a file system path, not a stream.")
 
         if not self.archive_path.is_dir():
-            raise CorruptedArchiveError(f"Path is not a directory: {self.archive_path}")
+            raise ValueError(f"Path is not a directory: {self.archive_path}")
 
         # Password and encoding are generally not applicable here.
         # self.encoding might be used for filename encoding if needed, but Python 3 handles unicode paths.
@@ -110,7 +106,7 @@ class FolderReader(ArchiveReader):
 
     def iter_members(self) -> Iterator[ArchiveMember]:
         if not self.archive_path.is_dir():
-            raise ArchiveyError(f"Archive path is not a directory: {self.archive_path}")
+            raise ArchiveError(f"Archive path is not a directory: {self.archive_path}")
 
         # Yield the root directory itself first
         # This is a common convention for archive listings
@@ -128,7 +124,8 @@ class FolderReader(ArchiveReader):
                 raw_info=root_stat,
             )
         except OSError as e:
-            raise CorruptedArchiveError(
+            # TODO: better exception type
+            raise ArchiveError(
                 f"Cannot stat root directory {self.archive_path}: {e}"
             ) from e
 
@@ -168,7 +165,7 @@ class FolderReader(ArchiveReader):
         full_path = self.archive_path / os_specific_member_path
 
         if not full_path.exists():
-            raise MemberNotFoundError(
+            raise ArchiveMemberNotFoundError(
                 f"Member not found: {member_name} (resolved to {full_path})"
             )
 
@@ -190,19 +187,20 @@ class FolderReader(ArchiveReader):
                 # If archive_path is /foo/bar and resolved_full_path is /foo/baz/file.txt (due to symlink or ..) this is bad.
                 # A more robust check:
                 if not str(resolved_full_path).startswith(str(self.archive_path)):
-                    raise MemberNotFoundError(
+                    raise ArchiveMemberNotFoundError(
                         f"Access to member '{member_name}' outside archive root is denied."
                     )
 
         except OSError as e:  # e.g. broken symlink during resolve()
-            raise MemberNotFoundError(
+            raise ArchiveMemberNotFoundError(
                 f"Error resolving path for member '{member_name}': {e}"
             ) from e
 
         try:
             return open(full_path, "rb")
         except OSError as e:
-            raise CorruptedArchiveError(
+            raise ArchiveError(
+                # TODO: better exception type
                 f"Cannot open member '{member_name}': {e}"
             ) from e
 
@@ -224,25 +222,25 @@ class FolderReader(ArchiveReader):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    @classmethod
-    def check_format_by_signature(cls, path_or_file: PathType) -> bool:
-        # Folders don't have signatures in the traditional sense.
-        # This method might always return False, or True if path_or_file is a directory.
-        # For consistency with how `detect_archive_format` works, it relies on `os.path.isdir`.
-        # This check is primarily for file-based signatures.
-        if isinstance(path_or_file, (str, bytes, os.PathLike)):
-            return Path(path_or_file).is_dir()
-        return False  # Cannot determine if a stream is a "folder"
+    # @classmethod
+    # def check_format_by_signature(cls, path_or_file: PathType) -> bool:
+    #     # Folders don't have signatures in the traditional sense.
+    #     # This method might always return False, or True if path_or_file is a directory.
+    #     # For consistency with how `detect_archive_format` works, it relies on `os.path.isdir`.
+    #     # This check is primarily for file-based signatures.
+    #     if isinstance(path_or_file, (str, bytes, os.PathLike)):
+    #         return Path(path_or_file).is_dir()
+    #     return False  # Cannot determine if a stream is a "folder"
 
-    @classmethod
-    def check_format_by_path(cls, path: PathType) -> bool:
-        """
-        Checks if the given path is a directory.
-        """
-        if isinstance(path, (str, bytes, os.PathLike)):
-            p = Path(path)
-            return p.is_dir()
-        return False
+    # @classmethod
+    # def check_format_by_path(cls, path: PathType) -> bool:
+    #     """
+    #     Checks if the given path is a directory.
+    #     """
+    #     if isinstance(path, (str, bytes, os.PathLike)):
+    #         p = Path(path)
+    #         return p.is_dir()
+    #     return False
 
     @classmethod
     def get_extra_extensions(cls) -> list[str]:
