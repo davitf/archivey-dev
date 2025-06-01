@@ -17,6 +17,7 @@ archivey = "archivey:main"
 
 [project.optional-dependencies]
 optional = [
+    "cryptography>=45.0.3",
     "lz4>=4.4.4",
     "py7zr>=0.22.0",
     "rarfile>=4.2",
