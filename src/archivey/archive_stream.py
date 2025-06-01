@@ -10,7 +10,9 @@ from archivey.exceptions import (
     ArchiveMemberNotFoundError,
     ArchiveNotSupportedError,
 )
+from archivey.folder_reader import FolderReader
 from archivey.formats import detect_archive_format
+from archivey.iso_reader import IsoReader
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
@@ -18,8 +20,6 @@ from archivey.types import (
     ArchiveInfo,
     ArchiveMember,
 )
-from archivey.iso_reader import IsoReader
-from archivey.folder_reader import FolderReader
 
 logger = logging.getLogger(__name__)
 
@@ -92,10 +92,12 @@ def create_archive_reader(
         return SingleFileReader(archive_path, pwd=pwd, format=format)
 
     if format == ArchiveFormat.ISO:
-        return IsoReader(archive_path, password=pwd) # IsoReader expects 'password'
+        return IsoReader(archive_path, password=pwd)  # IsoReader expects 'password'
 
     if format == ArchiveFormat.FOLDER:
-        return FolderReader(archive_path, password=pwd) # FolderReader takes password for consistency
+        return FolderReader(
+            archive_path, password=pwd
+        )  # FolderReader takes password for consistency
 
     raise ArchiveNotSupportedError(f"Unsupported archive format: {format}")
 
@@ -166,9 +168,13 @@ class ArchiveStream:
                 use_stored_metadata=use_single_file_stored_metadata,
             )
         elif format == ArchiveFormat.ISO:
-            self._reader = IsoReader(filename, password=pwd) # IsoReader expects 'password'
+            self._reader = IsoReader(
+                filename, password=pwd
+            )  # IsoReader expects 'password'
         elif format == ArchiveFormat.FOLDER:
-            self._reader = FolderReader(filename, password=pwd) # FolderReader takes password for consistency
+            self._reader = FolderReader(
+                filename, password=pwd
+            )  # FolderReader takes password for consistency
         else:
             raise ArchiveNotSupportedError(
                 f"Unsupported archive format: {filename} {format}"

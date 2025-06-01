@@ -23,7 +23,7 @@ optional = [
     "rarfile>=4.2",
     "zstandard>=0.23.0",
     "pycryptodomex>=3.9.8", # For rarfile encryption
-    "pycdlib>=1.12.0", # For ISO reading
+    "pycdlib>=1.14.0",
 ]
 
 [build-system]

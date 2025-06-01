@@ -268,7 +268,6 @@ class SingleFileReader(ArchiveReader):
             type=MemberType.FILE,
             compression_method=self.get_format().value,
             crc32=None,
-            extra=None,
         )
 
         if self.ext == ".gz":

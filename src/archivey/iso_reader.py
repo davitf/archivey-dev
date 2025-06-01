@@ -2,13 +2,22 @@ import io
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import IO, Iterator, List, Optional
+from typing import IO, TYPE_CHECKING, Iterator, List, Optional
 
-import pycdlib # type: ignore
+if TYPE_CHECKING:
+    import pycdlib
+else:
+    try:
+        import pycdlib
+    except ImportError:
+        pycdlib = None  # type: ignore[assignment]
 
 from archivey.base_reader import ArchiveReader, PathType
-from archivey.exceptions import ArchiveyError, CorruptedArchiveError, EncryptedArchiveError
-from archivey.types import ArchiveInfo, ArchiveMember, ArchiveFormat, MemberType
+from archivey.exceptions import (
+    ArchiveyError,
+    CorruptedArchiveError,
+)
+from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 
 class IsoReader(ArchiveReader):
@@ -17,14 +26,16 @@ class IsoReader(ArchiveReader):
     """
 
     format = ArchiveFormat.ISO
-    magic = b"CD001" # Standard ISO 9660 identifier
+    magic = b"CD001"  # Standard ISO 9660 identifier
     magic_offset = 0x8001
 
     def __init__(
         self,
         archive: PathType,
         password: Optional[str | bytes] = None,
-        encoding: Optional[str] = None, # ISO 9660 typically uses its own encoding system.
+        encoding: Optional[
+            str
+        ] = None,  # ISO 9660 typically uses its own encoding system.
     ):
         super().__init__(archive, password=password, encoding=encoding)
         self.iso: Optional[pycdlib.PyCdlib] = None
@@ -35,7 +46,7 @@ class IsoReader(ArchiveReader):
             try:
                 self.iso = pycdlib.PyCdlib()
                 self.iso.open(archive)
-            except Exception as e: # pycdlib can raise various errors
+            except Exception as e:  # pycdlib can raise various errors
                 raise CorruptedArchiveError(f"Failed to open ISO file: {e}") from e
         elif hasattr(archive, "read") and hasattr(archive, "seek"):
             # pycdlib requires a filepath, it cannot work directly with streams.
@@ -51,13 +62,17 @@ class IsoReader(ArchiveReader):
             # For standard ISOs, passwords are not applicable.
             # We could raise EncryptedArchiveError if a password is provided,
             # or simply ignore it. Ignoring seems more user-friendly for now.
-            pass # Ignoring password as ISOs are not typically encrypted
+            pass  # Ignoring password as ISOs are not typically encrypted
 
-    def _is_pycdlib_dir(self, record: pycdlib.backends.pycdlibstructures.DirectoryRecord) -> bool:
+    def _is_pycdlib_dir(
+        self, record: pycdlib.backends.pycdlibstructures.DirectoryRecord
+    ) -> bool:
         """Checks if a pycdlib DirectoryRecord is a directory."""
         return record.is_dir()
 
-    def _is_pycdlib_symlink(self, record: pycdlib.backends.pycdlibstructures.DirectoryRecord) -> bool:
+    def _is_pycdlib_symlink(
+        self, record: pycdlib.backends.pycdlibstructures.DirectoryRecord
+    ) -> bool:
         """Checks if a pycdlib DirectoryRecord is a symbolic link (using Rock Ridge)."""
         # pycdlib doesn't directly expose a simple is_symlink().
         # We need to check for Rock Ridge 'SL' extension.
@@ -68,12 +83,14 @@ class IsoReader(ArchiveReader):
                     return True
         return False
 
-    def _convert_direntry_to_member(self, path: str, record: pycdlib.backends.pycdlibstructures.DirectoryRecord) -> ArchiveMember:
+    def _convert_direntry_to_member(
+        self, path: str, record: pycdlib.backends.pycdlibstructures.DirectoryRecord
+    ) -> ArchiveMember:
         """Converts a pycdlib DirectoryRecord to an ArchiveMember."""
         member_type = MemberType.OTHER
         if self._is_pycdlib_dir(record):
             member_type = MemberType.DIR
-        elif self._is_pycdlib_symlink(record): # Check for symlink before regular file
+        elif self._is_pycdlib_symlink(record):  # Check for symlink before regular file
             member_type = MemberType.LINK
         elif record.is_file():
             member_type = MemberType.FILE
@@ -86,7 +103,7 @@ class IsoReader(ArchiveReader):
                 # For consistency, one might want to specify UTC if the ISO timestamps are UTC.
                 # However, pycdlib already gives a datetime object.
                 mtime_dt = record.date_time
-            except ValueError: # Should not happen if record.date_time is valid
+            except ValueError:  # Should not happen if record.date_time is valid
                 mtime_dt = None
 
         link_target = None
@@ -98,43 +115,67 @@ class IsoReader(ArchiveReader):
                     # We need to join them. pycdlib doesn't seem to have a direct
                     # method to get the full link target path string easily.
                     # This is a simplified assumption; complex SL links might exist.
-                    link_target = "/".join(c.data.decode('utf-8', 'replace') for c in ext.sl_components)
+                    link_target = "/".join(
+                        c.data.decode("utf-8", "replace") for c in ext.sl_components
+                    )
                     break
 
         # pycdlib does not directly expose CRC32 or compression method for individual files
         # as ISO9660 is not a compressed format in the same way as zip/rar.
         return ArchiveMember(
             filename=path,
-            file_size=record.data_length if record.is_file() or self._is_pycdlib_symlink(record) else 0, # Symlinks also have a size for their target path
-            compress_size=record.data_length if record.is_file() or self._is_pycdlib_symlink(record) else 0, # No compression in ISO
+            file_size=record.data_length
+            if record.is_file() or self._is_pycdlib_symlink(record)
+            else 0,  # Symlinks also have a size for their target path
+            compress_size=record.data_length
+            if record.is_file() or self._is_pycdlib_symlink(record)
+            else 0,  # No compression in ISO
             mtime=mtime_dt,
             type=member_type,
-            mode=record.posix_mode() if record.has_rock_ridge() and hasattr(record, 'posix_mode') else None,
+            mode=record.posix_mode()
+            if record.has_rock_ridge() and hasattr(record, "posix_mode")
+            else None,
             link_target=link_target,
             raw_info=record,
         )
 
-    def _walk_iso(self, current_path: str = '/', current_iso_path: str = '/') -> Iterator[ArchiveMember]:
+    def _walk_iso(
+        self, current_path: str = "/", current_iso_path: str = "/"
+    ) -> Iterator[ArchiveMember]:
         """Helper to recursively walk the ISO directory structure."""
         if not self.iso:
             raise ArchiveyError("ISO not opened")
 
         try:
-            for child_name_bytes, record in self.iso.list_dir(iso_path=current_iso_path):
-                child_name = child_name_bytes.decode(self.iso.joliet_output_encoding if self.iso.has_joliet() else self.iso.iso_output_encoding, 'replace')
+            for child_name_bytes, record in self.iso.list_dir(
+                iso_path=current_iso_path
+            ):
+                child_name = child_name_bytes.decode(
+                    self.iso.joliet_output_encoding
+                    if self.iso.has_joliet()
+                    else self.iso.iso_output_encoding,
+                    "replace",
+                )
 
                 # Skip '.' and '..' entries
-                if child_name == '.' or child_name == '..':
+                if child_name == "." or child_name == "..":
                     continue
 
                 # Construct the full path for the member
                 # Ensure no double slashes if current_path is '/'
-                member_path = os.path.join(current_path.strip('/'), child_name).replace('\\', '/')
-                if not member_path.startswith('/') and current_path == '/': # Handle root children
-                     member_path = f"/{member_path}"
-                if current_path != '/' and not member_path.startswith(current_path): # ensure children of /foo are /foo/bar
-                    member_path = f"{current_path.rstrip('/')}/{child_name}".replace('\\', '/')
-
+                member_path = os.path.join(current_path.strip("/"), child_name).replace(
+                    "\\", "/"
+                )
+                if (
+                    not member_path.startswith("/") and current_path == "/"
+                ):  # Handle root children
+                    member_path = f"/{member_path}"
+                if current_path != "/" and not member_path.startswith(
+                    current_path
+                ):  # ensure children of /foo are /foo/bar
+                    member_path = f"{current_path.rstrip('/')}/{child_name}".replace(
+                        "\\", "/"
+                    )
 
                 # Clean path: remove leading slash for internal consistency if desired,
                 # but usually archive members are listed with full paths from root.
@@ -145,11 +186,15 @@ class IsoReader(ArchiveReader):
 
                 if self._is_pycdlib_dir(record):
                     # Construct the iso_path for pycdlib (needs trailing slash for dirs)
-                    next_iso_path = os.path.join(current_iso_path, child_name).replace('\\', '/') + '/'
+                    next_iso_path = (
+                        os.path.join(current_iso_path, child_name).replace("\\", "/")
+                        + "/"
+                    )
                     yield from self._walk_iso(member_path, next_iso_path)
         except Exception as e:
-            raise CorruptedArchiveError(f"Error walking ISO directory {current_iso_path}: {e}") from e
-
+            raise CorruptedArchiveError(
+                f"Error walking ISO directory {current_iso_path}: {e}"
+            ) from e
 
     def get_members(self) -> List[ArchiveMember]:
         if not self.iso:
@@ -164,18 +209,19 @@ class IsoReader(ArchiveReader):
         # pycdlib doesn't explicitly list the root dir record in list_dir('/')
         # We can try to get its record specifically.
         try:
-            root_record = self.iso.get_record(iso_path='/.')
+            root_record = self.iso.get_record(iso_path="/.")
             if root_record:
-                 yield self._convert_direntry_to_member('/', root_record)
-        except Exception as e:
+                yield self._convert_direntry_to_member("/", root_record)
+        except Exception:
             # This might fail if the ISO is very strange or empty.
             # Log or handle as appropriate. For now, proceed to walk.
             pass
 
-        yield from self._walk_iso(current_path='/', current_iso_path='/')
+        yield from self._walk_iso(current_path="/", current_iso_path="/")
 
-
-    def open(self, member: ArchiveMember | str, *, pwd: Optional[str | bytes] = None) -> IO[bytes]:
+    def open(
+        self, member: ArchiveMember | str, *, pwd: Optional[str | bytes] = None
+    ) -> IO[bytes]:
         if not self.iso:
             raise ArchiveyError("ISO not opened")
 
@@ -197,17 +243,19 @@ class IsoReader(ArchiveReader):
         # Convert our potentially clean path to the ISO path format pycdlib expects
         # This means it must start with '/' and use '/' as separator.
         iso_path = member_name
-        if not iso_path.startswith('/'):
-            iso_path = '/' + iso_path
+        if not iso_path.startswith("/"):
+            iso_path = "/" + iso_path
 
         # Ensure the path uses '/' as separator, which pycdlib expects.
-        iso_path = iso_path.replace('\\', '/')
+        iso_path = iso_path.replace("\\", "/")
 
         try:
             # Check if it's a directory, pycdlib can't extract directories as a stream
             record = self.iso.get_record(iso_path=iso_path)
             if record and self._is_pycdlib_dir(record):
-                raise IsADirectoryError(f"Cannot open directory '{member_name}' as a file stream.")
+                raise IsADirectoryError(
+                    f"Cannot open directory '{member_name}' as a file stream."
+                )
 
             file_data = self.iso.get_file_from_iso(iso_path=iso_path)
             return io.BytesIO(file_data)
@@ -215,7 +263,9 @@ class IsoReader(ArchiveReader):
             # This exception is often raised for "file not found"
             raise FileNotFoundError(f"File not found in ISO: {member_name}") from None
         except Exception as e:
-            raise ArchiveyError(f"Failed to open member '{member_name}' from ISO: {e}") from e
+            raise ArchiveyError(
+                f"Failed to open member '{member_name}' from ISO: {e}"
+            ) from e
 
     def get_archive_info(self) -> ArchiveInfo:
         if not self.iso:
@@ -229,17 +279,25 @@ class IsoReader(ArchiveReader):
         try:
             pvd = self.iso.pvd
             if pvd:
-                info.comment = pvd.volume_identifier.decode(self.iso.iso_output_encoding, 'replace').strip()
+                info.comment = pvd.volume_identifier.decode(
+                    self.iso.iso_output_encoding, "replace"
+                ).strip()
                 # Other PVD fields like system_identifier, volume_set_identifier,
                 # publisher_identifier, data_preparer_identifier, application_identifier
                 # could be added to extra_info if needed.
                 extra = {}
                 if pvd.system_identifier:
-                    extra["system_identifier"] = pvd.system_identifier.decode(self.iso.iso_output_encoding, 'replace').strip()
+                    extra["system_identifier"] = pvd.system_identifier.decode(
+                        self.iso.iso_output_encoding, "replace"
+                    ).strip()
                 if pvd.publisher_identifier:
-                    extra["publisher_identifier"] = pvd.publisher_identifier.decode(self.iso.iso_output_encoding, 'replace').strip()
+                    extra["publisher_identifier"] = pvd.publisher_identifier.decode(
+                        self.iso.iso_output_encoding, "replace"
+                    ).strip()
                 if pvd.application_identifier:
-                    extra["application_identifier"] = pvd.application_identifier.decode(self.iso.iso_output_encoding, 'replace').strip()
+                    extra["application_identifier"] = pvd.application_identifier.decode(
+                        self.iso.iso_output_encoding, "replace"
+                    ).strip()
                 if extra:
                     info.extra = extra
         except Exception:
@@ -257,7 +315,7 @@ class IsoReader(ArchiveReader):
         if self.iso:
             try:
                 self.iso.close()
-            except Exception as e:
+            except Exception:
                 # Log error or handle as needed, but don't let it prevent closing.
                 # print(f"Error closing ISO: {e}")
                 pass
@@ -283,17 +341,19 @@ class IsoReader(ArchiveReader):
             except FileNotFoundError:
                 return False
         elif hasattr(path_or_file, "read") and hasattr(path_or_file, "seek"):
-            f = path_or_file # type: ignore
+            f = path_or_file  # type: ignore
         else:
-            return False # Not a path or stream
+            return False  # Not a path or stream
 
         original_pos = -1
         if f.seekable():
             original_pos = f.tell()
             f.seek(cls.magic_offset)
-        else: # Non-seekable stream, cannot check at specific offset
-            if cls.magic_offset > 0: # If magic is not at the beginning for non-seekable stream
-                 return False
+        else:  # Non-seekable stream, cannot check at specific offset
+            if (
+                cls.magic_offset > 0
+            ):  # If magic is not at the beginning for non-seekable stream
+                return False
 
         try:
             sig = f.read(len(cls.magic))
