@@ -3,7 +3,7 @@ import io
 import lzma
 import stat
 import tarfile
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterator, List, Union
 
 from archivey.base_reader import (
@@ -97,7 +97,11 @@ class TarReader(ArchiveReader):
                     filename=filename,
                     file_size=info.size,
                     compress_size=None,
-                    mtime=datetime.fromtimestamp(info.mtime) if info.mtime else None,
+                    mtime=datetime.fromtimestamp(info.mtime, tz=timezone.utc).replace(
+                        tzinfo=None
+                    )
+                    if info.mtime
+                    else None,
                     type=(
                         MemberType.FILE
                         if info.isfile()
