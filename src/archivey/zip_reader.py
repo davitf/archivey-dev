@@ -1,7 +1,8 @@
+import logging
 import stat
 import struct
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import IO, Iterator, List, Optional
 
 from archivey.base_reader import ArchiveReader
@@ -17,12 +18,14 @@ from archivey.utils import decode_bytes_with_fallback, str_to_bytes
 # TODO: check if this is correct
 _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]
 
+logger = logging.getLogger(__name__)
+
 
 def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
     """Get the timestamp from a ZipInfo object, handling extended timestamp fields."""
     main_modtime = datetime(*zip_info.date_time)
-
     if not zip_info.extra:
+        logger.info(f"No extra: {main_modtime}")
         return main_modtime
 
     # Parse extended timestamp extra field (0x5455)
@@ -43,11 +46,18 @@ def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
 
                 # Convert to datetime
                 if mod_time > 0:
-                    return datetime.fromtimestamp(mod_time)
+                    extra_modtime = datetime.fromtimestamp(
+                        mod_time, tz=timezone.utc
+                    ).replace(tzinfo=None)
+                    logger.info(
+                        f"Modtime: main={main_modtime}, extra={extra_modtime} timestamp={mod_time}"
+                    )
+                    return extra_modtime
 
         # Skip this field: 4 bytes header + data_size
         pos += 4 + ln
 
+    logger.info(f"Modtime: main={main_modtime}")
     return main_modtime
 
 

@@ -5,7 +5,7 @@ import logging
 import lzma
 import os
 import struct
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterator, List
 
 from archivey.base_reader import ArchiveReader
@@ -62,7 +62,9 @@ def read_gzip_metadata(
         id1, id2, cm, flg, mtime_timestamp, xfl, os = struct.unpack("<4BIBB", header)
 
         if mtime_timestamp != 0:
-            extra_fields["mtime"] = datetime.fromtimestamp(mtime_timestamp)
+            extra_fields["mtime"] = datetime.fromtimestamp(
+                mtime_timestamp, tz=timezone.utc
+            ).replace(tzinfo=None)
             logger.info(
                 f"GZIP metadata: mtime_timestamp={mtime_timestamp}, mtime={extra_fields['mtime']}"
             )

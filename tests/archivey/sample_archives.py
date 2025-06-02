@@ -779,3 +779,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveFormatInfo]]] = [
 
 # Build all archive infos
 SAMPLE_ARCHIVES = build_archive_infos()
+
+BASIC_ARCHIVES = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["basic_nonsolid", "basic_solid"]
+)
