@@ -1,11 +1,12 @@
 import logging
+import os
 import stat
 import struct
 import zipfile
 from datetime import datetime, timezone
-from typing import IO, Iterator, List, Optional
+from typing import IO, List, Optional, cast
 
-from archivey.base_reader import ArchiveReader
+from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -61,17 +62,18 @@ def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
     return main_modtime
 
 
-class ZipReader(ArchiveReader):
+class ZipReader(BaseArchiveReaderRandomAccess):
     """Reader for ZIP archives."""
 
-    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
-        super().__init__(ArchiveFormat.ZIP)
-        self.archive_path = archive_path
+    def __init__(
+        self, archive_path: str | bytes | os.PathLike, *, pwd: bytes | str | None = None
+    ):
+        super().__init__(ArchiveFormat.ZIP, archive_path)
         self._members: list[ArchiveMember] | None = None
         self._format_info: ArchiveInfo | None = None
         self._pwd = pwd
         try:
-            self._archive = zipfile.ZipFile(archive_path, "r")
+            self._archive = zipfile.ZipFile(self.archive_path, "r")
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Invalid ZIP archive {archive_path}") from e
 
@@ -93,7 +95,7 @@ class ZipReader(ArchiveReader):
 
         if self._format_info is None:
             self._format_info = ArchiveInfo(
-                format=self.get_format(),
+                format=self.format,
                 is_solid=False,  # ZIP archives are never solid
                 comment=decode_bytes_with_fallback(
                     self._archive.comment, _ZIP_ENCODINGS
@@ -109,14 +111,6 @@ class ZipReader(ArchiveReader):
             )
         return self._format_info
 
-    def is_solid(self) -> bool:
-        """Check if the archive is solid (all files compressed together).
-
-        Returns:
-            bool: Always returns False for ZIP archives
-        """
-        return False
-
     def _get_link_target(self, info: zipfile.ZipInfo) -> Optional[str]:
         if self._archive is None:
             raise ValueError("Archive is closed")
@@ -131,79 +125,89 @@ class ZipReader(ArchiveReader):
         if self._archive is None:
             raise ValueError("Archive is closed")
 
-        if self._members is None:
-            self._members = []
-            for info in self._archive.infolist():
-                is_dir = info.is_dir()
-                compression_method = (
-                    {
-                        zipfile.ZIP_STORED: "store",
-                        zipfile.ZIP_DEFLATED: "deflate",
-                        zipfile.ZIP_BZIP2: "bzip2",
-                        zipfile.ZIP_LZMA: "lzma",
-                    }.get(info.compress_type, "unknown")
-                    if hasattr(info, "compress_type")
-                    else None
-                )
+        if self._members is not None:
+            return self._members
 
-                mode = info.external_attr >> 16
-                is_link = stat.S_ISLNK(mode)
+        self._members = []
+        for info in self._archive.infolist():
+            is_dir = info.is_dir()
+            compression_method = (
+                {
+                    zipfile.ZIP_STORED: "store",
+                    zipfile.ZIP_DEFLATED: "deflate",
+                    zipfile.ZIP_BZIP2: "bzip2",
+                    zipfile.ZIP_LZMA: "lzma",
+                }.get(info.compress_type, "unknown")
+                if hasattr(info, "compress_type")
+                else None
+            )
 
-                member = ArchiveMember(
-                    filename=info.filename,
-                    file_size=info.file_size,
-                    compress_size=info.compress_size,
-                    mtime=get_zipinfo_timestamp(info),
-                    type=MemberType.DIR
-                    if is_dir
-                    else MemberType.LINK
-                    if is_link
-                    else MemberType.FILE,
-                    mode=stat.S_IMODE(info.external_attr >> 16)
-                    if hasattr(info, "external_attr") and info.external_attr != 0
-                    else None,
-                    crc32=info.CRC if hasattr(info, "CRC") else None,
-                    compression_method=compression_method,
-                    comment=decode_bytes_with_fallback(info.comment, _ZIP_ENCODINGS)
-                    if info.comment
-                    else None,
-                    encrypted=bool(info.flag_bits & 0x1),
-                    extra={
-                        "compress_type": info.compress_type,
-                        "compress_size": info.compress_size,
-                        "create_system": info.create_system,
-                        "create_version": info.create_version,
-                        "extract_version": info.extract_version,
-                        "flag_bits": info.flag_bits,
-                        "volume": info.volume,
-                    },
-                    raw_info=info,
-                    link_target=self._get_link_target(info),
-                )
-                self._members.append(member)
+            mode = info.external_attr >> 16
+            is_link = stat.S_ISLNK(mode)
+
+            member = ArchiveMember(
+                filename=info.filename,
+                file_size=info.file_size,
+                compress_size=info.compress_size,
+                mtime=get_zipinfo_timestamp(info),
+                type=MemberType.DIR
+                if is_dir
+                else MemberType.LINK
+                if is_link
+                else MemberType.FILE,
+                mode=stat.S_IMODE(info.external_attr >> 16)
+                if hasattr(info, "external_attr") and info.external_attr != 0
+                else None,
+                crc32=info.CRC if hasattr(info, "CRC") else None,
+                compression_method=compression_method,
+                comment=decode_bytes_with_fallback(info.comment, _ZIP_ENCODINGS)
+                if info.comment
+                else None,
+                encrypted=bool(info.flag_bits & 0x1),
+                extra={
+                    "compress_type": info.compress_type,
+                    "compress_size": info.compress_size,
+                    "create_system": info.create_system,
+                    "create_version": info.create_version,
+                    "extract_version": info.extract_version,
+                    "flag_bits": info.flag_bits,
+                    "volume": info.volume,
+                },
+                raw_info=info,
+                link_target=self._get_link_target(info),
+            )
+            self._members.append(member)
 
         return self._members
 
     def open(
-        self, member: ArchiveMember, pwd: Optional[bytes | str] = None
+        self,
+        member_or_filename: ArchiveMember | str,
+        *,
+        pwd: Optional[bytes | str] = None,
     ) -> IO[bytes]:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
         try:
+            info_or_filename = (
+                cast(zipfile.ZipInfo, member_or_filename.raw_info)
+                if isinstance(member_or_filename, ArchiveMember)
+                else member_or_filename
+            )
+            filename = (
+                member_or_filename.filename
+                if isinstance(member_or_filename, ArchiveMember)
+                else member_or_filename
+            )
+            logger.info(f"Opening member {filename} with password {pwd}")
             return self._archive.open(
-                member.filename, pwd=str_to_bytes(pwd or self._pwd)
+                info_or_filename,
+                pwd=str_to_bytes(pwd or self._pwd),
             )
         except RuntimeError as e:
             if "password required" in str(e):
-                raise ArchiveEncryptedError(
-                    f"Member {member.filename} is encrypted"
-                ) from e
-            raise ArchiveError(f"Error reading member {member.filename}: {e}") from e
+                raise ArchiveEncryptedError(f"Member {filename} is encrypted") from e
+            raise ArchiveError(f"Error reading member {filename}: {e}") from e
         except zipfile.BadZipFile as e:
-            raise ArchiveCorruptedError(
-                f"Error reading member {member.filename}: {e}"
-            ) from e
-
-    def iter_members(self) -> Iterator[ArchiveMember]:
-        return iter(self.get_members())
+            raise ArchiveCorruptedError(f"Error reading member {filename}: {e}") from e

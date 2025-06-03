@@ -20,7 +20,7 @@ else:
     except ImportError:
         rarfile = None  # type: ignore[assignment]
 
-from archivey.base_reader import ArchiveReader
+from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -28,7 +28,7 @@ from archivey.exceptions import (
     PackageNotInstalledError,
 )
 from archivey.formats import ArchiveFormat
-from archivey.io_wrappers import ExceptionTranslatingIO
+from archivey.io_helpers import ErrorIOStream, ExceptionTranslatingIO
 from archivey.types import ArchiveInfo, ArchiveMember, MemberType
 from archivey.utils import bytes_to_str, str_to_bytes
 
@@ -177,12 +177,11 @@ def check_rarinfo_crc(
     return converted == rarinfo.CRC
 
 
-class BaseRarReader(ArchiveReader):
+class BaseRarReader(BaseArchiveReaderRandomAccess):
     """Base class for RAR archive readers."""
 
     def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
-        super().__init__(ArchiveFormat.RAR)
-        self.archive_path = archive_path
+        super().__init__(ArchiveFormat.RAR, archive_path)
         self._members: Optional[list[ArchiveMember]] = None
         self._format_info: Optional[ArchiveInfo] = None
 
@@ -297,9 +296,6 @@ class BaseRarReader(ArchiveReader):
 
         return self._members
 
-    def iter_members(self) -> Iterator[ArchiveMember]:
-        return iter(self.get_members())
-
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
 
@@ -325,7 +321,7 @@ class BaseRarReader(ArchiveReader):
             )
 
             self._format_info = ArchiveInfo(
-                format=self.get_format(),
+                format=self.format,
                 version=version,
                 is_solid=getattr(
                     self._archive, "is_solid", lambda: False
@@ -354,8 +350,13 @@ class RarReader(BaseRarReader):
         return None
 
     def open(
-        self, member: ArchiveMember, *, pwd: Optional[str | bytes] = None
+        self,
+        member_or_filename: ArchiveMember | str,
+        *,
+        pwd: Optional[str | bytes] = None,
     ) -> IO[bytes]:
+        member = self.get_member(member_or_filename)
+
         if member.encrypted:
             pwd_check = verify_rar5_password(
                 str_to_bytes(pwd or self._pwd), cast(rarfile.RarInfo, member.raw_info)
@@ -369,9 +370,11 @@ class RarReader(BaseRarReader):
             raise ValueError("Archive is closed")
 
         try:
-            # Apparently pwd can be either bytes or str
-            inner = self._archive.open(member.filename, pwd=bytes_to_str(pwd))
-            return ExceptionTranslatingIO(inner, self._exception_translator)  # type: ignore[arg-type]
+            # Apparently pwd can be either bytes or str.
+            inner: IO[bytes] = self._archive.open(
+                member.filename, pwd=bytes_to_str(pwd)
+            )  # type: ignore[arg-type]
+            return ExceptionTranslatingIO(inner, self._exception_translator)
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(
                 f"Error reading member {member.filename}"
@@ -460,24 +463,6 @@ class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
         if not matches:
             raise CRCMismatchError(self._filename)
 
-        # if expected_crc is None and self._expected_encrypted_crc is not None:
-        #     if self._pwd is None:
-        #         logger.warning(f"No password available for encrypted CRC in {self._filename}")
-        #         return
-
-        #     # Convert the computed CRC to the encrypted format
-        #     actual_orig = actual_crc
-        #     assert self._member.extra is not None
-        #     actual_crc = convert_crc_to_encrypted(actual_crc, self._pwd, self._member.extra.get("encryption_salt", b""), self._member.extra.get("kdf_count", 15))
-        #     expected_crc = self._expected_encrypted_crc
-        #     logger.info(f"Converted CRC: {self._filename} {self._pwd=} {actual_orig:08x} -> {actual_crc:08x} ; expected {expected_crc:08x}")
-        #     return
-
-        # assert expected_crc is not None
-
-        # if actual_crc != expected_crc:
-        #     raise CRCMismatchError(self._filename, expected_crc, actual_crc)
-
     def readable(self) -> bool:
         return True
 
@@ -511,25 +496,6 @@ class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
             super().close()
 
 
-class WrongPasswordMemberFile(RarStreamMemberFile):
-    def __init__(
-        self,
-        member: ArchiveMember,
-        shared_stream: IO[bytes],
-        lock: threading.Lock,
-        *,
-        pwd: bytes | None = None,
-    ):
-        super().__init__(member, shared_stream, lock, pwd=pwd)
-        self._closed = True
-
-    def read(self, n: int = -1) -> bytes:
-        raise ArchiveEncryptedError(f"Wrong password specified for {self._filename}")
-
-    def close(self) -> None:
-        pass
-
-
 class RarStreamReader(BaseRarReader):
     """Reader for RAR archives using the solid stream reader.
 
@@ -561,22 +527,7 @@ class RarStreamReader(BaseRarReader):
             self._proc.wait()
             self._proc = None
 
-    def _get_member_file(self, member: ArchiveMember) -> RarStreamMemberFile:
-        assert self._stream is not None
-        pwd_bytes = str_to_bytes(self._pwd) if self._pwd is not None else None
-        if (
-            member.encrypted
-            and verify_rar5_password(pwd_bytes, cast(rarfile.RarInfo, member.raw_info))
-            == PasswordCheckResult.INCORRECT
-        ):
-            # unrar silently skips encrypted files with incorrect passwords
-            return WrongPasswordMemberFile(
-                member, self._stream, self._lock, pwd=pwd_bytes
-            )
-
-        return RarStreamMemberFile(member, self._stream, self._lock, pwd=pwd_bytes)
-
-    def _open_stream(self) -> None:
+    def _open_unrar_stream(self) -> None:
         try:
             # Open an unrar process that outputs the contents of all files in the archive to stdout.
             password_args = ["-p" + self._pwd] if self._pwd else ["-p-"]
@@ -595,57 +546,33 @@ class RarStreamReader(BaseRarReader):
         except Exception as e:
             raise ArchiveError(f"Error opening RAR archive {self.archive_path}: {e}")
 
-    def open(
-        self, member: ArchiveMember, *, pwd: Optional[str | bytes] = None
-    ) -> IO[bytes]:
+    def _get_member_file(self, member: ArchiveMember) -> IO[bytes]:
+        assert self._stream is not None
+        pwd_bytes = str_to_bytes(self._pwd) if self._pwd is not None else None
+        if (
+            member.encrypted
+            and verify_rar5_password(pwd_bytes, cast(rarfile.RarInfo, member.raw_info))
+            == PasswordCheckResult.INCORRECT
+        ):
+            # unrar silently skips encrypted files with incorrect passwords
+            return ErrorIOStream(
+                ArchiveEncryptedError(f"Wrong password specified for {member.filename}")
+            )
+
+        return RarStreamMemberFile(member, self._stream, self._lock, pwd=pwd_bytes)
+
+    def iter_members(self) -> Iterator[tuple[ArchiveMember, IO[bytes]]]:
         if self._archive is None or self._members is None:
             raise ValueError("Archive is closed")
 
-        if pwd is not None:
-            pwd = bytes_to_str(pwd)
-            if self._pwd is None:
-                if self._stream is not None:
-                    raise ValueError(
-                        "RarStreamReader needs the password to be set in the constructor or first open() call"
-                    )
-                self._pwd = pwd
+        for member in self._members:
+            stream = self._get_member_file(member)
+            yield member, stream
+            stream.close()
 
-            elif pwd != self._pwd:
-                raise ValueError("RarStreamReader does not support different passwords")
-
-        if self._pwd is not None:
-            # Check if the password is correct for the member
-            if member.encrypted:
-                pwd_check = verify_rar5_password(
-                    str_to_bytes(self._pwd), cast(rarfile.RarInfo, member.raw_info)
-                )
-                if pwd_check == PasswordCheckResult.INCORRECT:
-                    raise ArchiveEncryptedError(
-                        f"Wrong password specified for {member.filename}"
-                    )
-
-        if self._stream is None:
-            self._open_stream()
-
-        try:
-            index = self._members.index(member)
-        except ValueError:
-            raise ValueError("Requested member is not part of this archive")
-
-        if index <= self._active_index:
-            raise ValueError(
-                f"Cannot re-open already closed/skipped file: {member.filename}"
-            )
-
-        # Drain previous active file
-        if self._active_member:
-            self._active_member.close()
-
-        # Skip any intermediate files between last read and this one
-        for i in range(self._active_index + 1, index):
-            self._get_member_file(self._members[i]).close()
-
-        f = self._get_member_file(member)
-        self._active_member = f
-        self._active_index = index
-        return f
+    def open(
+        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
+    ) -> IO[bytes]:
+        raise NotImplementedError(
+            "RarStreamReader does not support opening specific members"
+        )

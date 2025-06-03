@@ -41,7 +41,19 @@ class ArchiveNotSupportedError(ArchiveError):
     pass
 
 
+class ArchiveMemberCannotBeOpenedError(ArchiveError):
+    """Raised when a requested member cannot be opened."""
+
+    pass
+
+
 class PackageNotInstalledError(ArchiveError):
     """Raised when a required library is not installed."""
+
+    pass
+
+
+class ArchiveIOError(ArchiveError):
+    """Raised when an I/O error occurs."""
 
     pass

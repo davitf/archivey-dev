@@ -14,11 +14,11 @@ else:
     except ImportError:
         pycdlib = None  # type: ignore[assignment]
 
-from archivey.base_reader import ArchiveReader
+from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 
-class IsoReader(ArchiveReader):
+class IsoReader(BaseArchiveReaderRandomAccess):
     """
     Reads ISO 9660 archives using the pycdlib library.
     """
@@ -29,18 +29,18 @@ class IsoReader(ArchiveReader):
 
     def __init__(
         self,
-        archive: str | bytes,
+        archive_path: str | bytes,
         password: Optional[str | bytes] = None,
         encoding: Optional[
             str
         ] = None,  # ISO 9660 typically uses its own encoding system.
     ):
-        super().__init__(archive)
+        super().__init__(ArchiveFormat.ISO, archive_path)
         self.iso: Optional[pycdlib.pycdlib.PyCdlib] = None
         self.archive_path_obj: Optional[Path] = None
 
         self.iso = pycdlib.pycdlib.PyCdlib()
-        self.iso.open(archive)
+        self.iso.open(self.archive_path)
 
         if password:
             # ISO 9660 does not natively support encryption in a way pycdlib handles.
@@ -310,61 +310,3 @@ class IsoReader(ArchiveReader):
                 # print(f"Error closing ISO: {e}")
                 pass
             self.iso = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    @classmethod
-    def check_format_by_signature(cls, path_or_file: str | bytes | IO[bytes]) -> bool:
-        """
-        Checks if the given file matches the ISO 9660 signature.
-        """
-        close_after = False
-        f: IO[bytes]
-        if isinstance(path_or_file, (str, bytes, os.PathLike)):
-            try:
-                f = open(path_or_file, "rb")
-                close_after = True
-            except FileNotFoundError:
-                return False
-        elif hasattr(path_or_file, "read") and hasattr(path_or_file, "seek"):
-            f = path_or_file  # type: ignore
-        else:
-            return False  # Not a path or stream
-
-        original_pos = -1
-        if f.seekable():
-            original_pos = f.tell()
-            f.seek(cls.magic_offset)
-        else:  # Non-seekable stream, cannot check at specific offset
-            if (
-                cls.magic_offset > 0
-            ):  # If magic is not at the beginning for non-seekable stream
-                return False
-
-        try:
-            sig = f.read(len(cls.magic))
-            return sig == cls.magic
-        except Exception:
-            return False
-        finally:
-            if f.seekable() and original_pos != -1:
-                f.seek(original_pos)
-            if close_after:
-                f.close()
-
-    @classmethod
-    def check_format_by_path(cls, path: str | bytes | os.PathLike) -> bool:
-        """
-        Checks if the given path has a common ISO extension.
-        """
-        if isinstance(path, (str, bytes, os.PathLike)):
-            return Path(path).suffix.lower() == ".iso"
-        return False
-
-    @classmethod
-    def get_extra_extensions(cls) -> list[str]:
-        return [".iso"]

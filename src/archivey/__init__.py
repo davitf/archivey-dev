@@ -1,4 +1,9 @@
 from archivey.archive_stream import ArchiveStream
+from archivey.dependency_checker import (
+    DependencyVersions,
+    format_dependency_versions,
+    get_dependency_versions,
+)
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -29,4 +34,7 @@ __all__ = [
     "ArchiveFormat",
     "detect_archive_format_by_signature",
     "MemberType",
+    "DependencyVersions",
+    "get_dependency_versions",
+    "format_dependency_versions",
 ]

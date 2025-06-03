@@ -1,27 +1,34 @@
 import gzip
-import io
+import logging
 import lzma
 import stat
 import tarfile
 from datetime import datetime, timezone
-from typing import Iterator, List, Union
+from typing import IO, Callable, Iterator, List, Union, cast
 
 from archivey.base_reader import (
     ArchiveInfo,
     ArchiveMember,
-    ArchiveReader,
+    BaseArchiveReaderRandomAccess,
 )
-from archivey.exceptions import ArchiveCorruptedError, ArchiveMemberNotFoundError
+from archivey.exceptions import (
+    ArchiveCorruptedError,
+    ArchiveMemberCannotBeOpenedError,
+)
+from archivey.io_helpers import ErrorIOStream
 from archivey.types import ArchiveFormat, MemberType
 
+logger = logging.getLogger(__name__)
 
-class TarReader(ArchiveReader):
+
+class TarReader(BaseArchiveReaderRandomAccess):
     """Reader for TAR archives and compressed TAR archives."""
 
     def __init__(
         self,
         archive_path: str,
         format: ArchiveFormat,
+        streaming_only: bool = False,
         *,
         pwd: bytes | str | None = None,
     ):
@@ -35,8 +42,8 @@ class TarReader(ArchiveReader):
         if pwd is not None:
             raise ValueError("TAR format does not support password protection.")
 
-        super().__init__(format)
-        self.archive_path = archive_path
+        super().__init__(format, archive_path)
+        self._streaming_only = streaming_only
         self._members = None
         self._format_info = None
 
@@ -50,6 +57,11 @@ class TarReader(ArchiveReader):
                 ArchiveFormat.TAR_LZ4: "r:lz4",
             }
             mode: str = mode_dict.get(format, "r")
+            if streaming_only:
+                if ":" in mode:
+                    mode = mode.replace(":", "|")
+                else:
+                    mode += "|"
 
             # Pylance knows the mode argument can only accept some specific values,
             # and doesn't understand that we're building one of them above.
@@ -70,6 +82,63 @@ class TarReader(ArchiveReader):
             self._archive = None
             self._members = None
 
+    def get_members_if_available(self) -> List[ArchiveMember] | None:
+        if self._streaming_only:
+            return None
+        return self.get_members()
+
+    def _tarinfo_to_archive_member(self, info: tarfile.TarInfo) -> ArchiveMember:
+        # Get compression method based on format
+        compression_method: str | None = {
+            ArchiveFormat.TAR: "store",
+            ArchiveFormat.TAR_GZ: ArchiveFormat.GZIP,
+            ArchiveFormat.TAR_BZ2: ArchiveFormat.BZIP2,
+            ArchiveFormat.TAR_XZ: ArchiveFormat.XZ,
+            ArchiveFormat.TAR_ZSTD: ArchiveFormat.ZSTD,
+            ArchiveFormat.TAR_LZ4: ArchiveFormat.LZ4,
+        }.get(self.format, None)
+
+        filename = info.name
+        if info.isdir() and not filename.endswith("/"):
+            filename += "/"
+
+        return ArchiveMember(
+            filename=filename,
+            file_size=info.size,
+            compress_size=None,
+            mtime=datetime.fromtimestamp(info.mtime, tz=timezone.utc).replace(
+                tzinfo=None
+            )
+            if info.mtime
+            else None,
+            type=(
+                MemberType.FILE
+                if info.isfile()
+                else MemberType.DIR
+                if info.isdir()
+                else MemberType.LINK
+                if info.issym() or info.islnk()
+                else MemberType.OTHER
+            ),
+            mode=stat.S_IMODE(info.mode) if hasattr(info, "mode") else None,
+            link_target=info.linkname if info.issym() or info.islnk() else None,
+            crc32=None,  # TAR doesn't have CRC
+            compression_method=compression_method,
+            extra={
+                "type": info.type,
+                "mode": info.mode,
+                "uid": info.uid,
+                "gid": info.gid,
+                "uname": info.uname,
+                "gname": info.gname,
+                "linkname": info.linkname,
+                "linkpath": info.linkpath,
+                "devmajor": info.devmajor,
+                "devminor": info.devminor,
+            },
+            raw_info=info,
+        )
+
     def get_members(self) -> List[ArchiveMember]:
         if self._archive is None:
             raise ValueError("Archive is closed")
@@ -77,93 +146,47 @@ class TarReader(ArchiveReader):
         if self._members is None:
             self._members = []
             for info in self._archive.getmembers():
-                # Get compression method based on format
-                compression_method = None
-                if self.get_format() != ArchiveFormat.TAR:
-                    # Map format to compression method
-                    compression_method = {
-                        ArchiveFormat.TAR_GZ: ArchiveFormat.GZIP,
-                        ArchiveFormat.TAR_BZ2: ArchiveFormat.BZIP2,
-                        ArchiveFormat.TAR_XZ: ArchiveFormat.XZ,
-                        ArchiveFormat.TAR_ZSTD: ArchiveFormat.ZSTD,
-                        ArchiveFormat.TAR_LZ4: ArchiveFormat.LZ4,
-                    }.get(self.get_format())
-
-                filename = info.name
-                if info.isdir() and not filename.endswith("/"):
-                    filename += "/"
-
-                member = ArchiveMember(
-                    filename=filename,
-                    file_size=info.size,
-                    compress_size=None,
-                    mtime=datetime.fromtimestamp(info.mtime, tz=timezone.utc).replace(
-                        tzinfo=None
-                    )
-                    if info.mtime
-                    else None,
-                    type=(
-                        MemberType.FILE
-                        if info.isfile()
-                        else MemberType.DIR
-                        if info.isdir()
-                        else MemberType.LINK
-                        if info.issym() or info.islnk()
-                        else MemberType.OTHER
-                    ),
-                    mode=stat.S_IMODE(info.mode) if hasattr(info, "mode") else None,
-                    link_target=info.linkname if info.issym() or info.islnk() else None,
-                    crc32=None,  # TAR doesn't have CRC
-                    compression_method=compression_method,
-                    extra={
-                        "type": info.type,
-                        "mode": info.mode,
-                        "uid": info.uid,
-                        "gid": info.gid,
-                        "uname": info.uname,
-                        "gname": info.gname,
-                        "linkname": info.linkname,
-                        "linkpath": info.linkpath,
-                        "devmajor": info.devmajor,
-                        "devminor": info.devminor,
-                    },
-                    raw_info=info,
-                )
-                self._members.append(member)
+                self._members.append(self._tarinfo_to_archive_member(info))
 
         return self._members
 
     def open(
-        self, member: Union[str, ArchiveMember], *, pwd: bytes | str | None = None
-    ) -> io.IOBase:
+        self,
+        member_or_filename: Union[str, ArchiveMember],
+        *,
+        pwd: bytes | str | None = None,
+    ) -> IO[bytes]:
         if self._archive is None:
             raise ValueError("Archive is closed")
+        if self._streaming_only:
+            raise ValueError(
+                "Archive opened in streaming mode does not support opening specific members."
+            )
 
         if pwd is not None:
             raise ValueError("TAR format does not support password protection.")
 
-        if isinstance(member, str):
-            try:
-                info = self._archive.getmember(member)
-            except KeyError:
-                raise ArchiveMemberNotFoundError(
-                    f"Member {member} not found in archive"
-                )
-        else:
-            try:
-                info = self._archive.getmember(member.filename)
-            except KeyError:
-                raise ArchiveMemberNotFoundError(
-                    f"Member {member.filename} not found in archive"
-                )
+        info_or_filename = (
+            cast(tarfile.TarInfo, member_or_filename.raw_info)
+            if isinstance(member_or_filename, ArchiveMember)
+            else member_or_filename
+        )
+        filename = (
+            member_or_filename.filename
+            if isinstance(member_or_filename, ArchiveMember)
+            else member_or_filename
+        )
 
         try:
-            return self._archive.extractfile(info)
-        except tarfile.ReadError as e:
-            raise ArchiveCorruptedError(f"Error reading member {info.name}: {e}")
+            stream = self._archive.extractfile(info_or_filename)
+            if stream is None:
+                raise ArchiveMemberCannotBeOpenedError(
+                    f"Member {filename} cannot be opened"
+                )
+            return stream
 
-    def iter_members(self) -> Iterator[ArchiveMember]:
-        return iter(self.get_members())
+        except tarfile.ReadError as e:
+            raise ArchiveCorruptedError(f"Error reading member {filename}: {e}")
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -175,11 +198,10 @@ class TarReader(ArchiveReader):
             raise ValueError("Archive is closed")
 
         if self._format_info is None:
-            format = self.get_format()
+            format = self.format
             self._format_info = ArchiveInfo(
                 format=format,
-                is_solid=format
-                != ArchiveFormat.TAR,  # True for all compressed TAR formats
+                is_solid=format != ArchiveFormat.TAR,  # True for compressed TAR formats
                 extra={
                     "format_version": self._archive.format
                     if hasattr(self._archive, "format")
@@ -191,12 +213,20 @@ class TarReader(ArchiveReader):
             )
         return self._format_info
 
-    def is_solid(self) -> bool:
-        """Check if the archive is solid (all files compressed together).
+    def iter_members(
+        self, filter: Callable[[ArchiveMember], bool] | None = None
+    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+        if self._archive is None:
+            raise ValueError("Archive is closed")
 
-        Returns:
-            bool: True for compressed TAR formats (gz, bz2, xz, etc.), False for plain TAR
-        """
-        # Compressed TAR formats are effectively solid as they require sequential decompression
-        format = self.get_format()
-        return format != ArchiveFormat.TAR  # True for all compressed TAR formats
+        # TODO: check if this actually works in streaming mode
+        for tarinfo in self._archive:
+            member = self._tarinfo_to_archive_member(tarinfo)
+            if filter is None or filter(member):
+                try:
+                    stream = self.open(member)
+                    yield member, stream
+                    stream.close()
+                except Exception as e:
+                    logger.info(f"Error opening member {member.filename}: {e}")
+                    yield member, ErrorIOStream(e)

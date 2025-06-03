@@ -1,15 +1,19 @@
+import logging
 import os
 import stat
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import IO, Any, Iterator, List, Optional
+from typing import IO, Iterator, List, Optional
 
-from archivey.base_reader import ArchiveReader
-from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
+from archivey.base_reader import BaseArchiveReaderRandomAccess
+from archivey.exceptions import ArchiveError, ArchiveIOError, ArchiveMemberNotFoundError
+from archivey.io_helpers import ErrorIOStream
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
+logger = logging.getLogger(__name__)
 
-class FolderReader(ArchiveReader):
+
+class FolderReader(BaseArchiveReaderRandomAccess):
     """
     Reads a folder on the filesystem as an archive.
     """
@@ -20,25 +24,15 @@ class FolderReader(ArchiveReader):
 
     def __init__(
         self,
-        archive: str | bytes | os.PathLike,
-        password: Optional[str | bytes] = None,  # Not used for folders
-        encoding: Optional[str] = None,  # Filesystem encoding is handled by OS
+        archive_path: str | bytes | os.PathLike,
     ):
-        super().__init__(archive, password=password, encoding=encoding)  # type: ignore
+        super().__init__(ArchiveFormat.FOLDER, archive_path)
+        self.path = Path(self.archive_path).resolve()  # Store absolute path
 
-        if isinstance(archive, (str, bytes, os.PathLike)):
-            self.archive_path = Path(archive).resolve()  # Store absolute path
-        else:
-            # FolderReader fundamentally needs a path, not a stream.
-            raise TypeError("FolderReader requires a file system path, not a stream.")
+        if not self.path.is_dir():
+            raise ValueError(f"Path is not a directory: {self.path}")
 
-        if not self.archive_path.is_dir():
-            raise ValueError(f"Path is not a directory: {self.archive_path}")
-
-        # Password and encoding are generally not applicable here.
-        # self.encoding might be used for filename encoding if needed, but Python 3 handles unicode paths.
-
-    def _get_member_type(self, path: Path, lstat_result: os.stat_result) -> MemberType:
+    def _get_member_type(self, lstat_result: os.stat_result) -> MemberType:
         """Determines the MemberType from a path and its lstat result."""
         if stat.S_ISDIR(lstat_result.st_mode):
             return MemberType.DIR
@@ -48,23 +42,19 @@ class FolderReader(ArchiveReader):
             return MemberType.FILE
         return MemberType.OTHER
 
-    def _convert_entry_to_member(
-        self, entry_path: Path, root_path: Path
-    ) -> ArchiveMember:
+    def _convert_entry_to_member(self, entry_path: Path) -> ArchiveMember:
         """Converts a filesystem path to an ArchiveMember."""
+        filename = str(entry_path.relative_to(self.path)).replace(os.sep, "/")
+
         try:
             # Use lstat to get info about the link itself, not the target
-            lstat_result = entry_path.lstat()
-            # For actual file size and potentially other details if not a link, stat() is useful
-            stat_result = (
-                entry_path.stat() if not entry_path.is_symlink() else lstat_result
-            )
+            stat_result = entry_path.lstat()
 
         except OSError as e:
             # Could be a broken symlink or permission error
             # Create a placeholder member
             return ArchiveMember(
-                filename=str(entry_path.relative_to(root_path)).replace(os.sep, "/"),
+                filename=filename,
                 file_size=0,
                 compress_size=0,
                 mtime=None,
@@ -73,17 +63,7 @@ class FolderReader(ArchiveReader):
                 raw_info=e,
             )
 
-        member_type = self._get_member_type(entry_path, lstat_result)
-
-        # Relative path from the root of the "archive" (the folder)
-        # Ensure consistent '/' separator for archive paths
-        relative_path_str = str(entry_path.relative_to(root_path)).replace(os.sep, "/")
-
-        file_size = stat_result.st_size if member_type == MemberType.FILE else 0
-        # For symlinks, file_size is often the length of the target path string.
-        # Here, we'll keep it consistent with how other archive formats might report symlink size (often 0 or target path length)
-        if member_type == MemberType.LINK:
-            file_size = lstat_result.st_size
+        member_type = self._get_member_type(stat_result)
 
         link_target: Optional[str] = None
         if member_type == MemberType.LINK:
@@ -93,76 +73,66 @@ class FolderReader(ArchiveReader):
                 link_target = "Error reading link target"
 
         return ArchiveMember(
-            filename=relative_path_str,
-            file_size=file_size,
-            compress_size=file_size,  # No compression for folders
-            mtime=datetime.fromtimestamp(lstat_result.st_mtime, tz=timezone.utc),
+            filename=filename,
+            file_size=stat_result.st_size,
+            compress_size=stat_result.st_size,  # No compression for folders
+            mtime=datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc),
             type=member_type,
-            mode=lstat_result.st_mode,
+            mode=stat_result.st_mode,
             link_target=link_target,
-            raw_info=lstat_result,  # Store stat result for potential further use
-            # CRC32 and compression_method are not applicable
         )
 
-    def iter_members(self) -> Iterator[ArchiveMember]:
-        if not self.archive_path.is_dir():
-            raise ArchiveError(f"Archive path is not a directory: {self.archive_path}")
-
-        # Yield the root directory itself first
-        # This is a common convention for archive listings
-        try:
-            root_stat = (
-                self.archive_path.lstat()
-            )  # lstat for consistency, though for root it's likely not a symlink itself
-            yield ArchiveMember(
-                filename="",  # Root of the archive
-                file_size=0,  # Directories usually have 0 size or size of their entries list
-                compress_size=0,
-                mtime=datetime.fromtimestamp(root_stat.st_mtime, tz=timezone.utc),
-                type=MemberType.DIR,
-                mode=root_stat.st_mode,
-                raw_info=root_stat,
-            )
-        except OSError as e:
-            # TODO: better exception type
-            raise ArchiveError(
-                f"Cannot stat root directory {self.archive_path}: {e}"
-            ) from e
-
-        for root, dirs, files in os.walk(
-            self.archive_path, topdown=True, followlinks=False
+    def _iter_member_infos(self) -> Iterator[ArchiveMember]:
+        for dirpath, dirnames, filenames in self.path.walk(
+            top_down=True, follow_symlinks=False
         ):
-            current_root_path = Path(root)
+            for dirname in dirnames:
+                yield self._convert_entry_to_member(dirpath / dirname)
+            for filename in filenames:
+                yield self._convert_entry_to_member(dirpath / filename)
 
-            # Process directories
-            for dir_name in sorted(dirs):  # Sort for consistent order
-                dir_path = current_root_path / dir_name
-                yield self._convert_entry_to_member(dir_path, self.archive_path)
+    def iter_members(self) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+        for member in self._iter_member_infos():
+            if member.is_file:
+                try:
+                    stream = self.open(member)
+                except (IOError, OSError) as e:
+                    logger.info(f"Error opening member {member.filename}: {e}")
+                    archive_error = ArchiveIOError(
+                        f"Error opening member {member.filename}: {e}",
+                    )
+                    archive_error.__cause__ = e
+                    stream = ErrorIOStream(archive_error)
+            else:
+                stream = None
 
-            # Process files
-            for file_name in sorted(files):  # Sort for consistent order
-                file_path = current_root_path / file_name
-                yield self._convert_entry_to_member(file_path, self.archive_path)
+            yield member, stream
+            if stream is not None:
+                try:
+                    stream.close()
+                except Exception as e:
+                    logger.info(f"Error closing member {member.filename}: {e}")
 
     def get_members(self) -> List[ArchiveMember]:
-        return list(self.iter_members())
+        return list(self._iter_member_infos())
 
     def open(
-        self, member: ArchiveMember | str, *, pwd: Optional[str | bytes] = None
+        self,
+        member_or_filename: ArchiveMember | str,
+        *,
+        pwd: Optional[str | bytes] = None,
     ) -> IO[bytes]:
         # pwd is ignored for FolderReader
 
-        member_name: str
-        if isinstance(member, ArchiveMember):
-            member_name = member.filename
-        elif isinstance(member, str):
-            member_name = member
-        else:
-            raise TypeError("member must be an ArchiveMember or a string path")
+        member_name = (
+            member_or_filename.filename
+            if isinstance(member_or_filename, ArchiveMember)
+            else member_or_filename
+        )
 
         # Convert archive path (with '/') to OS-specific path
         os_specific_member_path = member_name.replace("/", os.sep)
-        full_path = self.archive_path / os_specific_member_path
+        full_path = self.path / os_specific_member_path
 
         if not full_path.exists():
             raise ArchiveMemberNotFoundError(
@@ -170,7 +140,7 @@ class FolderReader(ArchiveReader):
             )
 
         if full_path.is_dir():
-            raise IsADirectoryError(
+            raise ArchiveError(
                 f"Cannot open directory '{member_name}' as a file stream."
             )
 
@@ -197,7 +167,7 @@ class FolderReader(ArchiveReader):
             ) from e
 
         try:
-            return open(full_path, "rb")
+            return full_path.open("rb")
         except OSError as e:
             raise ArchiveError(
                 # TODO: better exception type
@@ -215,54 +185,3 @@ class FolderReader(ArchiveReader):
         # No-op for FolderReader, as there's no main file handle to close.
         # Individual files are opened and closed in the open() method.
         pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    # @classmethod
-    # def check_format_by_signature(cls, path_or_file: PathType) -> bool:
-    #     # Folders don't have signatures in the traditional sense.
-    #     # This method might always return False, or True if path_or_file is a directory.
-    #     # For consistency with how `detect_archive_format` works, it relies on `os.path.isdir`.
-    #     # This check is primarily for file-based signatures.
-    #     if isinstance(path_or_file, (str, bytes, os.PathLike)):
-    #         return Path(path_or_file).is_dir()
-    #     return False  # Cannot determine if a stream is a "folder"
-
-    # @classmethod
-    # def check_format_by_path(cls, path: PathType) -> bool:
-    #     """
-    #     Checks if the given path is a directory.
-    #     """
-    #     if isinstance(path, (str, bytes, os.PathLike)):
-    #         p = Path(path)
-    #         return p.is_dir()
-    #     return False
-
-    @classmethod
-    def get_extra_extensions(cls) -> list[str]:
-        # Folders don't have extensions.
-        return []
-
-    # The init of ArchiveReader expects these, even if None.
-    # We override them here to ensure they are set for the class.
-    _supported_compressions: Optional[List[str]] = None
-    _supported_encryption_methods: Optional[List[str]] = None
-    _supported_encryption_strengths: Optional[List[int]] = None
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        # Ensure the format is correctly set from the class attribute
-        # The super().__init__ in ArchiveReader does not take format as arg
-        # but sets self._format from type(self).format
-        # So this is mostly for clarity or if we directly manipulated self._format
-        super().__init_subclass__(**kwargs)  # type: ignore
-        if not hasattr(cls, "format") or cls.format != ArchiveFormat.FOLDER:
-            raise TypeError(
-                "FolderReader subclasses must have format set to ArchiveFormat.FOLDER"
-            )
-
-
-ArchiveReader.register(FolderReader)  # type: ignore

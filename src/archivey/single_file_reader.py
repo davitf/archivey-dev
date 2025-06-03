@@ -6,9 +6,9 @@ import lzma
 import os
 import struct
 from datetime import datetime, timezone
-from typing import Iterator, List
+from typing import List
 
-from archivey.base_reader import ArchiveReader
+from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
@@ -196,7 +196,7 @@ class BZ2Wrapper(io.IOBase):
         self._fileobj.close()
 
 
-class SingleFileReader(ArchiveReader):
+class SingleFileReader(BaseArchiveReaderRandomAccess):
     """Reader for raw compressed files (gz, bz2, xz, zstd, lz4)."""
 
     def __init__(
@@ -216,7 +216,7 @@ class SingleFileReader(ArchiveReader):
             format: The format of the archive. If None, will be detected from the file extension.
             **kwargs: Additional options (ignored)
         """
-        super().__init__(format)
+        super().__init__(format, archive_path)
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
         self.archive_path = archive_path
@@ -268,7 +268,7 @@ class SingleFileReader(ArchiveReader):
             compress_size=os.path.getsize(archive_path),
             mtime=mtime,
             type=MemberType.FILE,
-            compression_method=self.get_format().value,
+            compression_method=self.format.value,
             crc32=None,
         )
 
@@ -288,7 +288,7 @@ class SingleFileReader(ArchiveReader):
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format."""
         return ArchiveInfo(
-            format=self.get_format().value,
+            format=self.format.value,
             is_solid=False,
             extra=None,
         )
@@ -302,6 +302,3 @@ class SingleFileReader(ArchiveReader):
         if self.ext == ".bz2":
             return BZ2Wrapper(fileobj)
         return fileobj
-
-    def iter_members(self) -> Iterator[ArchiveMember]:
-        return iter([self.member])
