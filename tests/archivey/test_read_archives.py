@@ -200,6 +200,55 @@ def check_read_archive(
         assert not missing_files, f"Missing files: {missing_files}"
         assert not extra_files, f"Extra files: {extra_files}"
 
+        # Test random access for suitable archive types
+        if sample_archive.format_info.format in [
+            ArchiveFormat.ZIP,
+            ArchiveFormat.RAR,
+            ArchiveFormat.SEVENZIP,
+            ArchiveFormat.TAR,
+            ArchiveFormat.TAR_GZ,
+            ArchiveFormat.TAR_BZ2,
+            ArchiveFormat.TAR_XZ,
+            ArchiveFormat.TAR_LZ4,
+            ArchiveFormat.TAR_ZST,
+        ]:
+            file_members_for_random_access = [
+                f for f in sample_archive.contents.files if f.type == MemberType.FILE
+            ]
+            if file_members_for_random_access:
+                indices_to_test = []
+                if len(file_members_for_random_access) > 0:
+                    indices_to_test.append(0)
+                if len(file_members_for_random_access) > 1:
+                    indices_to_test.append(len(file_members_for_random_access) // 2)
+                if len(file_members_for_random_access) > 2 and len(file_members_for_random_access) -1 not in indices_to_test:
+                    indices_to_test.append(len(file_members_for_random_access) - 1)
+
+                # Ensure unique indices if list is small
+                indices_to_test = sorted(list(set(indices_to_test)))
+
+
+                for i in indices_to_test:
+                    sample_file_to_open = file_members_for_random_access[i]
+                    # print(f"Attempting to randomly open: {sample_file_to_open.name}")
+                    try:
+                        with archive.open(
+                            sample_file_to_open.name,
+                            pwd=sample_file_to_open.password
+                            if constructor_password is None
+                            else None,
+                        ) as f:
+                            contents = f.read()
+                            assert contents == sample_file_to_open.contents, (
+                                f"Random access content mismatch for {sample_file_to_open.name} "
+                                f"in {sample_archive.filename}"
+                            )
+                    except Exception as e:
+                        pytest.fail(
+                            f"Random access failed for {sample_file_to_open.name} "
+                            f"in {sample_archive.filename}: {e}"
+                        )
+
 
 @pytest.mark.parametrize(
     "sample_archive",
@@ -370,6 +419,10 @@ BASIC_7Z_ARCHIVE = filter_archives(
     SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["7z"]
 )[0]
 
+DUMMY_ISO_ARCHIVE_PATH = (
+    pathlib.Path(__file__).parent.parent / "test_archives" / "dummy.iso"
+)
+
 
 @patch("archivey.rar_reader.rarfile", None)
 @pytest.mark.missing_rarfile
@@ -387,6 +440,22 @@ def test_py7zr_not_installed_raises_exception():
     with pytest.raises(PackageNotInstalledError) as excinfo:
         ArchiveStream(BASIC_7Z_ARCHIVE.get_archive_path())
     assert "py7zr package is not installed" in str(excinfo.value)
+
+
+@patch("archivey.iso_reader.pycdlib", None)
+@pytest.mark.missing_pycdlib
+def test_pycdlib_not_installed_raises_exception():
+    """Test that PackageNotInstalledError is raised for .iso when pycdlib is not installed."""
+    DUMMY_ISO_ARCHIVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    DUMMY_ISO_ARCHIVE_PATH.touch(exist_ok=True)
+    try:
+        with pytest.raises(PackageNotInstalledError) as excinfo:
+            ArchiveStream(DUMMY_ISO_ARCHIVE_PATH)
+        assert "pycdlib package is not installed. Please install it to work with ISO archives." in str(
+            excinfo.value
+        )
+    finally:
+        DUMMY_ISO_ARCHIVE_PATH.unlink(missing_ok=True)
 
 
 @patch("archivey.rar_reader.rarfile._have_crypto", 0)
