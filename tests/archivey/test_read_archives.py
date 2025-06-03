@@ -416,7 +416,3 @@ def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files()
         pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
     ) as archive:
         assert set(archive.namelist()) == {"secret.txt", "also_secret.txt"}
-
-
-def test_x():
-    assert 1 == 2
