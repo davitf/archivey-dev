@@ -425,6 +425,7 @@ class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
         self._member = member
         self._pwd = pwd
         self._crc_checked = False
+        print(f"RarStreamMemberFile __init__ {self._filename} {self._remaining}")
 
     def read(self, n: int = -1) -> bytes:
         if self._closed:
@@ -508,6 +509,7 @@ class RarStreamReader(BaseRarReader):
 
     def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
         super().__init__(archive_path, pwd=pwd)
+
         self._proc: subprocess.Popen | None = None
         self._stream: IO[bytes] | None = None
         self._lock = threading.Lock()
@@ -546,8 +548,11 @@ class RarStreamReader(BaseRarReader):
         except Exception as e:
             raise ArchiveError(f"Error opening RAR archive {self.archive_path}: {e}")
 
-    def _get_member_file(self, member: ArchiveMember) -> IO[bytes]:
+    def _get_member_file(self, member: ArchiveMember) -> IO[bytes] | None:
         assert self._stream is not None
+        if not member.is_file:
+            return None
+
         pwd_bytes = str_to_bytes(self._pwd) if self._pwd is not None else None
         if (
             member.encrypted
@@ -562,13 +567,19 @@ class RarStreamReader(BaseRarReader):
         return RarStreamMemberFile(member, self._stream, self._lock, pwd=pwd_bytes)
 
     def iter_members(self) -> Iterator[tuple[ArchiveMember, IO[bytes]]]:
-        if self._archive is None or self._members is None:
+        if self._archive is None:
             raise ValueError("Archive is closed")
+        if self._stream is None:
+            self._open_unrar_stream()
 
-        for member in self._members:
+        logger.info(f"Iterating over {len(self.get_members())} members")
+        print("START STREAM")
+
+        for member in self.get_members():
             stream = self._get_member_file(member)
             yield member, stream
-            stream.close()
+            if stream is not None:
+                stream.close()
 
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
