@@ -1,5 +1,6 @@
 # A zipfile-like interface for reading all the files in an archive.
 
+import io
 import logging
 import os
 import shutil
@@ -202,7 +203,7 @@ class ArchiveStream:
 
     def get_format(self) -> ArchiveFormat:
         """Get the format of the archive."""
-        return self._reader.get_format()
+        return self._reader.format
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive format."""
@@ -241,13 +242,56 @@ class ArchiveStream:
         """
         return self._reader.open(name, pwd=pwd)
 
+    def _write_member(
+        self,
+        root_path: str,
+        member: ArchiveMember,
+        preserve_links: bool,
+        stream: IO[bytes] | None,
+    ) -> str:
+        """Write a member to the filesystem."""
+        if isinstance(member, str):
+            member = self.getinfo(member)
+
+        target_path = os.path.join(root_path, member.filename)
+
+        # Create parent directories if they don't exist
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+
+        if member.is_dir:
+            os.makedirs(target_path, exist_ok=True)
+
+        elif member.is_link:
+            if not preserve_links:
+                return None
+
+            # Handle symbolic links
+            with self.open(member) as f:
+                link_target = f.read().decode("utf-8")
+            os.symlink(link_target, target_path)
+
+        elif member.is_file:
+            if stream is None:
+                logger.warning(f"Stream is None for member: {member.filename}")
+                # Assume it's a 0-length file
+                stream = io.BytesIO(b"")
+
+            # Regular file
+            with open(target_path, "wb") as dst:
+                shutil.copyfileobj(stream, dst)
+
+        # Preserve modification time
+        if member.mtime:
+            os.utime(target_path, (member.mtime.timestamp(), member.mtime.timestamp()))
+
+        return target_path
+
     def extract(
         self,
         member: Union[str, ArchiveMember],
-        path: str | None = None,
-        preserve_ownership: bool = False,
+        root_path: str | None = None,
         preserve_links: bool = True,
-    ) -> str:
+    ) -> str | None:
         """Extract a member to the filesystem.
 
         Args:
@@ -263,49 +307,24 @@ class ArchiveStream:
             ArchiveMemberNotFoundError: If the member doesn't exist
             ArchiveError: For other archive-related errors
         """
-        if path is None:
-            path = os.getcwd()
+        if root_path is None:
+            root_path = os.getcwd()
 
         if isinstance(member, str):
             member = self.getinfo(member)
 
-        target_path = os.path.join(path, member.filename)
-
-        # Create parent directories if they don't exist
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-
-        if member.is_dir:
-            os.makedirs(target_path, exist_ok=True)
-            return target_path
-
-        if member.is_link and preserve_links:
-            # Handle symbolic links
-            with self.open(member) as f:
-                link_target = f.read().decode("utf-8")
-            os.symlink(link_target, target_path)
-            return target_path
-
-        # Regular file
-        with self.open(member) as src, open(target_path, "wb") as dst:
-            shutil.copyfileobj(src, dst)
-
-        # Preserve modification time
-        if member.mtime:
-            os.utime(target_path, (member.mtime.timestamp(), member.mtime.timestamp()))
-
-        return target_path
+        with self.open(member) as stream:
+            return self._write_member(root_path, member, preserve_links, stream)
 
     def extractall(
         self,
         path: str | None = None,
-        preserve_ownership: bool = False,
         preserve_links: bool = True,
     ) -> None:
         """Extract all members to the filesystem.
 
         Args:
             path: Directory to extract to (defaults to current directory)
-            preserve_ownership: Whether to preserve file ownership
             preserve_links: Whether to preserve symbolic links
 
         Raises:
@@ -314,8 +333,18 @@ class ArchiveStream:
         if path is None:
             path = os.getcwd()
 
-        for member in self._reader.iter_members():
-            self.extract(member, path, preserve_ownership, preserve_links)
+        for member, stream in self.iter_members():
+            self._write_member(path, member, preserve_links, stream)
+            if stream is not None:
+                stream.close()
+
+    def iter_members(self) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+        """Iterate over members.
+
+        Returns:
+            An iterator of ArchiveMember objects.
+        """
+        return self._reader.iter_members()
 
     @property
     def comment(self) -> str | None:

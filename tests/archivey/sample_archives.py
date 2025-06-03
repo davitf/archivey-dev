@@ -56,6 +56,9 @@ class ArchiveContents:
             or self.header_password is not None
         )
 
+    def has_password_in_files(self) -> bool:
+        return any(f.password is not None for f in self.files)
+
     def has_multiple_passwords(self) -> bool:
         return len({f.password for f in self.files if f.password is not None}) > 1
 

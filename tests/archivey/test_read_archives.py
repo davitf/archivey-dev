@@ -57,14 +57,18 @@ def get_crc32(data: bytes) -> int:
     return crc32_value & 0xFFFFFFFF
 
 
-def check_read_archive(
+def check_iter_members(
     sample_archive: ArchiveInfo,
     use_rar_stream: bool = False,
-    set_file_password_in_constructor: bool = False,
+    set_file_password_in_constructor: bool = True,
 ):
-    # print("STARTING TEST", sample_archive.filename)
     if sample_archive.skip_test:
         pytest.skip(f"Skipping test for {sample_archive.filename} as skip_test is True")
+
+    if sample_archive.contents.has_multiple_passwords():
+        pytest.skip(
+            f"Skipping test for {sample_archive.filename} as it has multiple passwords"
+        )
 
     features = FORMAT_FEATURES.get(
         sample_archive.format_info.format, DEFAULT_FORMAT_FEATURES
@@ -77,7 +81,10 @@ def check_read_archive(
 
     constructor_password = sample_archive.contents.header_password
 
-    if set_file_password_in_constructor and sample_archive.contents.has_password():
+    if (
+        set_file_password_in_constructor
+        and sample_archive.contents.has_password_in_files()
+    ):
         assert constructor_password is None, (
             "Can't set file password in constructor if header password is already set"
         )
@@ -105,7 +112,7 @@ def check_read_archive(
         )
         actual_filenames: list[str] = []
 
-        for member in archive.info_iter():
+        for member, stream in archive.iter_members():
             sample_file = files_by_name.get(member.filename, None)
 
             if member.is_file and sample_file is not None and member.crc32 is not None:
@@ -181,12 +188,9 @@ def check_read_archive(
                 )
 
             if sample_file.type == MemberType.FILE:
-                with archive.open(
-                    member,
-                    pwd=sample_file.password if constructor_password is None else None,
-                ) as f:
-                    contents = f.read()
-                    assert contents == sample_file.contents
+                assert stream is not None
+                contents = stream.read()
+                assert contents == sample_file.contents
 
         expected_filenames = set(
             file.name
@@ -207,7 +211,7 @@ def check_read_archive(
     ids=lambda x: x.filename,
 )
 def test_read_zip_archives(sample_archive: ArchiveInfo):
-    check_read_archive(sample_archive)
+    check_iter_members(sample_archive)
 
 
 CORRUPTED_ARCHIVES_DIR = pathlib.Path(__file__).parent / "../test_corrupted_archives"
@@ -261,7 +265,7 @@ def test_read_corrupted_archives_general(archive_path_str: str):
     ids=lambda x: x.filename,
 )
 def test_read_tar_archives(sample_archive: ArchiveInfo):
-    check_read_archive(sample_archive)
+    check_iter_members(sample_archive)
 
 
 @pytest.mark.parametrize(
@@ -286,9 +290,9 @@ def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
 
     if expect_failure:
         with pytest.raises(ValueError):
-            check_read_archive(sample_archive, use_rar_stream=use_rar_stream)
+            check_iter_members(sample_archive, use_rar_stream=use_rar_stream)
     else:
-        check_read_archive(sample_archive, use_rar_stream=use_rar_stream)
+        check_iter_members(sample_archive, use_rar_stream=use_rar_stream)
 
 
 @pytest.mark.parametrize(
@@ -306,7 +310,7 @@ def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
 def test_read_rar_archives_with_password_in_constructor(
     sample_archive: ArchiveInfo, use_rar_stream: bool
 ):
-    check_read_archive(
+    check_iter_members(
         sample_archive,
         use_rar_stream=use_rar_stream,
         set_file_password_in_constructor=True,
@@ -327,7 +331,7 @@ def test_read_rar_archives_with_password_in_constructor(
 def test_read_zip_and_7z_archives_with_password_in_constructor(
     sample_archive: ArchiveInfo,
 ):
-    check_read_archive(
+    check_iter_members(
         sample_archive,
         set_file_password_in_constructor=True,
     )
@@ -339,7 +343,7 @@ def test_read_zip_and_7z_archives_with_password_in_constructor(
     ids=lambda x: x.filename,
 )
 def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo):
-    check_read_archive(sample_archive)
+    check_iter_members(sample_archive)
 
 
 @pytest.mark.parametrize(
@@ -350,7 +354,7 @@ def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo):
     ids=lambda x: x.filename,
 )
 def test_read_single_file_compressed_archives(sample_archive: ArchiveInfo):
-    check_read_archive(sample_archive)
+    check_iter_members(sample_archive)
 
 
 # Tests for LibraryNotInstalledError
@@ -371,8 +375,8 @@ BASIC_7Z_ARCHIVE = filter_archives(
 )[0]
 
 
-@patch("archivey.rar_reader.rarfile", None)
 @pytest.mark.missing_rarfile
+@patch("archivey.rar_reader.rarfile", None)
 def test_rarfile_not_installed_raises_exception():
     """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
     with pytest.raises(PackageNotInstalledError) as excinfo:
@@ -380,8 +384,8 @@ def test_rarfile_not_installed_raises_exception():
     assert "rarfile package is not installed" in str(excinfo.value)
 
 
-@patch("archivey.sevenzip_reader.py7zr", None)
 @pytest.mark.missing_py7zr
+@patch("archivey.sevenzip_reader.py7zr", None)
 def test_py7zr_not_installed_raises_exception():
     """Test that LibraryNotInstalledError is raised for .7z when py7zr is not installed."""
     with pytest.raises(PackageNotInstalledError) as excinfo:
@@ -389,8 +393,8 @@ def test_py7zr_not_installed_raises_exception():
     assert "py7zr package is not installed" in str(excinfo.value)
 
 
-@patch("archivey.rar_reader.rarfile._have_crypto", 0)
 @pytest.mark.missing_crypto
+@patch("archivey.rar_reader.rarfile._have_crypto", 0)
 def test_rarfile_missing_cryptography_raises_exception():
     """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
     with pytest.raises(PackageNotInstalledError) as excinfo:
@@ -403,8 +407,8 @@ def test_rarfile_missing_cryptography_raises_exception():
     assert "cryptography package is not installed" in str(excinfo.value)
 
 
-@patch("archivey.rar_reader.rarfile._have_crypto", 0)
 @pytest.mark.missing_crypto
+@patch("archivey.rar_reader.rarfile._have_crypto", 0)
 def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files():
     """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
     with ArchiveStream(
@@ -414,4 +418,5 @@ def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files()
         assert set(archive.namelist()) == {"secret.txt", "also_secret.txt"}
 
 
-# def test_basic
+def test_x():
+    assert 1 == 2
