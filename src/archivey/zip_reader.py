@@ -234,7 +234,9 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 raise ArchiveEncryptedError(f"Member {filename} is encrypted") from e
             raise ArchiveError(f"Error extracting member {filename}: {e}") from e
         except zipfile.BadZipFile as e:
-            raise ArchiveCorruptedError(f"Error extracting member {filename}: {e}") from e
+            raise ArchiveCorruptedError(
+                f"Error extracting member {filename}: {e}"
+            ) from e
 
     def extractall(
         self,

@@ -102,7 +102,7 @@ class LazyOpenIO(io.RawIOBase, IO[bytes]):
         self,
         open_fn: Callable[..., IO[bytes]],
         *args: Any,
-        seekable: bool | None = None,
+        seekable: bool,
         **kwargs: Any,
     ) -> None:
         super().__init__()
@@ -110,7 +110,7 @@ class LazyOpenIO(io.RawIOBase, IO[bytes]):
         self._args = args
         self._kwargs = kwargs
         self._inner: IO[bytes] | None = None
-        self._seekable_hint = seekable
+        self._seekable = seekable
 
     def _ensure_open(self) -> IO[bytes]:
         if self.closed:
@@ -132,9 +132,7 @@ class LazyOpenIO(io.RawIOBase, IO[bytes]):
         return False
 
     def seekable(self) -> bool:
-        if self._seekable_hint is not None:
-            return self._seekable_hint
-        return self._ensure_open().seekable()
+        return self._seekable
 
     def close(self) -> None:  # pragma: no cover - simple delegation
         if self._inner is not None:

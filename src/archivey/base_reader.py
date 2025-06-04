@@ -120,7 +120,9 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         for member in self.get_members():
             if filter is None or filter(member):
                 try:
-                    stream = LazyOpenIO(self.open, member, seekable=True)
+                    # TODO: some libraries support fast seeking for files with no
+                    # compression, so we should use that if possible.
+                    stream = LazyOpenIO(self.open, member, seekable=False)
                     yield member, stream
                     stream.close()
                 except (ArchiveError, OSError) as e:
