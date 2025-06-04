@@ -1,6 +1,7 @@
 import sys
+from typing import TYPE_CHECKING
 
-if sys.version_info >= (3, 11):
+if sys.version_info >= (3, 11) or TYPE_CHECKING:
     from enum import StrEnum
 else:
     from backports.strenum import StrEnum

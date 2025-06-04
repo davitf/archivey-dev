@@ -94,7 +94,12 @@ class FolderReader(BaseArchiveReaderRandomAccess):
             for filename in filenames:
                 yield self._convert_entry_to_member(dirpath / filename)
 
-    def iter_members_with_io(self) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+    def iter_members_with_io(
+        self, *, pwd: bytes | str | None = None
+    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+        if pwd is not None:
+            raise ArchiveError("Password is not supported for FolderReader")
+
         for member in self._iter_member_infos():
             if member.is_file:
                 try:

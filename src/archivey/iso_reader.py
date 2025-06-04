@@ -1,8 +1,9 @@
 import io
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Iterator, List, Optional
+from typing import IO, TYPE_CHECKING, Callable, Iterator, List, Optional
 
 from archivey.exceptions import ArchiveError, PackageNotInstalledError
 
@@ -19,6 +20,8 @@ else:
 
 from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
+
+logger = logging.getLogger(__name__)
 
 
 class IsoReader(BaseArchiveReaderRandomAccess):
@@ -199,9 +202,17 @@ class IsoReader(BaseArchiveReaderRandomAccess):
             raise ArchiveError("ISO not opened")
         return list(self.iter_members_with_io())
 
-    def iter_members_with_io(self) -> Iterator[ArchiveMember]:
+    def iter_members_with_io(
+        self,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        *,
+        pwd: bytes | str | None = None,
+    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
         if not self.iso:
             raise ArchiveError("ISO not opened")
+
+        if pwd is not None:
+            raise ArchiveError("Password is not supported for ISOReader")
 
         # Yield the root directory itself, as it's a common convention
         # pycdlib doesn't explicitly list the root dir record in list_dir('/')
@@ -215,7 +226,14 @@ class IsoReader(BaseArchiveReaderRandomAccess):
             # Log or handle as appropriate. For now, proceed to walk.
             pass
 
-        yield from self._walk_iso(current_path="/", current_iso_path="/")
+        for member in self._walk_iso(current_path="/", current_iso_path="/"):
+            if filter is None or filter(member):
+                try:
+                    stream = self.open(member)
+                    yield member, stream
+                    stream.close()
+                except (ArchiveError, OSError) as e:
+                    logger.info(f"Error opening member {member.filename}: {e}")
 
     def open(
         self, member: ArchiveMember | str, *, pwd: Optional[str | bytes] = None

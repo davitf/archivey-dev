@@ -1,9 +1,10 @@
 import abc
+import functools
 import io
 import logging
 import os
 import shutil
-from typing import IO, Callable, Iterator, List
+from typing import IO, Callable, Iterable, Iterator, List
 
 from archivey.config import ArchiveyConfig, get_default_config
 from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
@@ -11,6 +12,58 @@ from archivey.io_helpers import ErrorIOStream, LazyOpenIO
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember
 
 logger = logging.getLogger(__name__)
+
+
+def _set_member_metadata(member: ArchiveMember, target_path: str) -> None:
+    if member.mtime:
+        os.utime(target_path, (member.mtime.timestamp(), member.mtime.timestamp()))
+
+    if member.mode:
+        os.chmod(target_path, member.mode)
+
+
+def _write_member(
+    root_path: str,
+    member: ArchiveMember,
+    preserve_links: bool,
+    stream: IO[bytes] | None,
+) -> str | None:
+    target_path = os.path.join(root_path, member.filename)
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+
+    if member.is_dir:
+        os.makedirs(target_path, exist_ok=True)
+    elif member.is_link:
+        if not preserve_links:
+            return None
+        assert stream is not None
+        link_target = stream.read().decode("utf-8")
+        os.symlink(link_target, target_path)
+    elif member.is_file:
+        if stream is None:
+            stream = io.BytesIO(b"")
+        with open(target_path, "wb") as dst:
+            shutil.copyfileobj(stream, dst)
+
+    _set_member_metadata(member, target_path)
+    return target_path
+
+
+def create_member_filter(
+    members: Iterable[ArchiveMember | str] | None,
+    filter: Callable[[ArchiveMember], bool] | None,
+) -> Callable[[ArchiveMember], bool] | None:
+    if members is None:
+        return filter
+
+    members_to_write = {
+        member.filename if isinstance(member, ArchiveMember) else member
+        for member in members
+    }
+
+    return lambda member: member.filename in members_to_write and (
+        filter is None or filter(member)
+    )
 
 
 class ArchiveReader(abc.ABC):
@@ -53,7 +106,10 @@ class ArchiveReader(abc.ABC):
 
     @abc.abstractmethod
     def iter_members_with_io(
-        self, filter: Callable[[ArchiveMember], bool] | None = None
+        self,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        *,
+        pwd: bytes | str | None = None,
     ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
         """Iterate over all members in the archive.
 
@@ -62,6 +118,8 @@ class ArchiveReader(abc.ABC):
             members for which the filter returns True will be yielded.
             The filter may be called for all members either before or during the
             iteration, so don't rely on any specific behavior.
+            pwd: Password to use for decryption, if needed and different from the one
+            used when opening the archive. May not be supported by all archive formats.
 
         Returns:
             A (ArchiveMember, IO[bytes]) iterator over the members. Each stream should
@@ -80,6 +138,11 @@ class ArchiveReader(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def is_open_possible(self):
+        """Check if opening members is possible (i.e. not streaming-only access)."""
+        pass
+
+    @abc.abstractmethod
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
     ) -> IO[bytes]:
@@ -87,9 +150,80 @@ class ArchiveReader(abc.ABC):
 
         Args:
             member: The member to open
-            pwd: Password to use for decryption
+            pwd: Password to use for decryption, if needed and different from the one
+            used when opening the archive.
         """
         pass
+
+    def _build_member_map(self) -> dict[str, ArchiveMember]:
+        if self._member_map is None:
+            self._member_map = {
+                member.filename: member for member in self.get_members()
+            }
+        return self._member_map
+
+    def get_member(self, member_or_filename: ArchiveMember | str) -> ArchiveMember:
+        if isinstance(member_or_filename, ArchiveMember):
+            return member_or_filename
+
+        member_map = self._build_member_map()
+        if member_or_filename not in member_map:
+            raise ArchiveMemberNotFoundError(f"Member not found: {member_or_filename}")
+        return member_map[member_or_filename]
+
+    # ------------------------------------------------------------------
+    # Extraction helpers
+    # ------------------------------------------------------------------
+
+    def extract(
+        self,
+        member_or_filename: ArchiveMember | str,
+        path: str | None = None,
+        pwd: bytes | str | None = None,
+        preserve_links: bool = True,
+    ) -> str | None:
+        # Try using open(). Assume that, if it's possible to open a member,
+        # get_member() is also available.
+        if self.is_open_possible():
+            member = self.get_member(member_or_filename)
+            stream = self.open(member, pwd=pwd)
+            return _write_member(path or os.getcwd(), member, preserve_links, stream)
+
+        # Fall back to extractall().
+        logger.warning(
+            "extract() may be slow for streaming archives, use extractall instead if possible. ()"
+        )
+        d = self.extractall(
+            path=path,
+            members=[member_or_filename],
+            pwd=pwd,
+            preserve_links=preserve_links,
+        )
+        return list(d.values())[0] if len(d) else None
+
+    def extractall(
+        self,
+        path: str | None = None,
+        members: list[ArchiveMember | str] | None = None,
+        pwd: bytes | str | None = None,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        preserve_links: bool = True,
+    ) -> dict[str, str]:
+        written_paths: dict[str, str] = {}
+
+        filter = create_member_filter(members, filter)
+
+        if path is None:
+            path = os.getcwd()
+
+        for member, stream in self.iter_members_with_io(filter=filter, pwd=pwd):
+            written_path = _write_member(path, member, preserve_links, stream)
+            if written_path is not None:
+                written_paths[member.filename] = written_path
+            if stream is not None:
+                stream.close()
+
+        return written_paths
 
     # Context manager support
     def __enter__(self) -> "ArchiveReader":
@@ -105,6 +239,9 @@ class BaseArchiveReaderStreamingAccess(ArchiveReader):
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         return None
 
+    def is_open_possible(self) -> bool:
+        return False
+
     def open(
         self, member: ArchiveMember, *, pwd: bytes | str | None = None
     ) -> IO[bytes]:
@@ -119,8 +256,14 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         return self.get_members()
 
+    def is_open_possible(self) -> bool:
+        return True
+
     def iter_members_with_io(
-        self, filter: Callable[[ArchiveMember], bool] | None = None
+        self,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        *,
+        pwd: bytes | str | None = None,
     ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
         """Default implementation of iter_members for random access archives."""
         for member in self.get_members():
@@ -128,7 +271,8 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
                 try:
                     # TODO: some libraries support fast seeking for files with no
                     # compression, so we should use that if possible.
-                    stream = LazyOpenIO(self.open, member, seekable=False)
+                    actual_open = functools.partial(self.open, pwd=pwd)
+                    stream = LazyOpenIO(actual_open, member, seekable=False)
                     yield member, stream
                     stream.close()
                 except (ArchiveError, OSError) as e:
@@ -139,90 +283,8 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
                     # to read from the stream.
                     yield member, ErrorIOStream(e)
 
-    def _build_member_map(self) -> dict[str, ArchiveMember]:
-        if self._member_map is None:
-            self._member_map = {
-                member.filename: member for member in self.get_members()
-            }
-        return self._member_map
-
-    def get_member(self, member_or_filename: ArchiveMember | str) -> ArchiveMember:
-        if isinstance(member_or_filename, ArchiveMember):
-            return member_or_filename
-
-        return self._build_member_map()[member_or_filename]
-
     def getinfo(self, name: str) -> ArchiveMember:
         for member in self.get_members():
             if member.filename == name:
                 return member
         raise ArchiveMemberNotFoundError(f"Member not found: {name}")
-
-    # ------------------------------------------------------------------
-    # Extraction helpers
-    # ------------------------------------------------------------------
-
-    def _write_member(
-        self,
-        root_path: str,
-        member: ArchiveMember,
-        preserve_links: bool,
-        stream: IO[bytes] | None,
-    ) -> str | None:
-        target_path = os.path.join(root_path, member.filename)
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-
-        if member.is_dir:
-            os.makedirs(target_path, exist_ok=True)
-        elif member.is_link:
-            if not preserve_links:
-                return None
-            assert stream is not None
-            link_target = stream.read().decode("utf-8")
-            os.symlink(link_target, target_path)
-        elif member.is_file:
-            if stream is None:
-                stream = io.BytesIO(b"")
-            with open(target_path, "wb") as dst:
-                shutil.copyfileobj(stream, dst)
-
-        if member.mtime:
-            os.utime(target_path, (member.mtime.timestamp(), member.mtime.timestamp()))
-
-        if member.mode:
-            os.chmod(target_path, member.mode)
-
-        return target_path
-
-    def extract(
-        self,
-        member: ArchiveMember | str,
-        root_path: str | None = None,
-        preserve_links: bool = True,
-    ) -> str | None:
-        if root_path is None:
-            root_path = os.getcwd()
-
-        # Prefer direct open for random access readers
-        if isinstance(self, BaseArchiveReaderRandomAccess):
-            member_obj = self.get_member(member)
-            with self.open(member_obj) as stream:
-                return self._write_member(root_path, member_obj, preserve_links, stream)
-
-        member_name = member.filename if isinstance(member, ArchiveMember) else member
-        for m, stream in self.iter_members_with_io():
-            if m.filename == member_name:
-                result = self._write_member(root_path, m, preserve_links, stream)
-                if stream is not None:
-                    stream.close()
-                return result
-
-        raise ArchiveMemberNotFoundError(f"Member not found: {member_name}")
-
-    def extractall(self, path: str | None = None, preserve_links: bool = True) -> None:
-        if path is None:
-            path = os.getcwd()
-        for member, stream in self.iter_members_with_io():
-            self._write_member(path, member, preserve_links, stream)
-            if stream is not None:
-                stream.close()
