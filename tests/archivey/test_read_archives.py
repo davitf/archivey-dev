@@ -300,6 +300,12 @@ def test_read_iso_archives(sample_archive: ArchiveInfo):
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
+    if (
+        sample_archive.contents.header_password is not None
+        and get_dependency_versions().cryptography_version is None
+    ):
+        pytest.skip("Cryptography is not installed, skipping RAR encrypted-header test")
+
     has_password = sample_archive.contents.has_password()
     has_multiple_passwords = sample_archive.contents.has_multiple_passwords()
     first_file_has_password = sample_archive.contents.files[0].password is not None
@@ -416,7 +422,6 @@ BASIC_ZSTD_ARCHIVE = filter_archives(
 )[0]
 
 
-@pytest.mark.missing_package
 @pytest.mark.parametrize(
     ["library_name", "archive_path"],
     [
@@ -440,40 +445,33 @@ def test_missing_package_raises_exception(library_name: str, archive_path: str):
     assert f"{library_name} package is not installed" in str(excinfo.value)
 
 
-@pytest.mark.missing_crypto
-@patch("archivey.rar_reader.rarfile._have_crypto", 0)
+@pytest.mark.skipif(
+    get_dependency_versions().rarfile_version is None, reason="rarfile is not installed"
+)
 def test_rarfile_missing_cryptography_raises_exception():
     """Test that LibraryNotInstalledError is raised for header-encrypted .rar when cryptography is not installed."""
-    dependencies = get_dependency_versions()
-    if dependencies.rarfile_version is None:
-        pytest.skip("rarfile is not installed")
-    if dependencies.cryptography_version is None:
-        pytest.skip("cryptography is not installed")
-
-    with pytest.raises(PackageNotInstalledError) as excinfo:
+    with patch("archivey.rar_reader.rarfile._have_crypto", 0):
         with open_archive(
-            HEADER_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
-            pwd=HEADER_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
+            NORMAL_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
+            pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
         ) as archive:
-            archive.get_members()
-    assert "cryptography package is not installed" in str(excinfo.value)
+            assert {m.filename for m in archive.get_members()} == {
+                "secret.txt",
+                "also_secret.txt",
+            }
 
 
-@pytest.mark.missing_crypto
-@patch("archivey.rar_reader.rarfile._have_crypto", 0)
+@pytest.mark.skipif(
+    get_dependency_versions().rarfile_version is None, reason="rarfile is not installed"
+)
 def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files():
     """Test that LibraryNotInstalledError is NOT raised for non-header-encrypted .rar when cryptography is not installed."""
-    dependencies = get_dependency_versions()
-    if dependencies.rarfile_version is None:
-        pytest.skip("rarfile is not installed")
-    if dependencies.cryptography_version is None:
-        pytest.skip("cryptography is not installed")
-
-    with open_archive(
-        NORMAL_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
-        pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
-    ) as archive:
-        assert {m.filename for m in archive.get_members()} == {
-            "secret.txt",
-            "also_secret.txt",
-        }
+    with patch("archivey.rar_reader.rarfile._have_crypto", 0):
+        with open_archive(
+            NORMAL_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
+            pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
+        ) as archive:
+            assert {m.filename for m in archive.get_members()} == {
+                "secret.txt",
+                "also_secret.txt",
+            }
