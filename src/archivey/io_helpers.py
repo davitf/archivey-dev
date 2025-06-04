@@ -1,4 +1,5 @@
 import io
+from dataclasses import dataclass
 from typing import IO, Any, Callable, Optional, cast
 
 
@@ -144,4 +145,65 @@ class LazyOpenIO(io.RawIOBase, IO[bytes]):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # pragma: no cover - trivial
+        self.close()
+
+
+@dataclass
+class IOStats:
+    """Simple container for I/O statistics."""
+
+    bytes_read: int = 0
+    seek_calls: int = 0
+
+
+class StatsIO(io.RawIOBase, IO[bytes]):
+    """Wraps another IO object and tracks read/seek statistics."""
+
+    def __init__(self, inner: IO[bytes], stats: IOStats) -> None:
+        super().__init__()
+        self._inner = inner
+        self.stats = stats
+
+    # Basic IO methods -------------------------------------------------
+    def read(self, n: int = -1) -> bytes:
+        data = self._inner.read(n)
+        self.stats.bytes_read += len(data)
+        return data
+
+    def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
+        n = self._inner.readinto(b)
+        self.stats.bytes_read += n
+        return n
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        self.stats.seek_calls += 1
+        return self._inner.seek(offset, whence)
+
+    def readable(self) -> bool:  # pragma: no cover - trivial
+        return self._inner.readable()
+
+    def writable(self) -> bool:  # pragma: no cover - trivial
+        return self._inner.writable()
+
+    def seekable(self) -> bool:  # pragma: no cover - trivial
+        return self._inner.seekable()
+
+    def write(self, b: Any) -> int:  # pragma: no cover - simple delegation
+        return self._inner.write(b)
+
+    def close(self) -> None:  # pragma: no cover - simple delegation
+        self._inner.close()
+        super().close()
+
+    # Delegate unknown attributes --------------------------------------
+    def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
+        return getattr(self._inner, item)
+
+    # Context manager support -----------------------------------------
+    def __enter__(self) -> "StatsIO":  # pragma: no cover - trivial
+        self._inner.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # pragma: no cover - trivial
+        self._inner.__exit__(exc_type, exc_val, exc_tb)
         self.close()
