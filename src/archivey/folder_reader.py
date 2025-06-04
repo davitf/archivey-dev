@@ -83,9 +83,17 @@ class FolderReader(BaseArchiveReaderRandomAccess):
         )
 
     def _iter_member_infos(self) -> Iterator[ArchiveMember]:
-        for dirpath, dirnames, filenames in self.path.walk(
-            top_down=True, follow_symlinks=False
-        ):
+        if hasattr(self.path, "walk"):
+            walker = self.path.walk(top_down=True, follow_symlinks=False)
+        else:  # Python < 3.12 fallback
+            walker = (
+                (Path(dp), dn, fn)
+                for dp, dn, fn in os.walk(
+                    self.path, topdown=True, followlinks=False
+                )
+            )
+
+        for dirpath, dirnames, filenames in walker:
             for dirname in dirnames:
                 yield self._convert_entry_to_member(dirpath / dirname)
             for filename in filenames:
