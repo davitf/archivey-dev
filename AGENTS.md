@@ -27,7 +27,7 @@ To run a specific test or a subset of tests, pass `-k` with a pattern. For
 example, to run only tests related to zip archives:
 
 ```bash
-hatch run pytest -k .zip
+uv run --extra optional pytest -k .zip
 ```
 
 ## Updating test files
