@@ -20,6 +20,7 @@ from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
+    CreateSystem,
     MemberType,
 )
 
@@ -78,6 +79,11 @@ def read_gzip_metadata(
 
         # Add operating system
         extra_fields["create_system"] = os  # 0 = FAT, 3 = Unix, etc.
+        member.create_system = (
+            CreateSystem(os)
+            if os in CreateSystem._value2member_map_
+            else CreateSystem.UNKNOWN
+        )
 
         # Handle optional fields
         if flg & 0x04:  # FEXTRA

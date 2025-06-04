@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import io
 import logging
+import shutil
 import stat
 import struct
 import subprocess
@@ -33,7 +34,7 @@ from archivey.exceptions import (
 )
 from archivey.formats import ArchiveFormat
 from archivey.io_helpers import ErrorIOStream, ExceptionTranslatingIO
-from archivey.types import ArchiveInfo, ArchiveMember, MemberType
+from archivey.types import ArchiveInfo, ArchiveMember, CreateSystem, MemberType
 from archivey.utils import bytes_to_str, str_to_bytes
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,15 @@ _RAR_COMPRESSION_METHODS = {
     0x33: "normal",
     0x34: "good",
     0x35: "best",
+}
+
+_RAR_HOST_OS_TO_CREATE_SYSTEM = {
+    0: CreateSystem.FAT,
+    1: CreateSystem.OS2_HPFS,
+    2: CreateSystem.NTFS,
+    3: CreateSystem.UNIX,
+    4: CreateSystem.MACINTOSH,
+    5: CreateSystem.UNKNOWN,  # BeOS is not represented
 }
 
 RAR_ENCDATA_FLAG_TWEAKED_CHECKSUMS = 0x2
@@ -293,8 +303,12 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
                     compression_method=compression_method,
                     comment=info.comment,
                     encrypted=info.needs_password(),
+                    create_system=_RAR_HOST_OS_TO_CREATE_SYSTEM.get(
+                        getattr(info, "host_os", None), CreateSystem.UNKNOWN
+                    ),
                     raw_info=info,
                     link_target=self._get_link_target(info),
+                    extra={"host_os": getattr(info, "host_os", None)},
                 )
                 self._members.append(member)
 
@@ -534,9 +548,15 @@ class RarStreamReader(BaseRarReader):
 
     def _open_unrar_stream(self) -> None:
         try:
+            unrar_path = shutil.which("unrar")
+            if not unrar_path:
+                raise PackageNotInstalledError(
+                    "unrar command is not installed. It is required to read RAR member contents."
+                )
+
             # Open an unrar process that outputs the contents of all files in the archive to stdout.
             password_args = ["-p" + self._pwd] if self._pwd else ["-p-"]
-            cmd = ["unrar", "p", "-inul", *password_args, self.archive_path]
+            cmd = [unrar_path, "p", "-inul", *password_args, self.archive_path]
             logger.info(
                 f"Opening RAR archive {self.archive_path} with command: {' '.join(cmd)}"
             )

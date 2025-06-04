@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
@@ -17,6 +19,7 @@ class DependencyVersions:
     pycdlib_version: Optional[str] = None
     backports_strenum_version: Optional[str] = None
     tqdm_version: Optional[str] = None
+    unrar_version: Optional[str] = None
 
 
 def get_dependency_versions() -> DependencyVersions:
@@ -46,6 +49,23 @@ def get_dependency_versions() -> DependencyVersions:
             setattr(versions, attr, version(package))
         except PackageNotFoundError:
             pass
+
+    # Check if the unrar command is available
+    unrar_path = shutil.which("unrar")
+    if unrar_path:
+        try:
+            proc = subprocess.run(
+                [unrar_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            first_line = proc.stdout.splitlines()[0] if proc.stdout else None
+            versions.unrar_version = first_line
+        except Exception:
+            versions.unrar_version = "available"
+    else:
+        versions.unrar_version = None
 
     return versions
 
