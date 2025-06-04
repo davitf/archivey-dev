@@ -3,11 +3,15 @@
 import argparse
 import hashlib
 import logging
+import os
+import builtins
 import zlib
 from datetime import datetime
 from typing import IO, Tuple
 
 from tqdm import tqdm
+
+from archivey.io_helpers import IOStats, StatsIO
 
 from archivey.base_reader import ArchiveReader
 from archivey.core import open_archive
@@ -77,8 +81,30 @@ parser.add_argument(
     action="store_true",
     help="Use stored metadata for single file archives",
 )
+parser.add_argument(
+    "--track-io",
+    action="store_true",
+    help="Track IO statistics for archive file access",
+)
 
 args = parser.parse_args()
+
+stats_per_file: dict[str, IOStats] = {}
+if args.track_io:
+    original_open = builtins.open
+    target_paths = {os.path.abspath(p) for p in args.files}
+
+    def patched_open(file, mode="r", *oargs, **okwargs):
+        path = None
+        if isinstance(file, (str, bytes, os.PathLike)):
+            path = os.path.abspath(file)
+        if path in target_paths and "r" in mode and not any(m in mode for m in ["w", "a", "+"]):
+            f = original_open(file, mode, *oargs, **okwargs)
+            stats = stats_per_file.setdefault(path, IOStats())
+            return StatsIO(f, stats)
+        return original_open(file, mode, *oargs, **okwargs)
+
+    builtins.open = patched_open
 
 
 def process_member(
@@ -175,4 +201,14 @@ for archive_path in args.files:
 
     except ArchiveError as e:
         print(f"Error processing {archive_path}: {e}")
+    if args.track_io:
+        abs_path = os.path.abspath(archive_path)
+        stats = stats_per_file.get(abs_path)
+        if stats is not None:
+            print(
+                f"IO stats for {archive_path}: {stats.bytes_read} bytes read, {stats.seek_calls} seeks"
+            )
     print()
+
+if args.track_io:
+    builtins.open = original_open
