@@ -86,3 +86,48 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
         except BaseException as e:
             self._translate_exception(cast(Exception, e))
         super().close()
+
+
+class LazyOpenIO(io.RawIOBase, IO[bytes]):
+    """A wrapper that defers opening of the underlying stream until needed."""
+
+    def __init__(self, open_fn: Callable[..., IO[bytes]], *args: Any, **kwargs: Any) -> None:
+        super().__init__()
+        self._open_fn = open_fn
+        self._args = args
+        self._kwargs = kwargs
+        self._inner: IO[bytes] | None = None
+
+    def _ensure_open(self) -> IO[bytes]:
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        if self._inner is None:
+            self._inner = self._open_fn(*self._args, **self._kwargs)
+        return self._inner
+
+    # ------------------------------------------------------------------
+    # Basic IO methods
+    # ------------------------------------------------------------------
+    def read(self, n: int = -1) -> bytes:
+        return self._ensure_open().read(n)
+
+    def readable(self) -> bool:  # pragma: no cover - trivial
+        return True
+
+    def writable(self) -> bool:  # pragma: no cover - trivial
+        return False
+
+    def seekable(self) -> bool:
+        return self._ensure_open().seekable()
+
+    def close(self) -> None:  # pragma: no cover - simple delegation
+        if self._inner is not None:
+            self._inner.close()
+        super().close()
+
+    # Context manager support -------------------------------------------------
+    def __enter__(self) -> "LazyOpenIO":  # pragma: no cover - trivial
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # pragma: no cover - trivial
+        self.close()

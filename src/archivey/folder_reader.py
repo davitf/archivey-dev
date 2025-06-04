@@ -7,7 +7,7 @@ from typing import IO, Iterator, List, Optional
 
 from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.exceptions import ArchiveError, ArchiveIOError, ArchiveMemberNotFoundError
-from archivey.io_helpers import ErrorIOStream
+from archivey.io_helpers import ErrorIOStream, LazyOpenIO
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 logger = logging.getLogger(__name__)
@@ -98,7 +98,7 @@ class FolderReader(BaseArchiveReaderRandomAccess):
         for member in self._iter_member_infos():
             if member.is_file:
                 try:
-                    stream = self.open(member)
+                    stream = LazyOpenIO(self.open, member)
                 except (IOError, OSError) as e:
                     logger.info(f"Error opening member {member.filename}: {e}")
                     archive_error = ArchiveIOError(

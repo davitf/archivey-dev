@@ -6,7 +6,7 @@ import shutil
 from typing import IO, Callable, Iterator, List
 
 from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
-from archivey.io_helpers import ErrorIOStream
+from archivey.io_helpers import ErrorIOStream, LazyOpenIO
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember
 
 logger = logging.getLogger(__name__)
@@ -120,7 +120,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         for member in self.get_members():
             if filter is None or filter(member):
                 try:
-                    stream = self.open(member)
+                    stream = LazyOpenIO(self.open, member)
                     yield member, stream
                     stream.close()
                 except (ArchiveError, OSError) as e:

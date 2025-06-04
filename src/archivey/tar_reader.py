@@ -16,7 +16,7 @@ from archivey.exceptions import (
     ArchiveError,
     ArchiveMemberCannotBeOpenedError,
 )
-from archivey.io_helpers import ErrorIOStream
+from archivey.io_helpers import ErrorIOStream, LazyOpenIO
 from archivey.types import ArchiveFormat, MemberType
 
 logger = logging.getLogger(__name__)
@@ -225,7 +225,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
             member = self._tarinfo_to_archive_member(tarinfo)
             if filter is None or filter(member):
                 try:
-                    stream = self.open(member)
+                    stream = LazyOpenIO(self.open, member)
                     yield member, stream
                     stream.close()
                 except (ArchiveError, OSError) as e:
