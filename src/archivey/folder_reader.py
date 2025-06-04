@@ -91,7 +91,7 @@ class FolderReader(BaseArchiveReaderRandomAccess):
             for filename in filenames:
                 yield self._convert_entry_to_member(dirpath / filename)
 
-    def iter_members(self) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+    def iter_members_with_io(self) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
         for member in self._iter_member_infos():
             if member.is_file:
                 try:

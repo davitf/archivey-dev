@@ -266,7 +266,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 self._members.append(member)
 
             if links_to_resolve and self._resolve_links_in_get_members:
-                for filename, file_io in self.iter_members(
+                for filename, file_io in self.iter_members_with_io(
                     files=list(links_to_resolve.keys())
                 ):
                     links_to_resolve[filename].link_target = file_io.read().decode(
@@ -306,7 +306,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 previous_password = file_info.folder.password
                 file_info.folder.password = bytes_to_str(pwd)
 
-            it = list(self.iter_members(files=[member.filename]))
+            it = list(self.iter_members_with_io(files=[member.filename]))
             assert len(it) == 1, (
                 f"Expected exactly one member, got {len(it)}. {member.filename}"
             )
@@ -327,7 +327,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             if pwd is not None and file_info.folder is not None:
                 file_info.folder.password = previous_password
 
-    def iter_members(
+    def iter_members_with_io(
         self,
         files: list[str] | None = None,
         filter: Callable[[ArchiveMember], bool] | None = None,

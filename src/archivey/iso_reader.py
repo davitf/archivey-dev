@@ -194,9 +194,9 @@ class IsoReader(BaseArchiveReaderRandomAccess):
     def get_members(self) -> List[ArchiveMember]:
         if not self.iso:
             raise ArchiveError("ISO not opened")
-        return list(self.iter_members())
+        return list(self.iter_members_with_io())
 
-    def iter_members(self) -> Iterator[ArchiveMember]:
+    def iter_members_with_io(self) -> Iterator[ArchiveMember]:
         if not self.iso:
             raise ArchiveError("ISO not opened")
 

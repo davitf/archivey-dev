@@ -13,8 +13,19 @@ from archivey.types import (
 )
 
 
+def _normalize_archive_path(archive_path: str | bytes | os.PathLike) -> str:
+    if isinstance(archive_path, os.PathLike):
+        return str(archive_path)
+    elif isinstance(archive_path, bytes):
+        return archive_path.decode("utf-8")
+    elif isinstance(archive_path, str):
+        return archive_path
+
+    raise TypeError(f"Invalid archive path type: {type(archive_path)} {archive_path}")
+
+
 def open_archive(
-    archive_path: str,
+    archive_path: str | bytes | os.PathLike,
     *,
     use_libarchive: bool = False,
     use_rar_stream: bool = False,
@@ -24,7 +35,7 @@ def open_archive(
     if not os.path.exists(archive_path):
         raise FileNotFoundError(f"Archive file not found: {archive_path}")
 
-    format = detect_archive_format(archive_path)
+    format = detect_archive_format(_normalize_archive_path(archive_path))
 
     pwd = kwargs.get("pwd")
     if pwd is not None and not isinstance(pwd, (str, bytes)):

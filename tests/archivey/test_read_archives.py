@@ -17,6 +17,7 @@ from sample_archives import (
 )
 
 from archivey.core import open_archive
+from archivey.dependency_checker import get_dependency_versions
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
@@ -117,14 +118,14 @@ def check_iter_members(
         use_rar_stream=use_rar_stream,
         use_single_file_stored_metadata=True,
     ) as archive:
-        assert archive.get_format() == sample_archive.format_info.format
+        assert archive.format == sample_archive.format_info.format
         format_info = archive.get_archive_info()
         assert normalize_newlines(format_info.comment) == normalize_newlines(
             sample_archive.contents.archive_comment
         )
         actual_filenames: list[str] = []
 
-        for member, stream in archive.iter_members():
+        for member, stream in archive.iter_members_with_io():
             sample_file = files_by_name.get(member.filename, None)
 
             if member.is_file and sample_file is not None and member.crc32 is not None:
@@ -264,8 +265,9 @@ def test_read_corrupted_archives_general(archive_path_str: str):
     with pytest.raises(ArchiveCorruptedError):
         # For many corrupted archives, error might be raised on open or during iteration
         with open_archive(str(archive_path)) as archive:
-            for _ in archive.info_iter():
-                pass
+            for member, stream in archive.iter_members_with_io():
+                if stream is not None:
+                    stream.read()
 
 
 @pytest.mark.parametrize(
@@ -427,8 +429,14 @@ BASIC_ZSTD_ARCHIVE = filter_archives(
     ids=lambda x: os.path.basename(x),
 )
 def test_missing_package_raises_exception(library_name: str, archive_path: str):
+    dependencies = get_dependency_versions()
+    if getattr(dependencies, f"{library_name}_version") is not None:
+        pytest.skip(
+            f"{library_name} is installed with version {getattr(dependencies, f'{library_name}_version')}"
+        )
+
     with pytest.raises(PackageNotInstalledError) as excinfo:
-        ArchiveStream(archive_path)
+        open_archive(archive_path)
     assert f"{library_name} package is not installed" in str(excinfo.value)
 
 
@@ -436,13 +444,18 @@ def test_missing_package_raises_exception(library_name: str, archive_path: str):
 @patch("archivey.rar_reader.rarfile._have_crypto", 0)
 def test_rarfile_missing_cryptography_raises_exception():
     """Test that LibraryNotInstalledError is raised for header-encrypted .rar when cryptography is not installed."""
+    dependencies = get_dependency_versions()
+    if dependencies.rarfile_version is None:
+        pytest.skip("rarfile is not installed")
+    if dependencies.cryptography_version is None:
+        pytest.skip("cryptography is not installed")
+
     with pytest.raises(PackageNotInstalledError) as excinfo:
         with open_archive(
             HEADER_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
             pwd=HEADER_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
         ) as archive:
-            names = archive.namelist()
-            logging.info(f"Names: {names}")
+            archive.get_members()
     assert "cryptography package is not installed" in str(excinfo.value)
 
 
@@ -450,8 +463,17 @@ def test_rarfile_missing_cryptography_raises_exception():
 @patch("archivey.rar_reader.rarfile._have_crypto", 0)
 def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files():
     """Test that LibraryNotInstalledError is NOT raised for non-header-encrypted .rar when cryptography is not installed."""
-    with ArchiveStream(
+    dependencies = get_dependency_versions()
+    if dependencies.rarfile_version is None:
+        pytest.skip("rarfile is not installed")
+    if dependencies.cryptography_version is None:
+        pytest.skip("cryptography is not installed")
+
+    with open_archive(
         NORMAL_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
         pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
     ) as archive:
-        assert set(archive.namelist()) == {"secret.txt", "also_secret.txt"}
+        assert {m.filename for m in archive.get_members()} == {
+            "secret.txt",
+            "also_secret.txt",
+        }

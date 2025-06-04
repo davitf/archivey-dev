@@ -46,7 +46,7 @@ class ArchiveReader(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def iter_members(
+    def iter_members_with_io(
         self, filter: Callable[[ArchiveMember], bool] | None = None
     ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
         """Iterate over all members in the archive.
@@ -73,6 +73,13 @@ class ArchiveReader(abc.ABC):
         """
         pass
 
+    # Context manager support
+    def __enter__(self) -> "ArchiveReader":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
 
 class BaseArchiveReaderStreamingAccess(ArchiveReader):
     """Abstract base class for archive readers which are read as streams."""
@@ -94,7 +101,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         return self.get_members()
 
-    def iter_members(
+    def iter_members_with_io(
         self, filter: Callable[[ArchiveMember], bool] | None = None
     ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
         """Default implementation of iter_members for random access archives."""
@@ -135,31 +142,6 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
 
         return self._build_member_map()[member_or_filename]
 
-    # ------------------------------------------------------------------
-    # Convenience methods common to all readers
-    # ------------------------------------------------------------------
-
-    # Context manager support
-    def __enter__(self) -> "ArchiveReader":
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self.close()
-
-    # Simple wrappers around existing APIs
-    def get_format(self) -> ArchiveFormat:
-        return self.format
-
-    def namelist(self) -> List[str]:
-        return [m.filename for m in self.get_members()]
-
-    def infolist(self) -> List[ArchiveMember]:
-        return self.get_members()
-
-    def info_iter(self) -> Iterator[ArchiveMember]:
-        for member, _ in self.iter_members():
-            yield member
-
     def getinfo(self, name: str) -> ArchiveMember:
         for member in self.get_members():
             if member.filename == name:
@@ -176,7 +158,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         member: ArchiveMember,
         preserve_links: bool,
         stream: IO[bytes] | None,
-    ) -> str:
+    ) -> str | None:
         target_path = os.path.join(root_path, member.filename)
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
@@ -197,6 +179,9 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         if member.mtime:
             os.utime(target_path, (member.mtime.timestamp(), member.mtime.timestamp()))
 
+        if member.mode:
+            os.chmod(target_path, member.mode)
+
         return target_path
 
     def extract(
@@ -215,7 +200,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
                 return self._write_member(root_path, member_obj, preserve_links, stream)
 
         member_name = member.filename if isinstance(member, ArchiveMember) else member
-        for m, stream in self.iter_members():
+        for m, stream in self.iter_members_with_io():
             if m.filename == member_name:
                 result = self._write_member(root_path, m, preserve_links, stream)
                 if stream is not None:
@@ -227,7 +212,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
     def extractall(self, path: str | None = None, preserve_links: bool = True) -> None:
         if path is None:
             path = os.getcwd()
-        for member, stream in self.iter_members():
+        for member, stream in self.iter_members_with_io():
             self._write_member(path, member, preserve_links, stream)
             if stream is not None:
                 stream.close()

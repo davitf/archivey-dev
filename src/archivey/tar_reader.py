@@ -213,7 +213,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
             )
         return self._format_info
 
-    def iter_members(
+    def iter_members_with_io(
         self, filter: Callable[[ArchiveMember], bool] | None = None
     ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
         if self._archive is None:
