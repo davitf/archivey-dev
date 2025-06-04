@@ -10,7 +10,17 @@ import struct
 import subprocess
 import threading
 import zlib
-from typing import IO, TYPE_CHECKING, Any, Iterable, Iterator, List, Optional, cast
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    cast,
+)
 
 if TYPE_CHECKING:
     import rarfile
@@ -512,49 +522,43 @@ class RarStreamReader(BaseRarReader):
 
     def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
         super().__init__(archive_path, pwd=pwd)
-
-        self._proc: subprocess.Popen | None = None
-        self._stream: IO[bytes] | None = None
-        self._lock = threading.Lock()
-        self._active_member: RarStreamMemberFile | None = None
-        self._active_index = -1
         self._pwd = bytes_to_str(pwd)
         self.archive_path = archive_path
 
     def close(self) -> None:
-        if self._active_member:
-            self._active_member.close()
-            self._active_member = None
-        if self._stream:
-            self._stream.close()
-            self._stream = None
-        if self._proc:
-            self._proc.wait()
-            self._proc = None
+        pass
 
-    def _open_unrar_stream(self) -> None:
+    def _open_unrar_stream(
+        self, pwd: bytes | str | None = None
+    ) -> tuple[subprocess.Popen, IO[bytes]]:
+        if pwd is None:
+            pwd = self._pwd
+
         try:
             # Open an unrar process that outputs the contents of all files in the archive to stdout.
-            password_args = ["-p" + self._pwd] if self._pwd else ["-p-"]
+            password_args = ["-p" + bytes_to_str(pwd)] if pwd else ["-p-"]
             cmd = ["unrar", "p", "-inul", *password_args, self.archive_path]
             logger.info(
                 f"Opening RAR archive {self.archive_path} with command: {' '.join(cmd)}"
             )
-            self._proc = subprocess.Popen(
+            proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 bufsize=1024 * 1024,
             )
-            if self._proc.stdout is None:
+            if proc.stdout is None:
                 raise RuntimeError("Could not open unrar output stream")
-            self._stream = self._proc.stdout  # type: ignore
+            stream = proc.stdout  # type: ignore
+            return proc, stream
+
         except (OSError, subprocess.SubprocessError) as e:
             raise ArchiveError(
                 f"Error opening RAR archive {self.archive_path}: {e}"
             ) from e
 
-    def _get_member_file(self, member: ArchiveMember) -> IO[bytes] | None:
-        assert self._stream is not None
+    def _get_member_file(
+        self, member: ArchiveMember, stream: IO[bytes], lock: threading.Lock
+    ) -> IO[bytes] | None:
         if not member.is_file:
             return None
 
@@ -569,21 +573,40 @@ class RarStreamReader(BaseRarReader):
                 ArchiveEncryptedError(f"Wrong password specified for {member.filename}")
             )
 
-        return RarStreamMemberFile(member, self._stream, self._lock, pwd=pwd_bytes)
+        return RarStreamMemberFile(member, stream, lock, pwd=pwd_bytes)
 
-    def iter_members_with_io(self) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+    def iter_members_with_io(
+        self,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        *,
+        pwd: bytes | str | None = None,
+    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
         if self._archive is None:
             raise ValueError("Archive is closed")
-        if self._stream is None:
-            self._open_unrar_stream()
+
+        proc, unrar_stream = self._open_unrar_stream(pwd)
+        lock = threading.Lock()
 
         logger.info("Iterating over %s members", len(self.get_members()))
 
-        for member in self.get_members():
-            stream = self._get_member_file(member)
-            yield member, stream
-            if stream is not None:
-                stream.close()
+        # TODO: apply filter, file type and password check to members before opening
+        # the unrar stream, pass only the filtered members to unrar
+
+        try:
+            for member in self.get_members():
+                stream = self._get_member_file(member, unrar_stream, lock)
+                yield member, stream
+                if stream is not None:
+                    # If the caller hasn't read the stream, close() will read any
+                    # remaining data.
+                    stream.close()
+        finally:
+            proc.terminate()
+            proc.wait()
+            unrar_stream.close()
+
+    def is_open_possible(self) -> bool:
+        return False
 
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None

@@ -3,6 +3,15 @@ Utility functions for archivey.
 """
 
 import logging
+from typing import overload
+
+
+@overload
+def decode_bytes_with_fallback(data: None, encodings: list[str]) -> None: ...
+
+
+@overload
+def decode_bytes_with_fallback(data: bytes, encodings: list[str]) -> str: ...
 
 
 def decode_bytes_with_fallback(data: bytes | None, encodings: list[str]) -> str | None:
@@ -24,11 +33,27 @@ def decode_bytes_with_fallback(data: bytes | None, encodings: list[str]) -> str 
     return data.decode("utf-8", errors="replace")
 
 
+@overload
+def str_to_bytes(s: None) -> None: ...
+
+
+@overload
+def str_to_bytes(s: str | bytes) -> bytes: ...
+
+
 def str_to_bytes(s: str | bytes | None) -> bytes | None:
     if s is None or isinstance(s, bytes):
         return s
     assert isinstance(s, str), f"Expected str, got {type(s)}"
     return s.encode("utf-8")
+
+
+@overload
+def bytes_to_str(b: None) -> None: ...
+
+
+@overload
+def bytes_to_str(b: str | bytes) -> str: ...
 
 
 def bytes_to_str(b: str | bytes | None) -> str | None:
