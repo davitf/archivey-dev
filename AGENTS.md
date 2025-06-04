@@ -6,30 +6,17 @@ This project follows a **src layout**. The Python package lives in
 
 ## Installing in development mode
 
-Use an editable install so local changes are picked up without reinstalling:
-
-```bash
-pip install -e .
-```
-
-Optional dependencies that enable additional archive formats can be installed
-with the `optional` extra:
-
-```bash
-pip install -e ".[optional]"
-```
-
-To work on the codebase with the recommended development tools you can also
-create a Hatch environment which installs the `dev` dependency group defined in
-`pyproject.toml`:
+The project uses **Hatch** to manage the development environment.  Install
+Hatch and create the default environment which includes the `dev` dependency
+group:
 
 ```bash
 pip install hatch
 hatch env create
 ```
 
-Inside the hatch shell you can then install the package with the optional
-extras as shown above:
+Once the environment is created, install the package in editable mode with the
+optional extras so that additional archive formats are supported:
 
 ```bash
 hatch run pip install -e ".[optional]"
@@ -37,17 +24,18 @@ hatch run pip install -e ".[optional]"
 
 ## Running the tests
 
-The project uses **pytest**.  Run all tests from the repository root with:
+The project uses **pytest**.  After activating the Hatch environment, run all
+tests from the repository root with:
 
 ```bash
-pytest
+hatch run pytest
 ```
 
 To run a specific test or a subset of tests, pass `-k` with a pattern. For
 example, to run tests whose name contains `archive_name`:
 
 ```bash
-pytest -k archive_name
+hatch run pytest -k archive_name
 ```
 
 Tox configurations are provided to run the suite against multiple Python
