@@ -15,6 +15,13 @@ def test_lazy_open_only_on_read():
     wrapper.close()
 
 
+def test_lazy_open_seekable_does_not_open():
+    open_fn = Mock(return_value=io.BytesIO())
+    wrapper = LazyOpenIO(open_fn, seekable=True)
+    assert wrapper.seekable() is True
+    assert open_fn.call_count == 0
+
+
 def test_lazy_open_not_called_when_unused():
     open_fn = Mock(return_value=io.BytesIO(b"unused"))
     wrapper = LazyOpenIO(open_fn)

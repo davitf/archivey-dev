@@ -225,7 +225,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
             member = self._tarinfo_to_archive_member(tarinfo)
             if filter is None or filter(member):
                 try:
-                    stream = LazyOpenIO(self.open, member)
+                    stream = LazyOpenIO(self.open, member, seekable=True)
                     yield member, stream
                     stream.close()
                 except (ArchiveError, OSError) as e:

@@ -120,7 +120,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         for member in self.get_members():
             if filter is None or filter(member):
                 try:
-                    stream = LazyOpenIO(self.open, member)
+                    stream = LazyOpenIO(self.open, member, seekable=True)
                     yield member, stream
                     stream.close()
                 except (ArchiveError, OSError) as e:
