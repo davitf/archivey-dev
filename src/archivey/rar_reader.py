@@ -570,7 +570,7 @@ class RarStreamReader(BaseRarReader):
 
         return RarStreamMemberFile(member, self._stream, self._lock, pwd=pwd_bytes)
 
-    def iter_members_with_io(self) -> Iterator[tuple[ArchiveMember, IO[bytes]]]:
+    def iter_members_with_io(self) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
         if self._archive is None:
             raise ValueError("Archive is closed")
         if self._stream is None:

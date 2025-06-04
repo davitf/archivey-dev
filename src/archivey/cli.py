@@ -9,11 +9,12 @@ from typing import IO, Tuple
 
 from tqdm import tqdm
 
+from archivey.base_reader import ArchiveReader
 from archivey.core import open_archive
 from archivey.exceptions import (
     ArchiveError,
 )
-from archivey.types import MemberType
+from archivey.types import ArchiveMember, MemberType
 
 logging.basicConfig(level=logging.INFO)
 
@@ -79,6 +80,61 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+
+def process_member(
+    member: ArchiveMember, archive: ArchiveReader, stream: IO[bytes] | None = None
+):
+    stream_to_close: IO[bytes] | None = None
+
+    encrypted_str = "E" if member.encrypted else " "
+    size_str = "?" * 12 if member.file_size is None else f"{member.file_size:12d}"
+    format_str = format_mode(member.type, member.mode or 0)
+
+    if member.is_file:
+        assert isinstance(member.filename, str)
+        assert isinstance(member.mtime, datetime)
+
+        try:
+            if member.extra:
+                print(f"{member.filename} {member.extra}")
+
+            if stream is None:
+                stream = stream_to_close = archive.open(member, pwd=args.password)
+
+            crc32, sha256 = get_member_checksums(stream)
+            if member.crc32 is not None and member.crc32 != crc32:
+                crc_error = f" != {member.crc32:08x}"
+            else:
+                crc_error = ""
+
+            print(
+                f"{encrypted_str}  {size_str}  {format_str}  {crc32:08x}{crc_error}  {sha256[:16]}  {member.mtime}  {member.filename}"
+            )
+
+        except ArchiveError as e:
+            formated_crc = (
+                f"{member.crc32:08x}" if member.crc32 is not None else "?" * 8
+            )
+            print(
+                f"{encrypted_str}  {size_str}  {format_str}  {formated_crc}  {' ' * 16}  {member.mtime}  {member.filename} -- ERROR: {repr(e)}"
+            )
+        finally:
+            if stream_to_close is not None:
+                stream_to_close.close()
+
+    elif member.is_link:
+        assert isinstance(member.link_target, str) or member.link_target is None
+        print(
+            f"{encrypted_str}  {size_str}  {format_str}  {' ' * 8}  {' ' * 16}  {member.mtime}  {member.filename} -> {member.link_target}"
+        )
+    else:
+        print(
+            f"{encrypted_str}  {size_str}  {format_str}  {' ' * 8}  {' ' * 16}  {member.mtime}  {member.filename} {member.type.upper()}"
+        )
+    if member.comment:
+        print(f"    Comment: {member.comment}")
+
+
 for archive_path in args.files:
     try:
         print(f"\nProcessing {archive_path}:")
@@ -89,70 +145,33 @@ for archive_path in args.files:
             pwd=args.password,
             use_single_file_stored_metadata=args.use_stored_metadata,
         ) as archive:
-            print(
-                f"Archive format: {archive.get_format()} {archive.get_archive_info()}"
-            )
+            print(f"Archive format: {archive.format} {archive.get_archive_info()}")
             if args.info:
                 continue
 
-            members = archive.infolist() if not args.stream else archive.info_iter()
+            if args.stream:
+                members_if_available = archive.get_members_if_available()
 
-            for member in tqdm(
-                members, desc="Computing checksums", disable=args.hide_progress
-            ):
-                encrypted_str = "E" if member.encrypted else " "
-                size_str = (
-                    "?" * 12 if member.file_size is None else f"{member.file_size:12d}"
-                )
-                format_str = format_mode(member.type, member.mode or 0)
+                for member, stream in tqdm(
+                    archive.iter_members_with_io(),
+                    desc="Computing checksums",
+                    disable=args.hide_progress,
+                    total=len(members_if_available)
+                    if members_if_available is not None
+                    else None,
+                ):
+                    process_member(member, archive, stream)
 
-                if member.is_file:
-                    assert isinstance(member.filename, str)
-                    assert isinstance(member.mtime, datetime)
+            else:
+                members = archive.get_members()
 
-                    if "inside" in member.filename:
-                        print("SKIPPING", member.filename)
-                        continue
-
-                    try:
-                        if member.extra:
-                            print(f"{member.filename} {member.extra}")
-
-                        with archive.open(member, pwd=args.password) as f:
-                            crc32, sha256 = get_member_checksums(f)
-                            if member.crc32 is not None and member.crc32 != crc32:
-                                crc_error = f" != {member.crc32:08x}"
-                            else:
-                                crc_error = ""
-
-                        print(
-                            f"{encrypted_str}  {size_str}  {format_str}  {crc32:08x}{crc_error}  {sha256[:16]}  {member.mtime}  {member.filename}"
-                        )
-
-                    except ArchiveError as e:
-                        formated_crc = (
-                            f"{member.crc32:08x}"
-                            if member.crc32 is not None
-                            else "?" * 8
-                        )
-                        print(
-                            f"{encrypted_str}  {size_str}  {format_str}  {formated_crc}  {' ' * 16}  {member.mtime}  {member.filename} -- ERROR: {repr(e)}"
-                        )
-
-                elif member.is_link:
-                    assert (
-                        isinstance(member.link_target, str)
-                        or member.link_target is None
-                    )
-                    print(
-                        f"{encrypted_str}  {size_str}  {format_str}  {' ' * 8}  {' ' * 16}  {member.mtime}  {member.filename} -> {member.link_target}"
-                    )
-                else:
-                    print(
-                        f"{encrypted_str}  {size_str}  {format_str}  {' ' * 8}  {' ' * 16}  {member.mtime}  {member.filename} {member.type.upper()}"
-                    )
-                if member.comment:
-                    print(f"    Comment: {member.comment}")
+                for member in tqdm(
+                    members,
+                    desc="Computing checksums",
+                    disable=args.hide_progress,
+                    total=len(members) if members is not None else None,
+                ):
+                    process_member(member, archive)
 
     except ArchiveError as e:
         print(f"Error processing {archive_path}: {e}")

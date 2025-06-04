@@ -1,12 +1,13 @@
 from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
+from sample_archives import BASIC_FILES, ENCODING_FILES, SYMLINK_FILES
 
 from archivey.core import open_archive
 from archivey.types import ArchiveFormat, MemberType
-from sample_archives import BASIC_FILES, SYMLINK_FILES, ENCODING_FILES
-from utils import write_files_to_dir
+from tests.archivey.testing_utils import write_files_to_dir
 
 
 @pytest.mark.parametrize(
@@ -28,7 +29,7 @@ def test_folder_reader(tmp_path: Path, files: list):
         for file in files:
             member = members[file.name.rstrip("/")]
             assert member.type == file.type
-            assert member.mtime.replace(tzinfo=None) == file.mtime
+            assert member.mtime == file.mtime
 
             if file.type == MemberType.LINK:
                 assert member.link_target == file.link_target

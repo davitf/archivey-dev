@@ -26,7 +26,7 @@ from tests.archivey.sample_archives import (
     FileInfo,
     GenerationMethod,
 )
-from tests.archivey.utils import write_files_to_dir
+from tests.archivey.testing_utils import write_files_to_dir
 
 _COMPRESSION_METHOD_TO_ZIPFILE_VALUE = {
     "store": zipfile.ZIP_STORED,

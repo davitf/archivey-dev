@@ -73,6 +73,18 @@ class ArchiveReader(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def open(
+        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
+    ) -> IO[bytes]:
+        """Open a member for reading.
+
+        Args:
+            member: The member to open
+            pwd: Password to use for decryption
+        """
+        pass
+
     # Context manager support
     def __enter__(self) -> "ArchiveReader":
         return self
@@ -116,18 +128,6 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
                     # The caller should only get the exception if it actually tries
                     # to read from the stream.
                     yield member, ErrorIOStream(e)
-
-    @abc.abstractmethod
-    def open(
-        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
-    ) -> IO[bytes]:
-        """Open a member for reading.
-
-        Args:
-            member: The member to open
-            pwd: Password to use for decryption
-        """
-        pass
 
     def _build_member_map(self) -> dict[str, ArchiveMember]:
         if self._member_map is None:

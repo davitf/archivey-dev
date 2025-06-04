@@ -76,24 +76,19 @@ class FolderReader(BaseArchiveReaderRandomAccess):
             filename=filename,
             file_size=stat_result.st_size,
             compress_size=stat_result.st_size,  # No compression for folders
-            mtime=datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc),
+            mtime=datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc).replace(
+                tzinfo=None
+            ),
             type=member_type,
             mode=stat_result.st_mode,
             link_target=link_target,
         )
 
     def _iter_member_infos(self) -> Iterator[ArchiveMember]:
-        if hasattr(self.path, "walk"):
-            walker = self.path.walk(top_down=True, follow_symlinks=False)
-        else:  # Python < 3.12 fallback
-            walker = (
-                (Path(dp), dn, fn)
-                for dp, dn, fn in os.walk(
-                    self.path, topdown=True, followlinks=False
-                )
-            )
-
-        for dirpath, dirnames, filenames in walker:
+        for root, dirnames, filenames in os.walk(
+            self.path, topdown=True, followlinks=False
+        ):
+            dirpath = Path(root)
             for dirname in dirnames:
                 yield self._convert_entry_to_member(dirpath / dirname)
             for filename in filenames:

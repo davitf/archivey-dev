@@ -39,7 +39,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-# pythonpath = ["src", "tests"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 addopts = "--log-level=DEBUG"
 

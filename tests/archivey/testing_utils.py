@@ -1,7 +1,11 @@
 from __future__ import annotations
+
 import os
+import subprocess
+from datetime import timezone
+
 from archivey.types import MemberType
-from sample_archives import FileInfo
+from tests.archivey.sample_archives import FileInfo
 
 
 def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
@@ -29,7 +33,10 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
 
         os.utime(
             full_path,
-            (file.mtime.timestamp(), file.mtime.timestamp()),
+            (
+                file.mtime.replace(tzinfo=timezone.utc).timestamp(),
+                file.mtime.replace(tzinfo=timezone.utc).timestamp(),
+            ),
             follow_symlinks=False,
         )
 
@@ -39,3 +46,6 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
             MemberType.FILE: 0o644,
         }
         os.chmod(full_path, file.permissions or default_permissions_by_type[file.type])
+
+    # List the files with ls
+    subprocess.run(["ls", "-alF", "-R", "--time-style=full-iso", dir], check=True)
