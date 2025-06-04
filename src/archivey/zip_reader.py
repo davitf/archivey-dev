@@ -211,3 +211,45 @@ class ZipReader(BaseArchiveReaderRandomAccess):
             raise ArchiveError(f"Error reading member {filename}: {e}") from e
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error reading member {filename}: {e}") from e
+
+    def extract(
+        self,
+        member: ArchiveMember | str,
+        root_path: str | None = None,
+        *,
+        pwd: bytes | str | None = None,
+    ) -> str:
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
+        filename = member.filename if isinstance(member, ArchiveMember) else member
+        try:
+            return self._archive.extract(
+                filename,
+                path=root_path,
+                pwd=str_to_bytes(pwd or self._pwd),
+            )
+        except RuntimeError as e:
+            if "password required" in str(e):
+                raise ArchiveEncryptedError(f"Member {filename} is encrypted") from e
+            raise ArchiveError(f"Error extracting member {filename}: {e}") from e
+        except zipfile.BadZipFile as e:
+            raise ArchiveCorruptedError(f"Error extracting member {filename}: {e}") from e
+
+    def extractall(
+        self,
+        path: str | None = None,
+        *,
+        pwd: bytes | str | None = None,
+    ) -> None:
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
+        try:
+            self._archive.extractall(path=path, pwd=str_to_bytes(pwd or self._pwd))
+        except RuntimeError as e:
+            if "password required" in str(e):
+                raise ArchiveEncryptedError("Archive is encrypted") from e
+            raise ArchiveError(f"Error extracting archive: {e}") from e
+        except zipfile.BadZipFile as e:
+            raise ArchiveCorruptedError(f"Error extracting archive: {e}") from e
