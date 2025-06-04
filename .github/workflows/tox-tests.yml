@@ -43,6 +43,9 @@ jobs:
         tox_env: ["newlibs", "oldlibs", "nolibs", "rarfile_no_crypto"]
 
     steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
