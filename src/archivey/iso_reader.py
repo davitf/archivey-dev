@@ -55,6 +55,16 @@ class IsoReader(BaseArchiveReaderRandomAccess):
             # or simply ignore it. Ignoring seems more user-friendly for now.
             pass  # Ignoring password as ISOs are not typically encrypted
 
+    def _path_kwargs(self, path: str) -> dict[str, str]:
+        """Return argument dict for pycdlib path functions."""
+        assert self.iso is not None
+        if self.iso.has_rock_ridge():
+            return {"rr_path": path}
+        if self.iso.has_joliet():
+            return {"joliet_path": path}
+        # Fallback to ISO 9660 names; these are stored upper-case
+        return {"iso_path": path.upper()}
+
     def _is_pycdlib_dir(
         self,
         record,  #: pycdlib.DirectoryRecord
@@ -143,14 +153,14 @@ class IsoReader(BaseArchiveReaderRandomAccess):
 
         try:
             for child_name_bytes, record in self.iso.list_dir(
-                iso_path=current_iso_path
+                **self._path_kwargs(current_iso_path)
             ):
-                child_name = child_name_bytes.decode(
-                    self.iso.joliet_output_encoding
-                    if self.iso.has_joliet()
-                    else self.iso.iso_output_encoding,
-                    "replace",
-                )
+                if self.iso.has_rock_ridge() or self.iso.has_joliet():
+                    child_name = child_name_bytes.decode("utf-8", "replace")
+                else:
+                    child_name = child_name_bytes.decode(
+                        self.iso.iso_output_encoding, "replace"
+                    )
 
                 # Skip '.' and '..' entries
                 if child_name == "." or child_name == "..":
@@ -180,7 +190,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
                 yield self._convert_direntry_to_member(member_path, record)
 
                 if self._is_pycdlib_dir(record):
-                    # Construct the iso_path for pycdlib (needs trailing slash for dirs)
+                    # Construct path for recursion; keep same case as returned
                     next_iso_path = (
                         os.path.join(current_iso_path, child_name).replace("\\", "/")
                         + "/"
@@ -204,7 +214,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
         # pycdlib doesn't explicitly list the root dir record in list_dir('/')
         # We can try to get its record specifically.
         try:
-            root_record = self.iso.get_record(iso_path="/.")
+            root_record = self.iso.get_record(**self._path_kwargs("/"))
             if root_record:
                 yield self._convert_direntry_to_member("/", root_record)
         except Exception:
@@ -246,13 +256,13 @@ class IsoReader(BaseArchiveReaderRandomAccess):
 
         try:
             # Check if it's a directory, pycdlib can't extract directories as a stream
-            record = self.iso.get_record(iso_path=iso_path)
+            record = self.iso.get_record(**self._path_kwargs(iso_path))
             if record and self._is_pycdlib_dir(record):
                 raise IsADirectoryError(
                     f"Cannot open directory '{member_name}' as a file stream."
                 )
 
-            file_data = self.iso.get_file_from_iso(iso_path=iso_path)
+            file_data = self.iso.get_file_from_iso(**self._path_kwargs(iso_path))
             return io.BytesIO(file_data)
         except pycdlib.backends.pycdlibexceptions.PyCdlibInvalidInput:
             # This exception is often raised for "file not found"
