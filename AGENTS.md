@@ -4,43 +4,46 @@ This project follows a **src layout**. The Python package lives in
 `src/archivey` and tests are under the `tests` directory.  Test archives live in
 `tests/test_archives` and helper scripts are in `tests/create_archives.py`.
 
-## Installing in development mode
-
-The project uses **Hatch** to manage the development environment.  Install
-Hatch and create the default environment which includes the `dev` dependency
-group:
-
-```bash
-pip install hatch
-hatch env create
-```
-
-Once the environment is created, install the package in editable mode with the
-optional extras so that additional archive formats are supported:
-
-```bash
-hatch run pip install -e ".[optional]"
-```
-
-## Running the tests
-
-The project uses **pytest**.  After activating the Hatch environment, run all
-tests from the repository root with:
-
-```bash
-hatch run pytest
-```
-
-To run a specific test or a subset of tests, pass `-k` with a pattern. For
-example, to run tests whose name contains `archive_name`:
-
-```bash
-hatch run pytest -k archive_name
-```
-
 Tox configurations are provided to run the suite against multiple Python
 versions and dependency sets (`tox -e <env>`).  Continuous integration executes
 these tox environments via the workflow in `.github/workflows/tox-tests.yml`.
+
+To help development, install **uv** and **hatch**:
+
+```bash
+pip install uv hatch
+```
+
+
+## Running the tests
+
+To run the tests:
+
+```bash
+uv run --extra optional pytest
+```
+
+To run a specific test or a subset of tests, pass `-k` with a pattern. For
+example, to run only tests related to zip archives:
+
+```bash
+hatch run pytest -k .zip
+```
+
+## Updating test files
+
+```bash
+uv run --extra optional python -m tests.create_archives [file_pattern]
+```
+
+E.g. to update only zip archives:
+
+```bash
+uv run --extra optional python -m tests.create_archives "*.zip"
+```
+
+If no file_pattern is specified, all the files will be created.
+
 
 ## Repository layout
 
@@ -51,7 +54,16 @@ these tox environments via the workflow in `.github/workflows/tox-tests.yml`.
   - `test_archives_external` – external archives for specific scenarios.
 - `pyproject.toml` – project metadata and tooling configuration.
 - `tox.ini` – defines tox environments used in CI.
+- `.github/workflows/tox-tests.yml` - defines Github actions for running the tox tests.
 
-The command line entry point is defined in `src/archivey/cli.py` and can be
-invoked as `archivey` once installed.
+A command line script that can be used to test if the modules are working is:
 
+```bash
+uv run --extra optional python -m archivey.cli [archive_files]
+```
+
+It will print the contents of the archive, as read by the corresponding ArchiveReader,
+along with the file hashes (computed by reading the archive members).
+
+
+## Code 
