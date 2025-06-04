@@ -5,6 +5,7 @@ import stat
 import tarfile
 from datetime import datetime, timezone
 from typing import IO, Callable, Iterator, List, Union, cast
+import io
 
 from archivey.base_reader import (
     ArchiveInfo,
@@ -15,6 +16,7 @@ from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveError,
     ArchiveMemberCannotBeOpenedError,
+    PackageNotInstalledError,
 )
 from archivey.io_helpers import ErrorIOStream, LazyOpenIO
 from archivey.types import ArchiveFormat, MemberType
@@ -47,27 +49,62 @@ class TarReader(BaseArchiveReaderRandomAccess):
         self._streaming_only = streaming_only
         self._members = None
         self._format_info = None
+        self._fileobj = None
 
         try:
-            mode_dict = {
-                ArchiveFormat.TAR: "r",
-                ArchiveFormat.TAR_GZ: "r:gz",
-                ArchiveFormat.TAR_BZ2: "r:bz2",
-                ArchiveFormat.TAR_XZ: "r:xz",
-                ArchiveFormat.TAR_ZSTD: "r:zst",
-                ArchiveFormat.TAR_LZ4: "r:lz4",
-            }
-            mode: str = mode_dict.get(format, "r")
-            if streaming_only:
-                if ":" in mode:
-                    mode = mode.replace(":", "|")
-                else:
-                    mode += "|"
+            if format == ArchiveFormat.TAR_ZSTD:
+                try:
+                    import zstandard
+                except ImportError:
+                    raise PackageNotInstalledError(
+                        "zstandard package is not installed, required for Zstandard archives"
+                    ) from None
+                try:
+                    self._fileobj = zstandard.open(archive_path, "rb")
+                    tar_mode = "r|"
+                    self._streaming_only = True
+                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
+                except zstandard.ZstdError as e:
+                    if self._fileobj is not None:
+                        self._fileobj.close()
+                        self._fileobj = None
+                    raise ArchiveCorruptedError(
+                        f"Invalid compressed TAR archive {archive_path}: {e}"
+                    ) from e
+            elif format == ArchiveFormat.TAR_LZ4:
+                try:
+                    import lz4.frame
+                except ImportError:
+                    raise PackageNotInstalledError(
+                        "lz4 package is not installed, required for LZ4 archives"
+                    ) from None
+                try:
+                    self._fileobj = lz4.frame.open(archive_path, "rb")
+                    tar_mode = "r|"
+                    self._streaming_only = True
+                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
+                except lz4.frame.LZ4FrameError as e:
+                    if self._fileobj is not None:
+                        self._fileobj.close()
+                        self._fileobj = None
+                    raise ArchiveCorruptedError(
+                        f"Invalid compressed TAR archive {archive_path}: {e}"
+                    ) from e
+            else:
+                mode_dict = {
+                    ArchiveFormat.TAR: "r",
+                    ArchiveFormat.TAR_GZ: "r:gz",
+                    ArchiveFormat.TAR_BZ2: "r:bz2",
+                    ArchiveFormat.TAR_XZ: "r:xz",
+                }
+                mode: str = mode_dict.get(format, "r")
+                if streaming_only:
+                    if ":" in mode:
+                        mode = mode.replace(":", "|")
+                    else:
+                        mode += "|"
 
-            # Pylance knows the mode argument can only accept some specific values,
-            # and doesn't understand that we're building one of them above.
-            # (possible Pylance or typeshed bug: it's not actually listing all possible values)
-            self._archive = tarfile.open(archive_path, mode)  # type: ignore
+                self._archive = tarfile.open(archive_path, mode)  # type: ignore
 
         except tarfile.ReadError as e:
             raise ArchiveCorruptedError(f"Invalid TAR archive {archive_path}: {e}")
@@ -82,6 +119,9 @@ class TarReader(BaseArchiveReaderRandomAccess):
             self._archive.close()
             self._archive = None
             self._members = None
+        if getattr(self, "_fileobj", None) is not None:
+            self._fileobj.close()
+            self._fileobj = None
 
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         if self._streaming_only:

@@ -273,17 +273,21 @@ def create_tar_archive_with_tarfile(
         tar_mode = "w:bz2"
     elif compression_format == ArchiveFormat.TAR_XZ:
         tar_mode = "w:xz"
-    elif compression_format == ArchiveFormat.TAR_ZSTD:
-        tar_mode = "w:zst"
-    elif compression_format == ArchiveFormat.TAR_LZ4:
-        tar_mode = "w:lz4"
+    elif compression_format in (ArchiveFormat.TAR_ZSTD, ArchiveFormat.TAR_LZ4):
+        tar_mode = "w"  # will compress manually below
     elif compression_format == ArchiveFormat.TAR:
         tar_mode = "w"  # plain tar
     else:
         raise ValueError(f"Unsupported tar compression format: {compression_format}")
 
-    # typing doesn't know all possible tar modes
-    with tarfile.open(abs_archive_path, tar_mode) as tf:  # type: ignore[reportArgumentType]
+    output_stream: io.BytesIO | None = None
+    if compression_format in (ArchiveFormat.TAR_ZSTD, ArchiveFormat.TAR_LZ4):
+        output_stream = io.BytesIO()
+        open_args = {"fileobj": output_stream}
+    else:
+        open_args = {"name": abs_archive_path}
+
+    with tarfile.open(mode=tar_mode, **open_args) as tf:  # type: ignore[reportArgumentType]
         for sample_file in contents.files:
             tarinfo = tarfile.TarInfo(name=sample_file.name)
             tarinfo.mtime = int(sample_file.mtime.timestamp())
@@ -316,6 +320,16 @@ def create_tar_archive_with_tarfile(
                 if sample_file.permissions is None:
                     tarinfo.mode = 0o644  # Default mode for regular files
                 tf.addfile(tarinfo, io.BytesIO(file_contents_bytes))
+
+    if output_stream is not None:
+        tar_data = output_stream.getvalue()
+        if compression_format == ArchiveFormat.TAR_ZSTD:
+            cctx = zstandard.ZstdCompressor()
+            compressed = cctx.compress(tar_data)
+        else:
+            compressed = lz4.frame.compress(tar_data)
+        with open(abs_archive_path, "wb") as out_f:
+            out_f.write(compressed)
 
 
 def create_single_file_compressed_archive_with_library(

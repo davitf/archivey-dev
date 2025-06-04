@@ -292,6 +292,9 @@ def test_read_corrupted_archives_general(archive_path_str: str):
     ids=lambda x: x.filename,
 )
 def test_read_tar_archives(sample_archive: ArchiveInfo):
+    archive_path = pathlib.Path(sample_archive.get_archive_path())
+    if not archive_path.exists():
+        pytest.skip("TAR archive not available")
     check_iter_members(sample_archive)
 
 
