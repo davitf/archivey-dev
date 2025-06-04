@@ -55,15 +55,41 @@ class IsoReader(BaseArchiveReaderRandomAccess):
             # or simply ignore it. Ignoring seems more user-friendly for now.
             pass  # Ignoring password as ISOs are not typically encrypted
 
-    def _path_kwargs(self, path: str) -> dict[str, str]:
-        """Return argument dict for pycdlib path functions."""
+    def _path_variants(self, path: str) -> list[tuple[str, str]]:
+        """Return possible argument pairs for pycdlib path functions."""
         assert self.iso is not None
-        if self.iso.has_rock_ridge():
-            return {"rr_path": path}
-        if self.iso.has_joliet():
-            return {"joliet_path": path}
-        # Fallback to ISO 9660 names; these are stored upper-case
-        return {"iso_path": path.upper()}
+        variants: list[tuple[str, str]] = []
+        if getattr(self.iso, "rock_ridge", None) is not None:
+            variants.extend(
+                [
+                    ("rr_path", path),
+                    ("rr_pathname", path),
+                    ("rr_name", path),
+                ]
+            )
+        if getattr(self.iso, "joliet", None) is not None:
+            variants.extend(
+                [
+                    ("joliet_path", path),
+                    ("joliet_pathname", path),
+                    ("joliet_name", path),
+                ]
+            )
+        variants.extend([("iso_path", path.upper()), ("path", path.upper())])
+        return variants
+
+    def _call_with_path(self, func, path: str):
+        """Call a pycdlib function with best path argument."""
+        last_err: Exception | None = None
+        for key, val in self._path_variants(path):
+            try:
+                return func(**{key: val})
+            except TypeError as e:
+                last_err = e
+                continue
+        if last_err is not None:
+            raise last_err
+        raise ArchiveError(f"Unable to call {func} with path {path}")
 
     def _is_pycdlib_dir(
         self,
@@ -152,10 +178,15 @@ class IsoReader(BaseArchiveReaderRandomAccess):
             raise ArchiveError("ISO not opened")
 
         try:
-            for child_name_bytes, record in self.iso.list_dir(
-                **self._path_kwargs(current_iso_path)
+            list_dir_fn = getattr(self.iso, "list_dir", None)
+            if list_dir_fn is None:
+                list_dir_fn = getattr(self.iso, "list_children")
+            for child_name_bytes, record in self._call_with_path(
+                list_dir_fn, current_iso_path
             ):
-                if self.iso.has_rock_ridge() or self.iso.has_joliet():
+                if getattr(self.iso, "rock_ridge", None) is not None or getattr(
+                    self.iso, "joliet", None
+                ) is not None:
                     child_name = child_name_bytes.decode("utf-8", "replace")
                 else:
                     child_name = child_name_bytes.decode(
@@ -214,7 +245,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
         # pycdlib doesn't explicitly list the root dir record in list_dir('/')
         # We can try to get its record specifically.
         try:
-            root_record = self.iso.get_record(**self._path_kwargs("/"))
+            root_record = self._call_with_path(self.iso.get_record, "/")
             if root_record:
                 yield self._convert_direntry_to_member("/", root_record)
         except Exception:
@@ -256,13 +287,13 @@ class IsoReader(BaseArchiveReaderRandomAccess):
 
         try:
             # Check if it's a directory, pycdlib can't extract directories as a stream
-            record = self.iso.get_record(**self._path_kwargs(iso_path))
+            record = self._call_with_path(self.iso.get_record, iso_path)
             if record and self._is_pycdlib_dir(record):
                 raise IsADirectoryError(
                     f"Cannot open directory '{member_name}' as a file stream."
                 )
 
-            file_data = self.iso.get_file_from_iso(**self._path_kwargs(iso_path))
+            file_data = self._call_with_path(self.iso.get_file_from_iso, iso_path)
             return io.BytesIO(file_data)
         except pycdlib.backends.pycdlibexceptions.PyCdlibInvalidInput:
             # This exception is often raised for "file not found"
