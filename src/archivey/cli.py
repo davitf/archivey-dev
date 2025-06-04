@@ -9,7 +9,7 @@ from typing import IO, Tuple
 
 from tqdm import tqdm
 
-from archivey.archive_stream import ArchiveStream
+from archivey.core import open_archive
 from archivey.exceptions import (
     ArchiveError,
 )
@@ -82,12 +82,12 @@ args = parser.parse_args()
 for archive_path in args.files:
     try:
         print(f"\nProcessing {archive_path}:")
-        with ArchiveStream(
+        with open_archive(
             archive_path,
             use_libarchive=args.use_libarchive,
             use_rar_stream=args.use_rar_stream,
-            use_single_file_stored_metadata=args.use_stored_metadata,
             pwd=args.password,
+            use_single_file_stored_metadata=args.use_stored_metadata,
         ) as archive:
             print(
                 f"Archive format: {archive.get_format()} {archive.get_archive_info()}"

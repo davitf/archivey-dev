@@ -1,4 +1,4 @@
-from archivey.archive_stream import ArchiveStream
+from archivey.core import open_archive
 from archivey.dependency_checker import (
     DependencyVersions,
     format_dependency_versions,
@@ -19,7 +19,7 @@ from archivey.iso_reader import IsoReader
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 __all__ = [
-    "ArchiveStream",
+    "open_archive",
     "IsoReader",
     "FolderReader",
     "ArchiveError",
