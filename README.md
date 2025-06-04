@@ -1,24 +1,29 @@
 # Archivey
 
-Archivey is a small library for reading the contents of many common archive formats. It provides a unified interface on top of packages like `zipfile`, `py7zr`, `rarfile` and `pycdlib`.
+Archivey is a library for reading the contents of many common archive formats. It provides a simple, unified interface on top of several builtin modules and external packages, and improves on some of their shortcomings.
+
 
 ## Features
 
-- Support for ZIP, 7z, TAR (including compressed tar variants), RAR and ISO files
-- Transparent handling of single-file compressed formats (`.gz`, `.bz2`, `.xz`, `.zst`, `.lz4`)
-- Stream or random access reading of archive members
-- Simple command line utility for inspecting archives
+- Support for ZIP, TAR (including compressed tar variants), RAR, 7z and ISO files, and single-file compressed formats
+- Optimized streaming access reading of archive members
+- Consistent handling of symlinks, file times, permissions, and passwords
+- Consistent exception hierarchy
+- Automatic file format detection
 
 ## Installation
 
+Recommended:
 ```
-pip install archivey
+pip install archivey[optional]
 ```
+Or, if you don't want to add all dependencies to your project, add only the ones you need.
 
-Some features require optional dependencies. See `pyproject.toml` for details. RAR support relies on the `unrar` tool.
+RAR support relies on the `unrar` tool, which you'll need to install separately.
 
 ## Usage
 
+### Streaming access
 ```python
 from archivey import open_archive
 
@@ -29,18 +34,15 @@ with open_archive("example.zip") as archive:
             data = stream.read()
 ```
 
-A small command line tool is also available:
+### Random access
+```python
+from archivey import open_archive
 
+with open_archive("example.zip") as archive:
+    members = archive.get_members()
+    # Read the contents of the last file in the archive
+    member_to_read = members[-1]
+    if member_to_read.is_file:
+        stream = archive.open(member_to_read)
+        data = stream.read()
 ```
-uv run --extra optional python -m archivey.cli example.zip
-```
-
-## Running the Tests
-
-Tests are executed with `pytest`:
-
-```
-uv run --extra optional pytest
-```
-
-RAR related tests require the `unrar` binary. If it is not available, these tests may fail.
