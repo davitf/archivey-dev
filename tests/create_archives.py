@@ -11,6 +11,10 @@ import zipfile
 from typing import Any, Generator
 
 import py7zr
+try:
+    import pycdlib
+except ImportError:  # pragma: no cover - optional dependency
+    pycdlib = None
 
 from archivey.types import ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
@@ -628,6 +632,46 @@ def create_7z_archive_with_command_line(
             subprocess.run(command, check=True, cwd=tempdir)
 
 
+def create_iso_archive_with_pycdlib(
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
+):
+    assert compression_format == ArchiveFormat.ISO, (
+        f"Only ISO format is supported, got {compression_format}"
+    )
+
+    if pycdlib is None:
+        raise RuntimeError("pycdlib is required to create ISO archives")
+
+    abs_archive_path = os.path.abspath(archive_path)
+    if os.path.exists(abs_archive_path):
+        os.remove(abs_archive_path)
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        write_files_to_dir(tempdir, contents.files)
+
+        iso = pycdlib.PyCdlib()
+        iso.new(rock_ridge="1.09", joliet=1)
+
+        for root_dir, dirs, files in os.walk(tempdir):
+            rel_root = os.path.relpath(root_dir, tempdir)
+            if rel_root == ".":
+                rel_root = ""
+
+            for d in dirs:
+                iso_path = os.path.join("/", rel_root, d)
+                iso_path = iso_path.replace(os.sep, "/")
+                iso.add_directory(rr_name=d, iso_path=iso_path)
+
+            for f_name in files:
+                src_path = os.path.join(root_dir, f_name)
+                iso_path = os.path.join("/", rel_root, f_name)
+                iso_path = iso_path.replace(os.sep, "/")
+                iso.add_file(src_path, iso_path=iso_path, rr_name=f_name)
+
+        iso.write(abs_archive_path)
+        iso.close()
+
+
 GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.ZIPFILE: create_zip_archive_with_zipfile,
     GenerationMethod.INFOZIP: create_zip_archive_with_infozip_command_line,
@@ -638,6 +682,7 @@ GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.SEVENZIP_COMMAND_LINE: create_7z_archive_with_command_line,
     GenerationMethod.SINGLE_FILE_COMMAND_LINE: create_single_file_compressed_archive_with_command_line,
     GenerationMethod.SINGLE_FILE_LIBRARY: create_single_file_compressed_archive_with_library,
+    GenerationMethod.ISO_PYCDLIB: create_iso_archive_with_pycdlib,
 }
 
 

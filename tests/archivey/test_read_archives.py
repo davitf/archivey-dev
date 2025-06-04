@@ -40,6 +40,7 @@ FORMAT_FEATURES = {
     ArchiveFormat.SEVENZIP: ArchiveFormatFeatures(
         dir_entries=False, file_comments=False
     ),
+    ArchiveFormat.ISO: ArchiveFormatFeatures(file_comments=False),
 }
 
 DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
@@ -266,6 +267,18 @@ def test_read_tar_archives(sample_archive: ArchiveInfo):
 
 @pytest.mark.parametrize(
     "sample_archive",
+    filter_archives(SAMPLE_ARCHIVES, extensions=["iso"]),
+    ids=lambda x: x.filename,
+)
+def test_read_iso_archives(sample_archive: ArchiveInfo):
+    pytest.importorskip("pycdlib")
+    if not pathlib.Path(sample_archive.get_archive_path()).exists():
+        pytest.skip("ISO archive not available")
+    check_read_archive(sample_archive)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
     filter_archives(SAMPLE_ARCHIVES, extensions=["rar"]),
     ids=lambda x: x.filename,
 )
@@ -387,6 +400,19 @@ def test_py7zr_not_installed_raises_exception():
     with pytest.raises(PackageNotInstalledError) as excinfo:
         ArchiveStream(BASIC_7Z_ARCHIVE.get_archive_path())
     assert "py7zr package is not installed" in str(excinfo.value)
+
+
+BASIC_ISO_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["basic_iso"], extensions=["iso"]
+)[0]
+
+
+@patch("archivey.iso_reader.pycdlib", None)
+@pytest.mark.missing_pycdlib
+def test_pycdlib_not_installed_raises_exception():
+    """Test that LibraryNotInstalledError is raised for .iso when pycdlib is not installed."""
+    with pytest.raises(PackageNotInstalledError):
+        ArchiveStream(BASIC_ISO_ARCHIVE.get_archive_path())
 
 
 @patch("archivey.rar_reader.rarfile._have_crypto", 0)
