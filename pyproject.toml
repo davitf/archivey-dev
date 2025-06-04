@@ -43,6 +43,9 @@ pythonpath = ["src", "."]
 testpaths = ["tests"]
 addopts = "--log-level=DEBUG"
 
+[tool.hatch.envs.default]
+python = "3.13"
+
 [tool.hatch.envs.default.scripts]
 lint = "ruff check --fix . && ruff format . && npx pyright ."
 test = "pytest"
