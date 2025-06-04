@@ -66,4 +66,8 @@ It will print the contents of the archive, as read by the corresponding ArchiveR
 along with the file hashes (computed by reading the archive members).
 
 
-## Code 
+## Best practices
+
+- All exceptions raised by libraries should be wrapped in an exception defined in
+`src/archivey/exceptions.py`. NEVER catch `Exception` as it may hide code bugs; catch
+only the base exception of each library, or specific builtin exceptions that they raise.
