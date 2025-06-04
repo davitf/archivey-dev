@@ -13,6 +13,7 @@ from archivey.base_reader import (
 )
 from archivey.exceptions import (
     ArchiveCorruptedError,
+    ArchiveError,
     ArchiveMemberCannotBeOpenedError,
 )
 from archivey.io_helpers import ErrorIOStream
@@ -227,6 +228,6 @@ class TarReader(BaseArchiveReaderRandomAccess):
                     stream = self.open(member)
                     yield member, stream
                     stream.close()
-                except Exception as e:
-                    logger.info(f"Error opening member {member.filename}: {e}")
+                except (ArchiveError, OSError) as e:
+                    logger.warning("Error opening member %s: %s", member.filename, e)
                     yield member, ErrorIOStream(e)

@@ -35,6 +35,7 @@ else:
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
+    ArchiveError,
     PackageNotInstalledError,
 )
 from archivey.formats import ArchiveFormat
@@ -347,7 +348,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 factory = StreamingFactory(q)
                 self._archive.extract(targets=files, factory=factory)
                 factory.finish()
-            except Exception as exc:
+            except (py7zr.exceptions.ArchiveError, OSError) as exc:
                 q.put(exc)
                 q.put(None)  # Ensure the main thread breaks out of the loop
 
@@ -411,9 +412,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         try:
             self._archive.extractall(path=path)
         except py7zr.PasswordRequired as e:
-            raise ArchiveEncryptedError(
-                "Password required to extract archive"
-            ) from e
+            raise ArchiveEncryptedError("Password required to extract archive") from e
         except py7zr.Bad7zFile as e:
             raise ArchiveCorruptedError(
                 f"Invalid 7-Zip archive {self.archive_path}"
