@@ -14,6 +14,7 @@ from archivey.exceptions import (
     ArchiveEOFError,
     ArchiveError,
     ArchiveFormatError,
+    PackageNotInstalledError,
 )
 from archivey.types import (
     ArchiveFormat,
@@ -242,8 +243,8 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
 
                 self.decompressor = zstandard.open
             except ImportError:
-                raise RuntimeError(
-                    "zstandard module not found, required for Zstandard archives"
+                raise PackageNotInstalledError(
+                    "zstandard package is not installed, required for Zstandard archives"
                 ) from None
         elif format == ArchiveFormat.LZ4:
             try:
@@ -251,8 +252,8 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
 
                 self.decompressor = lz4.frame.open
             except ImportError:
-                raise RuntimeError(
-                    "lz4 module not found, required for LZ4 archives"
+                raise PackageNotInstalledError(
+                    "lz4 package is not installed, required for LZ4 archives"
                 ) from None
         else:
             raise ArchiveError(f"Unsupported compression format: {self.ext}")

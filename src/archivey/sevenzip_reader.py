@@ -5,8 +5,6 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import IO, TYPE_CHECKING, Callable, Iterator, List, Optional, Union, cast
 
-from py7zr import Py7zIO, WriterFactory
-
 from archivey.base_reader import BaseArchiveReaderRandomAccess
 
 if TYPE_CHECKING:
@@ -15,6 +13,7 @@ if TYPE_CHECKING:
     import py7zr.exceptions
     import py7zr.helpers
     import py7zr.io
+    from py7zr import Py7zIO, WriterFactory
     from py7zr.py7zr import ArchiveFile
 else:
     try:
@@ -23,10 +22,13 @@ else:
         import py7zr.exceptions
         import py7zr.helpers
         import py7zr.io
+        from py7zr import Py7zIO, WriterFactory
         from py7zr.py7zr import ArchiveFile
     except ImportError:
         py7zr = None  # type: ignore[assignment]
         ArchiveFile = None  # type: ignore[misc,assignment]
+        Py7zIO = object  # type: ignore[misc,assignment]
+        WriterFactory = object  # type: ignore[misc,assignment]
 
 
 from archivey.exceptions import (

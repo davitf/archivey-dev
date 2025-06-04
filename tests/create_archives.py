@@ -1,7 +1,10 @@
 import argparse
+import bz2
 import fnmatch
+import gzip
 import io
 import logging
+import lzma
 import os
 import stat
 import subprocess
@@ -10,11 +13,10 @@ import tempfile
 import zipfile
 from typing import Any, Generator
 
+import lz4.frame
 import py7zr
-try:
-    import pycdlib
-except ImportError:  # pragma: no cover - optional dependency
-    pycdlib = None
+import pycdlib
+import zstandard
 
 from archivey.types import ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
@@ -364,16 +366,10 @@ def create_single_file_compressed_archive_with_library(
     archive_path: str,
     contents: ArchiveContents,
     compression_format: ArchiveFormat,
-    opener,
     opener_kwargs: dict[str, Any] = {},
 ):
-    assert compression_format in [
-        ArchiveFormat.GZIP,
-        ArchiveFormat.BZIP2,
-        ArchiveFormat.XZ,
-        ArchiveFormat.ZSTD,
-        ArchiveFormat.LZ4,
-    ], f"Only supported compression formats are supported, got {compression_format}"
+    opener = SINGLE_FILE_LIBRARY_OPENERS[compression_format]
+
     assert not contents.solid, f"Single-file archives are not solid. ({archive_path})"
     assert len(contents.files) == 1, (
         f"Single-file archives only support a single file. ({archive_path})"
@@ -639,9 +635,6 @@ def create_iso_archive_with_pycdlib(
         f"Only ISO format is supported, got {compression_format}"
     )
 
-    if pycdlib is None:
-        raise RuntimeError("pycdlib is required to create ISO archives")
-
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
         os.remove(abs_archive_path)
@@ -649,8 +642,30 @@ def create_iso_archive_with_pycdlib(
     with tempfile.TemporaryDirectory() as tempdir:
         write_files_to_dir(tempdir, contents.files)
 
-        iso = pycdlib.PyCdlib()
-        iso.new(rock_ridge="1.09", joliet=1)
+        iso = pycdlib.pycdlib.PyCdlib()
+        iso.new(interchange_level=3, rock_ridge="1.09", joliet=3)
+
+        # for file in contents.files:
+        #     abs_path = "/" + file.name
+        #     rock_ridge_name = os.path.basename(file.name)
+        #     print(f"Adding file {file.name} as {abs_path}")
+        #     if file.type == MemberType.FILE:
+        #         iso.add_file(
+        #             os.path.join(tempdir, file.name),
+        #             abs_path,
+        #             rr_name=rock_ridge_name,
+        #         )
+        #     elif file.type == MemberType.DIR:
+        #         iso.add_directory(
+        #             abs_path,
+        #             rr_name=rock_ridge_name,
+        #         )
+        #     elif file.type == MemberType.LINK and file.link_target:
+        #         iso.add_symlink(
+        #             abs_path,
+        #             rr_symlink_name=rock_ridge_name,
+        #             udf_target="/" + file.link_target,
+        #         )
 
         for root_dir, dirs, files in os.walk(tempdir):
             rel_root = os.path.relpath(root_dir, tempdir)
@@ -658,18 +673,54 @@ def create_iso_archive_with_pycdlib(
                 rel_root = ""
 
             for d in dirs:
+                print(f"Adding directory {d} to {rel_root}")
                 iso_path = os.path.join("/", rel_root, d)
                 iso_path = iso_path.replace(os.sep, "/")
-                iso.add_directory(rr_name=d, iso_path=iso_path)
+                iso.add_directory(
+                    rr_name=d, iso_path=iso_path.upper(), joliet_path=iso_path
+                )
 
             for f_name in files:
+                print(f"Adding file {f_name} to {rel_root}")
+
                 src_path = os.path.join(root_dir, f_name)
                 iso_path = os.path.join("/", rel_root, f_name)
                 iso_path = iso_path.replace(os.sep, "/")
-                iso.add_file(src_path, iso_path=iso_path, rr_name=f_name)
+                iso.add_file(
+                    src_path,
+                    iso_path=iso_path.upper(),
+                    rr_name=f_name,
+                    joliet_path=iso_path,
+                )
 
         iso.write(abs_archive_path)
         iso.close()
+
+
+def create_iso_archive_with_genisoimage(
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
+):
+    assert compression_format == ArchiveFormat.ISO, (
+        f"Only ISO format is supported, got {compression_format}"
+    )
+    abs_archive_path = os.path.abspath(archive_path)
+
+    volume_id_args = ["-V", contents.archive_comment or ""]
+    with tempfile.TemporaryDirectory() as tempdir:
+        write_files_to_dir(tempdir, contents.files)
+
+        subprocess.run(
+            [
+                "genisoimage",
+                "-J",
+                "-r",
+                "-o",
+                abs_archive_path,
+                *volume_id_args,
+                tempdir,
+            ],
+            check=True,
+        )
 
 
 GENERATION_METHODS_TO_GENERATOR = {
@@ -683,6 +734,16 @@ GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.SINGLE_FILE_COMMAND_LINE: create_single_file_compressed_archive_with_command_line,
     GenerationMethod.SINGLE_FILE_LIBRARY: create_single_file_compressed_archive_with_library,
     GenerationMethod.ISO_PYCDLIB: create_iso_archive_with_pycdlib,
+    GenerationMethod.ISO_GENISOIMAGE: create_iso_archive_with_genisoimage,
+}
+
+
+SINGLE_FILE_LIBRARY_OPENERS = {
+    ArchiveFormat.GZIP: gzip.GzipFile,
+    ArchiveFormat.BZIP2: bz2.BZ2File,
+    ArchiveFormat.XZ: lzma.LZMAFile,
+    ArchiveFormat.ZSTD: zstandard.open,
+    ArchiveFormat.LZ4: lz4.frame.open,
 }
 
 

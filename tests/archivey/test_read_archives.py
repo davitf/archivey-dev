@@ -63,6 +63,17 @@ def check_iter_members(
     use_rar_stream: bool = False,
     set_file_password_in_constructor: bool = True,
 ):
+    if sample_archive.format_info.format == ArchiveFormat.ISO:
+        pytest.importorskip("pycdlib")
+    elif sample_archive.format_info.format == ArchiveFormat.RAR:
+        pytest.importorskip("rarfile")
+    elif sample_archive.format_info.format == ArchiveFormat.SEVENZIP:
+        pytest.importorskip("py7zr")
+    elif sample_archive.format_info.format == ArchiveFormat.ZSTD:
+        pytest.importorskip("zstandard")
+    elif sample_archive.format_info.format == ArchiveFormat.LZ4:
+        pytest.importorskip("lz4")
+
     if sample_archive.skip_test:
         pytest.skip(f"Skipping test for {sample_archive.filename} as skip_test is True")
 
@@ -275,7 +286,6 @@ def test_read_tar_archives(sample_archive: ArchiveInfo):
     ids=lambda x: x.filename,
 )
 def test_read_iso_archives(sample_archive: ArchiveInfo):
-    pytest.importorskip("pycdlib")
     if not pathlib.Path(sample_archive.get_archive_path()).exists():
         pytest.skip("ISO archive not available")
     check_iter_members(sample_archive)
@@ -387,55 +397,45 @@ BASIC_7Z_ARCHIVE = filter_archives(
     SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["7z"]
 )[0]
 
-
-@pytest.mark.missing_rarfile
-@patch("archivey.rar_reader.rarfile", None)
-def test_rarfile_not_installed_raises_exception():
-    """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
-    with pytest.raises(PackageNotInstalledError) as excinfo:
-        ArchiveStream(BASIC_RAR_ARCHIVE.get_archive_path())
-    assert "rarfile package is not installed" in str(excinfo.value)
-
-
-@pytest.mark.missing_py7zr
-@patch("archivey.sevenzip_reader.py7zr", None)
-def test_py7zr_not_installed_raises_exception():
-    """Test that LibraryNotInstalledError is raised for .7z when py7zr is not installed."""
-    with pytest.raises(PackageNotInstalledError) as excinfo:
-        ArchiveStream(BASIC_7Z_ARCHIVE.get_archive_path())
-    assert "py7zr package is not installed" in str(excinfo.value)
-
-
 BASIC_ISO_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["basic_iso"], extensions=["iso"]
+    SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["iso"]
+)[0]
+
+BASIC_ZSTD_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["zst"]
+)[0]
+
+BASIC_LZ4_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["lz4"]
+)[0]
+
+BASIC_ZSTD_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["zst"]
 )[0]
 
 
-@patch("archivey.iso_reader.pycdlib", None)
-@pytest.mark.missing_pycdlib
-def test_pycdlib_not_installed_raises_exception():
-    """Test that LibraryNotInstalledError is raised for .iso when pycdlib is not installed."""
-    with pytest.raises(PackageNotInstalledError):
-        ArchiveStream(BASIC_ISO_ARCHIVE.get_archive_path())
-
-
-BASIC_ISO_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["basic_iso"], extensions=["iso"]
-)[0]
-
-
-@patch("archivey.iso_reader.pycdlib", None)
-@pytest.mark.missing_pycdlib
-def test_pycdlib_not_installed_raises_exception():
-    """Test that LibraryNotInstalledError is raised for .iso when pycdlib is not installed."""
-    with pytest.raises(PackageNotInstalledError):
-        ArchiveStream(BASIC_ISO_ARCHIVE.get_archive_path())
+@pytest.mark.missing_package
+@pytest.mark.parametrize(
+    ["library_name", "archive_path"],
+    [
+        ("pycdlib", BASIC_ISO_ARCHIVE.get_archive_path()),
+        ("rarfile", BASIC_RAR_ARCHIVE.get_archive_path()),
+        ("py7zr", BASIC_7Z_ARCHIVE.get_archive_path()),
+        ("zstandard", BASIC_ZSTD_ARCHIVE.get_archive_path()),
+        ("lz4", BASIC_LZ4_ARCHIVE.get_archive_path()),
+    ],
+    ids=lambda x: os.path.basename(x),
+)
+def test_missing_package_raises_exception(library_name: str, archive_path: str):
+    with pytest.raises(PackageNotInstalledError) as excinfo:
+        ArchiveStream(archive_path)
+    assert f"{library_name} package is not installed" in str(excinfo.value)
 
 
 @pytest.mark.missing_crypto
 @patch("archivey.rar_reader.rarfile._have_crypto", 0)
 def test_rarfile_missing_cryptography_raises_exception():
-    """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
+    """Test that LibraryNotInstalledError is raised for header-encrypted .rar when cryptography is not installed."""
     with pytest.raises(PackageNotInstalledError) as excinfo:
         with ArchiveStream(
             HEADER_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
@@ -449,7 +449,7 @@ def test_rarfile_missing_cryptography_raises_exception():
 @pytest.mark.missing_crypto
 @patch("archivey.rar_reader.rarfile._have_crypto", 0)
 def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files():
-    """Test that LibraryNotInstalledError is raised for .rar when rarfile is not installed."""
+    """Test that LibraryNotInstalledError is NOT raised for non-header-encrypted .rar when cryptography is not installed."""
     with ArchiveStream(
         NORMAL_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
         pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,

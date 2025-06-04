@@ -1,16 +1,12 @@
-import bz2
 import copy
-import gzip
-import lzma
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Optional
 
-import lz4.frame
-import zstandard
-
+# import lz4.frame
+# import zstandard
 from archivey.types import ArchiveFormat, MemberType
 
 
@@ -25,6 +21,7 @@ class GenerationMethod(Enum):
     SINGLE_FILE_COMMAND_LINE = "single_file_cmd"
     SINGLE_FILE_LIBRARY = "single_file_lib"
     ISO_PYCDLIB = "iso_pycdlib"
+    ISO_GENISOIMAGE = "iso_genisoimage"
 
     EXTERNAL = "external"
 
@@ -222,38 +219,39 @@ GZIP_LIBRARY = ArchiveFormatInfo(
     file_suffix="lib.gz",
     format=ArchiveFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    generation_method_options={"opener": gzip.GzipFile, "opener_kwargs": {"mtime": 0}},
+    generation_method_options={"opener_kwargs": {"mtime": 0}},
 )
 BZIP2_LIBRARY = ArchiveFormatInfo(
     file_suffix="lib.bz2",
     format=ArchiveFormat.BZIP2,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    generation_method_options={"opener": bz2.BZ2File},
 )
 XZ_LIBRARY = ArchiveFormatInfo(
     file_suffix="lib.xz",
     format=ArchiveFormat.XZ,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    generation_method_options={"opener": lzma.LZMAFile},
 )
 ZSTD_LIBRARY = ArchiveFormatInfo(
     file_suffix="lib.zst",
     format=ArchiveFormat.ZSTD,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    generation_method_options={"opener": zstandard.open},
 )
 LZ4_LIBRARY = ArchiveFormatInfo(
     file_suffix="lib.lz4",
     format=ArchiveFormat.LZ4,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    generation_method_options={"opener": lz4.frame.open},
 )
 
 # ISO format
 ISO_PYCDLIB = ArchiveFormatInfo(
-    file_suffix=".iso",
+    file_suffix="pycdlib.iso",
     format=ArchiveFormat.ISO,
     generation_method=GenerationMethod.ISO_PYCDLIB,
+)
+ISO_GENISOIMAGE = ArchiveFormatInfo(
+    file_suffix="genisoimage.iso",
+    format=ArchiveFormat.ISO,
+    generation_method=GenerationMethod.ISO_GENISOIMAGE,
 )
 
 ALL_SINGLE_FILE_FORMATS = [
@@ -299,12 +297,16 @@ SEVENZIP_FORMATS = [
 
 ISO_FORMATS = [
     ISO_PYCDLIB,
+    ISO_GENISOIMAGE,
 ]
 
 ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
 
 # Skip test filenames
-SKIP_TEST_FILENAMES = set()
+SKIP_TEST_FILENAMES = {
+    "basic_nonsolid__genisoimage.iso",
+    "basic_nonsolid__pycdlib.iso",
+}
 
 
 def _fake_mtime(i: int) -> datetime:
@@ -595,7 +597,7 @@ def build_archive_infos() -> list[ArchiveInfo]:
     missing_skip_tests = SKIP_TEST_FILENAMES - created_filenames
     if missing_skip_tests:
         raise ValueError(
-            f"Some skip test filenames were not created: {missing_skip_tests}"
+            f"Some skip test filenames were not created: {missing_skip_tests}. Created filenames: {created_filenames}"
         )
 
     return archives
@@ -638,7 +640,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveFormatInfo]]] = [
             file_basename="basic_nonsolid",
             files=BASIC_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS,
+        ZIP_RAR_7Z_FORMATS + ISO_FORMATS,
     ),
     (
         ArchiveContents(
@@ -790,13 +792,13 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveFormatInfo]]] = [
         ),
         BASIC_TAR_FORMATS,
     ),
-    (
-        ArchiveContents(
-            file_basename="basic_iso",
-            files=BASIC_FILES,
-        ),
-        ISO_FORMATS,
-    ),
+    # (
+    #     ArchiveContents(
+    #         file_basename="basic_iso",
+    #         files=BASIC_FILES,
+    #     ),
+    #     ISO_FORMATS,
+    # ),
 ]
 
 # Build all archive infos

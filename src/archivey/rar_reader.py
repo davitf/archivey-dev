@@ -14,11 +14,15 @@ from typing import IO, TYPE_CHECKING, Any, Iterable, Iterator, List, Optional, c
 
 if TYPE_CHECKING:
     import rarfile
+    from rarfile import Rar5Info, RarInfo
 else:
     try:
         import rarfile
+        from rarfile import Rar5Info, RarInfo
     except ImportError:
         rarfile = None  # type: ignore[assignment]
+        Rar5Info = object  # type: ignore[assignment]
+        RarInfo = object  # type: ignore[assignment]
 
 from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.exceptions import (
@@ -53,9 +57,9 @@ RarEncryptionInfo = collections.namedtuple(
 )
 
 
-def get_encryption_info(rarinfo: rarfile.RarInfo) -> RarEncryptionInfo | None:
+def get_encryption_info(rarinfo: RarInfo) -> RarEncryptionInfo | None:
     # The file_encryption attribute is not publicly defined, but it's there.
-    if not isinstance(rarinfo, rarfile.Rar5Info):
+    if not isinstance(rarinfo, Rar5Info):
         return None
     if rarinfo.file_encryption is None:  # type: ignore[attr-defined]
         return None
@@ -101,7 +105,7 @@ def _verify_rar5_password_internal(
 
 
 def verify_rar5_password(
-    password: bytes | None, rar_info: rarfile.RarInfo
+    password: bytes | None, rar_info: RarInfo
 ) -> PasswordCheckResult:
     """
     Verifies whether the given password matches the check value in RAR5 encryption data.
@@ -158,7 +162,7 @@ def convert_crc_to_encrypted(
 
 
 def check_rarinfo_crc(
-    rarinfo: rarfile.RarInfo, password: bytes | None, computed_crc: int
+    rarinfo: RarInfo, password: bytes | None, computed_crc: int
 ) -> bool:
     encryption_info = get_encryption_info(rarinfo)
     if (
@@ -224,7 +228,7 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
             self._archive = None
             self._members = None
 
-    def _get_link_target(self, info: rarfile.RarInfo) -> Optional[str]:
+    def _get_link_target(self, info: RarInfo) -> Optional[str]:
         if not info.is_symlink():
             return None
         if info.file_redir:
