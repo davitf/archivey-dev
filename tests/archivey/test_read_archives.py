@@ -16,7 +16,7 @@ from sample_archives import (
     filter_archives,
 )
 
-from archivey.archive_stream import ArchiveStream
+from archivey.core import open_archive
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
@@ -111,7 +111,7 @@ def check_iter_members(
             )
         )
 
-    with ArchiveStream(
+    with open_archive(
         sample_archive.get_archive_path(),
         pwd=constructor_password,
         use_rar_stream=use_rar_stream,
@@ -247,7 +247,7 @@ def test_read_truncated_archives(archive_path_str: str):
     """Test that reading truncated archives raises ArchiveEOFError."""
     archive_path = pathlib.Path(archive_path_str)
     with pytest.raises(ArchiveEOFError):
-        with ArchiveStream(archive_path):
+        with open_archive(archive_path):
             pass  # Opening is enough to trigger for some formats, iteration for others
 
 
@@ -263,7 +263,7 @@ def test_read_corrupted_archives_general(archive_path_str: str):
     archive_path = pathlib.Path(archive_path_str)
     with pytest.raises(ArchiveCorruptedError):
         # For many corrupted archives, error might be raised on open or during iteration
-        with ArchiveStream(str(archive_path)) as archive:
+        with open_archive(str(archive_path)) as archive:
             for _ in archive.info_iter():
                 pass
 
@@ -437,7 +437,7 @@ def test_missing_package_raises_exception(library_name: str, archive_path: str):
 def test_rarfile_missing_cryptography_raises_exception():
     """Test that LibraryNotInstalledError is raised for header-encrypted .rar when cryptography is not installed."""
     with pytest.raises(PackageNotInstalledError) as excinfo:
-        with ArchiveStream(
+        with open_archive(
             HEADER_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
             pwd=HEADER_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
         ) as archive:
