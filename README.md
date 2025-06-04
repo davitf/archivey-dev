@@ -46,3 +46,4 @@ with open_archive("example.zip") as archive:
         stream = archive.open(member_to_read)
         data = stream.read()
 ```
+

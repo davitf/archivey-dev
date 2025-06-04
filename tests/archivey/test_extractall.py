@@ -21,7 +21,7 @@ def _get_sample(name: str):
 )
 def test_extractall(tmp_path: Path, filename: str):
     sample = _get_sample(filename)
-    if sample.format_info.format == ArchiveFormat.SEVENZIP:
+    if sample.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
 
     dest = tmp_path / "out"

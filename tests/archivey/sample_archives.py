@@ -61,14 +61,28 @@ class ArchiveContents:
         return len({f.password for f in self.files if f.password is not None}) > 1
 
 
-@dataclass
-class ArchiveFormatInfo:
+@dataclass(frozen=True)
+class ArchiveFormatFeatures:
+    dir_entries: bool = True
+    file_comments: bool = False
+    archive_comment: bool = False
+    mtime: bool = True
+    rounded_mtime: bool = False
+    file_size: bool = True
+
+
+DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
+
+
+@dataclass(frozen=True)
+class ArchiveCreationInfo:
     file_suffix: str  # e.g., ".zip", "py7zr.7z", "7zcmd.7z"
     format: ArchiveFormat  # The archive format enum
     generation_method: GenerationMethod  # How to generate the archive
     generation_method_options: dict[str, Any] = field(
         default_factory=dict
     )  # Additional options for generation
+    features: ArchiveFormatFeatures = DEFAULT_FORMAT_FEATURES
 
 
 DEFAULT_ARCHIVES_BASE_DIR = os.path.normpath(
@@ -81,174 +95,205 @@ TEST_ARCHIVES_EXTERNAL_DIR = "test_archives_external"
 
 @dataclass
 class ArchiveInfo:
-    filename: (
-        str  # Will be constructed as f"{contents.file_basename}__{format.file_suffix}"
-    )
+    # Will be constructed as f"{contents.file_basename}__{format.file_suffix}"
+    filename: str
+
     contents: ArchiveContents
-    format_info: ArchiveFormatInfo
+    creation_info: ArchiveCreationInfo
     skip_test: bool = False
     generate_corrupted_variants: bool = False
 
     def get_archive_path(self, base_dir: str = DEFAULT_ARCHIVES_BASE_DIR) -> str:
-        if self.format_info.generation_method == GenerationMethod.EXTERNAL:
+        if self.creation_info.generation_method == GenerationMethod.EXTERNAL:
             return os.path.join(base_dir, TEST_ARCHIVES_EXTERNAL_DIR, self.filename)
         else:
             return os.path.join(base_dir, TEST_ARCHIVES_DIR, self.filename)
 
 
 # Generation method constants
-ZIP_ZIPFILE = ArchiveFormatInfo(
+ZIP_ZIPFILE = ArchiveCreationInfo(
     file_suffix="zipfile.zip",
     format=ArchiveFormat.ZIP,
     generation_method=GenerationMethod.ZIPFILE,
+    features=ArchiveFormatFeatures(
+        file_comments=True, archive_comment=True, rounded_mtime=True
+    ),
 )
-ZIP_INFOZIP = ArchiveFormatInfo(
+ZIP_INFOZIP = ArchiveCreationInfo(
     file_suffix="infozip.zip",
     format=ArchiveFormat.ZIP,
     generation_method=GenerationMethod.INFOZIP,
+    # Times are not rounded, as infozip adds the timestamps extra field
+    features=ArchiveFormatFeatures(
+        file_comments=True, archive_comment=True, rounded_mtime=False
+    ),
 )
 
 # 7z formats
-SEVENZIP_PY7ZR = ArchiveFormatInfo(
+SEVENZIP_PY7ZR = ArchiveCreationInfo(
     file_suffix="py7zr.7z",
     format=ArchiveFormat.SEVENZIP,
     generation_method=GenerationMethod.PY7ZR,
+    features=ArchiveFormatFeatures(dir_entries=False, archive_comment=True),
 )
-SEVENZIP_7ZCMD = ArchiveFormatInfo(
+SEVENZIP_7ZCMD = ArchiveCreationInfo(
     file_suffix="7zcmd.7z",
     format=ArchiveFormat.SEVENZIP,
     generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
+    features=ArchiveFormatFeatures(dir_entries=False, archive_comment=True),
 )
 
 # RAR format
-RAR_CMD = ArchiveFormatInfo(
+RAR_CMD = ArchiveCreationInfo(
     file_suffix=".rar",
     format=ArchiveFormat.RAR,
     generation_method=GenerationMethod.RAR_COMMAND_LINE,
+    features=ArchiveFormatFeatures(dir_entries=False, archive_comment=True),
 )
 
+_TAR_FORMAT_FEATURES = ArchiveFormatFeatures()
+
 # TAR formats
-TAR_PLAIN_CMD = ArchiveFormatInfo(
+TAR_PLAIN_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar",
     format=ArchiveFormat.TAR,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
+    features=_TAR_FORMAT_FEATURES,
 )
 
 # TAR formats
-TAR_PLAIN_TARFILE = ArchiveFormatInfo(
+TAR_PLAIN_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar",
     format=ArchiveFormat.TAR,
     generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES,
 )
 
-TAR_GZ_CMD = ArchiveFormatInfo(
+TAR_GZ_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar.gz",
     format=ArchiveFormat.TAR_GZ,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
+    features=_TAR_FORMAT_FEATURES,
 )
-TAR_GZ_TARFILE = ArchiveFormatInfo(
+TAR_GZ_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar.gz",
     format=ArchiveFormat.TAR_GZ,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
+    features=_TAR_FORMAT_FEATURES,
 )
 
 # No need to test both tarfile and cmdline for the other formats, as there shouldn't
 # be significant differences that won't be caught by the gz format.
-TAR_BZ2 = ArchiveFormatInfo(
+TAR_BZ2 = ArchiveCreationInfo(
     file_suffix=".tar.bz2",
     format=ArchiveFormat.TAR_BZ2,
     generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES,
 )
-TAR_XZ = ArchiveFormatInfo(
+TAR_XZ = ArchiveCreationInfo(
     file_suffix=".tar.xz",
     format=ArchiveFormat.TAR_XZ,
     generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES,
 )
-TAR_ZSTD = ArchiveFormatInfo(
+TAR_ZSTD = ArchiveCreationInfo(
     file_suffix=".tar.zst",
     format=ArchiveFormat.TAR_ZSTD,
     generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES,
 )
-TAR_LZ4 = ArchiveFormatInfo(
+TAR_LZ4 = ArchiveCreationInfo(
     file_suffix=".tar.lz4",
     format=ArchiveFormat.TAR_LZ4,
     generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES,
 )
 
 # Single file compression formats
-GZIP_CMD = ArchiveFormatInfo(
+GZIP_CMD = ArchiveCreationInfo(
     file_suffix="cmd.gz",
     format=ArchiveFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     # Dp not preserve filename and timestamp
     generation_method_options={"compression_cmd": "gzip", "cmd_args": ["-n"]},
+    features=ArchiveFormatFeatures(file_size=True),
 )
-GZIP_CMD_PRESERVE_METADATA = ArchiveFormatInfo(
+GZIP_CMD_PRESERVE_METADATA = ArchiveCreationInfo(
     file_suffix="cmd.gz",
     format=ArchiveFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "gzip", "cmd_args": ["-N"]},
+    features=ArchiveFormatFeatures(file_size=True),
 )
 
-BZIP2_CMD = ArchiveFormatInfo(
+BZIP2_CMD = ArchiveCreationInfo(
     file_suffix="cmd.bz2",
     format=ArchiveFormat.BZIP2,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "bzip2"},
+    features=ArchiveFormatFeatures(file_size=False),
 )
-XZ_CMD = ArchiveFormatInfo(
+XZ_CMD = ArchiveCreationInfo(
     file_suffix="cmd.xz",
     format=ArchiveFormat.XZ,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "xz"},
+    features=ArchiveFormatFeatures(file_size=True),
 )
-ZSTD_CMD = ArchiveFormatInfo(
+ZSTD_CMD = ArchiveCreationInfo(
     file_suffix="cmd.zst",
     format=ArchiveFormat.ZSTD,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "zstd"},
+    features=ArchiveFormatFeatures(file_size=False),
 )
-LZ4_CMD = ArchiveFormatInfo(
+LZ4_CMD = ArchiveCreationInfo(
     file_suffix="cmd.lz4",
     format=ArchiveFormat.LZ4,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "lz4"},
+    features=ArchiveFormatFeatures(file_size=False),
 )
 
-GZIP_LIBRARY = ArchiveFormatInfo(
+GZIP_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.gz",
     format=ArchiveFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     generation_method_options={"opener_kwargs": {"mtime": 0}},
+    features=ArchiveFormatFeatures(file_size=True),
 )
-BZIP2_LIBRARY = ArchiveFormatInfo(
+BZIP2_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.bz2",
     format=ArchiveFormat.BZIP2,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    features=ArchiveFormatFeatures(file_size=False),
 )
-XZ_LIBRARY = ArchiveFormatInfo(
+XZ_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.xz",
     format=ArchiveFormat.XZ,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    features=ArchiveFormatFeatures(file_size=True),
 )
-ZSTD_LIBRARY = ArchiveFormatInfo(
+ZSTD_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.zst",
     format=ArchiveFormat.ZSTD,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    features=ArchiveFormatFeatures(file_size=False),
 )
-LZ4_LIBRARY = ArchiveFormatInfo(
+LZ4_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.lz4",
     format=ArchiveFormat.LZ4,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    features=ArchiveFormatFeatures(file_size=False),
 )
 
 # ISO format
-ISO_PYCDLIB = ArchiveFormatInfo(
+ISO_PYCDLIB = ArchiveCreationInfo(
     file_suffix="pycdlib.iso",
     format=ArchiveFormat.ISO,
     generation_method=GenerationMethod.ISO_PYCDLIB,
 )
-ISO_GENISOIMAGE = ArchiveFormatInfo(
+ISO_GENISOIMAGE = ArchiveCreationInfo(
     file_suffix="genisoimage.iso",
     format=ArchiveFormat.ISO,
     generation_method=GenerationMethod.ISO_GENISOIMAGE,
@@ -573,7 +618,7 @@ def build_archive_infos() -> list[ArchiveInfo]:
             archive_info = ArchiveInfo(
                 filename=filename,
                 contents=contents,
-                format_info=format_info,
+                creation_info=format_info,
                 skip_test=filename in SKIP_TEST_FILENAMES,
                 generate_corrupted_variants=generate_corrupted_variants,
             )
@@ -634,7 +679,7 @@ def filter_archives(
 
 
 # Archive definitions
-ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveFormatInfo]]] = [
+ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     (
         ArchiveContents(
             file_basename="basic_nonsolid",
