@@ -5,7 +5,7 @@ import os
 import shutil
 from typing import IO, Callable, Iterator, List
 
-from archivey.exceptions import ArchiveMemberNotFoundError
+from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
 from archivey.io_helpers import ErrorIOStream
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember
 
@@ -123,8 +123,8 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
                     stream = self.open(member)
                     yield member, stream
                     stream.close()
-                except Exception as e:
-                    logger.info(f"Error opening member {member.filename}: {e}")
+                except (ArchiveError, OSError) as e:
+                    logger.warning("Error opening member %s: %s", member.filename, e)
                     # The caller should only get the exception if it actually tries
                     # to read from the stream.
                     yield member, ErrorIOStream(e)

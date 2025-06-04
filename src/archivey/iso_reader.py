@@ -8,11 +8,14 @@ from archivey.exceptions import ArchiveError, PackageNotInstalledError
 
 if TYPE_CHECKING:
     import pycdlib
+    from pycdlib.pycdlibexception import PyCdlibException
 else:
     try:
         import pycdlib
+        from pycdlib.pycdlibexception import PyCdlibException
     except ImportError:
         pycdlib = None  # type: ignore[assignment]
+        PyCdlibException = Exception  # type: ignore[misc,assignment]
 
 from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
@@ -186,7 +189,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
                         + "/"
                     )
                     yield from self._walk_iso(member_path, next_iso_path)
-        except Exception as e:
+        except PyCdlibException as e:
             raise ArchiveError(
                 f"Error walking ISO directory {current_iso_path}: {e}"
             ) from e
@@ -207,7 +210,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
             root_record = self.iso.get_record(iso_path="/.")
             if root_record:
                 yield self._convert_direntry_to_member("/", root_record)
-        except Exception:
+        except PyCdlibException:
             # This might fail if the ISO is very strange or empty.
             # Log or handle as appropriate. For now, proceed to walk.
             pass
@@ -257,7 +260,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
         except pycdlib.backends.pycdlibexceptions.PyCdlibInvalidInput:
             # This exception is often raised for "file not found"
             raise FileNotFoundError(f"File not found in ISO: {member_name}") from None
-        except Exception as e:
+        except PyCdlibException as e:
             raise ArchiveError(
                 f"Failed to open member '{member_name}' from ISO: {e}"
             ) from e
@@ -295,7 +298,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
                     ).strip()
                 if extra:
                     info.extra = extra
-        except Exception:
+        except PyCdlibException:
             # Silently ignore if PVD info is not available or fails to parse
             pass
 
@@ -310,8 +313,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
         if self.iso:
             try:
                 self.iso.close()
-            except Exception:
+            except PyCdlibException:
                 # Log error or handle as needed, but don't let it prevent closing.
-                # print(f"Error closing ISO: {e}")
                 pass
             self.iso = None

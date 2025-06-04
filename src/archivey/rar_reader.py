@@ -429,7 +429,6 @@ class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
         self._member = member
         self._pwd = pwd
         self._crc_checked = False
-        print(f"RarStreamMemberFile __init__ {self._filename} {self._remaining}")
 
     def read(self, n: int = -1) -> bytes:
         if self._closed:
@@ -549,8 +548,10 @@ class RarStreamReader(BaseRarReader):
             if self._proc.stdout is None:
                 raise RuntimeError("Could not open unrar output stream")
             self._stream = self._proc.stdout  # type: ignore
-        except Exception as e:
-            raise ArchiveError(f"Error opening RAR archive {self.archive_path}: {e}")
+        except (OSError, subprocess.SubprocessError) as e:
+            raise ArchiveError(
+                f"Error opening RAR archive {self.archive_path}: {e}"
+            ) from e
 
     def _get_member_file(self, member: ArchiveMember) -> IO[bytes] | None:
         assert self._stream is not None
@@ -576,8 +577,7 @@ class RarStreamReader(BaseRarReader):
         if self._stream is None:
             self._open_unrar_stream()
 
-        logger.info(f"Iterating over {len(self.get_members())} members")
-        print("START STREAM")
+        logger.info("Iterating over %s members", len(self.get_members()))
 
         for member in self.get_members():
             stream = self._get_member_file(member)

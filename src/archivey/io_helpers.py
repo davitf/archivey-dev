@@ -1,5 +1,5 @@
 import io
-from typing import IO, Any, Callable, Optional
+from typing import IO, Any, Callable, Optional, cast
 
 
 class ErrorIOStream(io.RawIOBase, IO[bytes]):
@@ -54,8 +54,8 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
     def read(self, n: int = -1) -> bytes:
         try:
             return self._inner.read(n)
-        except Exception as e:
-            self._translate_exception(e)
+        except BaseException as e:
+            self._translate_exception(cast(Exception, e))
             return b""  # This line will never be reached due to _translate_exception always raising
 
     def readable(self) -> bool:
@@ -70,19 +70,19 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
     def write(self, b: Any) -> int:
         try:
             return self._inner.write(b)
-        except Exception as e:
-            self._translate_exception(e)
+        except BaseException as e:
+            self._translate_exception(cast(Exception, e))
             return 0  # This line will never be reached due to _translate_exception always raising
 
     def writelines(self, lines: Any) -> None:
         try:
             self._inner.writelines(lines)
-        except Exception as e:
-            self._translate_exception(e)
+        except BaseException as e:
+            self._translate_exception(cast(Exception, e))
 
     def close(self) -> None:
         try:
             self._inner.close()
-        except Exception as e:
-            self._translate_exception(e)
+        except BaseException as e:
+            self._translate_exception(cast(Exception, e))
         super().close()

@@ -113,8 +113,8 @@ class FolderReader(BaseArchiveReaderRandomAccess):
             if stream is not None:
                 try:
                     stream.close()
-                except Exception as e:
-                    logger.info(f"Error closing member {member.filename}: {e}")
+                except OSError as e:
+                    logger.warning("Error closing member %s: %s", member.filename, e)
 
     def get_members(self) -> List[ArchiveMember]:
         return list(self._iter_member_infos())
