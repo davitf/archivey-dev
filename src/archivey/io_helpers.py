@@ -89,14 +89,28 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
 
 
 class LazyOpenIO(io.RawIOBase, IO[bytes]):
-    """A wrapper that defers opening of the underlying stream until needed."""
+    """A wrapper that defers opening of the underlying stream until needed.
 
-    def __init__(self, open_fn: Callable[..., IO[bytes]], *args: Any, **kwargs: Any) -> None:
+    Args:
+        open_fn: Function used to open the underlying stream.
+        seekable: Optional hint whether the underlying stream is seekable.
+            If provided, ``seekable()`` will return this value without opening
+            the stream.
+    """
+
+    def __init__(
+        self,
+        open_fn: Callable[..., IO[bytes]],
+        *args: Any,
+        seekable: bool | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__()
         self._open_fn = open_fn
         self._args = args
         self._kwargs = kwargs
         self._inner: IO[bytes] | None = None
+        self._seekable_hint = seekable
 
     def _ensure_open(self) -> IO[bytes]:
         if self.closed:
@@ -118,6 +132,8 @@ class LazyOpenIO(io.RawIOBase, IO[bytes]):
         return False
 
     def seekable(self) -> bool:
+        if self._seekable_hint is not None:
+            return self._seekable_hint
         return self._ensure_open().seekable()
 
     def close(self) -> None:  # pragma: no cover - simple delegation
