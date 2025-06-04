@@ -707,7 +707,7 @@ def create_archive(archive_info: ArchiveInfo, base_dir: str):
     full_path = archive_info.get_archive_path(base_dir)
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
-    if archive_info.format_info.generation_method == GenerationMethod.EXTERNAL:
+    if archive_info.creation_info.generation_method == GenerationMethod.EXTERNAL:
         # Check that the archive file exists
         if not os.path.exists(full_path):
             raise FileNotFoundError(f"External archive {full_path} does not exist")
@@ -715,14 +715,14 @@ def create_archive(archive_info: ArchiveInfo, base_dir: str):
 
     # Assert that header_password is None for formats that don't support it
     generator = GENERATION_METHODS_TO_GENERATOR[
-        archive_info.format_info.generation_method
+        archive_info.creation_info.generation_method
     ]
     try:
         generator(
             full_path,
             contents=archive_info.contents,
-            compression_format=archive_info.format_info.format,
-            **archive_info.format_info.generation_method_options,
+            compression_format=archive_info.creation_info.format,
+            **archive_info.creation_info.generation_method_options,
         )
     except Exception as e:
         logger.error(f"Error creating archive {archive_info.filename}: {e}")
@@ -782,7 +782,7 @@ if __name__ == "__main__":
         create_archive(archive, base_dir)
         bullet = (
             "-"
-            if archive.format_info.generation_method != GenerationMethod.EXTERNAL
+            if archive.creation_info.generation_method != GenerationMethod.EXTERNAL
             else "s"
         )
         logger.info(f"  {bullet} {archive.filename}")

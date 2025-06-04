@@ -2,8 +2,8 @@ import os
 from pathlib import Path
 
 import pytest
-
 from sample_archives import SAMPLE_ARCHIVES
+
 from archivey.core import open_archive
 from archivey.types import ArchiveFormat, MemberType
 
@@ -21,7 +21,7 @@ def _get_sample(name: str):
 )
 def test_extractall(tmp_path: Path, filename: str):
     sample = _get_sample(filename)
-    if sample.format_info.format == ArchiveFormat.SEVENZIP:
+    if sample.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
 
     dest = tmp_path / "out"

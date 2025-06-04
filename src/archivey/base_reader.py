@@ -124,7 +124,9 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
                     yield member, stream
                     stream.close()
                 except (ArchiveError, OSError) as e:
-                    logger.warning("Error opening member %s: %s", member.filename, e)
+                    logger.warning(
+                        "Error opening member %s", member.filename, exc_info=True
+                    )
                     # The caller should only get the exception if it actually tries
                     # to read from the stream.
                     yield member, ErrorIOStream(e)

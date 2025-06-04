@@ -38,7 +38,7 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
 
     def __init__(
         self,
-        inner: IO[bytes],
+        inner: IO[bytes] | io.IOBase,
         exception_translator: Callable[[Exception], Optional[Exception]],
     ):
         super().__init__()
@@ -54,8 +54,8 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
     def read(self, n: int = -1) -> bytes:
         try:
             return self._inner.read(n)
-        except BaseException as e:
-            self._translate_exception(cast(Exception, e))
+        except Exception as e:
+            self._translate_exception(e)
             return b""  # This line will never be reached due to _translate_exception always raising
 
     def readable(self) -> bool:

@@ -6,7 +6,7 @@ import lzma
 import os
 import struct
 from datetime import datetime, timezone
-from typing import List
+from typing import Callable, List, Optional
 
 from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.exceptions import (
@@ -16,6 +16,7 @@ from archivey.exceptions import (
     ArchiveFormatError,
     PackageNotInstalledError,
 )
+from archivey.io_helpers import ExceptionTranslatingIO
 from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
@@ -179,22 +180,14 @@ def read_xz_metadata(path: str, member: ArchiveMember):
         )
 
 
-class BZ2Wrapper(io.IOBase):
-    """Wrapper for bz2 file objects that converts OSError to ArchiveCorruptedError."""
-
-    def __init__(self, fileobj):
-        self._fileobj = fileobj
-
-    def read(self, size=-1):
-        try:
-            return self._fileobj.read(size)
-        except OSError as e:
-            raise ArchiveCorruptedError("BZ2 file is corrupted") from e
-        except EOFError as e:
-            raise ArchiveEOFError("BZ2 file is truncated") from e
-
-    def close(self):
-        self._fileobj.close()
+def _translate_bz2_exception(e: Exception) -> Optional[Exception]:
+    if isinstance(e, OSError):
+        return ArchiveCorruptedError("BZ2 file is corrupted")
+    elif isinstance(e, EOFError):
+        return ArchiveEOFError("BZ2 file is truncated")
+    elif isinstance(e, ValueError):
+        return ArchiveFormatError("No valid BZ2 stream found")
+    return None
 
 
 class SingleFileReader(BaseArchiveReaderRandomAccess):
@@ -231,6 +224,7 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         # Note: zstandard and lz4 imports are conditional below to avoid ModuleNotFoundError if not installed.
 
         # Open the appropriate decompressor based on file extension
+        self.decompressor: Callable[[str], io.IOBase]
         if format == ArchiveFormat.GZIP:
             self.decompressor = gzip.open
         elif format == ArchiveFormat.BZIP2:
@@ -301,5 +295,5 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
             raise ValueError("Requested member is not part of this archive")
         fileobj = self.decompressor(self.archive_path)
         if self.ext == ".bz2":
-            return BZ2Wrapper(fileobj)
+            return ExceptionTranslatingIO(fileobj, _translate_bz2_exception)
         return fileobj
