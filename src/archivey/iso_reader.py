@@ -55,35 +55,41 @@ class IsoReader(BaseArchiveReaderRandomAccess):
             # or simply ignore it. Ignoring seems more user-friendly for now.
             pass  # Ignoring password as ISOs are not typically encrypted
 
-    def _path_variants(self, path: str) -> list[tuple[str, str]]:
-        """Return possible argument pairs for pycdlib path functions."""
+    def _path_variants(self, path: str) -> list[dict[str, str]]:
+        """Return possible path keyword arguments for pycdlib functions."""
         assert self.iso is not None
-        variants: list[tuple[str, str]] = []
+        variants: list[dict[str, str]] = []
         if getattr(self.iso, "rock_ridge", None) is not None:
             variants.extend(
                 [
-                    ("rr_path", path),
-                    ("rr_pathname", path),
-                    ("rr_name", path),
+                    {"rr_path": path},
+                    {"rr_pathname": path},
+                    {"rr_name": path},
                 ]
             )
         if getattr(self.iso, "joliet", None) is not None:
             variants.extend(
                 [
-                    ("joliet_path", path),
-                    ("joliet_pathname", path),
-                    ("joliet_name", path),
+                    {"joliet_path": path},
+                    {"joliet_pathname": path},
+                    {"joliet_name": path},
                 ]
             )
-        variants.extend([("iso_path", path.upper()), ("path", path.upper())])
+        variants.extend([{"iso_path": path.upper()}, {"path": path.upper()}])
         return variants
 
     def _call_with_path(self, func, path: str):
-        """Call a pycdlib function with best path argument."""
+        """Call a pycdlib function with the best available path argument."""
+        import inspect
+
         last_err: Exception | None = None
-        for key, val in self._path_variants(path):
+        params = set(inspect.signature(func).parameters)
+        for kwargs in self._path_variants(path):
+            key = next(iter(kwargs))
+            if key not in params:
+                continue
             try:
-                return func(**{key: val})
+                return func(**kwargs)
             except TypeError as e:
                 last_err = e
                 continue
@@ -179,14 +185,47 @@ class IsoReader(BaseArchiveReaderRandomAccess):
 
         try:
             list_dir_fn = getattr(self.iso, "list_dir", None)
-            if list_dir_fn is None:
-                list_dir_fn = getattr(self.iso, "list_children")
-            for child_name_bytes, record in self._call_with_path(
-                list_dir_fn, current_iso_path
-            ):
-                if getattr(self.iso, "rock_ridge", None) is not None or getattr(
-                    self.iso, "joliet", None
-                ) is not None:
+            list_children_fn = getattr(self.iso, "list_children", None)
+
+            if list_dir_fn is not None:
+                entries = self._call_with_path(list_dir_fn, current_iso_path)
+                iterator = ((n, r) for n, r in entries)
+            elif list_children_fn is not None:
+                records = self._call_with_path(list_children_fn, current_iso_path)
+
+                def child_iter():
+                    for rec in records:
+                        name_bytes: bytes
+                        if getattr(
+                            self.iso, "rock_ridge", None
+                        ) is not None and hasattr(rec, "rock_ridge_name"):
+                            name = rec.rock_ridge_name()
+                            name_bytes = (
+                                name.encode("utf-8") if isinstance(name, str) else name
+                            )
+                        elif getattr(self.iso, "joliet", None) is not None and hasattr(
+                            rec, "joliet_name"
+                        ):
+                            name = rec.joliet_name()
+                            name_bytes = (
+                                name.encode("utf-8") if isinstance(name, str) else name
+                            )
+                        else:
+                            name = rec.file_identifier()
+                            name_bytes = (
+                                name.encode("utf-8") if isinstance(name, str) else name
+                            )
+                        yield name_bytes, rec
+
+                iterator = child_iter()
+            else:
+                raise ArchiveError("No directory listing function available")
+
+            for child_name_bytes, record in iterator:
+                if (
+                    getattr(self.iso, "rock_ridge", None) is not None
+                    or getattr(self.iso, "joliet", None) is not None
+                ):
                     child_name = child_name_bytes.decode("utf-8", "replace")
                 else:
                     child_name = child_name_bytes.decode(
