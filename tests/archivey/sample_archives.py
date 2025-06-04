@@ -24,6 +24,7 @@ class GenerationMethod(Enum):
     RAR_COMMAND_LINE = "rar_cmd"
     SINGLE_FILE_COMMAND_LINE = "single_file_cmd"
     SINGLE_FILE_LIBRARY = "single_file_lib"
+    ISO_PYCDLIB = "iso_pycdlib"
 
     EXTERNAL = "external"
 
@@ -248,6 +249,13 @@ LZ4_LIBRARY = ArchiveFormatInfo(
     generation_method_options={"opener": lz4.frame.open},
 )
 
+# ISO format
+ISO_PYCDLIB = ArchiveFormatInfo(
+    file_suffix=".iso",
+    format=ArchiveFormat.ISO,
+    generation_method=GenerationMethod.ISO_PYCDLIB,
+)
+
 ALL_SINGLE_FILE_FORMATS = [
     GZIP_CMD,
     BZIP2_CMD,
@@ -287,6 +295,10 @@ RAR_FORMATS = [
 SEVENZIP_FORMATS = [
     SEVENZIP_PY7ZR,
     SEVENZIP_7ZCMD,
+]
+
+ISO_FORMATS = [
+    ISO_PYCDLIB,
 ]
 
 ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
@@ -777,6 +789,13 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveFormatInfo]]] = [
             solid=True,
         ),
         BASIC_TAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="basic_iso",
+            files=BASIC_FILES,
+        ),
+        ISO_FORMATS,
     ),
 ]
 

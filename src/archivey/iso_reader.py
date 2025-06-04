@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Iterator, List, Optional
 
-from archivey.exceptions import ArchiveError
+from archivey.exceptions import ArchiveError, PackageNotInstalledError
 
 if TYPE_CHECKING:
     import pycdlib
@@ -38,6 +38,11 @@ class IsoReader(BaseArchiveReaderRandomAccess):
         super().__init__(ArchiveFormat.ISO, archive_path)
         self.iso: Optional[pycdlib.pycdlib.PyCdlib] = None
         self.archive_path_obj: Optional[Path] = None
+
+        if pycdlib is None:
+            raise PackageNotInstalledError(
+                "pycdlib package is not installed. Please install it to work with ISO archives."
+            )
 
         self.iso = pycdlib.pycdlib.PyCdlib()
         self.iso.open(self.archive_path)
