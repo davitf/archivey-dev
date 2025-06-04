@@ -23,7 +23,7 @@ from archivey.exceptions import (
     ArchiveEOFError,
     PackageNotInstalledError,
 )
-from archivey.types import ArchiveFormat, MemberType
+from archivey.types import ArchiveFormat, CreateSystem, MemberType
 
 
 def normalize_newlines(s: str | None) -> str | None:
@@ -63,6 +63,7 @@ def check_iter_members(
     sample_archive: ArchiveInfo,
     use_rar_stream: bool = False,
     set_file_password_in_constructor: bool = True,
+    skip_member_contents: bool = False,
 ):
     if sample_archive.format_info.format == ArchiveFormat.ISO:
         pytest.importorskip("pycdlib")
@@ -125,7 +126,13 @@ def check_iter_members(
         )
         actual_filenames: list[str] = []
 
-        for member, stream in archive.iter_members_with_io():
+        members_iter = (
+            ((m, None) for m in archive.get_members())
+            if skip_member_contents
+            else archive.iter_members_with_io()
+        )
+
+        for member, stream in members_iter:
             sample_file = files_by_name.get(member.filename, None)
 
             if member.is_file and sample_file is not None and member.crc32 is not None:
@@ -154,6 +161,12 @@ def check_iter_members(
                 assert member.comment == sample_file.comment
             else:
                 assert member.comment is None
+
+            if member.create_system is not None:
+                assert member.create_system in {
+                    CreateSystem.UNIX,
+                    CreateSystem.UNKNOWN,
+                }
 
             if member.is_file and member.file_size is not None:
                 assert member.file_size == len(sample_file.contents or b"")
@@ -200,7 +213,7 @@ def check_iter_members(
                     f"Timestamp mismatch for {member.filename}: {member.mtime} != {sample_file.mtime}"
                 )
 
-            if sample_file.type == MemberType.FILE:
+            if sample_file.type == MemberType.FILE and not skip_member_contents:
                 assert stream is not None
                 contents = stream.read()
                 assert contents == sample_file.contents
@@ -300,11 +313,15 @@ def test_read_iso_archives(sample_archive: ArchiveInfo):
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
+    deps = get_dependency_versions()
     if (
         sample_archive.contents.header_password is not None
-        and get_dependency_versions().cryptography_version is None
+        and deps.cryptography_version is None
     ):
         pytest.skip("Cryptography is not installed, skipping RAR encrypted-header test")
+
+    if use_rar_stream and deps.unrar_version is None:
+        pytest.skip("unrar not installed, skipping RarStreamReader test")
 
     has_password = sample_archive.contents.has_password()
     has_multiple_passwords = sample_archive.contents.has_multiple_passwords()
@@ -323,7 +340,11 @@ def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
         with pytest.raises(ValueError):
             check_iter_members(sample_archive, use_rar_stream=use_rar_stream)
     else:
-        check_iter_members(sample_archive, use_rar_stream=use_rar_stream)
+        check_iter_members(
+            sample_archive,
+            use_rar_stream=use_rar_stream,
+            skip_member_contents=deps.unrar_version is None,
+        )
 
 
 @pytest.mark.parametrize(
@@ -341,10 +362,15 @@ def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
 def test_read_rar_archives_with_password_in_constructor(
     sample_archive: ArchiveInfo, use_rar_stream: bool
 ):
+    deps = get_dependency_versions()
+    if use_rar_stream and deps.unrar_version is None:
+        pytest.skip("unrar not installed, skipping RarStreamReader test")
+
     check_iter_members(
         sample_archive,
         use_rar_stream=use_rar_stream,
         set_file_password_in_constructor=True,
+        skip_member_contents=deps.unrar_version is None,
     )
 
 

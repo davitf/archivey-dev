@@ -16,7 +16,13 @@ from archivey.exceptions import (
 from archivey.folder_reader import FolderReader
 from archivey.formats import detect_archive_format_by_signature
 from archivey.iso_reader import IsoReader
-from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
+from archivey.types import (
+    ArchiveFormat,
+    ArchiveInfo,
+    ArchiveMember,
+    CreateSystem,
+    MemberType,
+)
 
 __all__ = [
     "open_archive",
@@ -34,6 +40,7 @@ __all__ = [
     "ArchiveFormat",
     "detect_archive_format_by_signature",
     "MemberType",
+    "CreateSystem",
     "DependencyVersions",
     "get_dependency_versions",
     "format_dependency_versions",

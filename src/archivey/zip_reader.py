@@ -13,7 +13,7 @@ from archivey.exceptions import (
     ArchiveError,
 )
 from archivey.formats import ArchiveFormat
-from archivey.types import ArchiveInfo, ArchiveMember, MemberType
+from archivey.types import ArchiveInfo, ArchiveMember, CreateSystem, MemberType
 from archivey.utils import decode_bytes_with_fallback, str_to_bytes
 
 # TODO: check if this is correct
@@ -164,6 +164,9 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 if info.comment
                 else None,
                 encrypted=bool(info.flag_bits & 0x1),
+                create_system=CreateSystem(info.create_system)
+                if info.create_system in CreateSystem._value2member_map_
+                else CreateSystem.UNKNOWN,
                 extra={
                     "compress_type": info.compress_type,
                     "compress_size": info.compress_size,

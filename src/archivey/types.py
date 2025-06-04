@@ -7,6 +7,7 @@ else:
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import IntEnum
 from typing import Any, Optional, Tuple
 
 
@@ -67,6 +68,26 @@ class MemberType(StrEnum):
     OTHER = "other"
 
 
+class CreateSystem(IntEnum):
+    """Operating system on which the archive member was created."""
+
+    FAT = 0
+    AMIGA = 1
+    VMS = 2
+    UNIX = 3
+    VM_CMS = 4
+    ATARI_ST = 5
+    OS2_HPFS = 6
+    MACINTOSH = 7
+    Z_SYSTEM = 8
+    CPM = 9
+    TOPS20 = 10
+    NTFS = 11
+    QDOS = 12
+    ACORN_RISCOS = 13
+    UNKNOWN = 255
+
+
 @dataclass
 class ArchiveInfo:
     """Detailed information about an archive's format."""
@@ -91,6 +112,7 @@ class ArchiveMember:
     crc32: Optional[int] = None
     compression_method: Optional[str] = None  # e.g. "deflate", "lzma", etc.
     comment: Optional[str] = None
+    create_system: Optional[CreateSystem] = None
     encrypted: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
     link_target: Optional[str] = None
