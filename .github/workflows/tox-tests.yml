@@ -40,12 +40,12 @@ jobs:
       fail-fast: false
       matrix:
         tox_env:
-          - py310-newlibs
-          - py313-newlibs
-          - py310-oldlibs
-          - py313-oldlibs
-          - py310-nolibs
-          - py310-rarfile_no_crypto
+          - py3.10-newlibs
+          - py3.13-newlibs
+          - py3.10-oldlibs
+          - py3.13-oldlibs
+          - py3.10-nolibs
+          - py3.10-rarfile_no_crypto
 
     steps:
       - name: Check out code
