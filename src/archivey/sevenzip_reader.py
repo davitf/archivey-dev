@@ -1,6 +1,7 @@
 import io
 import logging
 import lzma
+import os
 from queue import Empty, Queue
 from threading import Thread
 from typing import IO, TYPE_CHECKING, Callable, Iterator, List, Optional, Union, cast
@@ -375,6 +376,50 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)
 
         thread.join()
+
+    def extract(
+        self,
+        member: ArchiveMember | str,
+        path: str | None = None,
+    ) -> str:
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
+        member_obj = self.get_member(member)
+
+        try:
+            self._archive.extract(path=path, targets=[member_obj.filename])
+        except py7zr.PasswordRequired as e:
+            raise ArchiveEncryptedError(
+                f"Password required to extract member {member_obj.filename}"
+            ) from e
+        except py7zr.Bad7zFile as e:
+            raise ArchiveCorruptedError(
+                f"Invalid 7-Zip archive {self.archive_path}"
+            ) from e
+        except py7zr.exceptions.ArchiveError as e:
+            raise ArchiveError(
+                f"Error extracting member {member_obj.filename}: {e}"
+            ) from e
+
+        return os.path.join(path or os.getcwd(), member_obj.filename)
+
+    def extractall(self, path: str | None = None) -> None:
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
+        try:
+            self._archive.extractall(path=path)
+        except py7zr.PasswordRequired as e:
+            raise ArchiveEncryptedError(
+                "Password required to extract archive"
+            ) from e
+        except py7zr.Bad7zFile as e:
+            raise ArchiveCorruptedError(
+                f"Invalid 7-Zip archive {self.archive_path}"
+            ) from e
+        except py7zr.exceptions.ArchiveError as e:
+            raise ArchiveError(f"Error extracting archive: {e}") from e
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
