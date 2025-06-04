@@ -26,6 +26,7 @@ from tests.archivey.sample_archives import (
     FileInfo,
     GenerationMethod,
 )
+from tests.archivey.utils import write_files_to_dir
 
 _COMPRESSION_METHOD_TO_ZIPFILE_VALUE = {
     "store": zipfile.ZIP_STORED,
@@ -38,51 +39,6 @@ DEFAULT_ZIP_COMPRESSION_METHOD = "store"
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-
-
-def write_files_to_dir(dir: str, files: list[FileInfo]):
-    # Leave directories for last, so that their timestamps are not affected by the creation of the files inside them.
-    for file in sorted(
-        files,
-        key=lambda x: [MemberType.FILE, MemberType.LINK, MemberType.DIR].index(x.type),
-    ):
-        full_path = os.path.join(dir, file.name)
-        if file.type == MemberType.DIR:
-            os.makedirs(full_path, exist_ok=True)
-        elif file.type == MemberType.LINK:
-            assert file.link_target is not None, "Link target is required"
-            dir_path = os.path.dirname(full_path)
-            os.makedirs(dir_path, exist_ok=True)
-            os.symlink(
-                file.link_target,
-                full_path,
-                target_is_directory=file.link_target_type == MemberType.DIR,
-            )
-        else:
-            assert file.contents is not None, "File contents are required"
-            dir_path = os.path.dirname(full_path)
-            os.makedirs(dir_path, exist_ok=True)
-
-            with open(full_path, "wb") as f:
-                f.write(file.contents)
-
-        os.utime(
-            full_path,
-            (file.mtime.timestamp(), file.mtime.timestamp()),
-            follow_symlinks=False,
-        )
-
-        # set permissions
-        default_permissions_by_type = {
-            MemberType.DIR: 0o755,
-            MemberType.LINK: 0o777,
-            MemberType.FILE: 0o644,
-        }
-        os.chmod(full_path, file.permissions or default_permissions_by_type[file.type])
-
-    # subprocess.run(["ls", "-l", dir])
-
-    # write_file_to_dir(dir, file)
 
 
 def group_files_by_password_and_compression_method(
