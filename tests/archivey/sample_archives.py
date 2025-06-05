@@ -837,6 +837,33 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
         ),
         BASIC_TAR_FORMATS,
     ),
+    (
+        ArchiveContents(
+            file_basename="fixture_zip",
+            files=[
+                FileInfo(
+                    name="fixture.txt",
+                    mtime=_fake_mtime(1),
+                    contents=b"fixture zip",
+                )
+            ],
+        ),
+        [ZIP_ZIPFILE],
+    ),
+    (
+        ArchiveContents(
+            file_basename="fixture_tar",
+            files=[
+                FileInfo(
+                    name="fixture.txt",
+                    mtime=_fake_mtime(1),
+                    contents=b"fixture tar",
+                )
+            ],
+            solid=True,
+        ),
+        [TAR_PLAIN_TARFILE],
+    ),
     # (
     #     ArchiveContents(
     #         file_basename="basic_iso",

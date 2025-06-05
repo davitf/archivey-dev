@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 import pytest
-from sample_archives import SAMPLE_ARCHIVES
+from tests.archivey.sample_archives import SAMPLE_ARCHIVES
 
 from archivey.core import open_archive
 from archivey.types import ArchiveFormat, MemberType
