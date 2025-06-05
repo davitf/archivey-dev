@@ -20,6 +20,9 @@ class DependencyVersions:
     backports_strenum_version: Optional[str] = None
     tqdm_version: Optional[str] = None
     unrar_version: Optional[str] = None
+    rapidgzip_version: Optional[str] = None
+    indexed_bzip2_version: Optional[str] = None
+    python_xz_version: Optional[str] = None
 
 
 def get_dependency_versions() -> DependencyVersions:
@@ -42,6 +45,9 @@ def get_dependency_versions() -> DependencyVersions:
         ("lz4", "lz4_version"),
         ("zstandard", "zstandard_version"),
         ("pycdlib", "pycdlib_version"),
+        ("rapidgzip", "rapidgzip_version"),
+        ("indexed_bzip2", "indexed_bzip2_version"),
+        ("python-xz", "python_xz_version"),
         ("backports.strenum", "backports_strenum_version"),
         ("tqdm", "tqdm_version"),
     ]:

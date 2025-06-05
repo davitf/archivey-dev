@@ -237,11 +237,41 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
 
         # Open the appropriate decompressor based on file extension
         if format == ArchiveFormat.GZIP:
-            self.decompressor = gzip.open
+            if self.config.use_rapidgzip:
+                try:
+                    import rapidgzip
+
+                    self.decompressor = rapidgzip.open
+                except ImportError:
+                    raise PackageNotInstalledError(
+                        "rapidgzip package is not installed, required for GZIP archives"
+                    ) from None
+            else:
+                self.decompressor = gzip.open
         elif format == ArchiveFormat.BZIP2:
-            self.decompressor = bz2.open
+            if self.config.use_indexed_bzip2:
+                try:
+                    import indexed_bzip2
+
+                    self.decompressor = indexed_bzip2.open
+                except ImportError:
+                    raise PackageNotInstalledError(
+                        "indexed_bzip2 package is not installed, required for BZIP2 archives"
+                    ) from None
+            else:
+                self.decompressor = bz2.open
         elif format == ArchiveFormat.XZ:
-            self.decompressor = lzma.open
+            if self.config.use_python_xz:
+                try:
+                    import xz
+
+                    self.decompressor = xz.open
+                except ImportError:
+                    raise PackageNotInstalledError(
+                        "python-xz package is not installed, required for XZ archives"
+                    ) from None
+            else:
+                self.decompressor = lzma.open
         elif format == ArchiveFormat.ZSTD:
             try:
                 import zstandard

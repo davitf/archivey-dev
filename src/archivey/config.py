@@ -12,6 +12,9 @@ class ArchiveyConfig:
     use_libarchive: bool = False
     use_rar_stream: bool = False
     use_single_file_stored_metadata: bool = False
+    use_rapidgzip: bool = False
+    use_indexed_bzip2: bool = False
+    use_python_xz: bool = False
 
 
 _default_config_var: contextvars.ContextVar[ArchiveyConfig] = contextvars.ContextVar(

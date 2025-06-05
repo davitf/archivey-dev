@@ -72,6 +72,21 @@ parser.add_argument(
     action="store_true",
     help="Use the RAR stream reader for RAR files",
 )
+parser.add_argument(
+    "--use-rapidgzip",
+    action="store_true",
+    help="Use rapidgzip for reading gzip-compressed files",
+)
+parser.add_argument(
+    "--use-indexed-bzip2",
+    action="store_true",
+    help="Use indexed_bzip2 for reading bzip2-compressed files",
+)
+parser.add_argument(
+    "--use-python-xz",
+    action="store_true",
+    help="Use python-xz for reading xz-compressed files",
+)
 parser.add_argument("--stream", action="store_true", help="Stream the archive")
 parser.add_argument("--info", action="store_true", help="Print info about the archive")
 parser.add_argument("--password", help="Password for encrypted archives")
@@ -172,6 +187,9 @@ for archive_path in args.files:
             use_libarchive=args.use_libarchive,
             use_rar_stream=args.use_rar_stream,
             use_single_file_stored_metadata=args.use_stored_metadata,
+            use_rapidgzip=args.use_rapidgzip,
+            use_indexed_bzip2=args.use_indexed_bzip2,
+            use_python_xz=args.use_python_xz,
         )
         with open_archive(
             archive_path,

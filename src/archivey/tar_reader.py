@@ -89,6 +89,63 @@ class TarReader(BaseArchiveReaderRandomAccess):
                     raise ArchiveCorruptedError(
                         f"Invalid compressed TAR archive {archive_path}: {e}"
                     ) from e
+            elif format == ArchiveFormat.TAR_GZ and self.config.use_rapidgzip:
+                try:
+                    import rapidgzip
+                except ImportError:
+                    raise PackageNotInstalledError(
+                        "rapidgzip package is not installed, required for GZIP archives"
+                    ) from None
+                try:
+                    self._fileobj = rapidgzip.open(archive_path)
+                    tar_mode = "r|"
+                    self._streaming_only = True
+                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
+                except (ValueError, OSError) as e:
+                    if self._fileobj is not None:
+                        self._fileobj.close()
+                        self._fileobj = None
+                    raise ArchiveCorruptedError(
+                        f"Invalid compressed TAR archive {archive_path}: {e}"
+                    ) from e
+            elif format == ArchiveFormat.TAR_BZ2 and self.config.use_indexed_bzip2:
+                try:
+                    import indexed_bzip2
+                except ImportError:
+                    raise PackageNotInstalledError(
+                        "indexed_bzip2 package is not installed, required for BZIP2 archives"
+                    ) from None
+                try:
+                    self._fileobj = indexed_bzip2.open(archive_path)
+                    tar_mode = "r|"
+                    self._streaming_only = True
+                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
+                except (ValueError, OSError) as e:
+                    if self._fileobj is not None:
+                        self._fileobj.close()
+                        self._fileobj = None
+                    raise ArchiveCorruptedError(
+                        f"Invalid compressed TAR archive {archive_path}: {e}"
+                    ) from e
+            elif format == ArchiveFormat.TAR_XZ and self.config.use_python_xz:
+                try:
+                    import xz
+                except ImportError:
+                    raise PackageNotInstalledError(
+                        "python-xz package is not installed, required for XZ archives"
+                    ) from None
+                try:
+                    self._fileobj = xz.open(archive_path, "rb")
+                    tar_mode = "r|"
+                    self._streaming_only = True
+                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
+                except xz.common.XZError as e:
+                    if self._fileobj is not None:
+                        self._fileobj.close()
+                        self._fileobj = None
+                    raise ArchiveCorruptedError(
+                        f"Invalid compressed TAR archive {archive_path}: {e}"
+                    ) from e
             else:
                 mode_dict = {
                     ArchiveFormat.TAR: "r",
