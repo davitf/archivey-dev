@@ -640,7 +640,7 @@ class RarStreamReader(BaseRarReader):
             proc.wait()
             unrar_stream.close()
 
-    def is_open_possible(self) -> bool:
+    def has_random_access(self) -> bool:
         return False
 
     def open(

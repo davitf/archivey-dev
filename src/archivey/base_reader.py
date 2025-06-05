@@ -100,11 +100,6 @@ class ArchiveReader(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_members(self) -> List[ArchiveMember]:
-        """Get a list of all members in the archive. May need to read the archive to get the members."""
-        pass
-
-    @abc.abstractmethod
     def iter_members_with_io(
         self,
         filter: Callable[[ArchiveMember], bool] | None = None,
@@ -138,68 +133,9 @@ class ArchiveReader(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def is_open_possible(self):
+    def has_random_access(self):
         """Check if opening members is possible (i.e. not streaming-only access)."""
         pass
-
-    @abc.abstractmethod
-    def open(
-        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
-    ) -> IO[bytes]:
-        """Open a member for reading.
-
-        Args:
-            member: The member to open
-            pwd: Password to use for decryption, if needed and different from the one
-            used when opening the archive.
-        """
-        pass
-
-    def _build_member_map(self) -> dict[str, ArchiveMember]:
-        if self._member_map is None:
-            self._member_map = {
-                member.filename: member for member in self.get_members()
-            }
-        return self._member_map
-
-    def get_member(self, member_or_filename: ArchiveMember | str) -> ArchiveMember:
-        if isinstance(member_or_filename, ArchiveMember):
-            return member_or_filename
-
-        member_map = self._build_member_map()
-        if member_or_filename not in member_map:
-            raise ArchiveMemberNotFoundError(f"Member not found: {member_or_filename}")
-        return member_map[member_or_filename]
-
-    # ------------------------------------------------------------------
-    # Extraction helpers
-    # ------------------------------------------------------------------
-
-    def extract(
-        self,
-        member_or_filename: ArchiveMember | str,
-        path: str | None = None,
-        pwd: bytes | str | None = None,
-        preserve_links: bool = True,
-    ) -> str | None:
-        # Try using open(). Assume that, if it's possible to open a member,
-        # get_member() is also available.
-        if self.is_open_possible():
-            member = self.get_member(member_or_filename)
-            stream = self.open(member, pwd=pwd)
-            return _write_member(path or os.getcwd(), member, preserve_links, stream)
-
-        # Fall back to extractall().
-        logger.warning(
-            "extract() may be slow for streaming archives, use extractall instead if possible. ()"
-        )
-        d = self.extractall(
-            path=path,
-            members=[member_or_filename],
-            pwd=pwd,
-            preserve_links=preserve_links,
-        )
-        return list(d.values())[0] if len(d) else None
 
     def extractall(
         self,
@@ -232,22 +168,84 @@ class ArchiveReader(abc.ABC):
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
+    # Methods only available for random access readers
 
-class BaseArchiveReaderStreamingAccess(ArchiveReader):
-    """Abstract base class for archive readers which are read as streams."""
+    @abc.abstractmethod
+    def get_members(self) -> List[ArchiveMember]:
+        """Get a list of all members in the archive. May need to read the archive to get the members."""
+        pass
 
-    def get_members_if_available(self) -> List[ArchiveMember] | None:
-        return None
-
-    def is_open_possible(self) -> bool:
-        return False
-
+    @abc.abstractmethod
     def open(
-        self, member: ArchiveMember, *, pwd: bytes | str | None = None
+        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
     ) -> IO[bytes]:
-        raise ValueError(
-            "This archive reader does not support opening specific members."
+        """Open a member for reading.
+
+        Args:
+            member: The member to open
+            pwd: Password to use for decryption, if needed and different from the one
+            used when opening the archive.
+        """
+        pass
+
+    def _build_member_map(self) -> dict[str, ArchiveMember]:
+        if self._member_map is None:
+            self._member_map = {
+                member.filename: member for member in self.get_members()
+            }
+        return self._member_map
+
+    def get_member(self, member_or_filename: ArchiveMember | str) -> ArchiveMember:
+        if isinstance(member_or_filename, ArchiveMember):
+            return member_or_filename
+
+        member_map = self._build_member_map()
+        if member_or_filename not in member_map:
+            raise ArchiveMemberNotFoundError(f"Member not found: {member_or_filename}")
+        return member_map[member_or_filename]
+
+    def extract(
+        self,
+        member_or_filename: ArchiveMember | str,
+        path: str | None = None,
+        pwd: bytes | str | None = None,
+        preserve_links: bool = True,
+    ) -> str | None:
+        # Try using open(). Assume that, if it's possible to open a member,
+        # get_member() is also available.
+        if self.has_random_access():
+            member = self.get_member(member_or_filename)
+            stream = self.open(member, pwd=pwd)
+            return _write_member(path or os.getcwd(), member, preserve_links, stream)
+
+        # Fall back to extractall().
+        logger.warning(
+            "extract() may be slow for streaming archives, use extractall instead if possible. ()"
         )
+        d = self.extractall(
+            path=path,
+            members=[member_or_filename],
+            pwd=pwd,
+            preserve_links=preserve_links,
+        )
+        return list(d.values())[0] if len(d) else None
+
+
+# class BaseArchiveReaderStreamingAccess(ArchiveReader):
+#     """Abstract base class for archive readers which are read as streams."""
+
+#     def get_members_if_available(self) -> List[ArchiveMember] | None:
+#         return None
+
+#     def has_random_access(self) -> bool:
+#         return False
+
+#     def open(
+#         self, member: ArchiveMember, *, pwd: bytes | str | None = None
+#     ) -> IO[bytes]:
+#         raise ValueError(
+#             "This archive reader does not support opening specific members."
+#         )
 
 
 class BaseArchiveReaderRandomAccess(ArchiveReader):
@@ -256,7 +254,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         return self.get_members()
 
-    def is_open_possible(self) -> bool:
+    def has_random_access(self) -> bool:
         return True
 
     def iter_members_with_io(
@@ -288,3 +286,61 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
             if member.filename == name:
                 return member
         raise ArchiveMemberNotFoundError(f"Member not found: {name}")
+
+
+class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
+    """Wrapper for archive readers that only support streaming access."""
+
+    def __init__(self, reader: ArchiveReader):
+        self.reader = reader
+
+    def close(self) -> None:
+        self.reader.close()
+
+    def get_members_if_available(self) -> List[ArchiveMember] | None:
+        return self.reader.get_members_if_available()
+
+    def iter_members_with_io(
+        self,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        *,
+        pwd: bytes | str | None = None,
+    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+        return self.reader.iter_members_with_io(filter, pwd=pwd)
+
+    def get_archive_info(self) -> ArchiveInfo:
+        return self.reader.get_archive_info()
+
+    def has_random_access(self) -> bool:
+        return False
+
+    def extractall(
+        self,
+        path: str | None = None,
+        members: list[ArchiveMember | str] | None = None,
+        pwd: bytes | str | None = None,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        preserve_links: bool = True,
+    ) -> dict[str, str]:
+        return self.reader.extractall(path, members, pwd, filter, preserve_links)
+
+    # Unsupported methods for streaming-only readers
+
+    def get_members(self) -> List[ArchiveMember]:
+        raise ValueError(
+            "Streaming-only archive reader does not support get_members()."
+        )
+
+    def open(
+        self, member: ArchiveMember, *, pwd: bytes | str | None = None
+    ) -> IO[bytes]:
+        raise ValueError("Streaming-only archive reader does not support open().")
+
+    def extract(
+        self,
+        member_or_filename: ArchiveMember | str,
+        path: str | None = None,
+        pwd: bytes | str | None = None,
+        preserve_links: bool = True,
+    ) -> str | None:
+        raise ValueError("Streaming-only archive reader does not support extract().")

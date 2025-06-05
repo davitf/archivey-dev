@@ -1,7 +1,7 @@
 import os
 from typing import Any
 
-from archivey.base_reader import ArchiveReader
+from archivey.base_reader import ArchiveReader, StreamingOnlyArchiveReaderWrapper
 from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.folder_reader import FolderReader
@@ -29,6 +29,7 @@ def open_archive(
     archive_path: str | bytes | os.PathLike,
     *,
     config: ArchiveyConfig | None = None,
+    streaming_only: bool = False,
     **kwargs: Any,
 ) -> ArchiveReader:
     """Open an archive and return the appropriate reader."""
@@ -47,6 +48,9 @@ def open_archive(
     with default_config(config):
         use_libarchive = config.use_libarchive
         use_rar_stream = config.use_rar_stream
+
+        reader: ArchiveReader
+
         if use_libarchive:
             raise NotImplementedError("LibArchiveReader is not implemented")
 
@@ -54,40 +58,46 @@ def open_archive(
             if use_rar_stream:
                 from archivey.rar_reader import RarStreamReader
 
-                return RarStreamReader(archive_path, pwd=pwd)
+                reader = RarStreamReader(archive_path, pwd=pwd)
             else:
                 from archivey.rar_reader import RarReader
 
-                return RarReader(archive_path, pwd=pwd)
+                reader = RarReader(archive_path, pwd=pwd)
 
-        if format == ArchiveFormat.ZIP:
+        elif format == ArchiveFormat.ZIP:
             from archivey.zip_reader import ZipReader
 
-            return ZipReader(archive_path, pwd=pwd)
+            reader = ZipReader(archive_path, pwd=pwd)
 
-        if format == ArchiveFormat.SEVENZIP:
+        elif format == ArchiveFormat.SEVENZIP:
             from archivey.sevenzip_reader import SevenZipReader
 
-            return SevenZipReader(archive_path, pwd=pwd)
+            reader = SevenZipReader(archive_path, pwd=pwd)
 
-        if format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
+        elif format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
             from archivey.tar_reader import TarReader
 
-            return TarReader(archive_path, pwd=pwd, format=format)
+            reader = TarReader(archive_path, pwd=pwd, format=format)
 
-        if format in SINGLE_FILE_COMPRESSED_FORMATS:
+        elif format in SINGLE_FILE_COMPRESSED_FORMATS:
             from archivey.single_file_reader import SingleFileReader
 
-            return SingleFileReader(
+            reader = SingleFileReader(
                 archive_path,
                 pwd=pwd,
                 format=format,
             )
 
-        if format == ArchiveFormat.ISO:
-            return IsoReader(archive_path, password=pwd)
+        elif format == ArchiveFormat.ISO:
+            reader = IsoReader(archive_path, password=pwd)
 
-        if format == ArchiveFormat.FOLDER:
-            return FolderReader(archive_path)
+        elif format == ArchiveFormat.FOLDER:
+            reader = FolderReader(archive_path)
 
-        raise ArchiveNotSupportedError(f"Unsupported archive format: {format}")
+        else:
+            raise ArchiveNotSupportedError(f"Unsupported archive format: {format}")
+
+        if streaming_only:
+            return StreamingOnlyArchiveReaderWrapper(reader)
+
+        return reader

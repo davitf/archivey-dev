@@ -274,23 +274,13 @@ def main(argv: list[str] | None = None) -> None:
                 if args.info:
                     continue
 
-                if args.mode == "extract":
-                    if member_filter is None:
-                        archive.extractall(args.dest)
-                    else:
-                        members = archive.get_members()
-                        if members is not None:
-                            members = [m for m in members if member_filter(m)]
-                        for member in tqdm(
-                            members,
-                            desc="Extracting",
-                            disable=args.hide_progress,
-                            total=len(members) if members is not None else None,
-                        ):
-                            archive.extract(member, root_path=args.dest)
-                    continue
-
                 verify = args.mode == "test"
+
+                if args.mode == "extract":
+                    archive.extractall(
+                        path=args.dest, preserve_links=True, filter=member_filter
+                    )
+
                 if args.stream:
                     members_if_available = archive.get_members_if_available()
                     if members_if_available is not None and member_filter is not None:
