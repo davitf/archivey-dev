@@ -315,7 +315,9 @@ def create_tar_archive_with_tarfile(
         output_stream = io.BytesIO()
         open_args = {"fileobj": output_stream}
             if zstandard is None:
-                raise ModuleNotFoundError("zstandard is required to create TAR_ZSTD archives")
+                raise ModuleNotFoundError(
+                    "zstandard is required to create TAR_ZSTD archives"
+                )
             if lz4_frame is None:
                 raise ModuleNotFoundError("lz4 is required to create TAR_LZ4 archives")
             compressed = lz4_frame.compress(tar_data)
