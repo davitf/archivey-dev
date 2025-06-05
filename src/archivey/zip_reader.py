@@ -15,6 +15,7 @@ from archivey.exceptions import (
 from archivey.formats import ArchiveFormat
 from archivey.types import ArchiveInfo, ArchiveMember, CreateSystem, MemberType
 from archivey.utils import decode_bytes_with_fallback, str_to_bytes
+from archivey.io_helpers import ExceptionTranslatingIO
 
 # TODO: check if this is correct
 _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]
@@ -207,9 +208,15 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 else member_or_filename
             )
             logger.info(f"Opening member {filename} with password {pwd}")
-            return self._archive.open(
+            stream = self._archive.open(
                 info_or_filename,
                 pwd=str_to_bytes(pwd or self._pwd),
+            )
+            return ExceptionTranslatingIO(
+                stream,
+                lambda e: ArchiveCorruptedError(f"Error reading member {filename}: {e}")
+                if isinstance(e, zipfile.BadZipFile)
+                else None,
             )
         except RuntimeError as e:
             if "password required" in str(e):

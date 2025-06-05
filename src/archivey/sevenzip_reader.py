@@ -348,8 +348,8 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 factory = StreamingFactory(q)
                 self._archive.extract(targets=files, factory=factory)
                 factory.finish()
-            except (py7zr.exceptions.ArchiveError, OSError) as exc:
-                q.put(exc)
+            except (py7zr.exceptions.ArchiveError, OSError, lzma.LZMAError) as exc:
+                q.put(ArchiveCorruptedError(str(exc)))
                 q.put(None)  # Ensure the main thread breaks out of the loop
 
         thread = Thread(target=extractor)
