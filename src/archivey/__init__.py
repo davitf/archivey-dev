@@ -21,6 +21,7 @@ from archivey.exceptions import (
 )
 from archivey.folder_reader import FolderReader
 from archivey.formats import detect_archive_format_by_signature
+from .archive_path import ArchivePath
 from archivey.iso_reader import IsoReader
 from archivey.types import (
     ArchiveFormat,
@@ -54,4 +55,5 @@ __all__ = [
     "get_default_config",
     "set_default_config",
     "default_config",
+    "ArchivePath",
 ]
