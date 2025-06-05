@@ -332,7 +332,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
                 try:
                     stream = LazyOpenIO(self.open, member, seekable=True)
                     yield member, stream
-                    stream.close()
-                except (ArchiveError, OSError) as e:
+                    stream.close() # Presumed original line
+                except (ArchiveError, OSError) as e: # Make sure ArchiveError is imported
                     logger.warning("Error opening member %s: %s", member.filename, e)
-                    yield member, ErrorIOStream(e)
+                    yield member, ErrorIOStream(e) # Make sure ErrorIOStream is imported
