@@ -29,6 +29,9 @@ def _translate_tar_exception(e: Exception) -> Optional[Exception]:
         if "unexpected end of data" in str(e).lower():
             return ArchiveEOFError("TAR archive is truncated")
 
+    if isinstance(e, lzma.LZMAError):
+        return ArchiveCorruptedError(f"Error decompressing TAR archive: {e}")
+
     return None
 
 
@@ -356,7 +359,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
                     stream = LazyOpenIO(self.open, member, seekable=True)
                     yield member, stream
                     stream.close()
-            except (ArchiveError, OSError, tarfile.ReadError) as e:
+            except (ArchiveError, OSError, tarfile.ReadError, lzma.LZMAError) as e:
                 logger.warning("Error opening member %s: %s", member.filename, e)
                 translated = _translate_tar_exception(e)
-                yield member, ErrorIOStream(translated or e)
+                yield member, ErrorIOStream(translated or ArchiveCorruptedError(str(e)))
