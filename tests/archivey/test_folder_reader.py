@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tests.archivey.sample_archives import BASIC_FILES, ENCODING_FILES, SYMLINK_FILES
 
 from archivey.core import open_archive
 from archivey.types import ArchiveFormat, MemberType
+from tests.archivey.sample_archives import BASIC_FILES, ENCODING_FILES, SYMLINK_FILES
 from tests.archivey.testing_utils import write_files_to_dir
 
 

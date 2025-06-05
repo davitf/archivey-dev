@@ -63,7 +63,10 @@ COMPRESSION_FORMAT_TO_TAR_FORMAT = {
     ArchiveFormat.LZ4: ArchiveFormat.TAR_LZ4,
 }
 
-TAR_FORMAT_TO_COMPRESSION_FORMAT = {v: k for k, v in COMPRESSION_FORMAT_TO_TAR_FORMAT.items()}
+TAR_FORMAT_TO_COMPRESSION_FORMAT = {
+    v: k for k, v in COMPRESSION_FORMAT_TO_TAR_FORMAT.items()
+}
+
 
 class MemberType(StrEnum):
     FILE = "file"

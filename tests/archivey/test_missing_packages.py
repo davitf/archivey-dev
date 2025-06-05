@@ -2,15 +2,15 @@ import os
 from unittest.mock import patch
 
 import pytest
-from tests.archivey.sample_archives import (
-    SAMPLE_ARCHIVES,
-    filter_archives,
-)
 
 from archivey.core import open_archive
 from archivey.dependency_checker import get_dependency_versions
 from archivey.exceptions import (
     PackageNotInstalledError,
+)
+from tests.archivey.sample_archives import (
+    SAMPLE_ARCHIVES,
+    filter_archives,
 )
 
 # Tests for LibraryNotInstalledError
