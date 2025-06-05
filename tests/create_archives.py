@@ -6,9 +6,9 @@ import io
 import logging
 import lzma
 import os
+import shutil
 import stat
 import subprocess
-import shutil
 import tarfile
 import tempfile
 import zipfile

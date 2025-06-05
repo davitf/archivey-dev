@@ -37,6 +37,7 @@ dev = [
     "devtools>=0.12.2",
     "hatch>=1.14.1",
     "pytest>=8.3.5",
+    "pytest-timeout>=2.3.1",
     "ruff>=0.11.11",
     "tox>=4.0.0",
 ]
@@ -45,6 +46,8 @@ dev = [
 pythonpath = ["src", "."]
 testpaths = ["tests"]
 addopts = "--log-level=DEBUG"
+timeout = 5
+timeout_method = "thread"
 
 [tool.hatch.envs.default]
 python = "3.13"
