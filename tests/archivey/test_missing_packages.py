@@ -2,7 +2,7 @@ import os
 from unittest.mock import patch
 
 import pytest
-from sample_archives import (
+from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     filter_archives,
 )

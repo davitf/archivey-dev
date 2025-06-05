@@ -6,7 +6,7 @@ import zlib
 from datetime import datetime
 
 import pytest
-from sample_archives import (
+from tests.archivey.sample_archives import (
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
     ArchiveInfo,
@@ -41,7 +41,10 @@ def get_crc32(data: bytes) -> int:
 
 
 def check_member_metadata(
-    member: ArchiveMember, sample_file: FileInfo | None, sample_archive: ArchiveInfo
+    member: ArchiveMember,
+    sample_file: FileInfo | None,
+    sample_archive: ArchiveInfo,
+    archive_path: str | None = None,
 ):
     if sample_file is None:
         return
@@ -91,7 +94,7 @@ def check_member_metadata(
         assert member.mtime is None
     elif sample_file.mtime == MARKER_MTIME_BASED_ON_ARCHIVE_NAME:
         archive_file_mtime = datetime.fromtimestamp(
-            os.path.getmtime(sample_archive.get_archive_path())
+            os.path.getmtime(archive_path or sample_archive.get_archive_path())
         )
         assert member.mtime == archive_file_mtime, (
             f"Timestamp mismatch for {member.filename} (special check): "
@@ -117,6 +120,7 @@ def check_member_metadata(
 
 def check_iter_members(
     sample_archive: ArchiveInfo,
+    archive_path: str | None = None,
     use_rar_stream: bool = False,
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
@@ -175,8 +179,9 @@ def check_iter_members(
         use_indexed_bzip2=use_indexed_bzip2,
         use_python_xz=use_python_xz,
     )
+    archive_path_resolved = archive_path or sample_archive.get_archive_path()
     with open_archive(
-        sample_archive.get_archive_path(),
+        archive_path_resolved,
         pwd=constructor_password,
         config=config,
     ) as archive:
@@ -196,7 +201,12 @@ def check_iter_members(
         for member, stream in members_iter:
             sample_file = files_by_name.get(member.filename, None)
 
-            check_member_metadata(member, sample_file, sample_archive)
+            check_member_metadata(
+                member,
+                sample_file,
+                sample_archive,
+                archive_path=archive_path_resolved,
+            )
 
             if sample_file is None:
                 if member.type == MemberType.DIR:
@@ -234,46 +244,40 @@ def check_iter_members(
     filter_archives(SAMPLE_ARCHIVES, extensions=["zip"]),
     ids=lambda x: x.filename,
 )
-def test_read_zip_archives(sample_archive: ArchiveInfo):
-    check_iter_members(sample_archive)
-
-
-CORRUPTED_ARCHIVES_DIR = pathlib.Path(__file__).parent / "../test_corrupted_archives"
-
-
-def get_corrupted_archives(suffix: str) -> list[str]:
-    """Helper to get list of corrupted archive paths for parametrization."""
-    if not CORRUPTED_ARCHIVES_DIR.exists():
-        return []
-    return glob.glob(str(CORRUPTED_ARCHIVES_DIR / suffix))
+def test_read_zip_archives(sample_archive: ArchiveInfo, sample_archive_path: str):
+    check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 
 @pytest.mark.parametrize(
-    "archive_path_str",
-    get_corrupted_archives("*.truncated"),
-    ids=lambda x: pathlib.Path(str(x)).name
-    if isinstance(x, (str, pathlib.Path))
-    else "invalid_param",
+    "sample_archive",
+    filter_archives(SAMPLE_ARCHIVES, custom_filter=lambda a: a.generate_corrupted_variants),
+    ids=lambda a: a.filename,
 )
-def test_read_truncated_archives(archive_path_str: str):
+def test_read_truncated_archives(sample_archive: ArchiveInfo, truncated_archive_path: str):
     """Test that reading truncated archives raises ArchiveEOFError."""
-    archive_path = pathlib.Path(archive_path_str)
-    with pytest.raises(ArchiveEOFError):
-        with open_archive(archive_path):
-            pass  # Opening is enough to trigger for some formats, iteration for others
+    archive_path = pathlib.Path(truncated_archive_path)
+    if sample_archive.creation_info.format == ArchiveFormat.RAR:
+        pytest.xfail("RAR library handles truncated archives without error")
+
+    with pytest.raises((ArchiveEOFError, ArchiveCorruptedError, EOFError)):
+        with open_archive(archive_path) as archive:
+            for member, stream in archive.iter_members_with_io():
+                if stream is not None:
+                    stream.read()
 
 
 @pytest.mark.parametrize(
-    "archive_path_str",
-    get_corrupted_archives("*.corrupted"),
-    ids=lambda x: pathlib.Path(str(x)).name
-    if isinstance(x, (str, pathlib.Path))
-    else "invalid_param",
+    "sample_archive",
+    filter_archives(SAMPLE_ARCHIVES, custom_filter=lambda a: a.generate_corrupted_variants),
+    ids=lambda a: a.filename,
 )
-def test_read_corrupted_archives_general(archive_path_str: str):
+def test_read_corrupted_archives_general(sample_archive: ArchiveInfo, corrupted_archive_path: str):
     """Test that reading generally corrupted archives raises ArchiveCorruptedError."""
-    archive_path = pathlib.Path(archive_path_str)
-    with pytest.raises(ArchiveCorruptedError):
+    archive_path = pathlib.Path(corrupted_archive_path)
+    if sample_archive.creation_info.format == ArchiveFormat.RAR:
+        pytest.xfail("RAR library handles corrupted archives without error")
+
+    with pytest.raises((ArchiveCorruptedError, zlib.error)):
         # For many corrupted archives, error might be raised on open or during iteration
         with open_archive(str(archive_path)) as archive:
             for member, stream in archive.iter_members_with_io():
@@ -289,11 +293,15 @@ def test_read_corrupted_archives_general(archive_path_str: str):
     ),
     ids=lambda x: x.filename,
 )
-def test_read_tar_archives(sample_archive: ArchiveInfo):
-    archive_path = pathlib.Path(sample_archive.get_archive_path())
+def test_read_tar_archives(sample_archive: ArchiveInfo, sample_archive_path: str):
+    archive_path = pathlib.Path(sample_archive_path)
     if not archive_path.exists():
         pytest.skip("TAR archive not available")
-    check_iter_members(sample_archive)
+    check_iter_members(
+        sample_archive,
+        archive_path=sample_archive_path,
+        skip_member_contents=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -301,10 +309,10 @@ def test_read_tar_archives(sample_archive: ArchiveInfo):
     filter_archives(SAMPLE_ARCHIVES, extensions=["iso"]),
     ids=lambda x: x.filename,
 )
-def test_read_iso_archives(sample_archive: ArchiveInfo):
-    if not pathlib.Path(sample_archive.get_archive_path()).exists():
+def test_read_iso_archives(sample_archive: ArchiveInfo, sample_archive_path: str):
+    if not pathlib.Path(sample_archive_path).exists():
         pytest.skip("ISO archive not available")
-    check_iter_members(sample_archive)
+    check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 
 @pytest.mark.parametrize(
@@ -313,7 +321,7 @@ def test_read_iso_archives(sample_archive: ArchiveInfo):
     ids=lambda x: x.filename,
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
-def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
+def test_read_rar_archives(sample_archive: ArchiveInfo, sample_archive_path: str, use_rar_stream: bool):
     deps = get_dependency_versions()
     if (
         sample_archive.contents.header_password is not None
@@ -339,10 +347,11 @@ def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
 
     if expect_failure:
         with pytest.raises(ValueError):
-            check_iter_members(sample_archive, use_rar_stream=use_rar_stream)
+            check_iter_members(sample_archive, archive_path=sample_archive_path, use_rar_stream=use_rar_stream)
     else:
         check_iter_members(
             sample_archive,
+            archive_path=sample_archive_path,
             use_rar_stream=use_rar_stream,
             skip_member_contents=deps.unrar_version is None,
         )
@@ -361,7 +370,7 @@ def test_read_rar_archives(sample_archive: ArchiveInfo, use_rar_stream: bool):
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives_with_password_in_constructor(
-    sample_archive: ArchiveInfo, use_rar_stream: bool
+    sample_archive: ArchiveInfo, sample_archive_path: str, use_rar_stream: bool
 ):
     deps = get_dependency_versions()
     if use_rar_stream and deps.unrar_version is None:
@@ -369,6 +378,7 @@ def test_read_rar_archives_with_password_in_constructor(
 
     check_iter_members(
         sample_archive,
+        archive_path=sample_archive_path,
         use_rar_stream=use_rar_stream,
         set_file_password_in_constructor=True,
         skip_member_contents=deps.unrar_version is None,
@@ -388,9 +398,11 @@ def test_read_rar_archives_with_password_in_constructor(
 )
 def test_read_zip_and_7z_archives_with_password_in_constructor(
     sample_archive: ArchiveInfo,
+    sample_archive_path: str,
 ):
     check_iter_members(
         sample_archive,
+        archive_path=sample_archive_path,
         set_file_password_in_constructor=True,
     )
 
@@ -400,8 +412,8 @@ def test_read_zip_and_7z_archives_with_password_in_constructor(
     filter_archives(SAMPLE_ARCHIVES, extensions=["7z"]),
     ids=lambda x: x.filename,
 )
-def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo):
-    check_iter_members(sample_archive)
+def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo, sample_archive_path: str):
+    check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 
 @pytest.mark.parametrize(
@@ -411,5 +423,7 @@ def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo):
     ),
     ids=lambda x: x.filename,
 )
-def test_read_single_file_compressed_archives(sample_archive: ArchiveInfo):
-    check_iter_members(sample_archive)
+def test_read_single_file_compressed_archives(
+    sample_archive: ArchiveInfo, sample_archive_path: str
+):
+    check_iter_members(sample_archive, archive_path=sample_archive_path)

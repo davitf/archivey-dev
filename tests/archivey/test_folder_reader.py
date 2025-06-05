@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from sample_archives import BASIC_FILES, ENCODING_FILES, SYMLINK_FILES
+from tests.archivey.sample_archives import BASIC_FILES, ENCODING_FILES, SYMLINK_FILES
 
 from archivey.core import open_archive
 from archivey.types import ArchiveFormat, MemberType
