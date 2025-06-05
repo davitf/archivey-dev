@@ -16,6 +16,7 @@ from sample_archives import (
     filter_archives,
 )
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.dependency_checker import get_dependency_versions
 from archivey.exceptions import (
@@ -113,11 +114,14 @@ def check_iter_members(
             )
         )
 
+    config = ArchiveyConfig(
+        use_rar_stream=use_rar_stream,
+        use_single_file_stored_metadata=True,
+    )
     with open_archive(
         sample_archive.get_archive_path(),
         pwd=constructor_password,
-        use_rar_stream=use_rar_stream,
-        use_single_file_stored_metadata=True,
+        config=config,
     ) as archive:
         assert archive.format == sample_archive.format_info.format
         format_info = archive.get_archive_info()

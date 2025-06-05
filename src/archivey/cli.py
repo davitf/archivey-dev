@@ -1,23 +1,23 @@
 # A zipfile-like interface for reading all the files in an archive.
 
 import argparse
+import builtins
 import hashlib
 import logging
 import os
-import builtins
 import zlib
 from datetime import datetime
 from typing import IO, Tuple
 
 from tqdm import tqdm
 
-from archivey.io_helpers import IOStats, StatsIO
-
 from archivey.base_reader import ArchiveReader
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.exceptions import (
     ArchiveError,
 )
+from archivey.io_helpers import IOStats, StatsIO
 from archivey.types import ArchiveMember, MemberType
 
 logging.basicConfig(level=logging.INFO)
@@ -98,7 +98,11 @@ if args.track_io:
         path = None
         if isinstance(file, (str, bytes, os.PathLike)):
             path = os.path.abspath(file)
-        if path in target_paths and "r" in mode and not any(m in mode for m in ["w", "a", "+"]):
+        if (
+            path in target_paths
+            and "r" in mode
+            and not any(m in mode for m in ["w", "a", "+"])
+        ):
             f = original_open(file, mode, *oargs, **okwargs)
             stats = stats_per_file.setdefault(path, IOStats())
             return StatsIO(f, stats)
@@ -164,12 +168,15 @@ def process_member(
 for archive_path in args.files:
     try:
         print(f"\nProcessing {archive_path}:")
-        with open_archive(
-            archive_path,
+        config = ArchiveyConfig(
             use_libarchive=args.use_libarchive,
             use_rar_stream=args.use_rar_stream,
-            pwd=args.password,
             use_single_file_stored_metadata=args.use_stored_metadata,
+        )
+        with open_archive(
+            archive_path,
+            pwd=args.password,
+            config=config,
         ) as archive:
             print(f"Archive format: {archive.format} {archive.get_archive_info()}")
             if args.info:

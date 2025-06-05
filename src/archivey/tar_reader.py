@@ -5,7 +5,6 @@ import stat
 import tarfile
 from datetime import datetime, timezone
 from typing import IO, Callable, Iterator, List, Union, cast
-import io
 
 from archivey.base_reader import (
     ArchiveInfo,

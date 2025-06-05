@@ -194,7 +194,12 @@ def check_rarinfo_crc(
 class BaseRarReader(BaseArchiveReaderRandomAccess):
     """Base class for RAR archive readers."""
 
-    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
+    def __init__(
+        self,
+        archive_path: str,
+        *,
+        pwd: bytes | str | None = None,
+    ):
         super().__init__(ArchiveFormat.RAR, archive_path)
         self._members: Optional[list[ArchiveMember]] = None
         self._format_info: Optional[ArchiveInfo] = None
@@ -358,7 +363,12 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
 class RarReader(BaseRarReader):
     """Reader for RAR archives using rarfile."""
 
-    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
+    def __init__(
+        self,
+        archive_path: str,
+        *,
+        pwd: bytes | str | None = None,
+    ):
         super().__init__(archive_path, pwd=pwd)
         self._pwd = pwd
 
@@ -524,7 +534,12 @@ class RarStreamReader(BaseRarReader):
     guaranteed to have the same password for all files)
     """
 
-    def __init__(self, archive_path: str, *, pwd: bytes | str | None = None):
+    def __init__(
+        self,
+        archive_path: str,
+        *,
+        pwd: bytes | str | None = None,
+    ):
         super().__init__(archive_path, pwd=pwd)
 
         self._proc: subprocess.Popen | None = None

@@ -1,3 +1,9 @@
+from archivey.config import (
+    ArchiveyConfig,
+    default_config,
+    get_default_config,
+    set_default_config,
+)
 from archivey.core import open_archive
 from archivey.dependency_checker import (
     DependencyVersions,
@@ -44,4 +50,8 @@ __all__ = [
     "DependencyVersions",
     "get_dependency_versions",
     "format_dependency_versions",
+    "ArchiveyConfig",
+    "get_default_config",
+    "set_default_config",
+    "default_config",
 ]
