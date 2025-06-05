@@ -33,6 +33,21 @@ try:  # Optional dependency
 except ModuleNotFoundError:  # pragma: no cover - optional import
     zstandard = None
 
+try:  # Optional dependency
+    import py7zr  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional import
+    py7zr = None
+
+try:  # Optional dependency
+    import pycdlib  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional import
+    pycdlib = None
+
+try:  # Optional dependency
+    import zstandard  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional import
+    zstandard = None
+
 from archivey.types import ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
@@ -299,7 +314,15 @@ def create_tar_archive_with_tarfile(
     if compression_format in (ArchiveFormat.TAR_ZSTD, ArchiveFormat.TAR_LZ4):
         output_stream = io.BytesIO()
         open_args = {"fileobj": output_stream}
-    else:
+            if zstandard is None:
+                raise ModuleNotFoundError("zstandard is required to create TAR_ZSTD archives")
+            if lz4_frame is None:
+                raise ModuleNotFoundError("lz4 is required to create TAR_LZ4 archives")
+            compressed = lz4_frame.compress(tar_data)
+    if opener is None:
+        raise ModuleNotFoundError(
+            f"Required library for {compression_format.name} is not installed"
+        )
         open_args = {"name": abs_archive_path}
 
     with tarfile.open(mode=tar_mode, **open_args) as tf:  # type: ignore[reportArgumentType]
@@ -458,6 +481,8 @@ def create_rar_archive_with_command_line(
         for i, (password, compression_method, group_files) in enumerate(
             group_files_by_password_and_compression_method(contents.files)
         ):
+    if py7zr is None:
+        raise ModuleNotFoundError("py7zr is required to create 7z archives")
             command = ["rar", "a", "-oh", "-ol"]
 
             if contents.solid:
@@ -580,6 +605,8 @@ def create_7z_archive_with_command_line(
     with tempfile.TemporaryDirectory() as tempdir:
         write_files_to_dir(tempdir, contents.files)
 
+    if pycdlib is None:
+        raise ModuleNotFoundError("pycdlib is required to create ISO archives")
         file_groups = list(
             group_files_by_password_and_compression_method(contents.files)
         )
@@ -687,8 +714,8 @@ def create_iso_archive_with_pycdlib(
                     src_path,
                     iso_path=iso_path.upper(),
                     rr_name=f_name,
-                    joliet_path=iso_path,
-                )
+    ArchiveFormat.ZSTD: zstandard.open if zstandard is not None else None,
+    ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
 
         iso.write(abs_archive_path)
         iso.close()
