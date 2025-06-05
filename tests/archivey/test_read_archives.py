@@ -65,6 +65,10 @@ def check_iter_members(
     use_rar_stream: bool = False,
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
+    *,
+    use_rapidgzip: bool = False,
+    use_indexed_bzip2: bool = False,
+    use_python_xz: bool = False,
 ):
     if sample_archive.format_info.format == ArchiveFormat.ISO:
         pytest.importorskip("pycdlib")
@@ -117,6 +121,9 @@ def check_iter_members(
     config = ArchiveyConfig(
         use_rar_stream=use_rar_stream,
         use_single_file_stored_metadata=True,
+        use_rapidgzip=use_rapidgzip,
+        use_indexed_bzip2=use_indexed_bzip2,
+        use_python_xz=use_python_xz,
     )
     with open_archive(
         sample_archive.get_archive_path(),
@@ -508,3 +515,41 @@ def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files()
                 "secret.txt",
                 "also_secret.txt",
             }
+
+
+@pytest.mark.skipif(
+    get_dependency_versions().rapidgzip_version is None
+    or get_dependency_versions().indexed_bzip2_version is None
+    or get_dependency_versions().python_xz_version is None,
+    reason="Optional decompressor packages not installed",
+)
+def test_optional_decompressor_backends():
+    archives = [
+        filter_archives(
+            SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["lib.gz"]
+        )[0],
+        filter_archives(
+            SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["lib.bz2"]
+        )[0],
+        filter_archives(
+            SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["lib.xz"]
+        )[0],
+        filter_archives(
+            SAMPLE_ARCHIVES, prefixes=["basic_solid"], extensions=["tar.gz"]
+        )[0],
+        filter_archives(
+            SAMPLE_ARCHIVES, prefixes=["basic_solid"], extensions=["tar.bz2"]
+        )[0],
+        filter_archives(
+            SAMPLE_ARCHIVES, prefixes=["basic_solid"], extensions=["tar.xz"]
+        )[0],
+    ]
+
+    for archive in archives:
+        check_iter_members(
+            archive,
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            skip_member_contents=True,
+        )
