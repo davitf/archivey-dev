@@ -66,7 +66,10 @@ class ZipReader(BaseArchiveReaderRandomAccess):
     """Reader for ZIP archives."""
 
     def __init__(
-        self, archive_path: str | bytes | os.PathLike, *, pwd: bytes | str | None = None
+        self,
+        archive_path: str | bytes | os.PathLike,
+        *,
+        pwd: bytes | str | None = None,
     ):
         super().__init__(ArchiveFormat.ZIP, archive_path)
         self._members: list[ArchiveMember] | None = None

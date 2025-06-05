@@ -212,7 +212,6 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         format: ArchiveFormat,
         *,
         pwd: bytes | str | None = None,
-        use_stored_metadata: bool = False,
         **kwargs,
     ):
         """Initialize the reader.
@@ -228,7 +227,7 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
             raise ValueError("Compressed files do not support password protection")
         self.archive_path = archive_path
         self.ext = os.path.splitext(archive_path)[1].lower()
-        self.use_stored_metadata = use_stored_metadata
+        self.use_stored_metadata = self.config.use_single_file_stored_metadata
 
         # Get the base name without compression extension
         self.member_name = os.path.splitext(os.path.basename(archive_path))[0]

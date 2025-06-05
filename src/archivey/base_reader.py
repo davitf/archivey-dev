@@ -5,6 +5,7 @@ import os
 import shutil
 from typing import IO, Callable, Iterator, List
 
+from archivey.config import ArchiveyConfig, get_default_config
 from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
 from archivey.io_helpers import ErrorIOStream, LazyOpenIO
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember
@@ -15,12 +16,16 @@ logger = logging.getLogger(__name__)
 class ArchiveReader(abc.ABC):
     """Abstract base class for archive streams."""
 
-    def __init__(self, format: ArchiveFormat, archive_path: str | bytes | os.PathLike):
+    def __init__(
+        self,
+        format: ArchiveFormat,
+        archive_path: str | bytes | os.PathLike,
+    ):
         """Initialize the archive reader.
 
         Args:
             format: The format of the archive
-        archive_path: The path to the archive file
+            archive_path: The path to the archive file
         """
         self.format = format
         self.archive_path = (
@@ -28,6 +33,7 @@ class ArchiveReader(abc.ABC):
             if isinstance(archive_path, bytes)
             else str(archive_path)
         )
+        self.config: ArchiveyConfig = get_default_config()
         self._member_map: dict[str, ArchiveMember] | None = None
 
     @abc.abstractmethod

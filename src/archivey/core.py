@@ -2,6 +2,7 @@ import os
 from typing import Any
 
 from archivey.base_reader import ArchiveReader
+from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.folder_reader import FolderReader
 from archivey.formats import detect_archive_format
@@ -27,8 +28,7 @@ def _normalize_archive_path(archive_path: str | bytes | os.PathLike) -> str:
 def open_archive(
     archive_path: str | bytes | os.PathLike,
     *,
-    use_libarchive: bool = False,
-    use_rar_stream: bool = False,
+    config: ArchiveyConfig | None = None,
     **kwargs: Any,
 ) -> ArchiveReader:
     """Open an archive and return the appropriate reader."""
@@ -41,48 +41,53 @@ def open_archive(
     if pwd is not None and not isinstance(pwd, (str, bytes)):
         raise TypeError("Password must be a string or bytes")
 
-    if use_libarchive:
-        raise NotImplementedError("LibArchiveReader is not implemented")
+    if config is None:
+        config = get_default_config()
 
-    if format == ArchiveFormat.RAR:
-        if use_rar_stream:
-            from archivey.rar_reader import RarStreamReader
+    with default_config(config):
+        use_libarchive = config.use_libarchive
+        use_rar_stream = config.use_rar_stream
+        if use_libarchive:
+            raise NotImplementedError("LibArchiveReader is not implemented")
 
-            return RarStreamReader(archive_path, pwd=pwd)
-        else:
-            from archivey.rar_reader import RarReader
+        if format == ArchiveFormat.RAR:
+            if use_rar_stream:
+                from archivey.rar_reader import RarStreamReader
 
-            return RarReader(archive_path, pwd=pwd)
+                return RarStreamReader(archive_path, pwd=pwd)
+            else:
+                from archivey.rar_reader import RarReader
 
-    if format == ArchiveFormat.ZIP:
-        from archivey.zip_reader import ZipReader
+                return RarReader(archive_path, pwd=pwd)
 
-        return ZipReader(archive_path, pwd=pwd)
+        if format == ArchiveFormat.ZIP:
+            from archivey.zip_reader import ZipReader
 
-    if format == ArchiveFormat.SEVENZIP:
-        from archivey.sevenzip_reader import SevenZipReader
+            return ZipReader(archive_path, pwd=pwd)
 
-        return SevenZipReader(archive_path, pwd=pwd)
+        if format == ArchiveFormat.SEVENZIP:
+            from archivey.sevenzip_reader import SevenZipReader
 
-    if format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
-        from archivey.tar_reader import TarReader
+            return SevenZipReader(archive_path, pwd=pwd)
 
-        return TarReader(archive_path, pwd=pwd, format=format)
+        if format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
+            from archivey.tar_reader import TarReader
 
-    if format in SINGLE_FILE_COMPRESSED_FORMATS:
-        from archivey.single_file_reader import SingleFileReader
+            return TarReader(archive_path, pwd=pwd, format=format)
 
-        return SingleFileReader(
-            archive_path,
-            pwd=pwd,
-            format=format,
-            use_stored_metadata=kwargs.get("use_single_file_stored_metadata", False),
-        )
+        if format in SINGLE_FILE_COMPRESSED_FORMATS:
+            from archivey.single_file_reader import SingleFileReader
 
-    if format == ArchiveFormat.ISO:
-        return IsoReader(archive_path, password=pwd)
+            return SingleFileReader(
+                archive_path,
+                pwd=pwd,
+                format=format,
+            )
 
-    if format == ArchiveFormat.FOLDER:
-        return FolderReader(archive_path)
+        if format == ArchiveFormat.ISO:
+            return IsoReader(archive_path, password=pwd)
 
-    raise ArchiveNotSupportedError(f"Unsupported archive format: {format}")
+        if format == ArchiveFormat.FOLDER:
+            return FolderReader(archive_path)
+
+        raise ArchiveNotSupportedError(f"Unsupported archive format: {format}")
