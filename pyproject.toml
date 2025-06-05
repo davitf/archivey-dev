@@ -1,7 +1,7 @@
 [project]
 name = "archivey"
 version = "0.1.0"
-description = "Add your description here"
+description = "A library for reading the contents of many common archive formats, providing a simple, unified interface."
 readme = "README.md"
 authors = [
     { name = "davi davi", email = "gh@davitf.com" }

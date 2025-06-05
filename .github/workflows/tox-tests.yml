@@ -59,3 +59,28 @@ jobs:
 
       - name: Run tox environment
         run: tox -e py${{ matrix.python-version }}-${{ matrix.tox_env }}
+
+  build-docs:
+    name: Build API Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # Or any suitable Python version
+
+      - name: Install pdoc
+        run: pip install pdoc
+
+      - name: Generate API documentation
+        run: pdoc --output-dir docs/api src/archivey
+
+      # Optional: Add a step to upload artifacts if needed
+      # - name: Upload documentation artifact
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: api-documentation
+      #     path: docs/api
