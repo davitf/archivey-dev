@@ -1,5 +1,6 @@
 import argparse
 import bz2
+from datetime import timezone
 import fnmatch
 import gzip
 import io
@@ -331,7 +332,7 @@ def create_tar_archive_with_tarfile(
     with tarfile.open(name=abs_archive_path, mode=tar_mode, fileobj=output_stream) as tf:  # type: ignore[reportArgumentType]
         for sample_file in contents.files:
             tarinfo = tarfile.TarInfo(name=sample_file.name)
-            tarinfo.mtime = int(sample_file.mtime.timestamp())
+            tarinfo.mtime = int(sample_file.mtime.replace(tzinfo=timezone.utc).timestamp())
 
             if sample_file.permissions is not None:
                 tarinfo.mode = sample_file.permissions
