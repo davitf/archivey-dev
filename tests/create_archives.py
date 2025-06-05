@@ -8,6 +8,7 @@ import lzma
 import os
 import stat
 import subprocess
+import shutil
 import tarfile
 import tempfile
 import zipfile
@@ -381,7 +382,7 @@ def create_single_file_compressed_archive_with_library(
 ):
     opener = SINGLE_FILE_LIBRARY_OPENERS[compression_format]
     if opener is None:
-        raise ModuleNotFoundError(
+        raise PackageNotInstalledError(
             f"Required library for {compression_format.name} is not installed"
         )
 
@@ -464,6 +465,8 @@ def create_rar_archive_with_command_line(
     assert compression_format == ArchiveFormat.RAR, (
         f"Only RAR format is supported, got {compression_format}"
     )
+    if shutil.which("rar") is None:
+        raise PackageNotInstalledError("rar command is not installed")
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
         os.remove(abs_archive_path)
@@ -529,7 +532,7 @@ def create_7z_archive_with_py7zr(
         f"Only 7Z format is supported, got {compression_format}"
     )
     if py7zr is None:
-        raise ModuleNotFoundError("py7zr is required to create 7z archives")
+        raise PackageNotInstalledError("py7zr is required to create 7z archives")
 
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
@@ -593,6 +596,8 @@ def create_7z_archive_with_command_line(
     assert compression_format == ArchiveFormat.SEVENZIP, (
         f"Only 7Z format is supported, got {compression_format}"
     )
+    if shutil.which("7z") is None:
+        raise PackageNotInstalledError("7z command is not installed")
     if contents.archive_comment:
         raise ValueError("Archive comments are not supported with 7z command line")
 
@@ -653,7 +658,7 @@ def create_iso_archive_with_pycdlib(
         f"Only ISO format is supported, got {compression_format}"
     )
     if pycdlib is None:
-        raise ModuleNotFoundError("pycdlib is required to create ISO archives")
+        raise PackageNotInstalledError("pycdlib is required to create ISO archives")
 
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
