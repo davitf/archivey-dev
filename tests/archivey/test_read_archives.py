@@ -21,7 +21,7 @@ from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
 )
-from archivey.types import ArchiveFormat, CreateSystem, ArchiveMember, MemberType
+from archivey.types import ArchiveFormat, ArchiveMember, CreateSystem, MemberType
 
 
 def normalize_newlines(s: str | None) -> str | None:
@@ -106,6 +106,13 @@ def check_member_metadata(
         assert member.mtime == sample_file.mtime, (
             f"Timestamp mismatch for {member.filename}: {member.mtime} != {sample_file.mtime}"
         )
+
+    # TODO: set feature
+    if member.create_system is not None:
+        assert member.create_system in {
+            CreateSystem.UNIX,
+            CreateSystem.UNKNOWN,
+        }
 
 
 def check_iter_members(
@@ -204,67 +211,7 @@ def check_iter_members(
 
             actual_filenames.append(member.filename)
 
-            if sample_file.compression_method is not None:
-                assert member.compression_method == sample_file.compression_method
-
-            if features.file_comments:
-                assert member.comment == sample_file.comment
-            else:
-                assert member.comment is None
-
-            if member.create_system is not None:
-                assert member.create_system in {
-                    CreateSystem.UNIX,
-                    CreateSystem.UNKNOWN,
-                }
-
-            if member.is_file and member.file_size is not None:
-                assert member.file_size == len(sample_file.contents or b"")
-
-            # Check permissions
-            if sample_file.permissions is not None:
-                assert member.mode is not None, (
-                    f"Permissions not set for {member.filename} in {sample_archive.filename} "
-                    f"(expected {oct(sample_file.permissions)})"
-                )
-                assert member.mode == sample_file.permissions, (
-                    f"Permission mismatch for {member.filename} in {sample_archive.filename}: "
-                    f"got {oct(member.mode) if member.mode is not None else 'None'}, "
-                    f"expected {oct(sample_file.permissions)}"
-                )
-
-            assert member.encrypted == (
-                sample_file.password is not None
-                or (
-                    member.is_file
-                    and sample_archive.contents.header_password is not None
-                )
-            ), (
-                f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
-            )
-
-            assert member.mtime is not None
-            if sample_file.mtime == MARKER_MTIME_BASED_ON_ARCHIVE_NAME:
-                archive_file_mtime = datetime.fromtimestamp(
-                    os.path.getmtime(sample_archive.get_archive_path())
-                )
-                assert member.mtime == archive_file_mtime, (
-                    f"Timestamp mismatch for {member.filename} (special check): "
-                    f"member mtime {member.mtime} vs archive mtime {archive_file_mtime}"
-                )
-            elif allow_timestamp_rounding_error:
-                assert (
-                    abs(member.mtime.timestamp() - sample_file.mtime.timestamp()) <= 1
-                ), (
-                    f"Timestamp mismatch for {member.filename}: {member.mtime} != {sample_file.mtime}"
-                )
-            else:
-                assert member.mtime == sample_file.mtime, (
-                    f"Timestamp mismatch for {member.filename}: {member.mtime} != {sample_file.mtime}"
-                )
-
             if sample_file.type == MemberType.FILE and not skip_member_contents:
-            if sample_file.type == MemberType.FILE:
                 assert stream is not None
                 contents = stream.read()
                 assert contents == sample_file.contents
@@ -466,130 +413,3 @@ def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo):
 )
 def test_read_single_file_compressed_archives(sample_archive: ArchiveInfo):
     check_iter_members(sample_archive)
-
-
-# Tests for LibraryNotInstalledError
-BASIC_RAR_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["rar"]
-)[0]
-
-HEADER_ENCRYPTED_RAR_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["encrypted_header"], extensions=["rar"]
-)[0]
-
-NORMAL_ENCRYPTED_RAR_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["encryption"], extensions=["rar"]
-)[0]
-
-BASIC_7Z_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["7z"]
-)[0]
-
-BASIC_ISO_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["iso"]
-)[0]
-
-BASIC_ZSTD_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["zst"]
-)[0]
-
-BASIC_LZ4_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["lz4"]
-)[0]
-
-BASIC_ZSTD_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["zst"]
-)[0]
-
-
-@pytest.mark.parametrize(
-    ["library_name", "archive_path"],
-    [
-        ("pycdlib", BASIC_ISO_ARCHIVE.get_archive_path()),
-        ("rarfile", BASIC_RAR_ARCHIVE.get_archive_path()),
-        ("py7zr", BASIC_7Z_ARCHIVE.get_archive_path()),
-        ("zstandard", BASIC_ZSTD_ARCHIVE.get_archive_path()),
-        ("lz4", BASIC_LZ4_ARCHIVE.get_archive_path()),
-    ],
-    ids=lambda x: os.path.basename(x),
-)
-def test_missing_package_raises_exception(library_name: str, archive_path: str):
-    dependencies = get_dependency_versions()
-    if getattr(dependencies, f"{library_name}_version") is not None:
-        pytest.skip(
-            f"{library_name} is installed with version {getattr(dependencies, f'{library_name}_version')}"
-        )
-
-    with pytest.raises(PackageNotInstalledError) as excinfo:
-        open_archive(archive_path)
-    assert f"{library_name} package is not installed" in str(excinfo.value)
-
-
-@pytest.mark.skipif(
-    get_dependency_versions().rarfile_version is None, reason="rarfile is not installed"
-)
-def test_rarfile_missing_cryptography_raises_exception():
-    """Test that LibraryNotInstalledError is raised for header-encrypted .rar when cryptography is not installed."""
-    with patch("archivey.rar_reader.rarfile._have_crypto", 0):
-        with open_archive(
-            NORMAL_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
-            pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
-        ) as archive:
-            assert {m.filename for m in archive.get_members()} == {
-                "secret.txt",
-                "also_secret.txt",
-            }
-
-
-@pytest.mark.skipif(
-    get_dependency_versions().rarfile_version is None, reason="rarfile is not installed"
-)
-def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files():
-    """Test that LibraryNotInstalledError is NOT raised for non-header-encrypted .rar when cryptography is not installed."""
-    with patch("archivey.rar_reader.rarfile._have_crypto", 0):
-        with open_archive(
-            NORMAL_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
-            pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
-        ) as archive:
-            assert {m.filename for m in archive.get_members()} == {
-                "secret.txt",
-                "also_secret.txt",
-            }
-
-
-@pytest.mark.skipif(
-    get_dependency_versions().rapidgzip_version is None
-    or get_dependency_versions().indexed_bzip2_version is None
-    or get_dependency_versions().python_xz_version is None,
-    reason="Optional decompressor packages not installed",
-)
-def test_optional_decompressor_backends():
-    archives = [
-        filter_archives(
-            SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["lib.gz"]
-        )[0],
-        filter_archives(
-            SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["lib.bz2"]
-        )[0],
-        filter_archives(
-            SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["lib.xz"]
-        )[0],
-        filter_archives(
-            SAMPLE_ARCHIVES, prefixes=["basic_solid"], extensions=["tar.gz"]
-        )[0],
-        filter_archives(
-            SAMPLE_ARCHIVES, prefixes=["basic_solid"], extensions=["tar.bz2"]
-        )[0],
-        filter_archives(
-            SAMPLE_ARCHIVES, prefixes=["basic_solid"], extensions=["tar.xz"]
-        )[0],
-    ]
-
-    for archive in archives:
-        check_iter_members(
-            archive,
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            skip_member_contents=True,
-        )

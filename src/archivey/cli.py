@@ -184,9 +184,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Use python-xz for reading xz-compressed files",
     )
     parser.add_argument("--stream", action="store_true", help="Stream the archive")
-    parser.add_argument("--info", action="store_true", help="Print info about the archive")
+    parser.add_argument(
+        "--info", action="store_true", help="Print info about the archive"
+    )
     parser.add_argument("--password", help="Password for encrypted archives")
-    parser.add_argument("--hide-progress", action="store_true", help="Hide progress bar")
+    parser.add_argument(
+        "--hide-progress", action="store_true", help="Hide progress bar"
+    )
     parser.add_argument(
         "--use-stored-metadata",
         action="store_true",
@@ -240,7 +244,11 @@ def main(argv: list[str] | None = None) -> None:
             path = None
             if isinstance(file, (str, bytes, os.PathLike)):
                 path = os.path.abspath(file)
-            if path in target_paths and "r" in mode and not any(m in mode for m in ["w", "a", "+"]):
+            if (
+                path in target_paths
+                and "r" in mode
+                and not any(m in mode for m in ["w", "a", "+"])
+            ):
                 f = original_open(file, mode, *oargs, **okwargs)
                 stats = stats_per_file.setdefault(path, IOStats())
                 return StatsIO(f, stats)
@@ -259,7 +267,9 @@ def main(argv: list[str] | None = None) -> None:
                 use_indexed_bzip2=args.use_indexed_bzip2,
                 use_python_xz=args.use_python_xz,
             )
-            with open_archive(archive_path, pwd=args.password, config=config) as archive:
+            with open_archive(
+                archive_path, pwd=args.password, config=config
+            ) as archive:
                 print(f"Archive format: {archive.format} {archive.get_archive_info()}")
                 if args.info:
                     continue
@@ -284,14 +294,20 @@ def main(argv: list[str] | None = None) -> None:
                 if args.stream:
                     members_if_available = archive.get_members_if_available()
                     if members_if_available is not None and member_filter is not None:
-                        members_if_available = [m for m in members_if_available if member_filter(m)]
+                        members_if_available = [
+                            m for m in members_if_available if member_filter(m)
+                        ]
                     for member, stream in tqdm(
                         archive.iter_members_with_io(filter=member_filter),
                         desc="Computing checksums" if verify else "Listing members",
                         disable=args.hide_progress,
-                        total=len(members_if_available) if members_if_available is not None else None,
+                        total=len(members_if_available)
+                        if members_if_available is not None
+                        else None,
                     ):
-                        process_member(member, archive, stream, verify=verify, pwd=args.password)
+                        process_member(
+                            member, archive, stream, verify=verify, pwd=args.password
+                        )
                 else:
                     members = archive.get_members()
                     if members is not None and member_filter is not None:
@@ -302,7 +318,9 @@ def main(argv: list[str] | None = None) -> None:
                         disable=args.hide_progress,
                         total=len(members) if members is not None else None,
                     ):
-                        process_member(member, archive, verify=verify, pwd=args.password)
+                        process_member(
+                            member, archive, verify=verify, pwd=args.password
+                        )
         except ArchiveError as e:
             print(f"Error processing {archive_path}: {e}")
         if args.track_io:
