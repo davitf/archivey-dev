@@ -13,10 +13,25 @@ import tempfile
 import zipfile
 from typing import Any, Generator
 
-import lz4.frame
-import py7zr
-import pycdlib
-import zstandard
+try:  # Optional dependency
+    import lz4.frame as lz4_frame  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional import
+    lz4_frame = None
+
+try:  # Optional dependency
+    import py7zr  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional import
+    py7zr = None
+
+try:  # Optional dependency
+    import pycdlib  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional import
+    pycdlib = None
+
+try:  # Optional dependency
+    import zstandard  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional import
+    zstandard = None
 
 from archivey.types import ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
@@ -324,10 +339,14 @@ def create_tar_archive_with_tarfile(
     if output_stream is not None:
         tar_data = output_stream.getvalue()
         if compression_format == ArchiveFormat.TAR_ZSTD:
+            if zstandard is None:
+                raise ModuleNotFoundError("zstandard is required to create TAR_ZSTD archives")
             cctx = zstandard.ZstdCompressor()
             compressed = cctx.compress(tar_data)
         else:
-            compressed = lz4.frame.compress(tar_data)
+            if lz4_frame is None:
+                raise ModuleNotFoundError("lz4 is required to create TAR_LZ4 archives")
+            compressed = lz4_frame.compress(tar_data)
         with open(abs_archive_path, "wb") as out_f:
             out_f.write(compressed)
 
@@ -339,6 +358,10 @@ def create_single_file_compressed_archive_with_library(
     opener_kwargs: dict[str, Any] = {},
 ):
     opener = SINGLE_FILE_LIBRARY_OPENERS[compression_format]
+    if opener is None:
+        raise ModuleNotFoundError(
+            f"Required library for {compression_format.name} is not installed"
+        )
 
     assert not contents.solid, f"Single-file archives are not solid. ({archive_path})"
     assert len(contents.files) == 1, (
@@ -483,6 +506,8 @@ def create_7z_archive_with_py7zr(
     assert compression_format == ArchiveFormat.SEVENZIP, (
         f"Only 7Z format is supported, got {compression_format}"
     )
+    if py7zr is None:
+        raise ModuleNotFoundError("py7zr is required to create 7z archives")
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
         os.remove(abs_archive_path)
@@ -604,6 +629,8 @@ def create_iso_archive_with_pycdlib(
     assert compression_format == ArchiveFormat.ISO, (
         f"Only ISO format is supported, got {compression_format}"
     )
+    if pycdlib is None:
+        raise ModuleNotFoundError("pycdlib is required to create ISO archives")
 
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
@@ -712,8 +739,8 @@ SINGLE_FILE_LIBRARY_OPENERS = {
     ArchiveFormat.GZIP: gzip.GzipFile,
     ArchiveFormat.BZIP2: bz2.BZ2File,
     ArchiveFormat.XZ: lzma.LZMAFile,
-    ArchiveFormat.ZSTD: zstandard.open,
-    ArchiveFormat.LZ4: lz4.frame.open,
+    ArchiveFormat.ZSTD: zstandard.open if zstandard is not None else None,
+    ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
 }
 
 
