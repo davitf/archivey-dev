@@ -106,7 +106,13 @@ class ArchiveInfo:
     def get_archive_name(self, variant: str | None = None) -> str:
         if variant is None:
             return self.filename
-        name, ext = os.path.splitext(self.filename)
+        first_dot = self.filename.find(".")
+        if first_dot == -1:
+            name = self.filename
+            ext = ""
+        else:
+            name = self.filename[:first_dot]
+            ext = self.filename[first_dot:]
         return f"{name}.{variant}{ext}"
 
     def get_archive_path(

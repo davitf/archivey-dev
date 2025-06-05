@@ -80,10 +80,13 @@ def main():
                 print(f"SKIPPING: Original archive not found: {original_archive_path}")
                 continue
 
-            name, ext = os.path.splitext(archive_info.filename)
-            truncated_output_path = CORRUPTED_ARCHIVES_DIR / (name + ".truncated" + ext)
+            truncated_output_path = (
+                CORRUPTED_ARCHIVES_DIR / archive_info.get_archive_name("truncated")
+            )
 
-            corrupted_output_path = CORRUPTED_ARCHIVES_DIR / (name + ".corrupted" + ext)
+            corrupted_output_path = (
+                CORRUPTED_ARCHIVES_DIR / archive_info.get_archive_name("corrupted")
+            )
 
             print(
                 f"Generating truncated version for: {archive_info.filename} -> {truncated_output_path}"

@@ -325,14 +325,38 @@ class TarReader(BaseArchiveReaderRandomAccess):
         if self._archive is None:
             raise ValueError("Archive is closed")
 
-        # TODO: check if this actually works in streaming mode
-        for tarinfo in self._archive:
+        iterator = iter(self._archive)
+
+        while True:
+            try:
+                tarinfo = next(iterator)
+            except StopIteration:
+                break
+            except tarfile.ReadError as e:
+                translated = _translate_tar_exception(e)
+                if translated is not None:
+                    raise translated from e
+                raise ArchiveCorruptedError(f"Error reading TAR archive: {e}") from e
+
             member = self._tarinfo_to_archive_member(tarinfo)
-            if filter is None or filter(member):
-                try:
+            if filter is not None and not filter(member):
+                continue
+
+            try:
+                if self._streaming_only:
+                    stream_obj = self._archive.extractfile(tarinfo)
+                    if stream_obj is None:
+                        raise ArchiveMemberCannotBeOpenedError(
+                            f"Member {member.filename} cannot be opened"
+                        )
+                    stream = ExceptionTranslatingIO(stream_obj, _translate_tar_exception)
+                    yield member, stream
+                    stream.close()
+                else:
                     stream = LazyOpenIO(self.open, member, seekable=True)
                     yield member, stream
                     stream.close()
-                except (ArchiveError, OSError) as e:
-                    logger.warning("Error opening member %s: %s", member.filename, e)
-                    yield member, ErrorIOStream(e)
+            except (ArchiveError, OSError, tarfile.ReadError) as e:
+                logger.warning("Error opening member %s: %s", member.filename, e)
+                translated = _translate_tar_exception(e)
+                yield member, ErrorIOStream(translated or e)

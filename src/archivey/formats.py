@@ -119,6 +119,7 @@ def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
     for ext, format in _EXTENSION_TO_FORMAT.items():
         if filename_lower.endswith(ext):
             return format
+
     return ArchiveFormat.UNKNOWN
 
 
