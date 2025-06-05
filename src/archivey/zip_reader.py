@@ -13,9 +13,9 @@ from archivey.exceptions import (
     ArchiveError,
 )
 from archivey.formats import ArchiveFormat
+from archivey.io_helpers import ExceptionTranslatingIO
 from archivey.types import ArchiveInfo, ArchiveMember, CreateSystem, MemberType
 from archivey.utils import decode_bytes_with_fallback, str_to_bytes
-from archivey.io_helpers import ExceptionTranslatingIO
 
 # TODO: check if this is correct
 _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]

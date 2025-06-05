@@ -352,7 +352,9 @@ class TarReader(BaseArchiveReaderRandomAccess):
                         raise ArchiveMemberCannotBeOpenedError(
                             f"Member {member.filename} cannot be opened"
                         )
-                    stream = ExceptionTranslatingIO(stream_obj, _translate_tar_exception)
+                    stream = ExceptionTranslatingIO(
+                        stream_obj, _translate_tar_exception
+                    )
                     yield member, stream
                     stream.close()
                 else:
