@@ -1,4 +1,3 @@
-import glob
 import logging
 import os
 import pathlib
@@ -6,13 +5,6 @@ import zlib
 from datetime import datetime
 
 import pytest
-from tests.archivey.sample_archives import (
-    MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
-    SAMPLE_ARCHIVES,
-    ArchiveInfo,
-    FileInfo,
-    filter_archives,
-)
 
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
@@ -22,6 +14,13 @@ from archivey.exceptions import (
     ArchiveEOFError,
 )
 from archivey.types import ArchiveFormat, ArchiveMember, CreateSystem, MemberType
+from tests.archivey.sample_archives import (
+    MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
+    SAMPLE_ARCHIVES,
+    ArchiveInfo,
+    FileInfo,
+    filter_archives,
+)
 
 
 def normalize_newlines(s: str | None) -> str | None:
@@ -250,14 +249,20 @@ def test_read_zip_archives(sample_archive: ArchiveInfo, sample_archive_path: str
 
 @pytest.mark.parametrize(
     "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, custom_filter=lambda a: a.generate_corrupted_variants),
+    filter_archives(
+        SAMPLE_ARCHIVES, custom_filter=lambda a: a.generate_corrupted_variants
+    ),
     ids=lambda a: a.filename,
 )
-def test_read_truncated_archives(sample_archive: ArchiveInfo, truncated_archive_path: str):
+def test_read_truncated_archives(
+    sample_archive: ArchiveInfo, truncated_archive_path: str
+):
     """Test that reading truncated archives raises ArchiveEOFError."""
     archive_path = pathlib.Path(truncated_archive_path)
     if sample_archive.creation_info.format == ArchiveFormat.RAR:
         pytest.xfail("RAR library handles truncated archives without error")
+    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
+        pytest.importorskip("py7zr")
 
     with pytest.raises((ArchiveEOFError, ArchiveCorruptedError, EOFError)):
         with open_archive(archive_path) as archive:
@@ -268,14 +273,20 @@ def test_read_truncated_archives(sample_archive: ArchiveInfo, truncated_archive_
 
 @pytest.mark.parametrize(
     "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, custom_filter=lambda a: a.generate_corrupted_variants),
+    filter_archives(
+        SAMPLE_ARCHIVES, custom_filter=lambda a: a.generate_corrupted_variants
+    ),
     ids=lambda a: a.filename,
 )
-def test_read_corrupted_archives_general(sample_archive: ArchiveInfo, corrupted_archive_path: str):
+def test_read_corrupted_archives_general(
+    sample_archive: ArchiveInfo, corrupted_archive_path: str
+):
     """Test that reading generally corrupted archives raises ArchiveCorruptedError."""
     archive_path = pathlib.Path(corrupted_archive_path)
     if sample_archive.creation_info.format == ArchiveFormat.RAR:
         pytest.xfail("RAR library handles corrupted archives without error")
+    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
+        pytest.importorskip("py7zr")
 
     with pytest.raises((ArchiveCorruptedError, zlib.error)):
         # For many corrupted archives, error might be raised on open or during iteration
@@ -283,6 +294,9 @@ def test_read_corrupted_archives_general(sample_archive: ArchiveInfo, corrupted_
             for member, stream in archive.iter_members_with_io():
                 if stream is not None:
                     stream.read()
+
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize(
@@ -294,9 +308,19 @@ def test_read_corrupted_archives_general(sample_archive: ArchiveInfo, corrupted_
     ids=lambda x: x.filename,
 )
 def test_read_tar_archives(sample_archive: ArchiveInfo, sample_archive_path: str):
-    archive_path = pathlib.Path(sample_archive_path)
-    if not archive_path.exists():
-        pytest.skip("TAR archive not available")
+    # archive_path = pathlib.Path(sample_archive_path)
+    # if not archive_path.exists():
+    #     pytest.skip("TAR archive not available")
+    logger.info(
+        f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
+    )
+    if sample_archive.creation_info.format == ArchiveFormat.TAR_ZSTD:
+        logger.info(f"  zstandard={get_dependency_versions().zstandard_version}")
+        pytest.importorskip("zstandard")
+    elif sample_archive.creation_info.format == ArchiveFormat.TAR_LZ4:
+        logger.info(f"  lz4={get_dependency_versions().lz4_version}")
+        pytest.importorskip("lz4")
+
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
@@ -321,7 +345,9 @@ def test_read_iso_archives(sample_archive: ArchiveInfo, sample_archive_path: str
     ids=lambda x: x.filename,
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
-def test_read_rar_archives(sample_archive: ArchiveInfo, sample_archive_path: str, use_rar_stream: bool):
+def test_read_rar_archives(
+    sample_archive: ArchiveInfo, sample_archive_path: str, use_rar_stream: bool
+):
     deps = get_dependency_versions()
     if (
         sample_archive.contents.header_password is not None
@@ -347,7 +373,11 @@ def test_read_rar_archives(sample_archive: ArchiveInfo, sample_archive_path: str
 
     if expect_failure:
         with pytest.raises(ValueError):
-            check_iter_members(sample_archive, archive_path=sample_archive_path, use_rar_stream=use_rar_stream)
+            check_iter_members(
+                sample_archive,
+                archive_path=sample_archive_path,
+                use_rar_stream=use_rar_stream,
+            )
     else:
         check_iter_members(
             sample_archive,
@@ -412,7 +442,9 @@ def test_read_zip_and_7z_archives_with_password_in_constructor(
     filter_archives(SAMPLE_ARCHIVES, extensions=["7z"]),
     ids=lambda x: x.filename,
 )
-def test_read_sevenzip_py7zr_archives(sample_archive: ArchiveInfo, sample_archive_path: str):
+def test_read_sevenzip_py7zr_archives(
+    sample_archive: ArchiveInfo, sample_archive_path: str
+):
     check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 

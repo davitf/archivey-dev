@@ -1,6 +1,5 @@
 import argparse
 import bz2
-from datetime import timezone
 import fnmatch
 import gzip
 import io
@@ -12,6 +11,7 @@ import subprocess
 import tarfile
 import tempfile
 import zipfile
+from datetime import timezone
 from typing import Any, Generator
 
 try:  # Optional dependency
@@ -49,6 +49,7 @@ try:  # Optional dependency
 except ModuleNotFoundError:  # pragma: no cover - optional import
     zstandard = None
 
+from archivey.exceptions import PackageNotInstalledError
 from archivey.types import TAR_FORMAT_TO_COMPRESSION_FORMAT, ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
@@ -275,7 +276,6 @@ def create_tar_archive_with_command_line(
         subprocess.run(command, check=True, cwd=tempdir)
 
 
-
 SINGLE_FILE_LIBRARY_OPENERS = {
     ArchiveFormat.GZIP: gzip.GzipFile,
     ArchiveFormat.BZIP2: bz2.BZ2File,
@@ -317,22 +317,28 @@ def create_tar_archive_with_tarfile(
         tar_mode = "w:bz2"
     elif compression_format == ArchiveFormat.TAR_XZ:
         tar_mode = "w:xz"
-    
+
     elif compression_format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
         stream_format = TAR_FORMAT_TO_COMPRESSION_FORMAT[compression_format]
         opener = SINGLE_FILE_LIBRARY_OPENERS[stream_format]
 
         if opener is None:
-            raise ModuleNotFoundError(f"Required library for {compression_format.name} is not installed")
+            raise PackageNotInstalledError(
+                f"Required library for {compression_format.name} is not installed"
+            )
         output_stream = opener(abs_archive_path, "wb")
         tar_mode = "w"  # will compress manually below
     else:
         raise ValueError(f"Unsupported tar compression format: {compression_format}")
 
-    with tarfile.open(name=abs_archive_path, mode=tar_mode, fileobj=output_stream) as tf:  # type: ignore[reportArgumentType]
+    with tarfile.open(
+        name=abs_archive_path, mode=tar_mode, fileobj=output_stream
+    ) as tf:  # type: ignore[reportArgumentType]
         for sample_file in contents.files:
             tarinfo = tarfile.TarInfo(name=sample_file.name)
-            tarinfo.mtime = int(sample_file.mtime.replace(tzinfo=timezone.utc).timestamp())
+            tarinfo.mtime = int(
+                sample_file.mtime.replace(tzinfo=timezone.utc).timestamp()
+            )
 
             if sample_file.permissions is not None:
                 tarinfo.mode = sample_file.permissions

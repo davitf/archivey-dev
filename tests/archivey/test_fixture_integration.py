@@ -11,6 +11,8 @@ from tests.archivey.test_read_archives import check_iter_members
     filter_archives(SAMPLE_ARCHIVES, prefixes=["fixture_zip", "fixture_tar"]),
     ids=lambda a: a.filename,
 )
-def test_fixture_generates_archives(sample_archive: ArchiveInfo, sample_archive_path: str):
+def test_fixture_generates_archives(
+    sample_archive: ArchiveInfo, sample_archive_path: str
+):
     assert os.path.exists(sample_archive_path)
     check_iter_members(sample_archive, archive_path=sample_archive_path)

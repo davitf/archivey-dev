@@ -1,11 +1,12 @@
+import os
 import pathlib
+
 import pytest
 
-import os
-
+from archivey.exceptions import PackageNotInstalledError
+from tests.archivey.sample_archives import ArchiveInfo
 from tests.create_archives import create_archive
 from tests.create_corrupted_archives import corrupt_archive, truncate_archive
-from tests.archivey.sample_archives import ArchiveInfo
 
 
 @pytest.fixture
@@ -16,7 +17,13 @@ def sample_archive_path(sample_archive: ArchiveInfo, tmp_path_factory) -> str:
         return str(path)
 
     base_dir = tmp_path_factory.mktemp("generated_archives")
-    create_archive(sample_archive, str(base_dir))
+    try:
+        create_archive(sample_archive, str(base_dir))
+    except PackageNotInstalledError as e:
+        pytest.skip(
+            f"Required library for {sample_archive.filename} is not installed: {e}"
+        )
+        raise
     return sample_archive.get_archive_path(str(base_dir))
 
 

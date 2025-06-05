@@ -2,10 +2,10 @@ import os
 from pathlib import Path
 
 import pytest
-from tests.archivey.sample_archives import SAMPLE_ARCHIVES
 
 from archivey.core import open_archive
 from archivey.types import ArchiveFormat, MemberType
+from tests.archivey.sample_archives import SAMPLE_ARCHIVES
 
 
 def _get_sample(name: str):
