@@ -4,7 +4,7 @@ import lzma
 import stat
 import tarfile
 from datetime import datetime, timezone
-from typing import IO, Callable, Iterator, List, Union, cast
+from typing import IO, Callable, Iterator, List, Optional, Union, cast
 
 from archivey.base_reader import (
     ArchiveInfo,
@@ -13,14 +13,23 @@ from archivey.base_reader import (
 )
 from archivey.exceptions import (
     ArchiveCorruptedError,
+    ArchiveEOFError,
     ArchiveError,
     ArchiveMemberCannotBeOpenedError,
     PackageNotInstalledError,
 )
-from archivey.io_helpers import ErrorIOStream, LazyOpenIO
+from archivey.io_helpers import ErrorIOStream, ExceptionTranslatingIO, LazyOpenIO
 from archivey.types import ArchiveFormat, MemberType
 
 logger = logging.getLogger(__name__)
+
+
+def _translate_tar_exception(e: Exception) -> Optional[Exception]:
+    if isinstance(e, tarfile.ReadError):
+        if "unexpected end of data" in str(e).lower():
+            return ArchiveEOFError("TAR archive is truncated")
+
+    return None
 
 
 class TarReader(BaseArchiveReaderRandomAccess):
@@ -280,7 +289,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
                 raise ArchiveMemberCannotBeOpenedError(
                     f"Member {filename} cannot be opened"
                 )
-            return stream
+            return ExceptionTranslatingIO(stream, _translate_tar_exception)
 
         except tarfile.ReadError as e:
             raise ArchiveCorruptedError(f"Error reading member {filename}: {e}")

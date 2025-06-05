@@ -603,8 +603,6 @@ def create_7z_archive_with_command_line(
     with tempfile.TemporaryDirectory() as tempdir:
         write_files_to_dir(tempdir, contents.files)
 
-    if pycdlib is None:
-        raise ModuleNotFoundError("pycdlib is required to create ISO archives")
         file_groups = list(
             group_files_by_password_and_compression_method(contents.files)
         )
@@ -759,7 +757,7 @@ GENERATION_METHODS_TO_GENERATOR = {
 }
 
 
-def create_archive(archive_info: ArchiveInfo, base_dir: str):
+def create_archive(archive_info: ArchiveInfo, base_dir: str) -> str:
     full_path = archive_info.get_archive_path(base_dir)
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
@@ -767,7 +765,7 @@ def create_archive(archive_info: ArchiveInfo, base_dir: str):
         # Check that the archive file exists
         if not os.path.exists(full_path):
             raise FileNotFoundError(f"External archive {full_path} does not exist")
-        return
+        return full_path
 
     # Assert that header_password is None for formats that don't support it
     generator = GENERATION_METHODS_TO_GENERATOR[
@@ -783,6 +781,8 @@ def create_archive(archive_info: ArchiveInfo, base_dir: str):
     except Exception as e:
         logger.error(f"Error creating archive {archive_info.filename}: {e}")
         raise
+
+    return full_path
 
 
 def filter_archives(

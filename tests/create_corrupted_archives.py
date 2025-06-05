@@ -12,7 +12,7 @@ ORIGINAL_ARCHIVES_EXTERNAL_DIR_NAME = "test_archives_external"  # Relative to te
 def truncate_archive(
     original_path: pathlib.Path,
     output_path: pathlib.Path,
-    truncate_fraction: float = 0.25,
+    truncate_fraction: float = 0.5,
 ):
     """Copies the original_path to output_path and truncates the last truncate_fraction of its bytes."""
     shutil.copyfile(original_path, output_path)

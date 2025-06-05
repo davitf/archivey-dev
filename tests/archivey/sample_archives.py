@@ -1,5 +1,6 @@
 import copy
 import os
+import random
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -101,13 +102,21 @@ class ArchiveInfo:
     contents: ArchiveContents
     creation_info: ArchiveCreationInfo
     skip_test: bool = False
-    generate_corrupted_variants: bool = False
 
-    def get_archive_path(self, base_dir: str = DEFAULT_ARCHIVES_BASE_DIR) -> str:
+    def get_archive_name(self, variant: str | None = None) -> str:
+        if variant is None:
+            return self.filename
+        name, ext = os.path.splitext(self.filename)
+        return f"{name}.{variant}{ext}"
+
+    def get_archive_path(
+        self, base_dir: str = DEFAULT_ARCHIVES_BASE_DIR, variant: str | None = None
+    ) -> str:
+        name = self.get_archive_name(variant)
         if self.creation_info.generation_method == GenerationMethod.EXTERNAL:
-            return os.path.join(base_dir, TEST_ARCHIVES_EXTERNAL_DIR, self.filename)
+            return os.path.join(base_dir, TEST_ARCHIVES_EXTERNAL_DIR, name)
         else:
-            return os.path.join(base_dir, TEST_ARCHIVES_DIR, self.filename)
+            return os.path.join(base_dir, TEST_ARCHIVES_DIR, name)
 
 
 # Generation method constants
@@ -352,6 +361,14 @@ SKIP_TEST_FILENAMES = {
     "basic_nonsolid__genisoimage.iso",
     "basic_nonsolid__pycdlib.iso",
 }
+
+
+def _create_random_data(size: int, seed: int, chars: bytes = b"0123456789 ") -> bytes:
+    r = random.Random(seed)
+    memview = memoryview(bytearray(size))
+    for i in range(size):
+        memview[i] = r.choice(chars)
+    return memview.tobytes()
 
 
 def _fake_mtime(i: int) -> datetime:
@@ -600,6 +617,24 @@ TEST_PERMISSIONS_FILES = [
     ),
 ]
 
+LARGE_FILES = [
+    FileInfo(
+        name="large1.txt",
+        contents=_create_random_data(100000, 1),
+        mtime=_fake_mtime(1),
+    ),
+    FileInfo(
+        name="large2.txt",
+        contents=_create_random_data(100000, 2),
+        mtime=_fake_mtime(2),
+    ),
+    FileInfo(
+        name="large3.txt",
+        contents=_create_random_data(100000, 3),
+        mtime=_fake_mtime(3),
+    ),
+]
+
 
 def build_archive_infos() -> list[ArchiveInfo]:
     """Build all ArchiveInfo objects from the definitions."""
@@ -607,20 +642,11 @@ def build_archive_infos() -> list[ArchiveInfo]:
     for contents, format_infos in ARCHIVE_DEFINITIONS:
         for format_info in format_infos:
             filename = f"{contents.file_basename}__{format_info.file_suffix}"
-            generate_corrupted_variants = False
-            if filename in (
-                "basic_nonsolid__zipfile.zip",
-                "basic_solid__tarfile.tar.gz",
-                "basic_nonsolid__.rar",
-                "basic_nonsolid__py7zr.7z",
-            ):
-                generate_corrupted_variants = True
             archive_info = ArchiveInfo(
                 filename=filename,
                 contents=contents,
                 creation_info=format_info,
                 skip_test=filename in SKIP_TEST_FILENAMES,
-                generate_corrupted_variants=generate_corrupted_variants,
             )
 
             if any(
@@ -836,6 +862,21 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             solid=True,
         ),
         BASIC_TAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="large_files_nonsolid",
+            files=LARGE_FILES,
+        ),
+        ZIP_RAR_7Z_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="large_files_solid",
+            files=LARGE_FILES,
+            solid=True,
+        ),
+        RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
     ),
     (
         ArchiveContents(

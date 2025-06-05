@@ -87,7 +87,6 @@ class ArchiveReader(abc.ABC):
             else str(archive_path)
         )
         self.config: ArchiveyConfig = get_default_config()
-        self._member_map: dict[str, ArchiveMember] | None = None
 
     @abc.abstractmethod
     def close(self) -> None:
@@ -231,25 +230,15 @@ class ArchiveReader(abc.ABC):
         return list(d.values())[0] if len(d) else None
 
 
-# class BaseArchiveReaderStreamingAccess(ArchiveReader):
-#     """Abstract base class for archive readers which are read as streams."""
-
-#     def get_members_if_available(self) -> List[ArchiveMember] | None:
-#         return None
-
-#     def has_random_access(self) -> bool:
-#         return False
-
-#     def open(
-#         self, member: ArchiveMember, *, pwd: bytes | str | None = None
-#     ) -> IO[bytes]:
-#         raise ValueError(
-#             "This archive reader does not support opening specific members."
-#         )
-
-
 class BaseArchiveReaderRandomAccess(ArchiveReader):
     """Abstract base class for archive readers which support random member access."""
+
+    def __init__(
+        self,
+        format: ArchiveFormat,
+        archive_path: str | bytes | os.PathLike,
+    ):
+        super().__init__(format, archive_path)
 
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         return self.get_members()

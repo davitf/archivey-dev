@@ -148,7 +148,8 @@ def read_xz_metadata(path: str, member: ArchiveMember):
         footer = f.read(12)
 
         if footer[-2:] != XZ_MAGIC_FOOTER:
-            raise ValueError("Invalid XZ footer")
+            logger.warning(f"Invalid XZ footer, file possibly truncated: {path}")
+            return
 
         # Backward Size (first 4 bytes) tells how far back the Index is, in 4-byte units minus 1
         backward_size_field = struct.unpack("<I", footer[4:8])[0]
@@ -162,7 +163,8 @@ def read_xz_metadata(path: str, member: ArchiveMember):
 
         # Skip index indicator byte and reserved bits (first byte)
         if index_data[0] != 0x00:
-            raise ValueError("Invalid XZ index indicator")
+            logger.warning(f"Invalid XZ footer, file possibly corrupted: {path}")
+            return
 
         # Next 2–10 bytes are variable-length field counts and sizes
         # We just want the uncompressed size (encoded as a multi-byte integer)

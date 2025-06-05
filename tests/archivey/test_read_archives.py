@@ -250,7 +250,7 @@ def test_read_zip_archives(sample_archive: ArchiveInfo, sample_archive_path: str
 @pytest.mark.parametrize(
     "sample_archive",
     filter_archives(
-        SAMPLE_ARCHIVES, custom_filter=lambda a: a.generate_corrupted_variants
+        SAMPLE_ARCHIVES, prefixes=["large_files_nonsolid", "large_files_solid"]
     ),
     ids=lambda a: a.filename,
 )
@@ -258,15 +258,19 @@ def test_read_truncated_archives(
     sample_archive: ArchiveInfo, truncated_archive_path: str
 ):
     """Test that reading truncated archives raises ArchiveEOFError."""
-    archive_path = pathlib.Path(truncated_archive_path)
-    if sample_archive.creation_info.format == ArchiveFormat.RAR:
-        pytest.xfail("RAR library handles truncated archives without error")
+
+    # archive_path = pathlib.Path(truncated_archive_path)
+    # if sample_archive.creation_info.format == ArchiveFormat.RAR:
+    #     pytest.xfail("RAR library handles truncated archives without error")
     if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
 
     with pytest.raises((ArchiveEOFError, ArchiveCorruptedError, EOFError)):
-        with open_archive(archive_path) as archive:
+        with open_archive(truncated_archive_path) as archive:
             for member, stream in archive.iter_members_with_io():
+                logger.info(
+                    f"Reading archive {sample_archive.filename} member {member.filename}"
+                )
                 if stream is not None:
                     stream.read()
 
@@ -274,7 +278,7 @@ def test_read_truncated_archives(
 @pytest.mark.parametrize(
     "sample_archive",
     filter_archives(
-        SAMPLE_ARCHIVES, custom_filter=lambda a: a.generate_corrupted_variants
+        SAMPLE_ARCHIVES, prefixes=["large_files_nonsolid", "large_files_solid"]
     ),
     ids=lambda a: a.filename,
 )
@@ -282,15 +286,15 @@ def test_read_corrupted_archives_general(
     sample_archive: ArchiveInfo, corrupted_archive_path: str
 ):
     """Test that reading generally corrupted archives raises ArchiveCorruptedError."""
-    archive_path = pathlib.Path(corrupted_archive_path)
-    if sample_archive.creation_info.format == ArchiveFormat.RAR:
-        pytest.xfail("RAR library handles corrupted archives without error")
+    # archive_path = pathlib.Path(corrupted_archive_path)
+    # if sample_archive.creation_info.format == ArchiveFormat.RAR:
+    #     pytest.xfail("RAR library handles corrupted archives without error")
     if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
 
     with pytest.raises((ArchiveCorruptedError, zlib.error)):
         # For many corrupted archives, error might be raised on open or during iteration
-        with open_archive(str(archive_path)) as archive:
+        with open_archive(corrupted_archive_path) as archive:
             for member, stream in archive.iter_members_with_io():
                 if stream is not None:
                     stream.read()
