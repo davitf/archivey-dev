@@ -48,7 +48,7 @@ try:  # Optional dependency
 except ModuleNotFoundError:  # pragma: no cover - optional import
     zstandard = None
 
-from archivey.types import ArchiveFormat, MemberType
+from archivey.types import TAR_FORMAT_TO_COMPRESSION_FORMAT, ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     ArchiveContents,
@@ -274,6 +274,16 @@ def create_tar_archive_with_command_line(
         subprocess.run(command, check=True, cwd=tempdir)
 
 
+
+SINGLE_FILE_LIBRARY_OPENERS = {
+    ArchiveFormat.GZIP: gzip.GzipFile,
+    ArchiveFormat.BZIP2: bz2.BZ2File,
+    ArchiveFormat.XZ: lzma.LZMAFile,
+    ArchiveFormat.ZSTD: zstandard.open if zstandard is not None else None,
+    ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
+}
+
+
 def create_tar_archive_with_tarfile(
     archive_path: str,
     contents: ArchiveContents,
@@ -296,38 +306,29 @@ def create_tar_archive_with_tarfile(
     if os.path.exists(abs_archive_path):
         os.remove(abs_archive_path)
 
-    tar_mode = "w:"
-    if compression_format == ArchiveFormat.TAR_GZ:
+    output_stream: io.BytesIO | None = None
+
+    if compression_format == ArchiveFormat.TAR:
+        tar_mode = "w"  # plain tar
+    elif compression_format == ArchiveFormat.TAR_GZ:
         tar_mode = "w:gz"
     elif compression_format == ArchiveFormat.TAR_BZ2:
         tar_mode = "w:bz2"
     elif compression_format == ArchiveFormat.TAR_XZ:
         tar_mode = "w:xz"
-    elif compression_format in (ArchiveFormat.TAR_ZSTD, ArchiveFormat.TAR_LZ4):
+    
+    elif compression_format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
+        stream_format = TAR_FORMAT_TO_COMPRESSION_FORMAT[compression_format]
+        opener = SINGLE_FILE_LIBRARY_OPENERS[stream_format]
+
+        if opener is None:
+            raise ModuleNotFoundError(f"Required library for {compression_format.name} is not installed")
+        output_stream = opener(abs_archive_path, "wb")
         tar_mode = "w"  # will compress manually below
-    elif compression_format == ArchiveFormat.TAR:
-        tar_mode = "w"  # plain tar
     else:
         raise ValueError(f"Unsupported tar compression format: {compression_format}")
 
-    output_stream: io.BytesIO | None = None
-    if compression_format in (ArchiveFormat.TAR_ZSTD, ArchiveFormat.TAR_LZ4):
-        output_stream = io.BytesIO()
-        open_args = {"fileobj": output_stream}
-            if zstandard is None:
-                raise ModuleNotFoundError(
-                    "zstandard is required to create TAR_ZSTD archives"
-                )
-            if lz4_frame is None:
-                raise ModuleNotFoundError("lz4 is required to create TAR_LZ4 archives")
-            compressed = lz4_frame.compress(tar_data)
-    if opener is None:
-        raise ModuleNotFoundError(
-            f"Required library for {compression_format.name} is not installed"
-        )
-        open_args = {"name": abs_archive_path}
-
-    with tarfile.open(mode=tar_mode, **open_args) as tf:  # type: ignore[reportArgumentType]
+    with tarfile.open(name=abs_archive_path, mode=tar_mode, fileobj=output_stream) as tf:  # type: ignore[reportArgumentType]
         for sample_file in contents.files:
             tarinfo = tarfile.TarInfo(name=sample_file.name)
             tarinfo.mtime = int(sample_file.mtime.timestamp())
@@ -362,18 +363,7 @@ def create_tar_archive_with_tarfile(
                 tf.addfile(tarinfo, io.BytesIO(file_contents_bytes))
 
     if output_stream is not None:
-        tar_data = output_stream.getvalue()
-        if compression_format == ArchiveFormat.TAR_ZSTD:
-            if zstandard is None:
-                raise ModuleNotFoundError("zstandard is required to create TAR_ZSTD archives")
-            cctx = zstandard.ZstdCompressor()
-            compressed = cctx.compress(tar_data)
-        else:
-            if lz4_frame is None:
-                raise ModuleNotFoundError("lz4 is required to create TAR_LZ4 archives")
-            compressed = lz4_frame.compress(tar_data)
-        with open(abs_archive_path, "wb") as out_f:
-            out_f.write(compressed)
+        output_stream.close()
 
 
 def create_single_file_compressed_archive_with_library(
@@ -483,8 +473,6 @@ def create_rar_archive_with_command_line(
         for i, (password, compression_method, group_files) in enumerate(
             group_files_by_password_and_compression_method(contents.files)
         ):
-    if py7zr is None:
-        raise ModuleNotFoundError("py7zr is required to create 7z archives")
             command = ["rar", "a", "-oh", "-ol"]
 
             if contents.solid:
@@ -535,6 +523,7 @@ def create_7z_archive_with_py7zr(
     )
     if py7zr is None:
         raise ModuleNotFoundError("py7zr is required to create 7z archives")
+
     abs_archive_path = os.path.abspath(archive_path)
     if os.path.exists(abs_archive_path):
         os.remove(abs_archive_path)
@@ -716,9 +705,8 @@ def create_iso_archive_with_pycdlib(
                     src_path,
                     iso_path=iso_path.upper(),
                     rr_name=f_name,
-    ArchiveFormat.ZSTD: zstandard.open if zstandard is not None else None,
-    ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
-
+                    joliet_path=iso_path,
+                )
         iso.write(abs_archive_path)
         iso.close()
 
@@ -761,15 +749,6 @@ GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.SINGLE_FILE_LIBRARY: create_single_file_compressed_archive_with_library,
     GenerationMethod.ISO_PYCDLIB: create_iso_archive_with_pycdlib,
     GenerationMethod.ISO_GENISOIMAGE: create_iso_archive_with_genisoimage,
-}
-
-
-SINGLE_FILE_LIBRARY_OPENERS = {
-    ArchiveFormat.GZIP: gzip.GzipFile,
-    ArchiveFormat.BZIP2: bz2.BZ2File,
-    ArchiveFormat.XZ: lzma.LZMAFile,
-    ArchiveFormat.ZSTD: zstandard.open if zstandard is not None else None,
-    ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
 }
 
 
