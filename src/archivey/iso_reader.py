@@ -61,6 +61,48 @@ class IsoReader(BaseArchiveReaderRandomAccess):
             # or simply ignore it. Ignoring seems more user-friendly for now.
             pass  # Ignoring password as ISOs are not typically encrypted
 
+    def _path_variants(self, path: str) -> list[dict[str, str]]:
+        """Return possible path keyword arguments for pycdlib functions."""
+        assert self.iso is not None
+        variants: list[dict[str, str]] = []
+        if getattr(self.iso, "rock_ridge", None) is not None:
+            variants.extend(
+                [
+                    {"rr_path": path},
+                    {"rr_pathname": path},
+                    {"rr_name": path},
+                ]
+            )
+        if getattr(self.iso, "joliet", None) is not None:
+            variants.extend(
+                [
+                    {"joliet_path": path},
+                    {"joliet_pathname": path},
+                    {"joliet_name": path},
+                ]
+            )
+        variants.extend([{"iso_path": path.upper()}, {"path": path.upper()}])
+        return variants
+
+    def _call_with_path(self, func, path: str):
+        """Call a pycdlib function with the best available path argument."""
+        import inspect
+
+        last_err: Exception | None = None
+        params = set(inspect.signature(func).parameters)
+        for kwargs in self._path_variants(path):
+            key = next(iter(kwargs))
+            if key not in params:
+                continue
+            try:
+                return func(**kwargs)
+            except TypeError as e:
+                last_err = e
+                continue
+        if last_err is not None:
+            raise last_err
+        raise ArchiveError(f"Unable to call {func} with path {path}")
+
     def _is_pycdlib_dir(
         self,
         record,  #: pycdlib.DirectoryRecord
@@ -148,15 +190,53 @@ class IsoReader(BaseArchiveReaderRandomAccess):
             raise ArchiveError("ISO not opened")
 
         try:
-            for child_name_bytes, record in self.iso.list_dir(
-                iso_path=current_iso_path
-            ):
-                child_name = child_name_bytes.decode(
-                    self.iso.joliet_output_encoding
-                    if self.iso.has_joliet()
-                    else self.iso.iso_output_encoding,
-                    "replace",
-                )
+            list_dir_fn = getattr(self.iso, "list_dir", None)
+            list_children_fn = getattr(self.iso, "list_children", None)
+
+            if list_dir_fn is not None:
+                entries = self._call_with_path(list_dir_fn, current_iso_path)
+                iterator = ((n, r) for n, r in entries)
+            elif list_children_fn is not None:
+                records = self._call_with_path(list_children_fn, current_iso_path)
+
+                def child_iter():
+                    for rec in records:
+                        name_bytes: bytes
+                        if getattr(
+                            self.iso, "rock_ridge", None
+                        ) is not None and hasattr(rec, "rock_ridge_name"):
+                            name = rec.rock_ridge_name()
+                            name_bytes = (
+                                name.encode("utf-8") if isinstance(name, str) else name
+                            )
+                        elif getattr(self.iso, "joliet", None) is not None and hasattr(
+                            rec, "joliet_name"
+                        ):
+                            name = rec.joliet_name()
+                            name_bytes = (
+                                name.encode("utf-8") if isinstance(name, str) else name
+                            )
+                        else:
+                            name = rec.file_identifier()
+                            name_bytes = (
+                                name.encode("utf-8") if isinstance(name, str) else name
+                            )
+                        yield name_bytes, rec
+
+                iterator = child_iter()
+            else:
+                raise ArchiveError("No directory listing function available")
+
+            for child_name_bytes, record in iterator:
+                if (
+                    getattr(self.iso, "rock_ridge", None) is not None
+                    or getattr(self.iso, "joliet", None) is not None
+                ):
+                    child_name = child_name_bytes.decode("utf-8", "replace")
+                else:
+                    child_name = child_name_bytes.decode(
+                        self.iso.iso_output_encoding, "replace"
+                    )
 
                 # Skip '.' and '..' entries
                 if child_name == "." or child_name == "..":
@@ -186,7 +266,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
                 yield self._convert_direntry_to_member(member_path, record)
 
                 if self._is_pycdlib_dir(record):
-                    # Construct the iso_path for pycdlib (needs trailing slash for dirs)
+                    # Construct path for recursion; keep same case as returned
                     next_iso_path = (
                         os.path.join(current_iso_path, child_name).replace("\\", "/")
                         + "/"
@@ -218,7 +298,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
         # pycdlib doesn't explicitly list the root dir record in list_dir('/')
         # We can try to get its record specifically.
         try:
-            root_record = self.iso.get_record(iso_path="/.")
+            root_record = self._call_with_path(self.iso.get_record, "/")
             if root_record:
                 yield self._convert_direntry_to_member("/", root_record)
         except PyCdlibException:
@@ -267,13 +347,13 @@ class IsoReader(BaseArchiveReaderRandomAccess):
 
         try:
             # Check if it's a directory, pycdlib can't extract directories as a stream
-            record = self.iso.get_record(iso_path=iso_path)
+            record = self._call_with_path(self.iso.get_record, iso_path)
             if record and self._is_pycdlib_dir(record):
                 raise IsADirectoryError(
                     f"Cannot open directory '{member_name}' as a file stream."
                 )
 
-            file_data = self.iso.get_file_from_iso(iso_path=iso_path)
+            file_data = self._call_with_path(self.iso.get_file_from_iso, iso_path)
             return io.BytesIO(file_data)
         except pycdlib.backends.pycdlibexceptions.PyCdlibInvalidInput:
             # This exception is often raised for "file not found"

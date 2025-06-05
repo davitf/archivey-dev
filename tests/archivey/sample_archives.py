@@ -349,7 +349,6 @@ ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
 
 # Skip test filenames
 SKIP_TEST_FILENAMES = {
-    "basic_nonsolid__genisoimage.iso",
     "basic_nonsolid__pycdlib.iso",
 }
 
