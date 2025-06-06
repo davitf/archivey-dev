@@ -14,12 +14,16 @@ def truncate_archive(
     original_path: pathlib.Path,
     output_path: pathlib.Path,
     truncate_fraction: float = 0.5,
+    truncate_bytes: int | None = None,
 ):
     """Copies the original_path to output_path and truncates the last truncate_fraction of its bytes."""
     shutil.copyfile(original_path, output_path)
     with open(output_path, "rb+") as f:
         size = os.path.getsize(output_path)
-        truncate_at = int(size * (1 - truncate_fraction))
+        if truncate_bytes is not None:
+            truncate_at = truncate_bytes
+        else:
+            truncate_at = int(size * (1 - truncate_fraction))
         f.truncate(truncate_at)
 
 
@@ -44,14 +48,10 @@ def corrupt_archive(
         if size == 0:  # Cannot corrupt an empty file
             return
 
-        if corruption_type == "truncate":
-            truncate_archive(original_path, output_path)
-            return
-
         elif corruption_type == "single":
             position_fraction = 0.5
             num_bytes = 1
-        elif corruption_type == "multiple":
+        elif corruption_type == "random":
             position_fraction = 0.5
             num_bytes = 128
         elif corruption_type == "zeroes":
@@ -69,7 +69,7 @@ def corrupt_archive(
         current_data = f.read(num_bytes)
         if corruption_type == "single":
             corrupted_data = bytes([current_data[0] ^ 0xFF])
-        elif corruption_type == "multiple":
+        elif corruption_type == "random":
             r = random.Random(current_data)
             corrupted_data = r.randbytes(num_bytes)
         elif corruption_type == "zeroes":

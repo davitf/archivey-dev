@@ -30,7 +30,7 @@ def sample_archive_path(
         )
 
 
-@pytest.fixture(params=["truncate", "multiple", "zeroes", "ffs"])
+@pytest.fixture(params=["random", "zeroes", "ffs"])
 def corrupted_archive_path(
     sample_archive: ArchiveInfo,
     sample_archive_path: str,

@@ -3,6 +3,7 @@ import os
 import pathlib
 import zlib
 from datetime import datetime
+from typing import Optional
 
 import pytest
 
@@ -17,6 +18,7 @@ from tests.archivey.sample_archives import (
     FileInfo,
     filter_archives,
 )
+from tests.archivey.testing_utils import skip_if_package_missing
 
 
 def normalize_newlines(s: str | None) -> str | None:
@@ -119,21 +121,9 @@ def check_iter_members(
     use_rar_stream: bool = False,
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
-    *,
-    use_rapidgzip: bool = False,
-    use_indexed_bzip2: bool = False,
-    use_python_xz: bool = False,
+    config: Optional[ArchiveyConfig] = None,
 ):
-    if sample_archive.creation_info.format == ArchiveFormat.ISO:
-        pytest.importorskip("pycdlib")
-    elif sample_archive.creation_info.format == ArchiveFormat.RAR:
-        pytest.importorskip("rarfile")
-    elif sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
-        pytest.importorskip("py7zr")
-    elif sample_archive.creation_info.format == ArchiveFormat.ZSTD:
-        pytest.importorskip("zstandard")
-    elif sample_archive.creation_info.format == ArchiveFormat.LZ4:
-        pytest.importorskip("lz4")
+    skip_if_package_missing(sample_archive.creation_info.format, config)
 
     if sample_archive.skip_test:
         pytest.skip(f"Skipping test for {sample_archive.filename} as skip_test is True")
@@ -167,13 +157,6 @@ def check_iter_members(
             )
         )
 
-    config = ArchiveyConfig(
-        use_rar_stream=use_rar_stream,
-        use_single_file_stored_metadata=True,
-        use_rapidgzip=use_rapidgzip,
-        use_indexed_bzip2=use_indexed_bzip2,
-        use_python_xz=use_python_xz,
-    )
     archive_path_resolved = archive_path or sample_archive.get_archive_path()
     with open_archive(
         archive_path_resolved,
@@ -254,10 +237,10 @@ logger = logging.getLogger(__name__)
     ),
     ids=lambda x: x.filename,
 )
-def test_read_tar_archives(sample_archive: ArchiveInfo, sample_archive_path: str):
-    # archive_path = pathlib.Path(sample_archive_path)
-    # if not archive_path.exists():
-    #     pytest.skip("TAR archive not available")
+@pytest.mark.parametrize("alternative_packages", [False, True])
+def test_read_tar_archives(
+    sample_archive: ArchiveInfo, sample_archive_path: str, alternative_packages: bool
+):
     logger.info(
         f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
     )
@@ -268,10 +251,21 @@ def test_read_tar_archives(sample_archive: ArchiveInfo, sample_archive_path: str
         logger.info(f"  lz4={get_dependency_versions().lz4_version}")
         pytest.importorskip("lz4")
 
+    if alternative_packages:
+        config = ArchiveyConfig(
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            use_zstandard=True,
+        )
+    else:
+        config = None
+
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
         skip_member_contents=True,
+        config=config,
     )
 
 
@@ -402,7 +396,19 @@ def test_read_sevenzip_py7zr_archives(
     ),
     ids=lambda x: x.filename,
 )
+@pytest.mark.parametrize("alternative_packages", [False, True])
 def test_read_single_file_compressed_archives(
-    sample_archive: ArchiveInfo, sample_archive_path: str
+    sample_archive: ArchiveInfo, sample_archive_path: str, alternative_packages: bool
 ):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    if alternative_packages:
+        config = ArchiveyConfig(
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            use_zstandard=True,
+            use_single_file_stored_metadata=True,
+        )
+    else:
+        config = ArchiveyConfig(use_single_file_stored_metadata=True)
+
+    check_iter_members(sample_archive, archive_path=sample_archive_path, config=config)

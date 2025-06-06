@@ -285,6 +285,9 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
 
     def __init__(self, reader: ArchiveReader):
         self.reader = reader
+        self.format = reader.format
+        self.archive_path = reader.archive_path
+        self.config = reader.config
 
     def close(self) -> None:
         self.reader.close()

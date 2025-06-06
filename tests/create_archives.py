@@ -17,37 +17,37 @@ from typing import Any, Generator
 
 try:  # Optional dependency
     import lz4.frame as lz4_frame  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - optional import
+except ModuleNotFoundError:
     lz4_frame = None
 
 try:  # Optional dependency
     import py7zr  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - optional import
+except ModuleNotFoundError:
     py7zr = None
 
 try:  # Optional dependency
     import pycdlib  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - optional import
+except ModuleNotFoundError:
     pycdlib = None
 
 try:  # Optional dependency
     import zstandard  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - optional import
+except ModuleNotFoundError:
     zstandard = None
 
 try:  # Optional dependency
     import py7zr  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - optional import
+except ModuleNotFoundError:
     py7zr = None
 
 try:  # Optional dependency
     import pycdlib  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - optional import
+except ModuleNotFoundError:
     pycdlib = None
 
 try:  # Optional dependency
     import zstandard  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - optional import
+except ModuleNotFoundError:
     zstandard = None
 
 from archivey.exceptions import PackageNotInstalledError

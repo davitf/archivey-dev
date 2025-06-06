@@ -212,6 +212,10 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 info_or_filename,
                 pwd=str_to_bytes(pwd or self._pwd),
             )
+
+            # member = self.get_member(member_or_filename)
+            # stream = StreamCheckingIO(stream, member.crc32, member.file_size)
+
             return ExceptionTranslatingIO(
                 stream,
                 lambda e: ArchiveCorruptedError(f"Error reading member {filename}: {e}")

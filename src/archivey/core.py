@@ -33,6 +33,8 @@ def open_archive(
     **kwargs: Any,
 ) -> ArchiveReader:
     """Open an archive and return the appropriate reader."""
+    archive_path = _normalize_archive_path(archive_path)
+
     if not os.path.exists(archive_path):
         raise FileNotFoundError(f"Archive file not found: {archive_path}")
 
@@ -77,7 +79,9 @@ def open_archive(
         elif format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
             from archivey.tar_reader import TarReader
 
-            reader = TarReader(archive_path, pwd=pwd, format=format)
+            reader = TarReader(
+                archive_path, pwd=pwd, format=format, streaming_only=streaming_only
+            )
 
         elif format in SINGLE_FILE_COMPRESSED_FORMATS:
             from archivey.single_file_reader import SingleFileReader

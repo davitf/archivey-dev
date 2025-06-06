@@ -61,6 +61,8 @@ class TarReader(BaseArchiveReaderRandomAccess):
         self._format_info = None
         self._fileobj = None
 
+        logger.info(f"TarReader init: {archive_path} {format} {streaming_only}")
+
         if format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
             self.compression_method = TAR_FORMAT_TO_COMPRESSION_FORMAT[format]
             self._fileobj = open_stream(
@@ -84,8 +86,9 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
         open_mode = "r|" if streaming_only else "r:"
         try:
+            # Fail on any error.
             self._archive = tarfile.open(
-                name=archive_path, fileobj=self._fileobj, mode=open_mode
+                name=archive_path, fileobj=self._fileobj, mode=open_mode, errorlevel=2
             )
             logger.info(f"Tar opened: {self._archive}")
         except tarfile.ReadError as e:
@@ -151,14 +154,38 @@ class TarReader(BaseArchiveReaderRandomAccess):
             raw_info=info,
         )
 
+    def _check_tar_integrity(self, last_tarinfo: tarfile.TarInfo) -> None:
+        # See what's after the last tarinfo. It should be an empty block.
+        data_size = last_tarinfo.size
+        # Round up to the next multiple of 512.
+        data_blocks = (data_size + 511) & ~511
+        next_member_offset = last_tarinfo.offset_data + data_blocks
+
+        if self._fileobj is not None and self._fileobj.seekable():
+            self._fileobj.seek(next_member_offset)
+            data = self._fileobj.read(512 * 2)
+            if len(data) < 512 * 2:
+                raise ArchiveCorruptedError("Missing data after last tarinfo")
+            if data != b"\x00" * 512:
+                # tarfile likely read the block and the checksum failed, so it assumed
+                # it's the end of the file.
+                raise ArchiveCorruptedError("Invalid data after last tarinfo")
+
+        else:
+            logger.warning("Cannot check tar integrity: file is not seekable")
+
     def get_members(self) -> List[ArchiveMember]:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
         if self._members is None:
             self._members = []
-            for info in self._archive.getmembers():
-                self._members.append(self._tarinfo_to_archive_member(info))
+            tarinfo = None
+            for tarinfo in self._archive.getmembers():
+                self._members.append(self._tarinfo_to_archive_member(tarinfo))
+
+            if self.config.check_tar_integrity and tarinfo is not None:
+                self._check_tar_integrity(tarinfo)
 
         return self._members
 
@@ -229,14 +256,21 @@ class TarReader(BaseArchiveReaderRandomAccess):
         return self._format_info
 
     def iter_members_with_io(
-        self, filter: Callable[[ArchiveMember], bool] | None = None
+        self,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        *,
+        pwd: bytes | str | None = None,
     ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
-        iterator = iter(self._archive)
+        if pwd is not None:
+            raise ValueError("TAR format does not support password protection.")
 
+        iterator = iter(self._archive)
         try:
+            tarinfo = None
+
             for tarinfo in iterator:
                 member = self._tarinfo_to_archive_member(tarinfo)
                 if filter is not None and not filter(member):
@@ -266,6 +300,9 @@ class TarReader(BaseArchiveReaderRandomAccess):
                         member,
                         ErrorIOStream(translated or ArchiveCorruptedError(str(e))),
                     )
+
+            if self.config.check_tar_integrity and tarinfo is not None:
+                self._check_tar_integrity(tarinfo)
 
         except tarfile.ReadError as e:
             translated = _translate_tar_exception(e)

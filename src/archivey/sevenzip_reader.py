@@ -2,6 +2,7 @@ import io
 import logging
 import lzma
 import os
+import struct
 from queue import Empty, Queue
 from threading import Thread
 from typing import IO, TYPE_CHECKING, Callable, Iterator, List, Optional, Union, cast
@@ -35,6 +36,7 @@ else:
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
+    ArchiveEOFError,
     ArchiveError,
     PackageNotInstalledError,
 )
@@ -213,6 +215,10 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 raise ArchiveCorruptedError(
                     f"Invalid 7-Zip archive {archive_path}"
                 ) from e
+        except struct.error as e:
+            raise ArchiveEOFError(
+                f"Possibly truncated 7-Zip archive {archive_path}"
+            ) from e
 
     def close(self) -> None:
         """Close the archive and release any resources."""

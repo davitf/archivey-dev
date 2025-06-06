@@ -78,8 +78,8 @@ def process_member(
         assert isinstance(member.mtime, datetime)
 
         try:
-            if member.extra:
-                print(f"{member.filename} {member.extra}")
+            # if member.extra:
+            # print(f"{member.filename} {member.extra}")
 
             if verify:
                 if stream is None:
@@ -268,7 +268,10 @@ def main(argv: list[str] | None = None) -> None:
                 use_python_xz=args.use_python_xz,
             )
             with open_archive(
-                archive_path, pwd=args.password, config=config
+                archive_path,
+                pwd=args.password,
+                config=config,
+                streaming_only=args.stream,
             ) as archive:
                 print(f"Archive format: {archive.format} {archive.get_archive_info()}")
                 if args.info:

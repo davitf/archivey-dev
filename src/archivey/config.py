@@ -15,6 +15,9 @@ class ArchiveyConfig:
     use_rapidgzip: bool = False
     use_indexed_bzip2: bool = False
     use_python_xz: bool = False
+    use_zstandard: bool = False
+
+    check_tar_integrity: bool = True
 
 
 _default_config_var: contextvars.ContextVar[ArchiveyConfig] = contextvars.ContextVar(
