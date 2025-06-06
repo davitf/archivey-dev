@@ -6,7 +6,11 @@ import zipfile
 from datetime import datetime, timezone
 from typing import IO, List, Optional, Callable, cast
 
-from archivey.base_reader import BaseArchiveReaderRandomAccess, apply_members_metadata
+from archivey.base_reader import (
+    BaseArchiveReaderRandomAccess,
+    apply_members_metadata,
+    create_member_filter,
+)
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -267,14 +271,23 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         if self._archive is None:
             raise ValueError("Archive is closed")
 
-        if members is not None or filter is not None or not preserve_links:
-            super().extractall(path, members, pwd, filter, preserve_links)
+        target = path or os.getcwd()
+        filter_fn = create_member_filter(members, filter)
+
+        if not preserve_links:
+            super().extractall(target, members, pwd, filter, preserve_links)
             return
 
-        target = path or os.getcwd()
-
         try:
-            self._archive.extractall(path=target, pwd=str_to_bytes(pwd or self._pwd))
+            if filter_fn is None:
+                self._archive.extractall(path=target, pwd=str_to_bytes(pwd or self._pwd))
+                selected = self.get_members()
+            else:
+                names = [m.filename for m in self.get_members() if filter_fn(m)]
+                if not names:
+                    return
+                self._archive.extractall(path=target, members=names, pwd=str_to_bytes(pwd or self._pwd))
+                selected = [m for m in self.get_members() if filter_fn(m)]
         except RuntimeError as e:
             if "password required" in str(e):
                 raise ArchiveEncryptedError("Archive is encrypted") from e
@@ -282,4 +295,4 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error extracting archive: {e}") from e
 
-        apply_members_metadata(self.get_members(), target)
+        apply_members_metadata(selected, target)
