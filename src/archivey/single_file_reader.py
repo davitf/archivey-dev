@@ -1,23 +1,17 @@
-import bz2
-import gzip
 import io
 import logging
-import lzma
 import os
 import struct
 from datetime import datetime, timezone
-from typing import Callable, List, Optional
+from typing import IO, List
 
 from archivey.base_reader import BaseArchiveReaderRandomAccess
+from archivey.compressed_streams import open_stream
 from archivey.exceptions import (
-    ArchiveCorruptedError,
-    ArchiveEOFError,
-    ArchiveError,
     ArchiveFormatError,
-    PackageNotInstalledError,
 )
-from archivey.io_helpers import ExceptionTranslatingIO
 from archivey.types import (
+    SINGLE_FILE_COMPRESSED_FORMATS,
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
@@ -188,16 +182,6 @@ def read_xz_metadata(path: str, member: ArchiveMember):
         )
 
 
-def _translate_bz2_exception(e: Exception) -> Optional[Exception]:
-    if isinstance(e, OSError):
-        return ArchiveCorruptedError("BZ2 file is corrupted")
-    elif isinstance(e, EOFError):
-        return ArchiveEOFError("BZ2 file is truncated")
-    elif isinstance(e, ValueError):
-        return ArchiveFormatError("No valid BZ2 stream found")
-    return None
-
-
 class SingleFileReader(BaseArchiveReaderRandomAccess):
     """Reader for raw compressed files (gz, bz2, xz, zstd, lz4)."""
 
@@ -220,74 +204,21 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         super().__init__(format, archive_path)
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
+
+        if format not in SINGLE_FILE_COMPRESSED_FORMATS:
+            raise ValueError(f"Unsupported archive format: {format}")
+
         self.archive_path = archive_path
         self.ext = os.path.splitext(archive_path)[1].lower()
         self.use_stored_metadata = self.config.use_single_file_stored_metadata
 
         # Get the base name without compression extension
-        self.member_name = os.path.splitext(os.path.basename(archive_path))[0]
-
-        # Open the appropriate decompressor based on file extension
-        # Note: zstandard and lz4 imports are conditional below to avoid ModuleNotFoundError if not installed.
-
-        # Open the appropriate decompressor based on file extension
-        self.decompressor: Callable[[str], io.IOBase]
-        if format == ArchiveFormat.GZIP:
-            if self.config.use_rapidgzip:
-                try:
-                    import rapidgzip
-
-                    self.decompressor = rapidgzip.open
-                except ImportError:
-                    raise PackageNotInstalledError(
-                        "rapidgzip package is not installed, required for GZIP archives"
-                    ) from None
-            else:
-                self.decompressor = gzip.open
-        elif format == ArchiveFormat.BZIP2:
-            if self.config.use_indexed_bzip2:
-                try:
-                    import indexed_bzip2
-
-                    self.decompressor = indexed_bzip2.open
-                except ImportError:
-                    raise PackageNotInstalledError(
-                        "indexed_bzip2 package is not installed, required for BZIP2 archives"
-                    ) from None
-            else:
-                self.decompressor = bz2.open
-        elif format == ArchiveFormat.XZ:
-            if self.config.use_python_xz:
-                try:
-                    import xz
-
-                    self.decompressor = xz.open
-                except ImportError:
-                    raise PackageNotInstalledError(
-                        "python-xz package is not installed, required for XZ archives"
-                    ) from None
-            else:
-                self.decompressor = lzma.open
-        elif format == ArchiveFormat.ZSTD:
-            try:
-                import zstandard
-
-                self.decompressor = zstandard.open
-            except ImportError:
-                raise PackageNotInstalledError(
-                    "zstandard package is not installed, required for Zstandard archives"
-                ) from None
-        elif format == ArchiveFormat.LZ4:
-            try:
-                import lz4.frame
-
-                self.decompressor = lz4.frame.open
-            except ImportError:
-                raise PackageNotInstalledError(
-                    "lz4 package is not installed, required for LZ4 archives"
-                ) from None
-        else:
-            raise ArchiveError(f"Unsupported compression format: {self.ext}")
+        # TODO: what if the file has no extension, or a wrong extension?
+        # maybe we should remove only extensions from known formats, and add an extra
+        # extension if it doesn't have one?
+        self.member_name = (
+            os.path.splitext(os.path.basename(archive_path))[0] or "unknown"
+        )
 
         # Get file metadata
         mtime = datetime.fromtimestamp(os.path.getmtime(archive_path))
@@ -304,9 +235,9 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
             crc32=None,
         )
 
-        if self.ext == ".gz":
+        if self.format == ArchiveFormat.GZIP:
             read_gzip_metadata(archive_path, self.member, self.use_stored_metadata)
-        elif self.ext == ".xz":
+        elif self.format == ArchiveFormat.XZ:
             read_xz_metadata(archive_path, self.member)
 
     def close(self) -> None:
@@ -325,12 +256,11 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
             extra=None,
         )
 
-    def open(self, member: ArchiveMember, *, pwd: bytes | None = None) -> io.IOBase:
+    def open(self, member: ArchiveMember, *, pwd: bytes | None = None) -> IO[bytes]:
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
         if member != self.member:
             raise ValueError("Requested member is not part of this archive")
-        fileobj = self.decompressor(self.archive_path)
-        if self.ext == ".bz2":
-            return ExceptionTranslatingIO(fileobj, _translate_bz2_exception)
+
+        fileobj = open_stream(self.format, self.archive_path, self.config)
         return fileobj

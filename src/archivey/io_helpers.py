@@ -1,6 +1,11 @@
 import io
+import logging
 from dataclasses import dataclass
 from typing import IO, Any, Callable, Optional, cast
+
+from archivey.exceptions import ArchiveError
+
+logger = logging.getLogger(__name__)
 
 
 class ErrorIOStream(io.RawIOBase, IO[bytes]):
@@ -39,17 +44,28 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
 
     def __init__(
         self,
-        inner: IO[bytes] | io.IOBase,
-        exception_translator: Callable[[Exception], Optional[Exception]],
+        inner: IO[bytes] | io.IOBase | Callable[..., IO[bytes] | io.IOBase],
+        exception_translator: Callable[[Exception], Optional[ArchiveError]],
     ):
         super().__init__()
-        self._inner = inner
         self._translate = exception_translator
+        self._inner: IO[bytes] | io.IOBase | None = None
+
+        if isinstance(inner, Callable):
+            try:
+                self._inner = inner()
+            except Exception as e:
+                self._translate_exception(e)
+        else:
+            self._inner = inner
 
     def _translate_exception(self, e: Exception) -> None:
         translated = self._translate(e)
         if translated is not None:
             raise translated from e
+
+        if not isinstance(e, ArchiveError):
+            logger.error(f"Unknown exception when reading IO: {e}", exc_info=e)
         raise e
 
     def read(self, n: int = -1) -> bytes:
@@ -58,6 +74,12 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
         except Exception as e:
             self._translate_exception(e)
             return b""  # This line will never be reached due to _translate_exception always raising
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        return self._inner.seek(offset, whence)
+
+    def tell(self) -> int:
+        return self._inner.tell()
 
     def readable(self) -> bool:
         return self._inner.readable()
@@ -83,7 +105,8 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
 
     def close(self) -> None:
         try:
-            self._inner.close()
+            if self._inner is not None:
+                self._inner.close()
         except BaseException as e:
             self._translate_exception(cast(Exception, e))
         super().close()

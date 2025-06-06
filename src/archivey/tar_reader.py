@@ -1,6 +1,4 @@
-import gzip
 import logging
-import lzma
 import stat
 import tarfile
 from datetime import datetime, timezone
@@ -11,26 +9,27 @@ from archivey.base_reader import (
     ArchiveMember,
     BaseArchiveReaderRandomAccess,
 )
+from archivey.compressed_streams import open_stream
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
     ArchiveError,
     ArchiveMemberCannotBeOpenedError,
-    PackageNotInstalledError,
 )
 from archivey.io_helpers import ErrorIOStream, ExceptionTranslatingIO, LazyOpenIO
-from archivey.types import ArchiveFormat, MemberType
+from archivey.types import TAR_FORMAT_TO_COMPRESSION_FORMAT, ArchiveFormat, MemberType
 
 logger = logging.getLogger(__name__)
 
 
-def _translate_tar_exception(e: Exception) -> Optional[Exception]:
+def _translate_tar_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, tarfile.ReadError):
         if "unexpected end of data" in str(e).lower():
-            return ArchiveEOFError("TAR archive is truncated")
-
-    if isinstance(e, lzma.LZMAError):
-        return ArchiveCorruptedError(f"Error decompressing TAR archive: {e}")
+            exc = ArchiveEOFError("TAR archive is truncated")
+        else:
+            exc = ArchiveCorruptedError(f"Error reading TAR archive: {e}")
+        exc.__cause__ = e
+        return exc
 
     return None
 
@@ -62,124 +61,38 @@ class TarReader(BaseArchiveReaderRandomAccess):
         self._format_info = None
         self._fileobj = None
 
-        try:
-            if format == ArchiveFormat.TAR_ZSTD:
-                try:
-                    import zstandard
-                except ImportError:
-                    raise PackageNotInstalledError(
-                        "zstandard package is not installed, required for Zstandard archives"
-                    ) from None
-                try:
-                    self._fileobj = zstandard.open(archive_path, "rb")
-                    tar_mode = "r|"
-                    self._streaming_only = True
-                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
-                except zstandard.ZstdError as e:
-                    if self._fileobj is not None:
-                        self._fileobj.close()
-                        self._fileobj = None
-                    raise ArchiveCorruptedError(
-                        f"Invalid compressed TAR archive {archive_path}: {e}"
-                    ) from e
-            elif format == ArchiveFormat.TAR_LZ4:
-                try:
-                    import lz4.frame
-                except ImportError:
-                    raise PackageNotInstalledError(
-                        "lz4 package is not installed, required for LZ4 archives"
-                    ) from None
-                try:
-                    self._fileobj = lz4.frame.open(archive_path, "rb")
-                    tar_mode = "r|"
-                    self._streaming_only = True
-                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
-                except lz4.frame.LZ4FrameError as e:
-                    if self._fileobj is not None:
-                        self._fileobj.close()
-                        self._fileobj = None
-                    raise ArchiveCorruptedError(
-                        f"Invalid compressed TAR archive {archive_path}: {e}"
-                    ) from e
-            elif format == ArchiveFormat.TAR_GZ and self.config.use_rapidgzip:
-                try:
-                    import rapidgzip
-                except ImportError:
-                    raise PackageNotInstalledError(
-                        "rapidgzip package is not installed, required for GZIP archives"
-                    ) from None
-                try:
-                    self._fileobj = rapidgzip.open(archive_path)
-                    tar_mode = "r|"
-                    self._streaming_only = True
-                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
-                except (ValueError, OSError) as e:
-                    if self._fileobj is not None:
-                        self._fileobj.close()
-                        self._fileobj = None
-                    raise ArchiveCorruptedError(
-                        f"Invalid compressed TAR archive {archive_path}: {e}"
-                    ) from e
-            elif format == ArchiveFormat.TAR_BZ2 and self.config.use_indexed_bzip2:
-                try:
-                    import indexed_bzip2
-                except ImportError:
-                    raise PackageNotInstalledError(
-                        "indexed_bzip2 package is not installed, required for BZIP2 archives"
-                    ) from None
-                try:
-                    self._fileobj = indexed_bzip2.open(archive_path)
-                    tar_mode = "r|"
-                    self._streaming_only = True
-                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
-                except (ValueError, OSError) as e:
-                    if self._fileobj is not None:
-                        self._fileobj.close()
-                        self._fileobj = None
-                    raise ArchiveCorruptedError(
-                        f"Invalid compressed TAR archive {archive_path}: {e}"
-                    ) from e
-            elif format == ArchiveFormat.TAR_XZ and self.config.use_python_xz:
-                try:
-                    import xz
-                except ImportError:
-                    raise PackageNotInstalledError(
-                        "python-xz package is not installed, required for XZ archives"
-                    ) from None
-                try:
-                    self._fileobj = xz.open(archive_path, "rb")
-                    tar_mode = "r|"
-                    self._streaming_only = True
-                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
-                except xz.common.XZError as e:
-                    if self._fileobj is not None:
-                        self._fileobj.close()
-                        self._fileobj = None
-                    raise ArchiveCorruptedError(
-                        f"Invalid compressed TAR archive {archive_path}: {e}"
-                    ) from e
-            else:
-                mode_dict = {
-                    ArchiveFormat.TAR: "r",
-                    ArchiveFormat.TAR_GZ: "r:gz",
-                    ArchiveFormat.TAR_BZ2: "r:bz2",
-                    ArchiveFormat.TAR_XZ: "r:xz",
-                }
-                mode: str = mode_dict.get(format, "r")
-                if streaming_only:
-                    if ":" in mode:
-                        mode = mode.replace(":", "|")
-                    else:
-                        mode += "|"
-
-                self._archive = tarfile.open(archive_path, mode)  # type: ignore
-
-        except tarfile.ReadError as e:
-            raise ArchiveCorruptedError(f"Invalid TAR archive {archive_path}: {e}")
-        except (gzip.BadGzipFile, lzma.LZMAError) as e:
-            raise ArchiveCorruptedError(
-                f"Invalid compressed TAR archive {archive_path}: {e}"
+        if format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
+            self.compression_method = TAR_FORMAT_TO_COMPRESSION_FORMAT[format]
+            self._fileobj = open_stream(
+                self.compression_method, archive_path, self.config
             )
+            logger.info(
+                f"Compressed tar opened: {self._fileobj} seekable={self._fileobj.seekable()}"
+            )
+            if self._fileobj.seekable():
+                logger.info(
+                    f"Compressed tar seeked: initial tell={self._fileobj.tell()}"
+                )
+                self._fileobj.seek(0)
+                logger.info(f"Compressed tar seeked: after seek={self._fileobj.tell()}")
+
+        elif format == ArchiveFormat.TAR:
+            self.compression_method = "store"
+            self._fileobj = None
+        else:
+            raise ValueError(f"Unsupported archive format: {format}")
+
+        open_mode = "r|" if streaming_only else "r:"
+        try:
+            self._archive = tarfile.open(
+                name=archive_path, fileobj=self._fileobj, mode=open_mode
+            )
+            logger.info(f"Tar opened: {self._archive}")
+        except tarfile.ReadError as e:
+            translated = _translate_tar_exception(e)
+            if translated is not None:
+                raise translated from e
+            raise
 
     def close(self) -> None:
         """Close the archive and release any resources."""
@@ -187,7 +100,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
             self._archive.close()
             self._archive = None
             self._members = None
-        if getattr(self, "_fileobj", None) is not None:
+        if self._fileobj is not None:
             self._fileobj.close()
             self._fileobj = None
 
@@ -197,16 +110,6 @@ class TarReader(BaseArchiveReaderRandomAccess):
         return self.get_members()
 
     def _tarinfo_to_archive_member(self, info: tarfile.TarInfo) -> ArchiveMember:
-        # Get compression method based on format
-        compression_method: str | None = {
-            ArchiveFormat.TAR: "store",
-            ArchiveFormat.TAR_GZ: ArchiveFormat.GZIP,
-            ArchiveFormat.TAR_BZ2: ArchiveFormat.BZIP2,
-            ArchiveFormat.TAR_XZ: ArchiveFormat.XZ,
-            ArchiveFormat.TAR_ZSTD: ArchiveFormat.ZSTD,
-            ArchiveFormat.TAR_LZ4: ArchiveFormat.LZ4,
-        }.get(self.format, None)
-
         filename = info.name
         if info.isdir() and not filename.endswith("/"):
             filename += "/"
@@ -232,7 +135,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
             mode=stat.S_IMODE(info.mode) if hasattr(info, "mode") else None,
             link_target=info.linkname if info.issym() or info.islnk() else None,
             crc32=None,  # TAR doesn't have CRC
-            compression_method=compression_method,
+            compression_method=self.compression_method,
             extra={
                 "type": info.type,
                 "mode": info.mode,
@@ -295,7 +198,10 @@ class TarReader(BaseArchiveReaderRandomAccess):
             return ExceptionTranslatingIO(stream, _translate_tar_exception)
 
         except tarfile.ReadError as e:
-            raise ArchiveCorruptedError(f"Error reading member {filename}: {e}")
+            translated = _translate_tar_exception(e)
+            if translated is not None:
+                raise translated from e
+            raise
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -330,38 +236,57 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
         iterator = iter(self._archive)
 
-        while True:
-            try:
-                tarinfo = next(iterator)
-            except StopIteration:
-                break
-            except tarfile.ReadError as e:
-                translated = _translate_tar_exception(e)
-                if translated is not None:
-                    raise translated from e
-                raise ArchiveCorruptedError(f"Error reading TAR archive: {e}") from e
+        try:
+            for tarinfo in iterator:
+                member = self._tarinfo_to_archive_member(tarinfo)
+                if filter is not None and not filter(member):
+                    continue
 
-            member = self._tarinfo_to_archive_member(tarinfo)
-            if filter is not None and not filter(member):
-                continue
-
-            try:
-                if self._streaming_only:
-                    stream_obj = self._archive.extractfile(tarinfo)
-                    if stream_obj is None:
-                        raise ArchiveMemberCannotBeOpenedError(
-                            f"Member {member.filename} cannot be opened"
+                try:
+                    if self._streaming_only:
+                        stream_obj = self._archive.extractfile(tarinfo)
+                        if stream_obj is None:
+                            raise ArchiveMemberCannotBeOpenedError(
+                                f"Member {member.filename} cannot be opened"
+                            )
+                        stream = ExceptionTranslatingIO(
+                            stream_obj, _translate_tar_exception
                         )
-                    stream = ExceptionTranslatingIO(
-                        stream_obj, _translate_tar_exception
+                        yield member, stream
+                        stream.close()
+                    else:
+                        stream = LazyOpenIO(self.open, member, seekable=True)
+                        yield member, stream
+                        stream.close()
+
+                except tarfile.ReadError as e:
+                    logger.warning("Error opening member %s: %s", member.filename, e)
+                    translated = _translate_tar_exception(e)
+                    yield (
+                        member,
+                        ErrorIOStream(translated or ArchiveCorruptedError(str(e))),
                     )
-                    yield member, stream
-                    stream.close()
-                else:
-                    stream = LazyOpenIO(self.open, member, seekable=True)
-                    yield member, stream
-                    stream.close()
-            except (ArchiveError, OSError, tarfile.ReadError, lzma.LZMAError) as e:
-                logger.warning("Error opening member %s: %s", member.filename, e)
-                translated = _translate_tar_exception(e)
-                yield member, ErrorIOStream(translated or ArchiveCorruptedError(str(e)))
+
+        except tarfile.ReadError as e:
+            translated = _translate_tar_exception(e)
+            if translated:
+                raise translated from e
+            raise
+
+        # Try reading a bit further, so that any checksum in the compressed data is
+        # checked and corruption is detected.
+        try:
+            if self._fileobj is not None:
+                logger.info(
+                    f"Tar closing: Will read a few bytes from {self.archive_path}"
+                )
+                data = self._fileobj.read(65536)
+                logger.info(
+                    f"Tar closing: Read {len(data)} bytes from {self.archive_path}"
+                )
+
+        except tarfile.ReadError as e:
+            translated = _translate_tar_exception(e)
+            if translated is not None:
+                raise translated from e
+            raise

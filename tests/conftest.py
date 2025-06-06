@@ -6,7 +6,7 @@ import pytest
 from archivey.exceptions import PackageNotInstalledError
 from tests.archivey.sample_archives import ArchiveInfo
 from tests.create_archives import create_archive
-from tests.create_corrupted_archives import corrupt_archive, truncate_archive
+from tests.create_corrupted_archives import corrupt_archive
 
 logger = logging.getLogger(__name__)
 
@@ -30,36 +30,28 @@ def sample_archive_path(
         )
 
 
-@pytest.fixture
-def truncated_archive_path(
-    sample_archive: ArchiveInfo,
-    sample_archive_path: str,
-    tmp_path_factory: pytest.TempPathFactory,
-) -> str:
-    """Return path to a truncated variant of the sample archive."""
-    path = pathlib.Path(sample_archive.get_archive_path(variant="truncated"))
-    if path.exists():
-        return str(path)
-
-    output_dir = tmp_path_factory.mktemp("generated_archives")
-    output_path = output_dir / sample_archive.get_archive_name(variant="truncated")
-    logger.info(f"Creating truncated archive {output_path}")
-    truncate_archive(pathlib.Path(sample_archive_path), output_path)
-    return str(output_path)
-
-
-@pytest.fixture
+@pytest.fixture(params=["truncate", "single", "multiple", "zeroes", "ffs"])
 def corrupted_archive_path(
     sample_archive: ArchiveInfo,
     sample_archive_path: str,
     tmp_path_factory: pytest.TempPathFactory,
+    request: pytest.FixtureRequest,
 ) -> str:
-    path = pathlib.Path(sample_archive.get_archive_path(variant="corrupted"))
+    corruption_type = request.param
+    path = pathlib.Path(
+        sample_archive.get_archive_path(variant=f"corrupted_{corruption_type}")
+    )
     if path.exists():
         return str(path)
 
     output_dir = tmp_path_factory.mktemp("generated_archives")
-    output_path = output_dir / sample_archive.get_archive_name(variant="corrupted")
-    logger.info(f"Creating corrupted archive {output_path}")
-    corrupt_archive(pathlib.Path(sample_archive_path), output_path)
+    output_path = output_dir / sample_archive.get_archive_name(
+        variant=f"corrupted_{corruption_type}"
+    )
+    logger.info(
+        f"Creating corrupted archive {output_path} with corruption type {corruption_type}"
+    )
+    corrupt_archive(
+        pathlib.Path(sample_archive_path), output_path, corruption_type=corruption_type
+    )
     return str(output_path)

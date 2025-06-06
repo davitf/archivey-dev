@@ -48,6 +48,9 @@ class ArchiveContents:
     archive_comment: str | None = None  # Optional archive comment
     solid: bool = False  # Whether archive should be solid
     header_password: str | None = None  # Optional header password
+    generate_corrupted_variants: bool = (
+        True  # Whether to generate corrupted variants for testing
+    )
 
     def has_password(self) -> bool:
         return (
@@ -641,6 +644,12 @@ LARGE_FILES = [
     ),
 ]
 
+SINGLE_LARGE_FILE = FileInfo(
+    name=MARKER_FILENAME_BASED_ON_ARCHIVE_NAME,
+    contents=_create_random_data(1000000, 1),
+    mtime=MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
+)
+
 
 def build_archive_infos() -> list[ArchiveInfo]:
     """Build all ArchiveInfo objects from the definitions."""
@@ -883,6 +892,13 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             solid=True,
         ),
         RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="large_single_file",
+            files=[SINGLE_LARGE_FILE],
+        ),
+        ALL_SINGLE_FILE_FORMATS,
     ),
     (
         ArchiveContents(

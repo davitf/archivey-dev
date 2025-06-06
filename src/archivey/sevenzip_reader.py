@@ -100,6 +100,7 @@ class StreamingFile(Py7zIO):
         self._closed = False
 
     def write(self, b: Union[bytes, bytearray]) -> int:
+        logger.info(f"Writing to streaming file {self._fname}: {len(b)} bytes")
         if not self._started:
             self._started = True
             self._files_queue.put((self._fname, self._reader))
@@ -148,6 +149,7 @@ class StreamingFactory(WriterFactory):
         self._queue = q
 
     def create(self, fname: str) -> Py7zIO:
+        logger.info(f"Creating streaming file {fname}")
         return StreamingFile(fname, self._queue)
 
     def yield_files(self) -> Iterator[tuple[str, IO[bytes]]]:
@@ -155,6 +157,7 @@ class StreamingFactory(WriterFactory):
             item = self._queue.get()
             if item is None:
                 break
+            logger.info(f"Yielding streaming file {item}")
             yield item
 
     def finish(self):
@@ -348,35 +351,47 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 factory = StreamingFactory(q)
                 self._archive.extract(targets=files, factory=factory)
                 factory.finish()
-            except (py7zr.exceptions.ArchiveError, OSError, lzma.LZMAError) as exc:
-                q.put(ArchiveCorruptedError(str(exc)))
-                q.put(None)  # Ensure the main thread breaks out of the loop
+            except Exception as e:
+                logger.error(
+                    f"Error in extractor thread for archive {self.archive_path}",
+                    exc_info=True,
+                )
+                q.put(e)
+                # Catch all exceptions to avoid the main thread waiting forever, but
+                # it will be re-raised in the main thread..
+            # except (py7zr.exceptions.ArchiveError, OSError, lzma.LZMAError) as exc:
+            # q.put(ArchiveCorruptedError(str(exc)))
+            # q.put(None)  # Ensure the main thread breaks out of the loop
 
         thread = Thread(target=extractor)
         thread.start()
 
-        while True:
-            item = q.get()
-            if item is None:
-                # End of file stream
-                break
-            if isinstance(item, Exception):
-                thread.join()
-                raise item
-            fname, io = item
-            member_info = members_dict.get(fname)
-            assert member_info is not None, f"Member {fname} not found"
-            if member_info.is_link and member_info.link_target is None:
-                member_info.link_target = io.read().decode("utf-8")
+        try:
+            while True:
+                item = q.get()
+                if item is None:
+                    # End of file stream
+                    break
+                if isinstance(item, Exception):
+                    thread.join()
+                    raise item
+                fname, io = item
+                member_info = members_dict.get(fname)
+                assert member_info is not None, f"Member {fname} not found"
+                if member_info.is_link and member_info.link_target is None:
+                    member_info.link_target = io.read().decode("utf-8")
 
-            if filter is None or filter(member_info):
-                yield member_info, io
+                if filter is None or filter(member_info):
+                    yield member_info, io
 
-            io.close()
+                io.close()
 
-        # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)
+            # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)
+        except (py7zr.exceptions.ArchiveError, lzma.LZMAError) as e:
+            raise ArchiveCorruptedError(f"Error reading archive: {e}") from e
 
-        thread.join()
+        finally:
+            thread.join()
 
     def extract(
         self,

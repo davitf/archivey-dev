@@ -1,5 +1,6 @@
 import os
 import pathlib
+import random
 import shutil
 
 from tests.archivey.sample_archives import SAMPLE_ARCHIVES
@@ -25,11 +26,16 @@ def truncate_archive(
 def corrupt_archive(
     original_path: pathlib.Path,
     output_path: pathlib.Path,
-    position_fraction: float = 0.5,
-    # num_corruptions: int = 5,
-    # corruption_byte_range: tuple[int, int] = (0, 255),
+    corruption_type: str = "single",
 ):
-    """Copies the original_path to output_path and corrupts a byte."""
+    """Copies the original_path to output_path and corrupts it based on the corruption type.
+
+    Args:
+        original_path: Path to the original archive
+        output_path: Path where the corrupted archive will be written
+        corruption_type: Type of corruption to apply:
+        position_fraction: Where to corrupt the file (0.0 to 1.0), used for "default" type
+    """
     shutil.copyfile(original_path, output_path)
     with open(output_path, "rb+") as f:
         content = bytearray(f.read())
@@ -38,11 +44,43 @@ def corrupt_archive(
         if size == 0:  # Cannot corrupt an empty file
             return
 
+        if corruption_type == "truncate":
+            truncate_archive(original_path, output_path)
+            return
+
+        elif corruption_type == "single":
+            position_fraction = 0.5
+            num_bytes = 1
+        elif corruption_type == "multiple":
+            position_fraction = 0.5
+            num_bytes = 128
+        elif corruption_type == "zeroes":
+            position_fraction = 0.5
+            num_bytes = 128
+        elif corruption_type == "ffs":
+            position_fraction = 0.5
+            num_bytes = 128
+        else:
+            raise ValueError(f"Invalid corruption type: {corruption_type}")
+
         corruption_position = int(size * position_fraction)
         f.seek(corruption_position)
-        current_byte = f.read(1)
+
+        current_data = f.read(num_bytes)
+        if corruption_type == "single":
+            corrupted_data = bytes([current_data[0] ^ 0xFF])
+        elif corruption_type == "multiple":
+            r = random.Random(current_data)
+            corrupted_data = r.randbytes(num_bytes)
+        elif corruption_type == "zeroes":
+            corrupted_data = bytes([0] * num_bytes)
+        elif corruption_type == "ffs":
+            corrupted_data = bytes([0xFF] * num_bytes)
+        else:
+            raise ValueError(f"Invalid corruption type: {corruption_type}")
+
         f.seek(corruption_position)
-        f.write(bytes([current_byte[0] ^ 0xFF]))
+        f.write(corrupted_data)
 
 
 def main():
@@ -84,19 +122,26 @@ def main():
                 CORRUPTED_ARCHIVES_DIR / archive_info.get_archive_name("truncated")
             )
 
-            corrupted_output_path = (
-                CORRUPTED_ARCHIVES_DIR / archive_info.get_archive_name("corrupted")
-            )
-
             print(
                 f"Generating truncated version for: {archive_info.filename} -> {truncated_output_path}"
             )
             truncate_archive(original_archive_path, truncated_output_path)
 
-            print(
-                f"Generating corrupted version for: {archive_info.filename} -> {corrupted_output_path}"
-            )
-            corrupt_archive(original_archive_path, corrupted_output_path)
+            # Generate corrupted versions for each corruption type
+            for corruption_type in ["header", "data", "checksum"]:
+                corrupted_output_path = (
+                    CORRUPTED_ARCHIVES_DIR
+                    / archive_info.get_archive_name(f"corrupted_{corruption_type}")
+                )
+
+                print(
+                    f"Generating corrupted version ({corruption_type}) for: {archive_info.filename} -> {corrupted_output_path}"
+                )
+                corrupt_archive(
+                    original_archive_path,
+                    corrupted_output_path,
+                    corruption_type=corruption_type,
+                )
 
     print("Corrupted archive generation complete.")
 

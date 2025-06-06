@@ -255,13 +255,13 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         """Default implementation of iter_members for random access archives."""
         for member in self.get_members():
             if filter is None or filter(member):
+                stream: LazyOpenIO | None = None
                 try:
                     # TODO: some libraries support fast seeking for files with no
                     # compression, so we should use that if possible.
                     actual_open = functools.partial(self.open, pwd=pwd)
                     stream = LazyOpenIO(actual_open, member, seekable=False)
                     yield member, stream
-                    stream.close()
                 except (ArchiveError, OSError) as e:
                     logger.warning(
                         "Error opening member %s", member.filename, exc_info=True
@@ -269,6 +269,9 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
                     # The caller should only get the exception if it actually tries
                     # to read from the stream.
                     yield member, ErrorIOStream(e)
+                finally:
+                    if stream is not None:
+                        stream.close()
 
     def getinfo(self, name: str) -> ArchiveMember:
         for member in self.get_members():
