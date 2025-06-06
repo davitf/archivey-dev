@@ -80,7 +80,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
         elif format == ArchiveFormat.TAR:
             self.compression_method = "store"
-            self._fileobj = None
+            self._fileobj = open(archive_path, "rb")
         else:
             raise ValueError(f"Unsupported archive format: {format}")
 
@@ -90,7 +90,9 @@ class TarReader(BaseArchiveReaderRandomAccess):
             self._archive = tarfile.open(
                 name=archive_path, fileobj=self._fileobj, mode=open_mode, errorlevel=2
             )
-            logger.info(f"Tar opened: {self._archive}")
+            logger.info(
+                f"Tar opened: {self._archive} seekable={self._fileobj.seekable()}"
+            )
         except tarfile.ReadError as e:
             translated = _translate_tar_exception(e)
             if translated is not None:
@@ -161,12 +163,16 @@ class TarReader(BaseArchiveReaderRandomAccess):
         data_blocks = (data_size + 511) & ~511
         next_member_offset = last_tarinfo.offset_data + data_blocks
 
+        # TODO: seeking on a compressed stream may lead to rereading the whole data,
+        # or may not be supported. Let's use a pseudo-seekable stream that stores
+        # a certain amount of data read, so we can quickly read this block.
+
         if self._fileobj is not None and self._fileobj.seekable():
             self._fileobj.seek(next_member_offset)
             data = self._fileobj.read(512 * 2)
             if len(data) < 512 * 2:
                 raise ArchiveCorruptedError("Missing data after last tarinfo")
-            if data != b"\x00" * 512:
+            if data != b"\x00" * (512 * 2):
                 # tarfile likely read the block and the checksum failed, so it assumed
                 # it's the end of the file.
                 raise ArchiveCorruptedError("Invalid data after last tarinfo")

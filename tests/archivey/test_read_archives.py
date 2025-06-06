@@ -10,7 +10,7 @@ import pytest
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.dependency_checker import get_dependency_versions
-from archivey.types import ArchiveFormat, ArchiveMember, CreateSystem, MemberType
+from archivey.types import ArchiveMember, CreateSystem, MemberType
 from tests.archivey.sample_archives import (
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
@@ -244,12 +244,6 @@ def test_read_tar_archives(
     logger.info(
         f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
     )
-    if sample_archive.creation_info.format == ArchiveFormat.TAR_ZSTD:
-        logger.info(f"  zstandard={get_dependency_versions().zstandard_version}")
-        pytest.importorskip("zstandard")
-    elif sample_archive.creation_info.format == ArchiveFormat.TAR_LZ4:
-        logger.info(f"  lz4={get_dependency_versions().lz4_version}")
-        pytest.importorskip("lz4")
 
     if alternative_packages:
         config = ArchiveyConfig(
@@ -260,6 +254,8 @@ def test_read_tar_archives(
         )
     else:
         config = None
+
+    skip_if_package_missing(sample_archive.creation_info.format, config)
 
     check_iter_members(
         sample_archive,

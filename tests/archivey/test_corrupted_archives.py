@@ -47,8 +47,10 @@ _ALTERNATIVE_PACKAGES_FORMATS = (
     ),
     ids=lambda a: a.filename,
 )
-@pytest.mark.parametrize("read_streams", [True, False])
-@pytest.mark.parametrize("alternative_packages", [False, True])
+@pytest.mark.parametrize("read_streams", [True, False], ids=["read", "noread"])
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+)
 def test_read_corrupted_archives(
     sample_archive: ArchiveInfo,
     corrupted_archive_path: str,
@@ -107,8 +109,10 @@ def test_read_corrupted_archives(
     ),
     ids=lambda a: a.filename,
 )
-@pytest.mark.parametrize("read_streams", [True, False])
-@pytest.mark.parametrize("alternative_packages", [False, True])
+@pytest.mark.parametrize("read_streams", [True, False], ids=["read", "noread"])
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+)
 def test_read_truncated_archives(
     sample_archive: ArchiveInfo,
     corrupted_length: int | float,
