@@ -4,7 +4,7 @@ import stat
 import struct
 import zipfile
 from datetime import datetime, timezone
-from typing import IO, List, Optional, cast
+from typing import IO, List, Optional, Callable, cast
 
 from archivey.base_reader import BaseArchiveReaderRandomAccess, apply_members_metadata
 from archivey.exceptions import (
@@ -258,11 +258,18 @@ class ZipReader(BaseArchiveReaderRandomAccess):
     def extractall(
         self,
         path: str | None = None,
+        members: list[ArchiveMember | str] | None = None,
         *,
         pwd: bytes | str | None = None,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        preserve_links: bool = True,
     ) -> None:
         if self._archive is None:
             raise ValueError("Archive is closed")
+
+        if members is not None or filter is not None or not preserve_links:
+            super().extractall(path, members, pwd, filter, preserve_links)
+            return
 
         target = path or os.getcwd()
 
