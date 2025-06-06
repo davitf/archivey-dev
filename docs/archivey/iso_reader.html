@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+<meta name="generator" content="pdoc3 0.11.6">
+<title>archivey.iso_reader API documentation</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/13.0.0/sanitize.min.css" integrity="sha512-y1dtMcuvtTMJc1yPgEqF0ZjQbhnc/bFhyvIyVNb9Zk5mIGtqVaAB1Ttl28su8AvFMOY0EwRbAe+HCLqj6W7/KA==" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/13.0.0/typography.min.css" integrity="sha512-Y1DYSb995BAfxobCkKepB1BqJJTPrOp3zPL74AWFugHHmmdcvO+C48WLrUOlhGMc0QG7AE3f7gmvvcrmX2fDoA==" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:1.5em;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:2em 0 .50em 0}h3{font-size:1.4em;margin:1.6em 0 .7em 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .2s ease-in-out}a:visited{color:#503}a:hover{color:#b62}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900;font-weight:bold}pre code{font-size:.8em;line-height:1.4em;padding:1em;display:block}code{background:#f3f3f3;font-family:"DejaVu Sans Mono",monospace;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source > summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible;min-width:max-content}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em 1em;margin:1em 0}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul ul{padding-left:1em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha512-D9gUyxqja7hBtkWpPWGt9wfbfaMGVt9gnyCvYa+jojwwPHLCzUm5i8rpk7vD7wNee9bA35eYIjobYPaQuKS1MQ==" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => {
+hljs.configure({languages: ['bash', 'css', 'diff', 'graphql', 'ini', 'javascript', 'json', 'plaintext', 'python', 'python-repl', 'rust', 'shell', 'sql', 'typescript', 'xml', 'yaml']});
+hljs.highlightAll();
+/* Collapse source docstrings */
+setTimeout(() => {
+[...document.querySelectorAll('.hljs.language-python > .hljs-string')]
+.filter(el => el.innerHTML.length > 200 && ['"""', "'''"].includes(el.innerHTML.substring(0, 3)))
+.forEach(el => {
+let d = document.createElement('details');
+d.classList.add('hljs-string');
+d.innerHTML = '<summary>"""</summary>' + el.innerHTML.substring(3);
+el.replaceWith(d);
+});
+}, 100);
+})</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>archivey.iso_reader</code></h1>
+</header>
+<section id="section-intro">
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="archivey.iso_reader.IsoReader"><code class="flex name class">
+<span>class <span class="ident">IsoReader</span></span>
+<span>(</span><span>archive_path: str | bytes,<br>password: str | bytes | None = None,<br>encoding: str | None = None)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class IsoReader(BaseArchiveReaderRandomAccess):
+    &#34;&#34;&#34;
+    Reads ISO 9660 archives using the pycdlib library.
+    &#34;&#34;&#34;
+
+    format = ArchiveFormat.ISO
+    magic = b&#34;CD001&#34;  # Standard ISO 9660 identifier
+    magic_offset = 0x8001
+
+    def __init__(
+        self,
+        archive_path: str | bytes,
+        password: Optional[str | bytes] = None,
+        encoding: Optional[
+            str
+        ] = None,  # ISO 9660 typically uses its own encoding system.
+    ):
+        super().__init__(ArchiveFormat.ISO, archive_path)
+        self.iso: Optional[pycdlib.pycdlib.PyCdlib] = None
+        self.archive_path_obj: Optional[Path] = None
+
+        if pycdlib is None:
+            raise PackageNotInstalledError(
+                &#34;pycdlib package is not installed. Please install it to work with ISO archives.&#34;
+            )
+
+        self.iso = pycdlib.pycdlib.PyCdlib()
+        self.iso.open(self.archive_path)
+
+        if password:
+            # ISO 9660 does not natively support encryption in a way pycdlib handles.
+            # If password-protected ISOs exist, they are likely handled by proprietary means.
+            # For standard ISOs, passwords are not applicable.
+            # We could raise EncryptedArchiveError if a password is provided,
+            # or simply ignore it. Ignoring seems more user-friendly for now.
+            pass  # Ignoring password as ISOs are not typically encrypted
+
+    def _is_pycdlib_dir(
+        self,
+        record,  #: pycdlib.DirectoryRecord
+    ) -&gt; bool:
+        &#34;&#34;&#34;Checks if a pycdlib DirectoryRecord is a directory.&#34;&#34;&#34;
+        return record.is_dir()
+
+    def _is_pycdlib_symlink(
+        self,
+        record,  #: pycdlib.pycdlib.backends.pycdlibstructures.DirectoryRecord
+    ) -&gt; bool:
+        &#34;&#34;&#34;Checks if a pycdlib DirectoryRecord is a symbolic link (using Rock Ridge).&#34;&#34;&#34;
+        # pycdlib doesn&#39;t directly expose a simple is_symlink().
+        # We need to check for Rock Ridge &#39;SL&#39; extension.
+        if record.has_rock_ridge():
+            rr_extensions = record.rock_ridge_extensions()
+            for ext in rr_extensions:
+                if isinstance(ext, pycdlib.rockridge.SLExtension):
+                    return True
+        return False
+
+    def _convert_direntry_to_member(
+        self,
+        path: str,
+        record,  #: pycdlib.backends.pycdlibstructures.DirectoryRecord
+    ) -&gt; ArchiveMember:
+        &#34;&#34;&#34;Converts a pycdlib DirectoryRecord to an ArchiveMember.&#34;&#34;&#34;
+        member_type = MemberType.OTHER
+        if self._is_pycdlib_dir(record):
+            member_type = MemberType.DIR
+        elif self._is_pycdlib_symlink(record):  # Check for symlink before regular file
+            member_type = MemberType.LINK
+        elif record.is_file():
+            member_type = MemberType.FILE
+
+        mtime_dt: Optional[datetime] = None
+        if record.date_time:
+            try:
+                # pycdlib&#39;s datetime is timezone-naive. Assume UTC or local as per ISO standard context.
+                # Python&#39;s datetime.fromtimestamp will use local timezone.
+                # For consistency, one might want to specify UTC if the ISO timestamps are UTC.
+                # However, pycdlib already gives a datetime object.
+                mtime_dt = record.date_time
+            except ValueError:  # Should not happen if record.date_time is valid
+                mtime_dt = None
+
+        link_target = None
+        if member_type == MemberType.LINK and record.has_rock_ridge():
+            rr_extensions = record.rock_ridge_extensions()
+            for ext in rr_extensions:
+                if isinstance(ext, pycdlib.rockridge.SLExtension):
+                    # SLExtension stores components of the link target.
+                    # We need to join them. pycdlib doesn&#39;t seem to have a direct
+                    # method to get the full link target path string easily.
+                    # This is a simplified assumption; complex SL links might exist.
+                    link_target = &#34;/&#34;.join(
+                        c.data.decode(&#34;utf-8&#34;, &#34;replace&#34;) for c in ext.sl_components
+                    )
+                    break
+
+        # pycdlib does not directly expose CRC32 or compression method for individual files
+        # as ISO9660 is not a compressed format in the same way as zip/rar.
+        return ArchiveMember(
+            filename=path,
+            file_size=record.data_length
+            if record.is_file() or self._is_pycdlib_symlink(record)
+            else 0,  # Symlinks also have a size for their target path
+            compress_size=record.data_length
+            if record.is_file() or self._is_pycdlib_symlink(record)
+            else 0,  # No compression in ISO
+            mtime=mtime_dt,
+            type=member_type,
+            mode=record.posix_mode()
+            if record.has_rock_ridge() and hasattr(record, &#34;posix_mode&#34;)
+            else None,
+            link_target=link_target,
+            raw_info=record,
+        )
+
+    def _walk_iso(
+        self, current_path: str = &#34;/&#34;, current_iso_path: str = &#34;/&#34;
+    ) -&gt; Iterator[ArchiveMember]:
+        &#34;&#34;&#34;Helper to recursively walk the ISO directory structure.&#34;&#34;&#34;
+        if not self.iso:
+            raise ArchiveError(&#34;ISO not opened&#34;)
+
+        try:
+            for child_name_bytes, record in self.iso.list_dir(
+                iso_path=current_iso_path
+            ):
+                child_name = child_name_bytes.decode(
+                    self.iso.joliet_output_encoding
+                    if self.iso.has_joliet()
+                    else self.iso.iso_output_encoding,
+                    &#34;replace&#34;,
+                )
+
+                # Skip &#39;.&#39; and &#39;..&#39; entries
+                if child_name == &#34;.&#34; or child_name == &#34;..&#34;:
+                    continue
+
+                # Construct the full path for the member
+                # Ensure no double slashes if current_path is &#39;/&#39;
+                member_path = os.path.join(current_path.strip(&#34;/&#34;), child_name).replace(
+                    &#34;\\&#34;, &#34;/&#34;
+                )
+                if (
+                    not member_path.startswith(&#34;/&#34;) and current_path == &#34;/&#34;
+                ):  # Handle root children
+                    member_path = f&#34;/{member_path}&#34;
+                if current_path != &#34;/&#34; and not member_path.startswith(
+                    current_path
+                ):  # ensure children of /foo are /foo/bar
+                    member_path = f&#34;{current_path.rstrip(&#39;/&#39;)}/{child_name}&#34;.replace(
+                        &#34;\\&#34;, &#34;/&#34;
+                    )
+
+                # Clean path: remove leading slash for internal consistency if desired,
+                # but usually archive members are listed with full paths from root.
+                # For now, keep leading slash.
+                # member_path = member_path.lstrip(&#39;/&#39;) # Example if no leading slash is wanted
+
+                yield self._convert_direntry_to_member(member_path, record)
+
+                if self._is_pycdlib_dir(record):
+                    # Construct the iso_path for pycdlib (needs trailing slash for dirs)
+                    next_iso_path = (
+                        os.path.join(current_iso_path, child_name).replace(&#34;\\&#34;, &#34;/&#34;)
+                        + &#34;/&#34;
+                    )
+                    yield from self._walk_iso(member_path, next_iso_path)
+        except PyCdlibException as e:
+            raise ArchiveError(
+                f&#34;Error walking ISO directory {current_iso_path}: {e}&#34;
+            ) from e
+
+    def get_members(self) -&gt; List[ArchiveMember]:
+        if not self.iso:
+            raise ArchiveError(&#34;ISO not opened&#34;)
+        return list(self.iter_members_with_io())
+
+    def iter_members_with_io(
+        self,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        *,
+        pwd: bytes | str | None = None,
+    ) -&gt; Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+        if not self.iso:
+            raise ArchiveError(&#34;ISO not opened&#34;)
+
+        if pwd is not None:
+            raise ArchiveError(&#34;Password is not supported for ISOReader&#34;)
+
+        # Yield the root directory itself, as it&#39;s a common convention
+        # pycdlib doesn&#39;t explicitly list the root dir record in list_dir(&#39;/&#39;)
+        # We can try to get its record specifically.
+        try:
+            root_record = self.iso.get_record(iso_path=&#34;/.&#34;)
+            if root_record:
+                yield self._convert_direntry_to_member(&#34;/&#34;, root_record)
+        except PyCdlibException:
+            # This might fail if the ISO is very strange or empty.
+            # Log or handle as appropriate. For now, proceed to walk.
+            pass
+
+        for member in self._walk_iso(current_path=&#34;/&#34;, current_iso_path=&#34;/&#34;):
+            if filter is None or filter(member):
+                try:
+                    stream = self.open(member)
+                    yield member, stream
+                    stream.close()
+                except (ArchiveError, OSError) as e:
+                    logger.info(f&#34;Error opening member {member.filename}: {e}&#34;)
+
+    def open(
+        self, member: ArchiveMember | str, *, pwd: Optional[str | bytes] = None
+    ) -&gt; IO[bytes]:
+        if not self.iso:
+            raise ArchiveError(&#34;ISO not opened&#34;)
+
+        member_name: str
+        if isinstance(member, ArchiveMember):
+            member_name = member.filename
+        elif isinstance(member, str):
+            member_name = member
+        else:
+            raise TypeError(&#34;member must be an ArchiveMember or a string path&#34;)
+
+        # pycdlib needs the exact path as it&#39;s stored in the ISO
+        # Our member.filename should correspond to this.
+        # Ensure it&#39;s in the format pycdlib expects (e.g. /FOO/BAR.TXT;1)
+        # The _walk_iso method should produce these correct paths.
+        # If the member name includes a version (&#39;;1&#39;), pycdlib handles it.
+        # If it doesn&#39;t, pycdlib usually defaults to the first version.
+
+        # Convert our potentially clean path to the ISO path format pycdlib expects
+        # This means it must start with &#39;/&#39; and use &#39;/&#39; as separator.
+        iso_path = member_name
+        if not iso_path.startswith(&#34;/&#34;):
+            iso_path = &#34;/&#34; + iso_path
+
+        # Ensure the path uses &#39;/&#39; as separator, which pycdlib expects.
+        iso_path = iso_path.replace(&#34;\\&#34;, &#34;/&#34;)
+
+        try:
+            # Check if it&#39;s a directory, pycdlib can&#39;t extract directories as a stream
+            record = self.iso.get_record(iso_path=iso_path)
+            if record and self._is_pycdlib_dir(record):
+                raise IsADirectoryError(
+                    f&#34;Cannot open directory &#39;{member_name}&#39; as a file stream.&#34;
+                )
+
+            file_data = self.iso.get_file_from_iso(iso_path=iso_path)
+            return io.BytesIO(file_data)
+        except pycdlib.backends.pycdlibexceptions.PyCdlibInvalidInput:
+            # This exception is often raised for &#34;file not found&#34;
+            raise FileNotFoundError(f&#34;File not found in ISO: {member_name}&#34;) from None
+        except PyCdlibException as e:
+            raise ArchiveError(
+                f&#34;Failed to open member &#39;{member_name}&#39; from ISO: {e}&#34;
+            ) from e
+
+    def get_archive_info(self) -&gt; ArchiveInfo:
+        if not self.iso:
+            raise ArchiveError(&#34;ISO not opened&#34;)
+
+        # Basic info
+        info = ArchiveInfo(format=self.format.value)
+
+        # Try to get volume label
+        # pycdlib might have this on the primary volume descriptor
+        try:
+            pvd = self.iso.pvd
+            if pvd:
+                info.comment = pvd.volume_identifier.decode(
+                    self.iso.iso_output_encoding, &#34;replace&#34;
+                ).strip()
+                # Other PVD fields like system_identifier, volume_set_identifier,
+                # publisher_identifier, data_preparer_identifier, application_identifier
+                # could be added to extra_info if needed.
+                extra = {}
+                if pvd.system_identifier:
+                    extra[&#34;system_identifier&#34;] = pvd.system_identifier.decode(
+                        self.iso.iso_output_encoding, &#34;replace&#34;
+                    ).strip()
+                if pvd.publisher_identifier:
+                    extra[&#34;publisher_identifier&#34;] = pvd.publisher_identifier.decode(
+                        self.iso.iso_output_encoding, &#34;replace&#34;
+                    ).strip()
+                if pvd.application_identifier:
+                    extra[&#34;application_identifier&#34;] = pvd.application_identifier.decode(
+                        self.iso.iso_output_encoding, &#34;replace&#34;
+                    ).strip()
+                if extra:
+                    info.extra = extra
+        except PyCdlibException:
+            # Silently ignore if PVD info is not available or fails to parse
+            pass
+
+        # ISOs are not inherently solid, encrypted (standardly), or versioned like RAR/7z
+        info.is_solid = False
+        # info.version could perhaps indicate ISO9660 version (e.g., &#34;1&#34;), Joliet, Rock Ridge presence
+        # For now, keeping it simple.
+
+        return info
+
+    def close(self) -&gt; None:
+        if self.iso:
+            try:
+                self.iso.close()
+            except PyCdlibException:
+                # Log error or handle as needed, but don&#39;t let it prevent closing.
+                pass
+            self.iso = None</code></pre>
+</details>
+<div class="desc"><p>Reads ISO 9660 archives using the pycdlib library.</p>
+<p>Initialize the archive reader.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>format</code></strong></dt>
+<dd>The format of the archive</dd>
+<dt><strong><code>archive_path</code></strong></dt>
+<dd>The path to the archive file</dd>
+</dl></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="archivey.base_reader.BaseArchiveReaderRandomAccess" href="base_reader.html#archivey.base_reader.BaseArchiveReaderRandomAccess">BaseArchiveReaderRandomAccess</a></li>
+<li><a title="archivey.base_reader.ArchiveReader" href="base_reader.html#archivey.base_reader.ArchiveReader">ArchiveReader</a></li>
+<li>abc.ABC</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="archivey.iso_reader.IsoReader.format"><code class="name">var <span class="ident">format</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.iso_reader.IsoReader.magic"><code class="name">var <span class="ident">magic</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.iso_reader.IsoReader.magic_offset"><code class="name">var <span class="ident">magic_offset</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="archivey.base_reader.BaseArchiveReaderRandomAccess" href="base_reader.html#archivey.base_reader.BaseArchiveReaderRandomAccess">BaseArchiveReaderRandomAccess</a></b></code>:
+<ul class="hlist">
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.close" href="base_reader.html#archivey.base_reader.ArchiveReader.close">close</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.get_archive_info" href="base_reader.html#archivey.base_reader.ArchiveReader.get_archive_info">get_archive_info</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.get_members" href="base_reader.html#archivey.base_reader.ArchiveReader.get_members">get_members</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.get_members_if_available" href="base_reader.html#archivey.base_reader.ArchiveReader.get_members_if_available">get_members_if_available</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.has_random_access" href="base_reader.html#archivey.base_reader.ArchiveReader.has_random_access">has_random_access</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.iter_members_with_io" href="base_reader.html#archivey.base_reader.BaseArchiveReaderRandomAccess.iter_members_with_io">iter_members_with_io</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.open" href="base_reader.html#archivey.base_reader.ArchiveReader.open">open</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="archivey" href="index.html">archivey</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="archivey.iso_reader.IsoReader" href="#archivey.iso_reader.IsoReader">IsoReader</a></code></h4>
+<ul class="">
+<li><code><a title="archivey.iso_reader.IsoReader.format" href="#archivey.iso_reader.IsoReader.format">format</a></code></li>
+<li><code><a title="archivey.iso_reader.IsoReader.magic" href="#archivey.iso_reader.IsoReader.magic">magic</a></code></li>
+<li><code><a title="archivey.iso_reader.IsoReader.magic_offset" href="#archivey.iso_reader.IsoReader.magic_offset">magic_offset</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.11.6</a>.</p>
+</footer>
+</body>
+</html>

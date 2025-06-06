@@ -1,0 +1,1164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+<meta name="generator" content="pdoc3 0.11.6">
+<title>archivey.rar_reader API documentation</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/13.0.0/sanitize.min.css" integrity="sha512-y1dtMcuvtTMJc1yPgEqF0ZjQbhnc/bFhyvIyVNb9Zk5mIGtqVaAB1Ttl28su8AvFMOY0EwRbAe+HCLqj6W7/KA==" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/13.0.0/typography.min.css" integrity="sha512-Y1DYSb995BAfxobCkKepB1BqJJTPrOp3zPL74AWFugHHmmdcvO+C48WLrUOlhGMc0QG7AE3f7gmvvcrmX2fDoA==" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:1.5em;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:2em 0 .50em 0}h3{font-size:1.4em;margin:1.6em 0 .7em 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .2s ease-in-out}a:visited{color:#503}a:hover{color:#b62}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900;font-weight:bold}pre code{font-size:.8em;line-height:1.4em;padding:1em;display:block}code{background:#f3f3f3;font-family:"DejaVu Sans Mono",monospace;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source > summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible;min-width:max-content}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em 1em;margin:1em 0}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul ul{padding-left:1em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha512-D9gUyxqja7hBtkWpPWGt9wfbfaMGVt9gnyCvYa+jojwwPHLCzUm5i8rpk7vD7wNee9bA35eYIjobYPaQuKS1MQ==" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => {
+hljs.configure({languages: ['bash', 'css', 'diff', 'graphql', 'ini', 'javascript', 'json', 'plaintext', 'python', 'python-repl', 'rust', 'shell', 'sql', 'typescript', 'xml', 'yaml']});
+hljs.highlightAll();
+/* Collapse source docstrings */
+setTimeout(() => {
+[...document.querySelectorAll('.hljs.language-python > .hljs-string')]
+.filter(el => el.innerHTML.length > 200 && ['"""', "'''"].includes(el.innerHTML.substring(0, 3)))
+.forEach(el => {
+let d = document.createElement('details');
+d.classList.add('hljs-string');
+d.innerHTML = '<summary>"""</summary>' + el.innerHTML.substring(3);
+el.replaceWith(d);
+});
+}, 100);
+})</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>archivey.rar_reader</code></h1>
+</header>
+<section id="section-intro">
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="archivey.rar_reader.check_rarinfo_crc"><code class="name flex">
+<span>def <span class="ident">check_rarinfo_crc</span></span>(<span>rarinfo: rarfile.RarInfo, password: bytes | None, computed_crc: int) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def check_rarinfo_crc(
+    rarinfo: RarInfo, password: bytes | None, computed_crc: int
+) -&gt; bool:
+    encryption_info = get_encryption_info(rarinfo)
+    if (
+        not encryption_info
+        or not encryption_info.flags &amp; RAR_ENCDATA_FLAG_TWEAKED_CHECKSUMS
+    ):
+        return computed_crc == rarinfo.CRC
+
+    if password is None:
+        logger.warning(f&#34;No password specified for checking {rarinfo.filename}&#34;)
+        return False
+
+    converted = convert_crc_to_encrypted(
+        computed_crc, password, encryption_info.salt, encryption_info.kdf_count
+    )
+    return converted == rarinfo.CRC</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.rar_reader.convert_crc_to_encrypted"><code class="name flex">
+<span>def <span class="ident">convert_crc_to_encrypted</span></span>(<span>crc: int, password: bytes, salt: bytes, kdf_count: int) ‑> int</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def convert_crc_to_encrypted(
+    crc: int, password: bytes, salt: bytes, kdf_count: int
+) -&gt; int:
+    &#34;&#34;&#34;Convert a CRC32 to the encrypted format used in RAR5 archives.
+
+    This implements the ConvertHashToMAC function from the RAR source code.
+    First creates a hash key using PBKDF2 with the password and salt,
+    then uses that key for HMAC-SHA256 of the CRC.
+    &#34;&#34;&#34;
+    # Convert password to UTF-8 if it isn&#39;t already
+    if isinstance(password, str):
+        password = password.encode(&#34;utf-8&#34;)
+
+    hash_key = _rar_hash_key(password, salt, kdf_count)
+
+    # Convert CRC to bytes
+    raw_crc = crc.to_bytes(4, &#34;little&#34;)
+
+    # Compute HMAC-SHA256 of the CRC using the hash key
+    digest = hmac.new(hash_key, raw_crc, hashlib.sha256).digest()
+
+    # logger.info(f&#34;Digest: {password=} {salt=} crc={crc:08x} {raw_crc=} {digest.hex()}&#34;)
+
+    # XOR the digest bytes into the CRC
+    result = 0
+    for i in struct.iter_unpack(&#34;&lt;I&#34;, digest):
+        result ^= i[0]
+
+    return result</code></pre>
+</details>
+<div class="desc"><p>Convert a CRC32 to the encrypted format used in RAR5 archives.</p>
+<p>This implements the ConvertHashToMAC function from the RAR source code.
+First creates a hash key using PBKDF2 with the password and salt,
+then uses that key for HMAC-SHA256 of the CRC.</p></div>
+</dd>
+<dt id="archivey.rar_reader.get_encryption_info"><code class="name flex">
+<span>def <span class="ident">get_encryption_info</span></span>(<span>rarinfo: rarfile.RarInfo) ‑> <a title="archivey.rar_reader.RarEncryptionInfo" href="#archivey.rar_reader.RarEncryptionInfo">RarEncryptionInfo</a> | None</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_encryption_info(rarinfo: RarInfo) -&gt; RarEncryptionInfo | None:
+    # The file_encryption attribute is not publicly defined, but it&#39;s there.
+    if not isinstance(rarinfo, Rar5Info):
+        return None
+    if rarinfo.file_encryption is None:  # type: ignore[attr-defined]
+        return None
+    return RarEncryptionInfo(*rarinfo.file_encryption)  # type: ignore[attr-defined]</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.rar_reader.verify_rar5_password"><code class="name flex">
+<span>def <span class="ident">verify_rar5_password</span></span>(<span>password: bytes | None, rar_info: rarfile.RarInfo) ‑> <a title="archivey.rar_reader.PasswordCheckResult" href="#archivey.rar_reader.PasswordCheckResult">PasswordCheckResult</a></span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def verify_rar5_password(
+    password: bytes | None, rar_info: RarInfo
+) -&gt; PasswordCheckResult:
+    &#34;&#34;&#34;
+    Verifies whether the given password matches the check value in RAR5 encryption data.
+    Returns True if the password is correct, False if not.
+    &#34;&#34;&#34;
+    if not rar_info.needs_password():
+        return PasswordCheckResult.CORRECT
+    if password is None:
+        return PasswordCheckResult.INCORRECT
+    encdata = get_encryption_info(rar_info)
+    if not encdata or not encdata.flags &amp; RAR_ENCDATA_FLAG_HAS_PASSWORD_CHECK_DATA:
+        return PasswordCheckResult.UNKNOWN
+
+    return _verify_rar5_password_internal(
+        password, encdata.salt, encdata.kdf_count, encdata.check_value
+    )</code></pre>
+</details>
+<div class="desc"><p>Verifies whether the given password matches the check value in RAR5 encryption data.
+Returns True if the password is correct, False if not.</p></div>
+</dd>
+</dl>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="archivey.rar_reader.BaseRarReader"><code class="flex name class">
+<span>class <span class="ident">BaseRarReader</span></span>
+<span>(</span><span>archive_path: str, *, pwd: str | bytes | None = None)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class BaseRarReader(BaseArchiveReaderRandomAccess):
+    &#34;&#34;&#34;Base class for RAR archive readers.&#34;&#34;&#34;
+
+    def __init__(
+        self,
+        archive_path: str,
+        *,
+        pwd: bytes | str | None = None,
+    ):
+        super().__init__(ArchiveFormat.RAR, archive_path)
+        self._members: Optional[list[ArchiveMember]] = None
+        self._format_info: Optional[ArchiveInfo] = None
+
+        if rarfile is None:
+            raise PackageNotInstalledError(
+                &#34;rarfile package is not installed. Please install it to work with RAR archives.&#34;
+            )
+
+        try:
+            self._archive = rarfile.RarFile(archive_path, &#34;r&#34;)
+            if pwd:
+                self._archive.setpassword(pwd)
+            elif (
+                self._archive._file_parser is not None
+                and self._archive._file_parser.has_header_encryption()
+            ):
+                raise ArchiveEncryptedError(
+                    f&#34;Archive {archive_path} has header encryption, password required to list files&#34;
+                )
+        except rarfile.BadRarFile as e:
+            raise ArchiveCorruptedError(f&#34;Invalid RAR archive {archive_path}: {e}&#34;)
+        except rarfile.NotRarFile as e:
+            raise ArchiveCorruptedError(f&#34;Not a RAR archive {archive_path}: {e}&#34;)
+        except rarfile.NeedFirstVolume as e:
+            raise ArchiveError(
+                f&#34;Need first volume of multi-volume RAR archive {archive_path}: {e}&#34;
+            )
+        except rarfile.RarWrongPassword as e:
+            raise ArchiveEncryptedError(
+                f&#34;Wrong password specified for {archive_path}&#34;
+            ) from e
+        except rarfile.NoCrypto as e:
+            raise PackageNotInstalledError(
+                &#34;cryptography package is not installed. Please install it to read RAR files with encrypted headers.&#34;
+            ) from e
+
+    def close(self):
+        if self._archive:
+            self._archive.close()
+            self._archive = None
+            self._members = None
+
+    def _get_link_target(self, info: RarInfo) -&gt; Optional[str]:
+        if not info.is_symlink():
+            return None
+        if info.file_redir:
+            return info.file_redir[2]
+        elif not info.needs_password():
+            if self._archive is None:
+                raise ArchiveError(&#34;Archive is closed&#34;)
+            return self._archive.read(info.filename).decode(&#34;utf-8&#34;)
+
+        # If the link target is encrypted, we can&#39;t read it.
+        return None
+
+    def get_members(self) -&gt; List[ArchiveMember]:
+        if self._archive is None:
+            raise ArchiveError(&#34;Archive is closed&#34;)
+
+        # According to https://documentation.help/WinRAR/HELPArcEncryption.htm :
+        # If &#34;Encrypt file names&#34; [i.e. header encryption] option is off,
+        # file checksums for encrypted RAR 5.0 files are modified using a
+        # special password dependent algorithm. [...] So do not expect checksums
+        # for encrypted RAR 5.0 files to match actual CRC32 or BLAKE2 values.
+        # If &#34;Encrypt file names&#34; option is on, checksums are stored without modification,
+        # because they can be accessed only after providing a valid password.
+
+        if self._members is None:
+            self._members = []
+            rarinfos: list[rarfile.RarInfo] = self._archive.infolist()
+            for info in rarinfos:
+                compression_method = (
+                    _RAR_COMPRESSION_METHODS.get(info.compress_type, &#34;unknown&#34;)
+                    if info.compress_type is not None
+                    else None
+                )
+
+                has_encrypted_crc: bool
+                encryption_info = get_encryption_info(info)
+                if encryption_info:
+                    has_encrypted_crc = bool(
+                        encryption_info.flags &amp; RAR_ENCDATA_FLAG_TWEAKED_CHECKSUMS
+                    )
+                else:
+                    has_encrypted_crc = False
+
+                member = ArchiveMember(
+                    filename=info.filename or &#34;&#34;,  # Will never actually be None
+                    file_size=info.file_size,
+                    compress_size=info.compress_size,
+                    mtime=info.mtime.replace(tzinfo=None) if info.mtime else None,
+                    type=(
+                        MemberType.DIR
+                        if info.is_dir()
+                        else MemberType.FILE
+                        if info.is_file()
+                        else MemberType.LINK
+                        if info.is_symlink()
+                        else MemberType.OTHER
+                    ),
+                    mode=stat.S_IMODE(info.mode)
+                    if hasattr(info, &#34;mode&#34;) and isinstance(info.mode, int)
+                    else None,
+                    crc32=info.CRC if not has_encrypted_crc else None,
+                    compression_method=compression_method,
+                    comment=info.comment,
+                    encrypted=info.needs_password(),
+                    create_system=_RAR_HOST_OS_TO_CREATE_SYSTEM.get(
+                        getattr(info, &#34;host_os&#34;, None), CreateSystem.UNKNOWN
+                    ),
+                    raw_info=info,
+                    link_target=self._get_link_target(info),
+                    extra={&#34;host_os&#34;: getattr(info, &#34;host_os&#34;, None)},
+                )
+                self._members.append(member)
+
+        return self._members
+
+    def get_archive_info(self) -&gt; ArchiveInfo:
+        &#34;&#34;&#34;Get detailed information about the archive&#39;s format.
+
+        Returns:
+            ArchiveInfo: Detailed format information
+        &#34;&#34;&#34;
+        if self._archive is None:
+            raise ArchiveError(&#34;Archive is closed&#34;)
+
+        if self._format_info is None:
+            # RAR5 archives have a different magic number and structure
+            with open(self.archive_path, &#34;rb&#34;) as f:
+                magic = f.read(8)
+                version = (
+                    &#34;5&#34;
+                    if magic.startswith(b&#34;\x52\x61\x72\x21\x1a\x07\x01\x00&#34;)
+                    else &#34;4&#34;
+                )
+
+            has_header_encryption = (
+                self._archive._file_parser is not None
+                and self._archive._file_parser.has_header_encryption()
+            )
+
+            self._format_info = ArchiveInfo(
+                format=self.format,
+                version=version,
+                is_solid=getattr(
+                    self._archive, &#34;is_solid&#34;, lambda: False
+                )(),  # rarfile &lt; 4.1 doesn&#39;t have is_solid
+                comment=self._archive.comment,
+                extra={
+                    # &#34;is_multivolume&#34;: self._archive.is_multivolume(),
+                    &#34;needs_password&#34;: self._archive.needs_password(),
+                    &#34;header_encrypted&#34;: has_header_encryption,
+                },
+            )
+
+        return self._format_info</code></pre>
+</details>
+<div class="desc"><p>Base class for RAR archive readers.</p>
+<p>Initialize the archive reader.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>format</code></strong></dt>
+<dd>The format of the archive</dd>
+<dt><strong><code>archive_path</code></strong></dt>
+<dd>The path to the archive file</dd>
+</dl></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="archivey.base_reader.BaseArchiveReaderRandomAccess" href="base_reader.html#archivey.base_reader.BaseArchiveReaderRandomAccess">BaseArchiveReaderRandomAccess</a></li>
+<li><a title="archivey.base_reader.ArchiveReader" href="base_reader.html#archivey.base_reader.ArchiveReader">ArchiveReader</a></li>
+<li>abc.ABC</li>
+</ul>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="archivey.rar_reader.RarReader" href="#archivey.rar_reader.RarReader">RarReader</a></li>
+<li><a title="archivey.rar_reader.RarStreamReader" href="#archivey.rar_reader.RarStreamReader">RarStreamReader</a></li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="archivey.rar_reader.BaseRarReader.get_archive_info"><code class="name flex">
+<span>def <span class="ident">get_archive_info</span></span>(<span>self) ‑> <a title="archivey.types.ArchiveInfo" href="types.html#archivey.types.ArchiveInfo">ArchiveInfo</a></span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_archive_info(self) -&gt; ArchiveInfo:
+    &#34;&#34;&#34;Get detailed information about the archive&#39;s format.
+
+    Returns:
+        ArchiveInfo: Detailed format information
+    &#34;&#34;&#34;
+    if self._archive is None:
+        raise ArchiveError(&#34;Archive is closed&#34;)
+
+    if self._format_info is None:
+        # RAR5 archives have a different magic number and structure
+        with open(self.archive_path, &#34;rb&#34;) as f:
+            magic = f.read(8)
+            version = (
+                &#34;5&#34;
+                if magic.startswith(b&#34;\x52\x61\x72\x21\x1a\x07\x01\x00&#34;)
+                else &#34;4&#34;
+            )
+
+        has_header_encryption = (
+            self._archive._file_parser is not None
+            and self._archive._file_parser.has_header_encryption()
+        )
+
+        self._format_info = ArchiveInfo(
+            format=self.format,
+            version=version,
+            is_solid=getattr(
+                self._archive, &#34;is_solid&#34;, lambda: False
+            )(),  # rarfile &lt; 4.1 doesn&#39;t have is_solid
+            comment=self._archive.comment,
+            extra={
+                # &#34;is_multivolume&#34;: self._archive.is_multivolume(),
+                &#34;needs_password&#34;: self._archive.needs_password(),
+                &#34;header_encrypted&#34;: has_header_encryption,
+            },
+        )
+
+    return self._format_info</code></pre>
+</details>
+<div class="desc"><p>Get detailed information about the archive's format.</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>ArchiveInfo</code></dt>
+<dd>Detailed format information</dd>
+</dl></div>
+</dd>
+</dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="archivey.base_reader.BaseArchiveReaderRandomAccess" href="base_reader.html#archivey.base_reader.BaseArchiveReaderRandomAccess">BaseArchiveReaderRandomAccess</a></b></code>:
+<ul class="hlist">
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.close" href="base_reader.html#archivey.base_reader.ArchiveReader.close">close</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.get_members" href="base_reader.html#archivey.base_reader.ArchiveReader.get_members">get_members</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.get_members_if_available" href="base_reader.html#archivey.base_reader.ArchiveReader.get_members_if_available">get_members_if_available</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.has_random_access" href="base_reader.html#archivey.base_reader.ArchiveReader.has_random_access">has_random_access</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.iter_members_with_io" href="base_reader.html#archivey.base_reader.BaseArchiveReaderRandomAccess.iter_members_with_io">iter_members_with_io</a></code></li>
+<li><code><a title="archivey.base_reader.BaseArchiveReaderRandomAccess.open" href="base_reader.html#archivey.base_reader.ArchiveReader.open">open</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
+<dt id="archivey.rar_reader.CRCMismatchError"><code class="flex name class">
+<span>class <span class="ident">CRCMismatchError</span></span>
+<span>(</span><span>filename: str)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class CRCMismatchError(ArchiveCorruptedError):
+    def __init__(self, filename: str):
+        super().__init__(f&#34;CRC mismatch in {filename}&#34;)</code></pre>
+</details>
+<div class="desc"><p>Raised when an archive is corrupted or invalid.</p></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="archivey.exceptions.ArchiveCorruptedError" href="exceptions.html#archivey.exceptions.ArchiveCorruptedError">ArchiveCorruptedError</a></li>
+<li><a title="archivey.exceptions.ArchiveError" href="exceptions.html#archivey.exceptions.ArchiveError">ArchiveError</a></li>
+<li>builtins.Exception</li>
+<li>builtins.BaseException</li>
+</ul>
+</dd>
+<dt id="archivey.rar_reader.PasswordCheckResult"><code class="flex name class">
+<span>class <span class="ident">PasswordCheckResult</span></span>
+<span>(</span><span>*args, **kwds)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class PasswordCheckResult(enum.Enum):
+    CORRECT = 1
+    INCORRECT = 2
+    UNKNOWN = 3</code></pre>
+</details>
+<div class="desc"><p>Create a collection of name/value pairs.</p>
+<p>Example enumeration:</p>
+<pre><code class="language-python-repl">&gt;&gt;&gt; class Color(Enum):
+...     RED = 1
+...     BLUE = 2
+...     GREEN = 3
+</code></pre>
+<p>Access them by:</p>
+<ul>
+<li>attribute access::</li>
+</ul>
+<pre><code class="language-python-repl">&gt;&gt;&gt; Color.RED
+&lt;Color.RED: 1&gt;
+</code></pre>
+<ul>
+<li>value lookup:</li>
+</ul>
+<pre><code class="language-python-repl">&gt;&gt;&gt; Color(1)
+&lt;Color.RED: 1&gt;
+</code></pre>
+<ul>
+<li>name lookup:</li>
+</ul>
+<pre><code class="language-python-repl">&gt;&gt;&gt; Color['RED']
+&lt;Color.RED: 1&gt;
+</code></pre>
+<p>Enumerations can be iterated over, and know how many members they have:</p>
+<pre><code class="language-python-repl">&gt;&gt;&gt; len(Color)
+3
+</code></pre>
+<pre><code class="language-python-repl">&gt;&gt;&gt; list(Color)
+[&lt;Color.RED: 1&gt;, &lt;Color.BLUE: 2&gt;, &lt;Color.GREEN: 3&gt;]
+</code></pre>
+<p>Methods can be added to enumerations, and members can have their own
+attributes &ndash; see the documentation for details.</p></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>enum.Enum</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="archivey.rar_reader.PasswordCheckResult.CORRECT"><code class="name">var <span class="ident">CORRECT</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.rar_reader.PasswordCheckResult.INCORRECT"><code class="name">var <span class="ident">INCORRECT</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.rar_reader.PasswordCheckResult.UNKNOWN"><code class="name">var <span class="ident">UNKNOWN</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.rar_reader.RarEncryptionInfo"><code class="flex name class">
+<span>class <span class="ident">RarEncryptionInfo</span></span>
+<span>(</span><span>algo, flags, kdf_count, salt, iv, check_value)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>RarEncryptionInfo(algo, flags, kdf_count, salt, iv, check_value)</p></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.tuple</li>
+</ul>
+<h3>Instance variables</h3>
+<dl>
+<dt id="archivey.rar_reader.RarEncryptionInfo.algo"><code class="name">var <span class="ident">algo</span></code></dt>
+<dd>
+<div class="desc"><p>Alias for field number 0</p></div>
+</dd>
+<dt id="archivey.rar_reader.RarEncryptionInfo.check_value"><code class="name">var <span class="ident">check_value</span></code></dt>
+<dd>
+<div class="desc"><p>Alias for field number 5</p></div>
+</dd>
+<dt id="archivey.rar_reader.RarEncryptionInfo.flags"><code class="name">var <span class="ident">flags</span></code></dt>
+<dd>
+<div class="desc"><p>Alias for field number 1</p></div>
+</dd>
+<dt id="archivey.rar_reader.RarEncryptionInfo.iv"><code class="name">var <span class="ident">iv</span></code></dt>
+<dd>
+<div class="desc"><p>Alias for field number 4</p></div>
+</dd>
+<dt id="archivey.rar_reader.RarEncryptionInfo.kdf_count"><code class="name">var <span class="ident">kdf_count</span></code></dt>
+<dd>
+<div class="desc"><p>Alias for field number 2</p></div>
+</dd>
+<dt id="archivey.rar_reader.RarEncryptionInfo.salt"><code class="name">var <span class="ident">salt</span></code></dt>
+<dd>
+<div class="desc"><p>Alias for field number 3</p></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.rar_reader.RarReader"><code class="flex name class">
+<span>class <span class="ident">RarReader</span></span>
+<span>(</span><span>archive_path: str, *, pwd: str | bytes | None = None)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class RarReader(BaseRarReader):
+    &#34;&#34;&#34;Reader for RAR archives using rarfile.&#34;&#34;&#34;
+
+    def __init__(
+        self,
+        archive_path: str,
+        *,
+        pwd: bytes | str | None = None,
+    ):
+        super().__init__(archive_path, pwd=pwd)
+        self._pwd = pwd
+
+    def _exception_translator(self, e: Exception) -&gt; Optional[Exception]:
+        if isinstance(e, rarfile.BadRarFile):
+            return ArchiveCorruptedError(f&#34;Error reading member {self.archive_path}&#34;)
+        return None
+
+    def open(
+        self,
+        member_or_filename: ArchiveMember | str,
+        *,
+        pwd: Optional[str | bytes] = None,
+    ) -&gt; IO[bytes]:
+        member = self.get_member(member_or_filename)
+
+        if member.encrypted:
+            pwd_check = verify_rar5_password(
+                str_to_bytes(pwd or self._pwd), cast(rarfile.RarInfo, member.raw_info)
+            )
+            if pwd_check == PasswordCheckResult.INCORRECT:
+                raise ArchiveEncryptedError(
+                    f&#34;Wrong password specified for {member.filename}&#34;
+                )
+
+        if self._archive is None:
+            raise ValueError(&#34;Archive is closed&#34;)
+
+        try:
+            # Apparently pwd can be either bytes or str.
+            inner: IO[bytes] = self._archive.open(
+                member.filename, pwd=bytes_to_str(pwd)
+            )  # type: ignore[arg-type]
+            return ExceptionTranslatingIO(inner, self._exception_translator)
+        except rarfile.BadRarFile as e:
+            raise ArchiveCorruptedError(
+                f&#34;Error reading member {member.filename}&#34;
+            ) from e
+        except rarfile.RarWrongPassword as e:
+            raise ArchiveEncryptedError(
+                f&#34;Wrong password specified for {member.filename}&#34;
+            ) from e
+        except rarfile.PasswordRequired as e:
+            raise ArchiveEncryptedError(
+                f&#34;Password required for {member.filename}&#34;
+            ) from e
+        except rarfile.Error as e:
+            raise ArchiveError(
+                f&#34;Unknown error reading member {member.filename}: {e}&#34;
+            ) from e</code></pre>
+</details>
+<div class="desc"><p>Reader for RAR archives using rarfile.</p>
+<p>Initialize the archive reader.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>format</code></strong></dt>
+<dd>The format of the archive</dd>
+<dt><strong><code>archive_path</code></strong></dt>
+<dd>The path to the archive file</dd>
+</dl></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="archivey.rar_reader.BaseRarReader" href="#archivey.rar_reader.BaseRarReader">BaseRarReader</a></li>
+<li><a title="archivey.base_reader.BaseArchiveReaderRandomAccess" href="base_reader.html#archivey.base_reader.BaseArchiveReaderRandomAccess">BaseArchiveReaderRandomAccess</a></li>
+<li><a title="archivey.base_reader.ArchiveReader" href="base_reader.html#archivey.base_reader.ArchiveReader">ArchiveReader</a></li>
+<li>abc.ABC</li>
+</ul>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="archivey.rar_reader.BaseRarReader" href="#archivey.rar_reader.BaseRarReader">BaseRarReader</a></b></code>:
+<ul class="hlist">
+<li><code><a title="archivey.rar_reader.BaseRarReader.close" href="base_reader.html#archivey.base_reader.ArchiveReader.close">close</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.get_archive_info" href="#archivey.rar_reader.BaseRarReader.get_archive_info">get_archive_info</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.get_members" href="base_reader.html#archivey.base_reader.ArchiveReader.get_members">get_members</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.get_members_if_available" href="base_reader.html#archivey.base_reader.ArchiveReader.get_members_if_available">get_members_if_available</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.has_random_access" href="base_reader.html#archivey.base_reader.ArchiveReader.has_random_access">has_random_access</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.iter_members_with_io" href="base_reader.html#archivey.base_reader.BaseArchiveReaderRandomAccess.iter_members_with_io">iter_members_with_io</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.open" href="base_reader.html#archivey.base_reader.ArchiveReader.open">open</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
+<dt id="archivey.rar_reader.RarStreamMemberFile"><code class="flex name class">
+<span>class <span class="ident">RarStreamMemberFile</span></span>
+<span>(</span><span>member: <a title="archivey.types.ArchiveMember" href="types.html#archivey.types.ArchiveMember">ArchiveMember</a>,<br>shared_stream: IO[bytes],<br>lock: <built-in function allocate_lock>,<br>*,<br>pwd: bytes | None = None)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
+    def __init__(
+        self,
+        member: ArchiveMember,
+        shared_stream: IO[bytes],
+        lock: threading.Lock,
+        *,
+        pwd: bytes | None = None,
+    ):
+        super().__init__()
+        self._stream = shared_stream
+        assert member.file_size is not None
+        self._remaining: int = member.file_size
+        self._expected_crc = (
+            member.crc32 &amp; 0xFFFFFFFF if member.crc32 is not None else None
+        )
+        self._expected_encrypted_crc: int | None = (
+            member.extra.get(&#34;encrypted_crc&#34;, None) if member.extra else None
+        )
+        self._actual_crc = 0
+        self._lock = lock
+        self._closed = False
+        self._filename = member.filename
+        self._fully_read = False
+        self._member = member
+        self._pwd = pwd
+        self._crc_checked = False
+
+    def read(self, n: int = -1) -&gt; bytes:
+        if self._closed:
+            raise ValueError(f&#34;Cannot read from closed/expired file: {self._filename}&#34;)
+
+        with self._lock:
+            if self._remaining == 0:
+                self._fully_read = True
+                self._check_crc()
+                return b&#34;&#34;
+
+            to_read = self._remaining if n &lt; 0 else min(self._remaining, n)
+            data = self._stream.read(to_read)
+            if not data:
+                raise EOFError(f&#34;Unexpected EOF while reading {self._filename}&#34;)
+            self._remaining -= len(data)
+            self._actual_crc = zlib.crc32(data, self._actual_crc)
+
+            logger.info(
+                f&#34;Read {len(data)} bytes from {self._filename}, {self._remaining} remaining: {data} ; crc={self._actual_crc:08x}&#34;
+            )
+            if self._remaining == 0:
+                self._fully_read = True
+                self._check_crc()
+
+            return data
+
+    def _check_crc(self):
+        if self._crc_checked:
+            return
+        self._crc_checked = True
+
+        matches = check_rarinfo_crc(
+            cast(rarfile.RarInfo, self._member.raw_info), self._pwd, self._actual_crc
+        )
+        if not matches:
+            raise CRCMismatchError(self._filename)
+
+    def readable(self) -&gt; bool:
+        return True
+
+    def writable(self) -&gt; bool:
+        return False
+
+    def seekable(self) -&gt; bool:
+        return False
+
+    def write(self, b: Any) -&gt; int:
+        raise io.UnsupportedOperation(&#34;write&#34;)
+
+    def writelines(self, lines: Iterable[Any]) -&gt; None:
+        raise io.UnsupportedOperation(&#34;writelines&#34;)
+
+    def close(self) -&gt; None:
+        if self._closed:
+            return
+        try:
+            with self._lock:
+                while self._remaining &gt; 0:
+                    chunk = self.read(min(65536, self._remaining))
+                    if not chunk:
+                        raise EOFError(
+                            f&#34;Unexpected EOF while skipping {self._filename}&#34;
+                        )
+
+            self._check_crc()
+        finally:
+            self._closed = True
+            super().close()</code></pre>
+</details>
+<div class="desc"><p>Base class for raw binary I/O.</p></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>io.RawIOBase</li>
+<li>_io._RawIOBase</li>
+<li>io.IOBase</li>
+<li>_io._IOBase</li>
+<li>typing.IO</li>
+<li>typing.Generic</li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="archivey.rar_reader.RarStreamMemberFile.close"><code class="name flex">
+<span>def <span class="ident">close</span></span>(<span>self) ‑> None</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def close(self) -&gt; None:
+    if self._closed:
+        return
+    try:
+        with self._lock:
+            while self._remaining &gt; 0:
+                chunk = self.read(min(65536, self._remaining))
+                if not chunk:
+                    raise EOFError(
+                        f&#34;Unexpected EOF while skipping {self._filename}&#34;
+                    )
+
+        self._check_crc()
+    finally:
+        self._closed = True
+        super().close()</code></pre>
+</details>
+<div class="desc"><p>Flush and close the IO object.</p>
+<p>This method has no effect if the file is already closed.</p></div>
+</dd>
+<dt id="archivey.rar_reader.RarStreamMemberFile.read"><code class="name flex">
+<span>def <span class="ident">read</span></span>(<span>self, n: int = -1) ‑> bytes</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def read(self, n: int = -1) -&gt; bytes:
+    if self._closed:
+        raise ValueError(f&#34;Cannot read from closed/expired file: {self._filename}&#34;)
+
+    with self._lock:
+        if self._remaining == 0:
+            self._fully_read = True
+            self._check_crc()
+            return b&#34;&#34;
+
+        to_read = self._remaining if n &lt; 0 else min(self._remaining, n)
+        data = self._stream.read(to_read)
+        if not data:
+            raise EOFError(f&#34;Unexpected EOF while reading {self._filename}&#34;)
+        self._remaining -= len(data)
+        self._actual_crc = zlib.crc32(data, self._actual_crc)
+
+        logger.info(
+            f&#34;Read {len(data)} bytes from {self._filename}, {self._remaining} remaining: {data} ; crc={self._actual_crc:08x}&#34;
+        )
+        if self._remaining == 0:
+            self._fully_read = True
+            self._check_crc()
+
+        return data</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.rar_reader.RarStreamMemberFile.readable"><code class="name flex">
+<span>def <span class="ident">readable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def readable(self) -&gt; bool:
+    return True</code></pre>
+</details>
+<div class="desc"><p>Return whether object was opened for reading.</p>
+<p>If False, read() will raise OSError.</p></div>
+</dd>
+<dt id="archivey.rar_reader.RarStreamMemberFile.seekable"><code class="name flex">
+<span>def <span class="ident">seekable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def seekable(self) -&gt; bool:
+    return False</code></pre>
+</details>
+<div class="desc"><p>Return whether object supports random access.</p>
+<p>If False, seek(), tell() and truncate() will raise OSError.
+This method may need to do a test seek().</p></div>
+</dd>
+<dt id="archivey.rar_reader.RarStreamMemberFile.writable"><code class="name flex">
+<span>def <span class="ident">writable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def writable(self) -&gt; bool:
+    return False</code></pre>
+</details>
+<div class="desc"><p>Return whether object was opened for writing.</p>
+<p>If False, write() will raise OSError.</p></div>
+</dd>
+<dt id="archivey.rar_reader.RarStreamMemberFile.write"><code class="name flex">
+<span>def <span class="ident">write</span></span>(<span>self, b: Any) ‑> int</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def write(self, b: Any) -&gt; int:
+    raise io.UnsupportedOperation(&#34;write&#34;)</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.rar_reader.RarStreamMemberFile.writelines"><code class="name flex">
+<span>def <span class="ident">writelines</span></span>(<span>self, lines: Iterable[Any]) ‑> None</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def writelines(self, lines: Iterable[Any]) -&gt; None:
+    raise io.UnsupportedOperation(&#34;writelines&#34;)</code></pre>
+</details>
+<div class="desc"><p>Write a list of lines to stream.</p>
+<p>Line separators are not added, so it is usual for each of the
+lines provided to have a line separator at the end.</p></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.rar_reader.RarStreamReader"><code class="flex name class">
+<span>class <span class="ident">RarStreamReader</span></span>
+<span>(</span><span>archive_path: str, *, pwd: str | bytes | None = None)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class RarStreamReader(BaseRarReader):
+    &#34;&#34;&#34;Reader for RAR archives using the solid stream reader.
+
+    This may fail for non-solid archives where some files are encrypted and others not,
+    or there are multiple passwords. If the password is incorrect for some files,
+    they will be silently skipped, so the successfully output data will be associated
+    with the wrong files. (ideally, use this only for solid archives, which are
+    guaranteed to have the same password for all files)
+    &#34;&#34;&#34;
+
+    def __init__(
+        self,
+        archive_path: str,
+        *,
+        pwd: bytes | str | None = None,
+    ):
+        super().__init__(archive_path, pwd=pwd)
+        self._pwd = bytes_to_str(pwd)
+        self.archive_path = archive_path
+
+    def close(self) -&gt; None:
+        pass
+
+    def _open_unrar_stream(
+        self, pwd: bytes | str | None = None
+    ) -&gt; tuple[subprocess.Popen, IO[bytes]]:
+        if pwd is None:
+            pwd = self._pwd
+
+        try:
+            unrar_path = shutil.which(&#34;unrar&#34;)
+            if not unrar_path:
+                raise PackageNotInstalledError(
+                    &#34;unrar command is not installed. It is required to read RAR member contents.&#34;
+                )
+
+            # Open an unrar process that outputs the contents of all files in the archive to stdout.
+            password_args = [&#34;-p&#34; + bytes_to_str(pwd)] if pwd else [&#34;-p-&#34;]
+            cmd = [unrar_path, &#34;p&#34;, &#34;-inul&#34;, *password_args, self.archive_path]
+            logger.info(
+                f&#34;Opening RAR archive {self.archive_path} with command: {&#39; &#39;.join(cmd)}&#34;
+            )
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                bufsize=1024 * 1024,
+            )
+            if proc.stdout is None:
+                raise RuntimeError(&#34;Could not open unrar output stream&#34;)
+            stream = proc.stdout  # type: ignore
+            return proc, stream
+
+        except (OSError, subprocess.SubprocessError) as e:
+            raise ArchiveError(
+                f&#34;Error opening RAR archive {self.archive_path}: {e}&#34;
+            ) from e
+
+    def _get_member_file(
+        self, member: ArchiveMember, stream: IO[bytes], lock: threading.Lock
+    ) -&gt; IO[bytes] | None:
+        if not member.is_file:
+            return None
+
+        pwd_bytes = str_to_bytes(self._pwd) if self._pwd is not None else None
+        if (
+            member.encrypted
+            and verify_rar5_password(pwd_bytes, cast(rarfile.RarInfo, member.raw_info))
+            == PasswordCheckResult.INCORRECT
+        ):
+            # unrar silently skips encrypted files with incorrect passwords
+            return ErrorIOStream(
+                ArchiveEncryptedError(f&#34;Wrong password specified for {member.filename}&#34;)
+            )
+
+        return RarStreamMemberFile(member, stream, lock, pwd=pwd_bytes)
+
+    def iter_members_with_io(
+        self,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        *,
+        pwd: bytes | str | None = None,
+    ) -&gt; Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+        if self._archive is None:
+            raise ValueError(&#34;Archive is closed&#34;)
+
+        proc, unrar_stream = self._open_unrar_stream(pwd)
+        lock = threading.Lock()
+
+        logger.info(&#34;Iterating over %s members&#34;, len(self.get_members()))
+
+        # TODO: apply filter, file type and password check to members before opening
+        # the unrar stream, pass only the filtered members to unrar
+
+        try:
+            for member in self.get_members():
+                stream = self._get_member_file(member, unrar_stream, lock)
+                yield member, stream
+                if stream is not None:
+                    # If the caller hasn&#39;t read the stream, close() will read any
+                    # remaining data.
+                    stream.close()
+        finally:
+            proc.terminate()
+            proc.wait()
+            unrar_stream.close()
+
+    def has_random_access(self) -&gt; bool:
+        return False
+
+    def open(
+        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
+    ) -&gt; IO[bytes]:
+        raise NotImplementedError(
+            &#34;RarStreamReader does not support opening specific members&#34;
+        )</code></pre>
+</details>
+<div class="desc"><p>Reader for RAR archives using the solid stream reader.</p>
+<p>This may fail for non-solid archives where some files are encrypted and others not,
+or there are multiple passwords. If the password is incorrect for some files,
+they will be silently skipped, so the successfully output data will be associated
+with the wrong files. (ideally, use this only for solid archives, which are
+guaranteed to have the same password for all files)</p>
+<p>Initialize the archive reader.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>format</code></strong></dt>
+<dd>The format of the archive</dd>
+<dt><strong><code>archive_path</code></strong></dt>
+<dd>The path to the archive file</dd>
+</dl></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="archivey.rar_reader.BaseRarReader" href="#archivey.rar_reader.BaseRarReader">BaseRarReader</a></li>
+<li><a title="archivey.base_reader.BaseArchiveReaderRandomAccess" href="base_reader.html#archivey.base_reader.BaseArchiveReaderRandomAccess">BaseArchiveReaderRandomAccess</a></li>
+<li><a title="archivey.base_reader.ArchiveReader" href="base_reader.html#archivey.base_reader.ArchiveReader">ArchiveReader</a></li>
+<li>abc.ABC</li>
+</ul>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="archivey.rar_reader.BaseRarReader" href="#archivey.rar_reader.BaseRarReader">BaseRarReader</a></b></code>:
+<ul class="hlist">
+<li><code><a title="archivey.rar_reader.BaseRarReader.close" href="base_reader.html#archivey.base_reader.ArchiveReader.close">close</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.get_archive_info" href="#archivey.rar_reader.BaseRarReader.get_archive_info">get_archive_info</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.get_members" href="base_reader.html#archivey.base_reader.ArchiveReader.get_members">get_members</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.get_members_if_available" href="base_reader.html#archivey.base_reader.ArchiveReader.get_members_if_available">get_members_if_available</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.has_random_access" href="base_reader.html#archivey.base_reader.ArchiveReader.has_random_access">has_random_access</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.iter_members_with_io" href="base_reader.html#archivey.base_reader.BaseArchiveReaderRandomAccess.iter_members_with_io">iter_members_with_io</a></code></li>
+<li><code><a title="archivey.rar_reader.BaseRarReader.open" href="base_reader.html#archivey.base_reader.ArchiveReader.open">open</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="archivey" href="index.html">archivey</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="archivey.rar_reader.check_rarinfo_crc" href="#archivey.rar_reader.check_rarinfo_crc">check_rarinfo_crc</a></code></li>
+<li><code><a title="archivey.rar_reader.convert_crc_to_encrypted" href="#archivey.rar_reader.convert_crc_to_encrypted">convert_crc_to_encrypted</a></code></li>
+<li><code><a title="archivey.rar_reader.get_encryption_info" href="#archivey.rar_reader.get_encryption_info">get_encryption_info</a></code></li>
+<li><code><a title="archivey.rar_reader.verify_rar5_password" href="#archivey.rar_reader.verify_rar5_password">verify_rar5_password</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="archivey.rar_reader.BaseRarReader" href="#archivey.rar_reader.BaseRarReader">BaseRarReader</a></code></h4>
+<ul class="">
+<li><code><a title="archivey.rar_reader.BaseRarReader.get_archive_info" href="#archivey.rar_reader.BaseRarReader.get_archive_info">get_archive_info</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.rar_reader.CRCMismatchError" href="#archivey.rar_reader.CRCMismatchError">CRCMismatchError</a></code></h4>
+</li>
+<li>
+<h4><code><a title="archivey.rar_reader.PasswordCheckResult" href="#archivey.rar_reader.PasswordCheckResult">PasswordCheckResult</a></code></h4>
+<ul class="">
+<li><code><a title="archivey.rar_reader.PasswordCheckResult.CORRECT" href="#archivey.rar_reader.PasswordCheckResult.CORRECT">CORRECT</a></code></li>
+<li><code><a title="archivey.rar_reader.PasswordCheckResult.INCORRECT" href="#archivey.rar_reader.PasswordCheckResult.INCORRECT">INCORRECT</a></code></li>
+<li><code><a title="archivey.rar_reader.PasswordCheckResult.UNKNOWN" href="#archivey.rar_reader.PasswordCheckResult.UNKNOWN">UNKNOWN</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.rar_reader.RarEncryptionInfo" href="#archivey.rar_reader.RarEncryptionInfo">RarEncryptionInfo</a></code></h4>
+<ul class="two-column">
+<li><code><a title="archivey.rar_reader.RarEncryptionInfo.algo" href="#archivey.rar_reader.RarEncryptionInfo.algo">algo</a></code></li>
+<li><code><a title="archivey.rar_reader.RarEncryptionInfo.check_value" href="#archivey.rar_reader.RarEncryptionInfo.check_value">check_value</a></code></li>
+<li><code><a title="archivey.rar_reader.RarEncryptionInfo.flags" href="#archivey.rar_reader.RarEncryptionInfo.flags">flags</a></code></li>
+<li><code><a title="archivey.rar_reader.RarEncryptionInfo.iv" href="#archivey.rar_reader.RarEncryptionInfo.iv">iv</a></code></li>
+<li><code><a title="archivey.rar_reader.RarEncryptionInfo.kdf_count" href="#archivey.rar_reader.RarEncryptionInfo.kdf_count">kdf_count</a></code></li>
+<li><code><a title="archivey.rar_reader.RarEncryptionInfo.salt" href="#archivey.rar_reader.RarEncryptionInfo.salt">salt</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.rar_reader.RarReader" href="#archivey.rar_reader.RarReader">RarReader</a></code></h4>
+</li>
+<li>
+<h4><code><a title="archivey.rar_reader.RarStreamMemberFile" href="#archivey.rar_reader.RarStreamMemberFile">RarStreamMemberFile</a></code></h4>
+<ul class="two-column">
+<li><code><a title="archivey.rar_reader.RarStreamMemberFile.close" href="#archivey.rar_reader.RarStreamMemberFile.close">close</a></code></li>
+<li><code><a title="archivey.rar_reader.RarStreamMemberFile.read" href="#archivey.rar_reader.RarStreamMemberFile.read">read</a></code></li>
+<li><code><a title="archivey.rar_reader.RarStreamMemberFile.readable" href="#archivey.rar_reader.RarStreamMemberFile.readable">readable</a></code></li>
+<li><code><a title="archivey.rar_reader.RarStreamMemberFile.seekable" href="#archivey.rar_reader.RarStreamMemberFile.seekable">seekable</a></code></li>
+<li><code><a title="archivey.rar_reader.RarStreamMemberFile.writable" href="#archivey.rar_reader.RarStreamMemberFile.writable">writable</a></code></li>
+<li><code><a title="archivey.rar_reader.RarStreamMemberFile.write" href="#archivey.rar_reader.RarStreamMemberFile.write">write</a></code></li>
+<li><code><a title="archivey.rar_reader.RarStreamMemberFile.writelines" href="#archivey.rar_reader.RarStreamMemberFile.writelines">writelines</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.rar_reader.RarStreamReader" href="#archivey.rar_reader.RarStreamReader">RarStreamReader</a></code></h4>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.11.6</a>.</p>
+</footer>
+</body>
+</html>

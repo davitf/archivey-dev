@@ -47,3 +47,26 @@ with open_archive("example.zip") as archive:
         data = stream.read()
 ```
 
+## Documentation
+
+API documentation can be generated with [pdoc](https://pdoc.dev/):
+
+```bash
+hatch run docs:build
+```
+
+The HTML files will be placed in the `docs/` directory.
+
+## Building
+
+Build a source distribution and wheel with:
+
+```bash
+hatch run build
+```
+
+## Running the tests
+
+```bash
+uv run --extra optional pytest
+```

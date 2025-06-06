@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+<meta name="generator" content="pdoc3 0.11.6">
+<title>archivey.io_helpers API documentation</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/13.0.0/sanitize.min.css" integrity="sha512-y1dtMcuvtTMJc1yPgEqF0ZjQbhnc/bFhyvIyVNb9Zk5mIGtqVaAB1Ttl28su8AvFMOY0EwRbAe+HCLqj6W7/KA==" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/13.0.0/typography.min.css" integrity="sha512-Y1DYSb995BAfxobCkKepB1BqJJTPrOp3zPL74AWFugHHmmdcvO+C48WLrUOlhGMc0QG7AE3f7gmvvcrmX2fDoA==" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:1.5em;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:2em 0 .50em 0}h3{font-size:1.4em;margin:1.6em 0 .7em 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .2s ease-in-out}a:visited{color:#503}a:hover{color:#b62}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900;font-weight:bold}pre code{font-size:.8em;line-height:1.4em;padding:1em;display:block}code{background:#f3f3f3;font-family:"DejaVu Sans Mono",monospace;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source > summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible;min-width:max-content}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em 1em;margin:1em 0}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul ul{padding-left:1em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha512-D9gUyxqja7hBtkWpPWGt9wfbfaMGVt9gnyCvYa+jojwwPHLCzUm5i8rpk7vD7wNee9bA35eYIjobYPaQuKS1MQ==" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => {
+hljs.configure({languages: ['bash', 'css', 'diff', 'graphql', 'ini', 'javascript', 'json', 'plaintext', 'python', 'python-repl', 'rust', 'shell', 'sql', 'typescript', 'xml', 'yaml']});
+hljs.highlightAll();
+/* Collapse source docstrings */
+setTimeout(() => {
+[...document.querySelectorAll('.hljs.language-python > .hljs-string')]
+.filter(el => el.innerHTML.length > 200 && ['"""', "'''"].includes(el.innerHTML.substring(0, 3)))
+.forEach(el => {
+let d = document.createElement('details');
+d.classList.add('hljs-string');
+d.innerHTML = '<summary>"""</summary>' + el.innerHTML.substring(3);
+el.replaceWith(d);
+});
+}, 100);
+})</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>archivey.io_helpers</code></h1>
+</header>
+<section id="section-intro">
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="archivey.io_helpers.ErrorIOStream"><code class="flex name class">
+<span>class <span class="ident">ErrorIOStream</span></span>
+<span>(</span><span>exc: Exception)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class ErrorIOStream(io.RawIOBase, IO[bytes]):
+    &#34;&#34;&#34;A stream that raises an exception on read operations.&#34;&#34;&#34;
+
+    def __init__(self, exc: Exception):
+        &#34;&#34;&#34;Initialize the error stream.&#34;&#34;&#34;
+        self._exc = exc
+
+    def read(self, size: int = -1) -&gt; bytes:
+        &#34;&#34;&#34;Raise the stored exception.&#34;&#34;&#34;
+        raise self._exc
+
+    def write(self, b: bytes) -&gt; int:
+        &#34;&#34;&#34;Raise the stored exception.&#34;&#34;&#34;
+        raise self._exc
+
+    def readable(self) -&gt; bool:
+        return True
+
+    def writable(self) -&gt; bool:
+        return False
+
+    def seekable(self) -&gt; bool:
+        return False</code></pre>
+</details>
+<div class="desc"><p>A stream that raises an exception on read operations.</p>
+<p>Initialize the error stream.</p></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>io.RawIOBase</li>
+<li>_io._RawIOBase</li>
+<li>io.IOBase</li>
+<li>_io._IOBase</li>
+<li>typing.IO</li>
+<li>typing.Generic</li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="archivey.io_helpers.ErrorIOStream.read"><code class="name flex">
+<span>def <span class="ident">read</span></span>(<span>self, size: int = -1) ‑> bytes</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def read(self, size: int = -1) -&gt; bytes:
+    &#34;&#34;&#34;Raise the stored exception.&#34;&#34;&#34;
+    raise self._exc</code></pre>
+</details>
+<div class="desc"><p>Raise the stored exception.</p></div>
+</dd>
+<dt id="archivey.io_helpers.ErrorIOStream.readable"><code class="name flex">
+<span>def <span class="ident">readable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def readable(self) -&gt; bool:
+    return True</code></pre>
+</details>
+<div class="desc"><p>Return whether object was opened for reading.</p>
+<p>If False, read() will raise OSError.</p></div>
+</dd>
+<dt id="archivey.io_helpers.ErrorIOStream.seekable"><code class="name flex">
+<span>def <span class="ident">seekable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def seekable(self) -&gt; bool:
+    return False</code></pre>
+</details>
+<div class="desc"><p>Return whether object supports random access.</p>
+<p>If False, seek(), tell() and truncate() will raise OSError.
+This method may need to do a test seek().</p></div>
+</dd>
+<dt id="archivey.io_helpers.ErrorIOStream.writable"><code class="name flex">
+<span>def <span class="ident">writable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def writable(self) -&gt; bool:
+    return False</code></pre>
+</details>
+<div class="desc"><p>Return whether object was opened for writing.</p>
+<p>If False, write() will raise OSError.</p></div>
+</dd>
+<dt id="archivey.io_helpers.ErrorIOStream.write"><code class="name flex">
+<span>def <span class="ident">write</span></span>(<span>self, b: bytes) ‑> int</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def write(self, b: bytes) -&gt; int:
+    &#34;&#34;&#34;Raise the stored exception.&#34;&#34;&#34;
+    raise self._exc</code></pre>
+</details>
+<div class="desc"><p>Raise the stored exception.</p></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.io_helpers.ExceptionTranslatingIO"><code class="flex name class">
+<span>class <span class="ident">ExceptionTranslatingIO</span></span>
+<span>(</span><span>inner: IO[bytes] | io.IOBase,<br>exception_translator: Callable[[Exception], Exception | None])</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
+    &#34;&#34;&#34;A wrapper around an IO object that translates exceptions during operations.
+
+    Args:
+        inner: The inner IO object to wrap
+        exception_translator: A function that takes an exception and returns either
+            a translated exception or None (in which case the original exception is raised)
+    &#34;&#34;&#34;
+
+    def __init__(
+        self,
+        inner: IO[bytes] | io.IOBase,
+        exception_translator: Callable[[Exception], Optional[Exception]],
+    ):
+        super().__init__()
+        self._inner = inner
+        self._translate = exception_translator
+
+    def _translate_exception(self, e: Exception) -&gt; None:
+        translated = self._translate(e)
+        if translated is not None:
+            raise translated from e
+        raise e
+
+    def read(self, n: int = -1) -&gt; bytes:
+        try:
+            return self._inner.read(n)
+        except Exception as e:
+            self._translate_exception(e)
+            return b&#34;&#34;  # This line will never be reached due to _translate_exception always raising
+
+    def readable(self) -&gt; bool:
+        return self._inner.readable()
+
+    def writable(self) -&gt; bool:
+        return self._inner.writable()
+
+    def seekable(self) -&gt; bool:
+        return self._inner.seekable()
+
+    def write(self, b: Any) -&gt; int:
+        try:
+            return self._inner.write(b)
+        except BaseException as e:
+            self._translate_exception(cast(Exception, e))
+            return 0  # This line will never be reached due to _translate_exception always raising
+
+    def writelines(self, lines: Any) -&gt; None:
+        try:
+            self._inner.writelines(lines)
+        except BaseException as e:
+            self._translate_exception(cast(Exception, e))
+
+    def close(self) -&gt; None:
+        try:
+            self._inner.close()
+        except BaseException as e:
+            self._translate_exception(cast(Exception, e))
+        super().close()</code></pre>
+</details>
+<div class="desc"><p>A wrapper around an IO object that translates exceptions during operations.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>inner</code></strong></dt>
+<dd>The inner IO object to wrap</dd>
+<dt><strong><code>exception_translator</code></strong></dt>
+<dd>A function that takes an exception and returns either
+a translated exception or None (in which case the original exception is raised)</dd>
+</dl></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>io.RawIOBase</li>
+<li>_io._RawIOBase</li>
+<li>io.IOBase</li>
+<li>_io._IOBase</li>
+<li>typing.IO</li>
+<li>typing.Generic</li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="archivey.io_helpers.ExceptionTranslatingIO.close"><code class="name flex">
+<span>def <span class="ident">close</span></span>(<span>self) ‑> None</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def close(self) -&gt; None:
+    try:
+        self._inner.close()
+    except BaseException as e:
+        self._translate_exception(cast(Exception, e))
+    super().close()</code></pre>
+</details>
+<div class="desc"><p>Flush and close the IO object.</p>
+<p>This method has no effect if the file is already closed.</p></div>
+</dd>
+<dt id="archivey.io_helpers.ExceptionTranslatingIO.read"><code class="name flex">
+<span>def <span class="ident">read</span></span>(<span>self, n: int = -1) ‑> bytes</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def read(self, n: int = -1) -&gt; bytes:
+    try:
+        return self._inner.read(n)
+    except Exception as e:
+        self._translate_exception(e)
+        return b&#34;&#34;  # This line will never be reached due to _translate_exception always raising</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.io_helpers.ExceptionTranslatingIO.readable"><code class="name flex">
+<span>def <span class="ident">readable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def readable(self) -&gt; bool:
+    return self._inner.readable()</code></pre>
+</details>
+<div class="desc"><p>Return whether object was opened for reading.</p>
+<p>If False, read() will raise OSError.</p></div>
+</dd>
+<dt id="archivey.io_helpers.ExceptionTranslatingIO.seekable"><code class="name flex">
+<span>def <span class="ident">seekable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def seekable(self) -&gt; bool:
+    return self._inner.seekable()</code></pre>
+</details>
+<div class="desc"><p>Return whether object supports random access.</p>
+<p>If False, seek(), tell() and truncate() will raise OSError.
+This method may need to do a test seek().</p></div>
+</dd>
+<dt id="archivey.io_helpers.ExceptionTranslatingIO.writable"><code class="name flex">
+<span>def <span class="ident">writable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def writable(self) -&gt; bool:
+    return self._inner.writable()</code></pre>
+</details>
+<div class="desc"><p>Return whether object was opened for writing.</p>
+<p>If False, write() will raise OSError.</p></div>
+</dd>
+<dt id="archivey.io_helpers.ExceptionTranslatingIO.write"><code class="name flex">
+<span>def <span class="ident">write</span></span>(<span>self, b: Any) ‑> int</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def write(self, b: Any) -&gt; int:
+    try:
+        return self._inner.write(b)
+    except BaseException as e:
+        self._translate_exception(cast(Exception, e))
+        return 0  # This line will never be reached due to _translate_exception always raising</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.io_helpers.ExceptionTranslatingIO.writelines"><code class="name flex">
+<span>def <span class="ident">writelines</span></span>(<span>self, lines: Any) ‑> None</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def writelines(self, lines: Any) -&gt; None:
+    try:
+        self._inner.writelines(lines)
+    except BaseException as e:
+        self._translate_exception(cast(Exception, e))</code></pre>
+</details>
+<div class="desc"><p>Write a list of lines to stream.</p>
+<p>Line separators are not added, so it is usual for each of the
+lines provided to have a line separator at the end.</p></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.io_helpers.IOStats"><code class="flex name class">
+<span>class <span class="ident">IOStats</span></span>
+<span>(</span><span>bytes_read: int = 0, seek_calls: int = 0)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@dataclass
+class IOStats:
+    &#34;&#34;&#34;Simple container for I/O statistics.&#34;&#34;&#34;
+
+    bytes_read: int = 0
+    seek_calls: int = 0</code></pre>
+</details>
+<div class="desc"><p>Simple container for I/O statistics.</p></div>
+<h3>Instance variables</h3>
+<dl>
+<dt id="archivey.io_helpers.IOStats.bytes_read"><code class="name">var <span class="ident">bytes_read</span> : int</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.io_helpers.IOStats.seek_calls"><code class="name">var <span class="ident">seek_calls</span> : int</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.io_helpers.LazyOpenIO"><code class="flex name class">
+<span>class <span class="ident">LazyOpenIO</span></span>
+<span>(</span><span>open_fn: Callable[..., IO[bytes]], *args: Any, seekable: bool, **kwargs: Any)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class LazyOpenIO(io.RawIOBase, IO[bytes]):
+    &#34;&#34;&#34;A wrapper that defers opening of the underlying stream until needed.
+
+    Args:
+        open_fn: Function used to open the underlying stream.
+        seekable: Optional hint whether the underlying stream is seekable.
+            If provided, ``seekable()`` will return this value without opening
+            the stream.
+    &#34;&#34;&#34;
+
+    def __init__(
+        self,
+        open_fn: Callable[..., IO[bytes]],
+        *args: Any,
+        seekable: bool,
+        **kwargs: Any,
+    ) -&gt; None:
+        super().__init__()
+        self._open_fn = open_fn
+        self._args = args
+        self._kwargs = kwargs
+        self._inner: IO[bytes] | None = None
+        self._seekable = seekable
+
+    def _ensure_open(self) -&gt; IO[bytes]:
+        if self.closed:
+            raise ValueError(&#34;I/O operation on closed file.&#34;)
+        if self._inner is None:
+            self._inner = self._open_fn(*self._args, **self._kwargs)
+        return self._inner
+
+    # ------------------------------------------------------------------
+    # Basic IO methods
+    # ------------------------------------------------------------------
+    def read(self, n: int = -1) -&gt; bytes:
+        return self._ensure_open().read(n)
+
+    def readable(self) -&gt; bool:  # pragma: no cover - trivial
+        return True
+
+    def writable(self) -&gt; bool:  # pragma: no cover - trivial
+        return False
+
+    def seekable(self) -&gt; bool:
+        return self._seekable
+
+    def close(self) -&gt; None:  # pragma: no cover - simple delegation
+        if self._inner is not None:
+            self._inner.close()
+        super().close()
+
+    # Context manager support -------------------------------------------------
+    def __enter__(self) -&gt; &#34;LazyOpenIO&#34;:  # pragma: no cover - trivial
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -&gt; None:  # pragma: no cover - trivial
+        self.close()</code></pre>
+</details>
+<div class="desc"><p>A wrapper that defers opening of the underlying stream until needed.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>open_fn</code></strong></dt>
+<dd>Function used to open the underlying stream.</dd>
+<dt><strong><code>seekable</code></strong></dt>
+<dd>Optional hint whether the underlying stream is seekable.
+If provided, <code>seekable()</code> will return this value without opening
+the stream.</dd>
+</dl></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>io.RawIOBase</li>
+<li>_io._RawIOBase</li>
+<li>io.IOBase</li>
+<li>_io._IOBase</li>
+<li>typing.IO</li>
+<li>typing.Generic</li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="archivey.io_helpers.LazyOpenIO.close"><code class="name flex">
+<span>def <span class="ident">close</span></span>(<span>self) ‑> None</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def close(self) -&gt; None:  # pragma: no cover - simple delegation
+    if self._inner is not None:
+        self._inner.close()
+    super().close()</code></pre>
+</details>
+<div class="desc"><p>Flush and close the IO object.</p>
+<p>This method has no effect if the file is already closed.</p></div>
+</dd>
+<dt id="archivey.io_helpers.LazyOpenIO.read"><code class="name flex">
+<span>def <span class="ident">read</span></span>(<span>self, n: int = -1) ‑> bytes</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def read(self, n: int = -1) -&gt; bytes:
+    return self._ensure_open().read(n)</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.io_helpers.LazyOpenIO.readable"><code class="name flex">
+<span>def <span class="ident">readable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def readable(self) -&gt; bool:  # pragma: no cover - trivial
+    return True</code></pre>
+</details>
+<div class="desc"><p>Return whether object was opened for reading.</p>
+<p>If False, read() will raise OSError.</p></div>
+</dd>
+<dt id="archivey.io_helpers.LazyOpenIO.seekable"><code class="name flex">
+<span>def <span class="ident">seekable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def seekable(self) -&gt; bool:
+    return self._seekable</code></pre>
+</details>
+<div class="desc"><p>Return whether object supports random access.</p>
+<p>If False, seek(), tell() and truncate() will raise OSError.
+This method may need to do a test seek().</p></div>
+</dd>
+<dt id="archivey.io_helpers.LazyOpenIO.writable"><code class="name flex">
+<span>def <span class="ident">writable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def writable(self) -&gt; bool:  # pragma: no cover - trivial
+    return False</code></pre>
+</details>
+<div class="desc"><p>Return whether object was opened for writing.</p>
+<p>If False, write() will raise OSError.</p></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.io_helpers.StatsIO"><code class="flex name class">
+<span>class <span class="ident">StatsIO</span></span>
+<span>(</span><span>inner: IO[bytes],<br>stats: <a title="archivey.io_helpers.IOStats" href="#archivey.io_helpers.IOStats">IOStats</a>)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class StatsIO(io.RawIOBase, IO[bytes]):
+    &#34;&#34;&#34;Wraps another IO object and tracks read/seek statistics.&#34;&#34;&#34;
+
+    def __init__(self, inner: IO[bytes], stats: IOStats) -&gt; None:
+        super().__init__()
+        self._inner = inner
+        self.stats = stats
+
+    # Basic IO methods -------------------------------------------------
+    def read(self, n: int = -1) -&gt; bytes:
+        data = self._inner.read(n)
+        self.stats.bytes_read += len(data)
+        return data
+
+    def readinto(self, b: bytearray | memoryview) -&gt; int:  # type: ignore[override]
+        n = self._inner.readinto(b)
+        self.stats.bytes_read += n
+        return n
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -&gt; int:
+        self.stats.seek_calls += 1
+        return self._inner.seek(offset, whence)
+
+    def readable(self) -&gt; bool:  # pragma: no cover - trivial
+        return self._inner.readable()
+
+    def writable(self) -&gt; bool:  # pragma: no cover - trivial
+        return self._inner.writable()
+
+    def seekable(self) -&gt; bool:  # pragma: no cover - trivial
+        return self._inner.seekable()
+
+    def write(self, b: Any) -&gt; int:  # pragma: no cover - simple delegation
+        return self._inner.write(b)
+
+    def close(self) -&gt; None:  # pragma: no cover - simple delegation
+        self._inner.close()
+        super().close()
+
+    # Delegate unknown attributes --------------------------------------
+    def __getattr__(self, item: str) -&gt; Any:  # pragma: no cover - simple
+        return getattr(self._inner, item)
+
+    # Context manager support -----------------------------------------
+    def __enter__(self) -&gt; &#34;StatsIO&#34;:  # pragma: no cover - trivial
+        self._inner.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -&gt; None:  # pragma: no cover - trivial
+        self._inner.__exit__(exc_type, exc_val, exc_tb)
+        self.close()</code></pre>
+</details>
+<div class="desc"><p>Wraps another IO object and tracks read/seek statistics.</p></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>io.RawIOBase</li>
+<li>_io._RawIOBase</li>
+<li>io.IOBase</li>
+<li>_io._IOBase</li>
+<li>typing.IO</li>
+<li>typing.Generic</li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="archivey.io_helpers.StatsIO.close"><code class="name flex">
+<span>def <span class="ident">close</span></span>(<span>self) ‑> None</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def close(self) -&gt; None:  # pragma: no cover - simple delegation
+    self._inner.close()
+    super().close()</code></pre>
+</details>
+<div class="desc"><p>Flush and close the IO object.</p>
+<p>This method has no effect if the file is already closed.</p></div>
+</dd>
+<dt id="archivey.io_helpers.StatsIO.read"><code class="name flex">
+<span>def <span class="ident">read</span></span>(<span>self, n: int = -1) ‑> bytes</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def read(self, n: int = -1) -&gt; bytes:
+    data = self._inner.read(n)
+    self.stats.bytes_read += len(data)
+    return data</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.io_helpers.StatsIO.readable"><code class="name flex">
+<span>def <span class="ident">readable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def readable(self) -&gt; bool:  # pragma: no cover - trivial
+    return self._inner.readable()</code></pre>
+</details>
+<div class="desc"><p>Return whether object was opened for reading.</p>
+<p>If False, read() will raise OSError.</p></div>
+</dd>
+<dt id="archivey.io_helpers.StatsIO.readinto"><code class="name flex">
+<span>def <span class="ident">readinto</span></span>(<span>self, b: bytearray | memoryview) ‑> int</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def readinto(self, b: bytearray | memoryview) -&gt; int:  # type: ignore[override]
+    n = self._inner.readinto(b)
+    self.stats.bytes_read += n
+    return n</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.io_helpers.StatsIO.seek"><code class="name flex">
+<span>def <span class="ident">seek</span></span>(<span>self, offset: int, whence: int = 0) ‑> int</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def seek(self, offset: int, whence: int = io.SEEK_SET) -&gt; int:
+    self.stats.seek_calls += 1
+    return self._inner.seek(offset, whence)</code></pre>
+</details>
+<div class="desc"><p>Change the stream position to the given byte offset.</p>
+<p>offset
+The stream position, relative to 'whence'.
+whence
+The relative position to seek from.</p>
+<p>The offset is interpreted relative to the position indicated by whence.
+Values for whence are:</p>
+<ul>
+<li>os.SEEK_SET or 0 &ndash; start of stream (the default); offset should be zero or positive</li>
+<li>os.SEEK_CUR or 1 &ndash; current stream position; offset may be negative</li>
+<li>os.SEEK_END or 2 &ndash; end of stream; offset is usually negative</li>
+</ul>
+<p>Return the new absolute position.</p></div>
+</dd>
+<dt id="archivey.io_helpers.StatsIO.seekable"><code class="name flex">
+<span>def <span class="ident">seekable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def seekable(self) -&gt; bool:  # pragma: no cover - trivial
+    return self._inner.seekable()</code></pre>
+</details>
+<div class="desc"><p>Return whether object supports random access.</p>
+<p>If False, seek(), tell() and truncate() will raise OSError.
+This method may need to do a test seek().</p></div>
+</dd>
+<dt id="archivey.io_helpers.StatsIO.writable"><code class="name flex">
+<span>def <span class="ident">writable</span></span>(<span>self) ‑> bool</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def writable(self) -&gt; bool:  # pragma: no cover - trivial
+    return self._inner.writable()</code></pre>
+</details>
+<div class="desc"><p>Return whether object was opened for writing.</p>
+<p>If False, write() will raise OSError.</p></div>
+</dd>
+<dt id="archivey.io_helpers.StatsIO.write"><code class="name flex">
+<span>def <span class="ident">write</span></span>(<span>self, b: Any) ‑> int</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def write(self, b: Any) -&gt; int:  # pragma: no cover - simple delegation
+    return self._inner.write(b)</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="archivey" href="index.html">archivey</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="archivey.io_helpers.ErrorIOStream" href="#archivey.io_helpers.ErrorIOStream">ErrorIOStream</a></code></h4>
+<ul class="">
+<li><code><a title="archivey.io_helpers.ErrorIOStream.read" href="#archivey.io_helpers.ErrorIOStream.read">read</a></code></li>
+<li><code><a title="archivey.io_helpers.ErrorIOStream.readable" href="#archivey.io_helpers.ErrorIOStream.readable">readable</a></code></li>
+<li><code><a title="archivey.io_helpers.ErrorIOStream.seekable" href="#archivey.io_helpers.ErrorIOStream.seekable">seekable</a></code></li>
+<li><code><a title="archivey.io_helpers.ErrorIOStream.writable" href="#archivey.io_helpers.ErrorIOStream.writable">writable</a></code></li>
+<li><code><a title="archivey.io_helpers.ErrorIOStream.write" href="#archivey.io_helpers.ErrorIOStream.write">write</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.io_helpers.ExceptionTranslatingIO" href="#archivey.io_helpers.ExceptionTranslatingIO">ExceptionTranslatingIO</a></code></h4>
+<ul class="two-column">
+<li><code><a title="archivey.io_helpers.ExceptionTranslatingIO.close" href="#archivey.io_helpers.ExceptionTranslatingIO.close">close</a></code></li>
+<li><code><a title="archivey.io_helpers.ExceptionTranslatingIO.read" href="#archivey.io_helpers.ExceptionTranslatingIO.read">read</a></code></li>
+<li><code><a title="archivey.io_helpers.ExceptionTranslatingIO.readable" href="#archivey.io_helpers.ExceptionTranslatingIO.readable">readable</a></code></li>
+<li><code><a title="archivey.io_helpers.ExceptionTranslatingIO.seekable" href="#archivey.io_helpers.ExceptionTranslatingIO.seekable">seekable</a></code></li>
+<li><code><a title="archivey.io_helpers.ExceptionTranslatingIO.writable" href="#archivey.io_helpers.ExceptionTranslatingIO.writable">writable</a></code></li>
+<li><code><a title="archivey.io_helpers.ExceptionTranslatingIO.write" href="#archivey.io_helpers.ExceptionTranslatingIO.write">write</a></code></li>
+<li><code><a title="archivey.io_helpers.ExceptionTranslatingIO.writelines" href="#archivey.io_helpers.ExceptionTranslatingIO.writelines">writelines</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.io_helpers.IOStats" href="#archivey.io_helpers.IOStats">IOStats</a></code></h4>
+<ul class="">
+<li><code><a title="archivey.io_helpers.IOStats.bytes_read" href="#archivey.io_helpers.IOStats.bytes_read">bytes_read</a></code></li>
+<li><code><a title="archivey.io_helpers.IOStats.seek_calls" href="#archivey.io_helpers.IOStats.seek_calls">seek_calls</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.io_helpers.LazyOpenIO" href="#archivey.io_helpers.LazyOpenIO">LazyOpenIO</a></code></h4>
+<ul class="">
+<li><code><a title="archivey.io_helpers.LazyOpenIO.close" href="#archivey.io_helpers.LazyOpenIO.close">close</a></code></li>
+<li><code><a title="archivey.io_helpers.LazyOpenIO.read" href="#archivey.io_helpers.LazyOpenIO.read">read</a></code></li>
+<li><code><a title="archivey.io_helpers.LazyOpenIO.readable" href="#archivey.io_helpers.LazyOpenIO.readable">readable</a></code></li>
+<li><code><a title="archivey.io_helpers.LazyOpenIO.seekable" href="#archivey.io_helpers.LazyOpenIO.seekable">seekable</a></code></li>
+<li><code><a title="archivey.io_helpers.LazyOpenIO.writable" href="#archivey.io_helpers.LazyOpenIO.writable">writable</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.io_helpers.StatsIO" href="#archivey.io_helpers.StatsIO">StatsIO</a></code></h4>
+<ul class="two-column">
+<li><code><a title="archivey.io_helpers.StatsIO.close" href="#archivey.io_helpers.StatsIO.close">close</a></code></li>
+<li><code><a title="archivey.io_helpers.StatsIO.read" href="#archivey.io_helpers.StatsIO.read">read</a></code></li>
+<li><code><a title="archivey.io_helpers.StatsIO.readable" href="#archivey.io_helpers.StatsIO.readable">readable</a></code></li>
+<li><code><a title="archivey.io_helpers.StatsIO.readinto" href="#archivey.io_helpers.StatsIO.readinto">readinto</a></code></li>
+<li><code><a title="archivey.io_helpers.StatsIO.seek" href="#archivey.io_helpers.StatsIO.seek">seek</a></code></li>
+<li><code><a title="archivey.io_helpers.StatsIO.seekable" href="#archivey.io_helpers.StatsIO.seekable">seekable</a></code></li>
+<li><code><a title="archivey.io_helpers.StatsIO.writable" href="#archivey.io_helpers.StatsIO.writable">writable</a></code></li>
+<li><code><a title="archivey.io_helpers.StatsIO.write" href="#archivey.io_helpers.StatsIO.write">write</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.11.6</a>.</p>
+</footer>
+</body>
+</html>

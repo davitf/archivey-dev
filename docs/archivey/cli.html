@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+<meta name="generator" content="pdoc3 0.11.6">
+<title>archivey.cli API documentation</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/13.0.0/sanitize.min.css" integrity="sha512-y1dtMcuvtTMJc1yPgEqF0ZjQbhnc/bFhyvIyVNb9Zk5mIGtqVaAB1Ttl28su8AvFMOY0EwRbAe+HCLqj6W7/KA==" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/13.0.0/typography.min.css" integrity="sha512-Y1DYSb995BAfxobCkKepB1BqJJTPrOp3zPL74AWFugHHmmdcvO+C48WLrUOlhGMc0QG7AE3f7gmvvcrmX2fDoA==" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:1.5em;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:2em 0 .50em 0}h3{font-size:1.4em;margin:1.6em 0 .7em 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .2s ease-in-out}a:visited{color:#503}a:hover{color:#b62}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900;font-weight:bold}pre code{font-size:.8em;line-height:1.4em;padding:1em;display:block}code{background:#f3f3f3;font-family:"DejaVu Sans Mono",monospace;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source > summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible;min-width:max-content}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em 1em;margin:1em 0}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul ul{padding-left:1em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha512-D9gUyxqja7hBtkWpPWGt9wfbfaMGVt9gnyCvYa+jojwwPHLCzUm5i8rpk7vD7wNee9bA35eYIjobYPaQuKS1MQ==" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => {
+hljs.configure({languages: ['bash', 'css', 'diff', 'graphql', 'ini', 'javascript', 'json', 'plaintext', 'python', 'python-repl', 'rust', 'shell', 'sql', 'typescript', 'xml', 'yaml']});
+hljs.highlightAll();
+/* Collapse source docstrings */
+setTimeout(() => {
+[...document.querySelectorAll('.hljs.language-python > .hljs-string')]
+.filter(el => el.innerHTML.length > 200 && ['"""', "'''"].includes(el.innerHTML.substring(0, 3)))
+.forEach(el => {
+let d = document.createElement('details');
+d.classList.add('hljs-string');
+d.innerHTML = '<summary>"""</summary>' + el.innerHTML.substring(3);
+el.replaceWith(d);
+});
+}, 100);
+})</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>archivey.cli</code></h1>
+</header>
+<section id="section-intro">
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="archivey.cli.build_arg_parser"><code class="name flex">
+<span>def <span class="ident">build_arg_parser</span></span>(<span>) ‑> argparse.ArgumentParser</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def build_arg_parser() -&gt; argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            &#34;Archivey command line interface.&#34;
+            &#34; Use &#39;--&#39; followed by patterns to filter archive members.&#34;
+        )
+    )
+    parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;, help=&#34;Archive files to process&#34;)
+
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        &#34;-t&#34;,
+        &#34;--test&#34;,
+        action=&#34;store_const&#34;,
+        const=&#34;test&#34;,
+        dest=&#34;mode&#34;,
+        help=&#34;List contents and verify checksums (default)&#34;,
+    )
+    mode.add_argument(
+        &#34;-l&#34;,
+        &#34;--list&#34;,
+        action=&#34;store_const&#34;,
+        const=&#34;list&#34;,
+        dest=&#34;mode&#34;,
+        help=&#34;List contents without verifying&#34;,
+    )
+    mode.add_argument(
+        &#34;-x&#34;,
+        &#34;--extract&#34;,
+        action=&#34;store_const&#34;,
+        const=&#34;extract&#34;,
+        dest=&#34;mode&#34;,
+        help=&#34;Extract files&#34;,
+    )
+    parser.set_defaults(mode=&#34;test&#34;)
+
+    parser.add_argument(
+        &#34;--use-libarchive&#34;,
+        action=&#34;store_true&#34;,
+        help=&#34;Use libarchive for processing archives&#34;,
+    )
+    parser.add_argument(
+        &#34;--use-rar-stream&#34;,
+        action=&#34;store_true&#34;,
+        help=&#34;Use the RAR stream reader for RAR files&#34;,
+    )
+    parser.add_argument(
+        &#34;--use-rapidgzip&#34;,
+        action=&#34;store_true&#34;,
+        help=&#34;Use rapidgzip for reading gzip-compressed files&#34;,
+    )
+    parser.add_argument(
+        &#34;--use-indexed-bzip2&#34;,
+        action=&#34;store_true&#34;,
+        help=&#34;Use indexed_bzip2 for reading bzip2-compressed files&#34;,
+    )
+    parser.add_argument(
+        &#34;--use-python-xz&#34;,
+        action=&#34;store_true&#34;,
+        help=&#34;Use python-xz for reading xz-compressed files&#34;,
+    )
+    parser.add_argument(&#34;--stream&#34;, action=&#34;store_true&#34;, help=&#34;Stream the archive&#34;)
+    parser.add_argument(
+        &#34;--info&#34;, action=&#34;store_true&#34;, help=&#34;Print info about the archive&#34;
+    )
+    parser.add_argument(&#34;--password&#34;, help=&#34;Password for encrypted archives&#34;)
+    parser.add_argument(
+        &#34;--hide-progress&#34;, action=&#34;store_true&#34;, help=&#34;Hide progress bar&#34;
+    )
+    parser.add_argument(
+        &#34;--use-stored-metadata&#34;,
+        action=&#34;store_true&#34;,
+        help=&#34;Use stored metadata for single file archives&#34;,
+    )
+    parser.add_argument(
+        &#34;--track-io&#34;,
+        action=&#34;store_true&#34;,
+        help=&#34;Track IO statistics for archive file access&#34;,
+    )
+    parser.add_argument(
+        &#34;--version&#34;,
+        action=&#34;store_true&#34;,
+        help=&#34;Show version and dependency information&#34;,
+    )
+    parser.add_argument(
+        &#34;--dest&#34;,
+        default=&#34;.&#34;,
+        help=&#34;Destination directory for extraction (default: current directory)&#34;,
+    )
+    return parser</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.cli.build_pattern_filter"><code class="name flex">
+<span>def <span class="ident">build_pattern_filter</span></span>(<span>patterns: list[str]) ‑> Callable[[<a title="archivey.types.ArchiveMember" href="types.html#archivey.types.ArchiveMember">ArchiveMember</a>], bool] | None</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def build_pattern_filter(patterns: list[str]) -&gt; Callable[[ArchiveMember], bool] | None:
+    &#34;&#34;&#34;Create a filter function for member names based on shell-style patterns.&#34;&#34;&#34;
+    if not patterns:
+        return None
+
+    def _match(member: ArchiveMember) -&gt; bool:
+        return any(fnmatch.fnmatch(member.filename, pat) for pat in patterns)
+
+    return _match</code></pre>
+</details>
+<div class="desc"><p>Create a filter function for member names based on shell-style patterns.</p></div>
+</dd>
+<dt id="archivey.cli.format_mode"><code class="name flex">
+<span>def <span class="ident">format_mode</span></span>(<span>member_type: <a title="archivey.types.MemberType" href="types.html#archivey.types.MemberType">MemberType</a>,<br>mode: int) ‑> str</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def format_mode(member_type: MemberType, mode: int) -&gt; str:
+    permissions = mode &amp; 0o777
+    type_char = (
+        &#34;d&#34;
+        if member_type == MemberType.DIR
+        else &#34;l&#34;
+        if member_type == MemberType.LINK
+        else &#34;-&#34;
+    )
+    permissions_str = type_char
+    letters = &#34;xwr&#34; * 3
+    for bit in range(8, -1, -1):
+        permissions_str += letters[bit] if permissions &amp; (1 &lt;&lt; bit) else &#34;-&#34;
+    return permissions_str</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.cli.get_member_checksums"><code class="name flex">
+<span>def <span class="ident">get_member_checksums</span></span>(<span>member_file: IO[bytes]) ‑> Tuple[int, str]</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_member_checksums(member_file: IO[bytes]) -&gt; Tuple[int, str]:
+    crc32_value: int = 0
+    sha256 = hashlib.sha256()
+    for block in iter(lambda: member_file.read(65536), b&#34;&#34;):
+        crc32_value = zlib.crc32(block, crc32_value)
+        sha256.update(block)
+    return crc32_value &amp; 0xFFFFFFFF, sha256.hexdigest()</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.cli.main"><code class="name flex">
+<span>def <span class="ident">main</span></span>(<span>argv: list[str] | None = None) ‑> None</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def main(argv: list[str] | None = None) -&gt; None:
+    if argv is None:
+        argv = sys.argv[1:]
+
+    pattern_args: list[str] = []
+    if &#34;--&#34; in argv:
+        idx = argv.index(&#34;--&#34;)
+        pattern_args = argv[idx + 1 :]
+        argv = argv[:idx]
+
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+
+    if args.version:
+        print(f&#34;archivey {package_version(&#39;archivey&#39;)}&#34;)
+        versions = get_dependency_versions()
+        print(format_dependency_versions(versions))
+        return
+
+    member_filter = build_pattern_filter(pattern_args)
+
+    stats_per_file: dict[str, IOStats] = {}
+    if args.track_io:
+        original_open = builtins.open
+        target_paths = {os.path.abspath(p) for p in args.files}
+
+        def patched_open(file, mode=&#34;r&#34;, *oargs, **okwargs):
+            path = None
+            if isinstance(file, (str, bytes, os.PathLike)):
+                path = os.path.abspath(file)
+            if (
+                path in target_paths
+                and &#34;r&#34; in mode
+                and not any(m in mode for m in [&#34;w&#34;, &#34;a&#34;, &#34;+&#34;])
+            ):
+                f = original_open(file, mode, *oargs, **okwargs)
+                stats = stats_per_file.setdefault(path, IOStats())
+                return StatsIO(f, stats)
+            return original_open(file, mode, *oargs, **okwargs)
+
+        builtins.open = patched_open
+
+    for archive_path in args.files:
+        try:
+            print(f&#34;\nProcessing {archive_path}:&#34;)
+            config = ArchiveyConfig(
+                use_libarchive=args.use_libarchive,
+                use_rar_stream=args.use_rar_stream,
+                use_single_file_stored_metadata=args.use_stored_metadata,
+                use_rapidgzip=args.use_rapidgzip,
+                use_indexed_bzip2=args.use_indexed_bzip2,
+                use_python_xz=args.use_python_xz,
+            )
+            with open_archive(
+                archive_path, pwd=args.password, config=config
+            ) as archive:
+                print(f&#34;Archive format: {archive.format} {archive.get_archive_info()}&#34;)
+                if args.info:
+                    continue
+
+                verify = args.mode == &#34;test&#34;
+
+                if args.mode == &#34;extract&#34;:
+                    archive.extractall(
+                        path=args.dest, preserve_links=True, filter=member_filter
+                    )
+
+                if args.stream:
+                    members_if_available = archive.get_members_if_available()
+                    if members_if_available is not None and member_filter is not None:
+                        members_if_available = [
+                            m for m in members_if_available if member_filter(m)
+                        ]
+                    for member, stream in tqdm(
+                        archive.iter_members_with_io(filter=member_filter),
+                        desc=&#34;Computing checksums&#34; if verify else &#34;Listing members&#34;,
+                        disable=args.hide_progress,
+                        total=len(members_if_available)
+                        if members_if_available is not None
+                        else None,
+                    ):
+                        process_member(
+                            member, archive, stream, verify=verify, pwd=args.password
+                        )
+                else:
+                    members = archive.get_members()
+                    if members is not None and member_filter is not None:
+                        members = [m for m in members if member_filter(m)]
+                    for member in tqdm(
+                        members,
+                        desc=&#34;Computing checksums&#34; if verify else &#34;Listing members&#34;,
+                        disable=args.hide_progress,
+                        total=len(members) if members is not None else None,
+                    ):
+                        process_member(
+                            member, archive, verify=verify, pwd=args.password
+                        )
+        except ArchiveError as e:
+            print(f&#34;Error processing {archive_path}: {e}&#34;)
+        if args.track_io:
+            abs_path = os.path.abspath(archive_path)
+            stats = stats_per_file.get(abs_path)
+            if stats is not None:
+                print(
+                    f&#34;IO stats for {archive_path}: {stats.bytes_read} bytes read, {stats.seek_calls} seeks&#34;
+                )
+        print()
+
+    if args.track_io:
+        builtins.open = original_open  # type: ignore[has-type]</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.cli.process_member"><code class="name flex">
+<span>def <span class="ident">process_member</span></span>(<span>member: <a title="archivey.types.ArchiveMember" href="types.html#archivey.types.ArchiveMember">ArchiveMember</a>,<br>archive: <a title="archivey.base_reader.ArchiveReader" href="base_reader.html#archivey.base_reader.ArchiveReader">ArchiveReader</a>,<br>stream: IO[bytes] | None = None,<br>*,<br>verify: bool,<br>pwd: str | None = None) ‑> None</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def process_member(
+    member: ArchiveMember,
+    archive: ArchiveReader,
+    stream: IO[bytes] | None = None,
+    *,
+    verify: bool,
+    pwd: str | None = None,
+) -&gt; None:
+    stream_to_close: IO[bytes] | None = None
+
+    encrypted_str = &#34;E&#34; if member.encrypted else &#34; &#34;
+    size_str = &#34;?&#34; * 12 if member.file_size is None else f&#34;{member.file_size:12d}&#34;
+    format_str = format_mode(member.type, member.mode or 0)
+
+    if member.is_file:
+        assert isinstance(member.filename, str)
+        assert isinstance(member.mtime, datetime)
+
+        try:
+            if member.extra:
+                print(f&#34;{member.filename} {member.extra}&#34;)
+
+            if verify:
+                if stream is None:
+                    stream = stream_to_close = archive.open(member, pwd=pwd)
+                crc32, sha256 = get_member_checksums(stream)
+                if member.crc32 is not None and member.crc32 != crc32:
+                    crc_error = f&#34; != {member.crc32:08x}&#34;
+                else:
+                    crc_error = &#34;&#34;
+                sha = sha256[:16]
+                crc_display = f&#34;{crc32:08x}{crc_error}&#34;
+            else:
+                crc_display = (
+                    f&#34;{member.crc32:08x}&#34; if member.crc32 is not None else &#34;?&#34; * 8
+                )
+                sha = &#34; &#34; * 16
+            print(
+                f&#34;{encrypted_str}  {size_str}  {format_str}  {crc_display}  {sha}  {member.mtime}  {member.filename}&#34;
+            )
+        except ArchiveError as e:
+            formatted_crc = (
+                f&#34;{member.crc32:08x}&#34; if member.crc32 is not None else &#34;?&#34; * 8
+            )
+            print(
+                f&#34;{encrypted_str}  {size_str}  {format_str}  {formatted_crc}  {&#39; &#39; * 16}  {member.mtime}  {member.filename} -- ERROR: {repr(e)}&#34;
+            )
+        finally:
+            if stream_to_close is not None:
+                stream_to_close.close()
+    elif member.is_link:
+        assert isinstance(member.link_target, str) or member.link_target is None
+        print(
+            f&#34;{encrypted_str}  {size_str}  {format_str}  {&#39; &#39; * 8}  {&#39; &#39; * 16}  {member.mtime}  {member.filename} -&gt; {member.link_target}&#34;
+        )
+    else:
+        print(
+            f&#34;{encrypted_str}  {size_str}  {format_str}  {&#39; &#39; * 8}  {&#39; &#39; * 16}  {member.mtime}  {member.filename} {member.type.upper()}&#34;
+        )
+    if member.comment:
+        print(f&#34;    Comment: {member.comment}&#34;)</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+</dl>
+</section>
+<section>
+</section>
+</article>
+<nav id="sidebar">
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="archivey" href="index.html">archivey</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="archivey.cli.build_arg_parser" href="#archivey.cli.build_arg_parser">build_arg_parser</a></code></li>
+<li><code><a title="archivey.cli.build_pattern_filter" href="#archivey.cli.build_pattern_filter">build_pattern_filter</a></code></li>
+<li><code><a title="archivey.cli.format_mode" href="#archivey.cli.format_mode">format_mode</a></code></li>
+<li><code><a title="archivey.cli.get_member_checksums" href="#archivey.cli.get_member_checksums">get_member_checksums</a></code></li>
+<li><code><a title="archivey.cli.main" href="#archivey.cli.main">main</a></code></li>
+<li><code><a title="archivey.cli.process_member" href="#archivey.cli.process_member">process_member</a></code></li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.11.6</a>.</p>
+</footer>
+</body>
+</html>

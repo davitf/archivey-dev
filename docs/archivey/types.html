@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+<meta name="generator" content="pdoc3 0.11.6">
+<title>archivey.types API documentation</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/13.0.0/sanitize.min.css" integrity="sha512-y1dtMcuvtTMJc1yPgEqF0ZjQbhnc/bFhyvIyVNb9Zk5mIGtqVaAB1Ttl28su8AvFMOY0EwRbAe+HCLqj6W7/KA==" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/13.0.0/typography.min.css" integrity="sha512-Y1DYSb995BAfxobCkKepB1BqJJTPrOp3zPL74AWFugHHmmdcvO+C48WLrUOlhGMc0QG7AE3f7gmvvcrmX2fDoA==" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:1.5em;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:2em 0 .50em 0}h3{font-size:1.4em;margin:1.6em 0 .7em 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .2s ease-in-out}a:visited{color:#503}a:hover{color:#b62}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900;font-weight:bold}pre code{font-size:.8em;line-height:1.4em;padding:1em;display:block}code{background:#f3f3f3;font-family:"DejaVu Sans Mono",monospace;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source > summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible;min-width:max-content}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em 1em;margin:1em 0}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul ul{padding-left:1em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha512-D9gUyxqja7hBtkWpPWGt9wfbfaMGVt9gnyCvYa+jojwwPHLCzUm5i8rpk7vD7wNee9bA35eYIjobYPaQuKS1MQ==" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => {
+hljs.configure({languages: ['bash', 'css', 'diff', 'graphql', 'ini', 'javascript', 'json', 'plaintext', 'python', 'python-repl', 'rust', 'shell', 'sql', 'typescript', 'xml', 'yaml']});
+hljs.highlightAll();
+/* Collapse source docstrings */
+setTimeout(() => {
+[...document.querySelectorAll('.hljs.language-python > .hljs-string')]
+.filter(el => el.innerHTML.length > 200 && ['"""', "'''"].includes(el.innerHTML.substring(0, 3)))
+.forEach(el => {
+let d = document.createElement('details');
+d.classList.add('hljs-string');
+d.innerHTML = '<summary>"""</summary>' + el.innerHTML.substring(3);
+el.replaceWith(d);
+});
+}, 100);
+})</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>archivey.types</code></h1>
+</header>
+<section id="section-intro">
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="archivey.types.ArchiveFormat"><code class="flex name class">
+<span>class <span class="ident">ArchiveFormat</span></span>
+<span>(</span><span>*args, **kwds)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class ArchiveFormat(StrEnum):
+    &#34;&#34;&#34;Supported compression formats.&#34;&#34;&#34;
+
+    ZIP = &#34;zip&#34;
+    RAR = &#34;rar&#34;
+    SEVENZIP = &#34;7z&#34;
+
+    GZIP = &#34;gz&#34;
+    BZIP2 = &#34;bz2&#34;
+    XZ = &#34;xz&#34;
+    ZSTD = &#34;zstd&#34;
+    LZ4 = &#34;lz4&#34;
+
+    TAR = &#34;tar&#34;
+    TAR_GZ = &#34;tar.gz&#34;
+    TAR_BZ2 = &#34;tar.bz2&#34;
+    TAR_XZ = &#34;tar.xz&#34;
+    TAR_ZSTD = &#34;tar.zstd&#34;
+    TAR_LZ4 = &#34;tar.lz4&#34;
+
+    ISO = &#34;iso&#34;
+    FOLDER = &#34;folder&#34;
+
+    UNKNOWN = &#34;unknown&#34;</code></pre>
+</details>
+<div class="desc"><p>Supported compression formats.</p></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>enum.StrEnum</li>
+<li>builtins.str</li>
+<li>enum.ReprEnum</li>
+<li>enum.Enum</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="archivey.types.ArchiveFormat.BZIP2"><code class="name">var <span class="ident">BZIP2</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.FOLDER"><code class="name">var <span class="ident">FOLDER</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.GZIP"><code class="name">var <span class="ident">GZIP</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.ISO"><code class="name">var <span class="ident">ISO</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.LZ4"><code class="name">var <span class="ident">LZ4</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.RAR"><code class="name">var <span class="ident">RAR</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.SEVENZIP"><code class="name">var <span class="ident">SEVENZIP</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.TAR"><code class="name">var <span class="ident">TAR</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.TAR_BZ2"><code class="name">var <span class="ident">TAR_BZ2</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.TAR_GZ"><code class="name">var <span class="ident">TAR_GZ</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.TAR_LZ4"><code class="name">var <span class="ident">TAR_LZ4</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.TAR_XZ"><code class="name">var <span class="ident">TAR_XZ</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.TAR_ZSTD"><code class="name">var <span class="ident">TAR_ZSTD</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.UNKNOWN"><code class="name">var <span class="ident">UNKNOWN</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.XZ"><code class="name">var <span class="ident">XZ</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.ZIP"><code class="name">var <span class="ident">ZIP</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveFormat.ZSTD"><code class="name">var <span class="ident">ZSTD</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.types.ArchiveInfo"><code class="flex name class">
+<span>class <span class="ident">ArchiveInfo</span></span>
+<span>(</span><span>format: str,<br>version: str | None = None,<br>is_solid: bool = False,<br>extra: dict[str, typing.Any] | None = None,<br>comment: str | None = None)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@dataclass
+class ArchiveInfo:
+    &#34;&#34;&#34;Detailed information about an archive&#39;s format.&#34;&#34;&#34;
+
+    format: str  # Will be ArchiveFormat from formats.py
+    version: Optional[str] = None  # e.g. &#34;4&#34; for RAR4, &#34;5&#34; for RAR5
+    is_solid: bool = False
+    extra: Optional[dict[str, Any]] = None
+    comment: Optional[str] = None</code></pre>
+</details>
+<div class="desc"><p>Detailed information about an archive's format.</p></div>
+<h3>Instance variables</h3>
+<dl>
+<dt id="archivey.types.ArchiveInfo.comment"><code class="name">var <span class="ident">comment</span> : str | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveInfo.extra"><code class="name">var <span class="ident">extra</span> : dict[str, typing.Any] | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveInfo.format"><code class="name">var <span class="ident">format</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveInfo.is_solid"><code class="name">var <span class="ident">is_solid</span> : bool</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveInfo.version"><code class="name">var <span class="ident">version</span> : str | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.types.ArchiveMember"><code class="flex name class">
+<span>class <span class="ident">ArchiveMember</span></span>
+<span>(</span><span>filename: str,<br>file_size: int | None,<br>compress_size: int | None,<br>mtime: datetime.datetime | None,<br>type: <a title="archivey.types.MemberType" href="#archivey.types.MemberType">MemberType</a>,<br>mode: int | None = None,<br>crc32: int | None = None,<br>compression_method: str | None = None,<br>comment: str | None = None,<br>create_system: <a title="archivey.types.CreateSystem" href="#archivey.types.CreateSystem">CreateSystem</a> | None = None,<br>encrypted: bool = False,<br>extra: dict[str, typing.Any] = &lt;factory&gt;,<br>link_target: str | None = None,<br>link_target_type: <a title="archivey.types.MemberType" href="#archivey.types.MemberType">MemberType</a> | None = None,<br>raw_info: Any | None = None)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@dataclass
+class ArchiveMember:
+    &#34;&#34;&#34;Represents a file within an archive.&#34;&#34;&#34;
+
+    filename: str
+    file_size: Optional[int]
+    compress_size: Optional[int]
+    mtime: Optional[datetime]
+    type: MemberType
+    mode: Optional[int] = None
+    crc32: Optional[int] = None
+    compression_method: Optional[str] = None  # e.g. &#34;deflate&#34;, &#34;lzma&#34;, etc.
+    comment: Optional[str] = None
+    create_system: Optional[CreateSystem] = None
+    encrypted: bool = False
+    extra: dict[str, Any] = field(default_factory=dict)
+    link_target: Optional[str] = None
+    link_target_type: Optional[MemberType] = None
+
+    # The raw info from the archive reader
+    raw_info: Optional[Any] = None
+
+    # Properties for zipfile compatibility (and others, as much as possible)
+    @property
+    def date_time(self) -&gt; Optional[Tuple[int, int, int, int, int, int]]:
+        &#34;&#34;&#34;Returns the date and time as a tuple.&#34;&#34;&#34;
+        if self.mtime is None:
+            return None
+        return (
+            self.mtime.year,
+            self.mtime.month,
+            self.mtime.day,
+            self.mtime.hour,
+            self.mtime.minute,
+            self.mtime.second,
+        )
+
+    @property
+    def is_file(self) -&gt; bool:
+        return self.type == MemberType.FILE
+
+    @property
+    def is_dir(self) -&gt; bool:
+        return self.type == MemberType.DIR
+
+    @property
+    def is_link(self) -&gt; bool:
+        return self.type == MemberType.LINK
+
+    @property
+    def is_other(self) -&gt; bool:
+        return self.type == MemberType.OTHER
+
+    @property
+    def CRC(self) -&gt; Optional[int]:
+        return self.crc32</code></pre>
+</details>
+<div class="desc"><p>Represents a file within an archive.</p></div>
+<h3>Instance variables</h3>
+<dl>
+<dt id="archivey.types.ArchiveMember.CRC"><code class="name">prop <span class="ident">CRC</span> : int | None</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@property
+def CRC(self) -&gt; Optional[int]:
+    return self.crc32</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.comment"><code class="name">var <span class="ident">comment</span> : str | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.compress_size"><code class="name">var <span class="ident">compress_size</span> : int | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.compression_method"><code class="name">var <span class="ident">compression_method</span> : str | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.crc32"><code class="name">var <span class="ident">crc32</span> : int | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.create_system"><code class="name">var <span class="ident">create_system</span> : <a title="archivey.types.CreateSystem" href="#archivey.types.CreateSystem">CreateSystem</a> | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.date_time"><code class="name">prop <span class="ident">date_time</span> : Tuple[int, int, int, int, int, int] | None</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@property
+def date_time(self) -&gt; Optional[Tuple[int, int, int, int, int, int]]:
+    &#34;&#34;&#34;Returns the date and time as a tuple.&#34;&#34;&#34;
+    if self.mtime is None:
+        return None
+    return (
+        self.mtime.year,
+        self.mtime.month,
+        self.mtime.day,
+        self.mtime.hour,
+        self.mtime.minute,
+        self.mtime.second,
+    )</code></pre>
+</details>
+<div class="desc"><p>Returns the date and time as a tuple.</p></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.encrypted"><code class="name">var <span class="ident">encrypted</span> : bool</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.extra"><code class="name">var <span class="ident">extra</span> : dict[str, typing.Any]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.file_size"><code class="name">var <span class="ident">file_size</span> : int | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.filename"><code class="name">var <span class="ident">filename</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.is_dir"><code class="name">prop <span class="ident">is_dir</span> : bool</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@property
+def is_dir(self) -&gt; bool:
+    return self.type == MemberType.DIR</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.is_file"><code class="name">prop <span class="ident">is_file</span> : bool</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@property
+def is_file(self) -&gt; bool:
+    return self.type == MemberType.FILE</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.is_link"><code class="name">prop <span class="ident">is_link</span> : bool</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@property
+def is_link(self) -&gt; bool:
+    return self.type == MemberType.LINK</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.is_other"><code class="name">prop <span class="ident">is_other</span> : bool</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@property
+def is_other(self) -&gt; bool:
+    return self.type == MemberType.OTHER</code></pre>
+</details>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.link_target"><code class="name">var <span class="ident">link_target</span> : str | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.link_target_type"><code class="name">var <span class="ident">link_target_type</span> : <a title="archivey.types.MemberType" href="#archivey.types.MemberType">MemberType</a> | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.mode"><code class="name">var <span class="ident">mode</span> : int | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.mtime"><code class="name">var <span class="ident">mtime</span> : datetime.datetime | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.raw_info"><code class="name">var <span class="ident">raw_info</span> : Any | None</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.ArchiveMember.type"><code class="name">var <span class="ident">type</span> : <a title="archivey.types.MemberType" href="#archivey.types.MemberType">MemberType</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.types.CreateSystem"><code class="flex name class">
+<span>class <span class="ident">CreateSystem</span></span>
+<span>(</span><span>*args, **kwds)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class CreateSystem(IntEnum):
+    &#34;&#34;&#34;Operating system on which the archive member was created.&#34;&#34;&#34;
+
+    FAT = 0
+    AMIGA = 1
+    VMS = 2
+    UNIX = 3
+    VM_CMS = 4
+    ATARI_ST = 5
+    OS2_HPFS = 6
+    MACINTOSH = 7
+    Z_SYSTEM = 8
+    CPM = 9
+    TOPS20 = 10
+    NTFS = 11
+    QDOS = 12
+    ACORN_RISCOS = 13
+    UNKNOWN = 255</code></pre>
+</details>
+<div class="desc"><p>Operating system on which the archive member was created.</p></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>enum.IntEnum</li>
+<li>builtins.int</li>
+<li>enum.ReprEnum</li>
+<li>enum.Enum</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="archivey.types.CreateSystem.ACORN_RISCOS"><code class="name">var <span class="ident">ACORN_RISCOS</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.AMIGA"><code class="name">var <span class="ident">AMIGA</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.ATARI_ST"><code class="name">var <span class="ident">ATARI_ST</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.CPM"><code class="name">var <span class="ident">CPM</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.FAT"><code class="name">var <span class="ident">FAT</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.MACINTOSH"><code class="name">var <span class="ident">MACINTOSH</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.NTFS"><code class="name">var <span class="ident">NTFS</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.OS2_HPFS"><code class="name">var <span class="ident">OS2_HPFS</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.QDOS"><code class="name">var <span class="ident">QDOS</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.TOPS20"><code class="name">var <span class="ident">TOPS20</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.UNIX"><code class="name">var <span class="ident">UNIX</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.UNKNOWN"><code class="name">var <span class="ident">UNKNOWN</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.VMS"><code class="name">var <span class="ident">VMS</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.VM_CMS"><code class="name">var <span class="ident">VM_CMS</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.CreateSystem.Z_SYSTEM"><code class="name">var <span class="ident">Z_SYSTEM</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="archivey.types.MemberType"><code class="flex name class">
+<span>class <span class="ident">MemberType</span></span>
+<span>(</span><span>*args, **kwds)</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class MemberType(StrEnum):
+    FILE = &#34;file&#34;
+    DIR = &#34;dir&#34;
+    LINK = &#34;link&#34;
+    OTHER = &#34;other&#34;</code></pre>
+</details>
+<div class="desc"><p>Enum where members are also (and must be) strings</p></div>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>enum.StrEnum</li>
+<li>builtins.str</li>
+<li>enum.ReprEnum</li>
+<li>enum.Enum</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="archivey.types.MemberType.DIR"><code class="name">var <span class="ident">DIR</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.MemberType.FILE"><code class="name">var <span class="ident">FILE</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.MemberType.LINK"><code class="name">var <span class="ident">LINK</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="archivey.types.MemberType.OTHER"><code class="name">var <span class="ident">OTHER</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="archivey" href="index.html">archivey</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="archivey.types.ArchiveFormat" href="#archivey.types.ArchiveFormat">ArchiveFormat</a></code></h4>
+<ul class="two-column">
+<li><code><a title="archivey.types.ArchiveFormat.BZIP2" href="#archivey.types.ArchiveFormat.BZIP2">BZIP2</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.FOLDER" href="#archivey.types.ArchiveFormat.FOLDER">FOLDER</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.GZIP" href="#archivey.types.ArchiveFormat.GZIP">GZIP</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.ISO" href="#archivey.types.ArchiveFormat.ISO">ISO</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.LZ4" href="#archivey.types.ArchiveFormat.LZ4">LZ4</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.RAR" href="#archivey.types.ArchiveFormat.RAR">RAR</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.SEVENZIP" href="#archivey.types.ArchiveFormat.SEVENZIP">SEVENZIP</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.TAR" href="#archivey.types.ArchiveFormat.TAR">TAR</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.TAR_BZ2" href="#archivey.types.ArchiveFormat.TAR_BZ2">TAR_BZ2</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.TAR_GZ" href="#archivey.types.ArchiveFormat.TAR_GZ">TAR_GZ</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.TAR_LZ4" href="#archivey.types.ArchiveFormat.TAR_LZ4">TAR_LZ4</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.TAR_XZ" href="#archivey.types.ArchiveFormat.TAR_XZ">TAR_XZ</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.TAR_ZSTD" href="#archivey.types.ArchiveFormat.TAR_ZSTD">TAR_ZSTD</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.UNKNOWN" href="#archivey.types.ArchiveFormat.UNKNOWN">UNKNOWN</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.XZ" href="#archivey.types.ArchiveFormat.XZ">XZ</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.ZIP" href="#archivey.types.ArchiveFormat.ZIP">ZIP</a></code></li>
+<li><code><a title="archivey.types.ArchiveFormat.ZSTD" href="#archivey.types.ArchiveFormat.ZSTD">ZSTD</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.types.ArchiveInfo" href="#archivey.types.ArchiveInfo">ArchiveInfo</a></code></h4>
+<ul class="">
+<li><code><a title="archivey.types.ArchiveInfo.comment" href="#archivey.types.ArchiveInfo.comment">comment</a></code></li>
+<li><code><a title="archivey.types.ArchiveInfo.extra" href="#archivey.types.ArchiveInfo.extra">extra</a></code></li>
+<li><code><a title="archivey.types.ArchiveInfo.format" href="#archivey.types.ArchiveInfo.format">format</a></code></li>
+<li><code><a title="archivey.types.ArchiveInfo.is_solid" href="#archivey.types.ArchiveInfo.is_solid">is_solid</a></code></li>
+<li><code><a title="archivey.types.ArchiveInfo.version" href="#archivey.types.ArchiveInfo.version">version</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.types.ArchiveMember" href="#archivey.types.ArchiveMember">ArchiveMember</a></code></h4>
+<ul class="two-column">
+<li><code><a title="archivey.types.ArchiveMember.CRC" href="#archivey.types.ArchiveMember.CRC">CRC</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.comment" href="#archivey.types.ArchiveMember.comment">comment</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.compress_size" href="#archivey.types.ArchiveMember.compress_size">compress_size</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.compression_method" href="#archivey.types.ArchiveMember.compression_method">compression_method</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.crc32" href="#archivey.types.ArchiveMember.crc32">crc32</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.create_system" href="#archivey.types.ArchiveMember.create_system">create_system</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.date_time" href="#archivey.types.ArchiveMember.date_time">date_time</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.encrypted" href="#archivey.types.ArchiveMember.encrypted">encrypted</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.extra" href="#archivey.types.ArchiveMember.extra">extra</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.file_size" href="#archivey.types.ArchiveMember.file_size">file_size</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.filename" href="#archivey.types.ArchiveMember.filename">filename</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.is_dir" href="#archivey.types.ArchiveMember.is_dir">is_dir</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.is_file" href="#archivey.types.ArchiveMember.is_file">is_file</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.is_link" href="#archivey.types.ArchiveMember.is_link">is_link</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.is_other" href="#archivey.types.ArchiveMember.is_other">is_other</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.link_target" href="#archivey.types.ArchiveMember.link_target">link_target</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.link_target_type" href="#archivey.types.ArchiveMember.link_target_type">link_target_type</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.mode" href="#archivey.types.ArchiveMember.mode">mode</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.mtime" href="#archivey.types.ArchiveMember.mtime">mtime</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.raw_info" href="#archivey.types.ArchiveMember.raw_info">raw_info</a></code></li>
+<li><code><a title="archivey.types.ArchiveMember.type" href="#archivey.types.ArchiveMember.type">type</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.types.CreateSystem" href="#archivey.types.CreateSystem">CreateSystem</a></code></h4>
+<ul class="two-column">
+<li><code><a title="archivey.types.CreateSystem.ACORN_RISCOS" href="#archivey.types.CreateSystem.ACORN_RISCOS">ACORN_RISCOS</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.AMIGA" href="#archivey.types.CreateSystem.AMIGA">AMIGA</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.ATARI_ST" href="#archivey.types.CreateSystem.ATARI_ST">ATARI_ST</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.CPM" href="#archivey.types.CreateSystem.CPM">CPM</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.FAT" href="#archivey.types.CreateSystem.FAT">FAT</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.MACINTOSH" href="#archivey.types.CreateSystem.MACINTOSH">MACINTOSH</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.NTFS" href="#archivey.types.CreateSystem.NTFS">NTFS</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.OS2_HPFS" href="#archivey.types.CreateSystem.OS2_HPFS">OS2_HPFS</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.QDOS" href="#archivey.types.CreateSystem.QDOS">QDOS</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.TOPS20" href="#archivey.types.CreateSystem.TOPS20">TOPS20</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.UNIX" href="#archivey.types.CreateSystem.UNIX">UNIX</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.UNKNOWN" href="#archivey.types.CreateSystem.UNKNOWN">UNKNOWN</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.VMS" href="#archivey.types.CreateSystem.VMS">VMS</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.VM_CMS" href="#archivey.types.CreateSystem.VM_CMS">VM_CMS</a></code></li>
+<li><code><a title="archivey.types.CreateSystem.Z_SYSTEM" href="#archivey.types.CreateSystem.Z_SYSTEM">Z_SYSTEM</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="archivey.types.MemberType" href="#archivey.types.MemberType">MemberType</a></code></h4>
+<ul class="">
+<li><code><a title="archivey.types.MemberType.DIR" href="#archivey.types.MemberType.DIR">DIR</a></code></li>
+<li><code><a title="archivey.types.MemberType.FILE" href="#archivey.types.MemberType.FILE">FILE</a></code></li>
+<li><code><a title="archivey.types.MemberType.LINK" href="#archivey.types.MemberType.LINK">LINK</a></code></li>
+<li><code><a title="archivey.types.MemberType.OTHER" href="#archivey.types.MemberType.OTHER">OTHER</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.11.6</a>.</p>
+</footer>
+</body>
+</html>
