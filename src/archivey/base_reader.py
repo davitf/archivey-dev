@@ -138,7 +138,7 @@ class ArchiveReader(abc.ABC):
 
     def extractall(
         self,
-        path: str | None = None,
+        path: str | os.PathLike | None = None,
         members: list[ArchiveMember | str] | None = None,
         pwd: bytes | str | None = None,
         filter: Callable[[ArchiveMember], bool] | None = None,
@@ -150,6 +150,8 @@ class ArchiveReader(abc.ABC):
 
         if path is None:
             path = os.getcwd()
+        else:
+            path = str(path)
 
         for member, stream in self.iter_members_with_io(filter=filter, pwd=pwd):
             written_path = _write_member(path, member, preserve_links, stream)

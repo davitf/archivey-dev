@@ -280,7 +280,7 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
 
         if self._members is None:
             self._members = []
-            rarinfos: list[rarfile.RarInfo] = self._archive.infolist()
+            rarinfos: list[RarInfo] = self._archive.infolist()
             for info in rarinfos:
                 compression_method = (
                     _RAR_COMPRESSION_METHODS.get(info.compress_type, "unknown")
@@ -319,7 +319,7 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
                     comment=info.comment,
                     encrypted=info.needs_password(),
                     create_system=_RAR_HOST_OS_TO_CREATE_SYSTEM.get(
-                        getattr(info, "host_os", None), CreateSystem.UNKNOWN
+                        info.host_os, CreateSystem.UNKNOWN
                     ),
                     raw_info=info,
                     link_target=self._get_link_target(info),
@@ -382,7 +382,7 @@ class RarReader(BaseRarReader):
         super().__init__(archive_path, pwd=pwd)
         self._pwd = pwd
 
-    def _exception_translator(self, e: Exception) -> Optional[Exception]:
+    def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, rarfile.BadRarFile):
             return ArchiveCorruptedError(f"Error reading member {self.archive_path}")
         return None
@@ -397,7 +397,7 @@ class RarReader(BaseRarReader):
 
         if member.encrypted:
             pwd_check = verify_rar5_password(
-                str_to_bytes(pwd or self._pwd), cast(rarfile.RarInfo, member.raw_info)
+                str_to_bytes(pwd or self._pwd), cast(RarInfo, member.raw_info)
             )
             if pwd_check == PasswordCheckResult.INCORRECT:
                 raise ArchiveEncryptedError(
@@ -496,7 +496,7 @@ class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
         self._crc_checked = True
 
         matches = check_rarinfo_crc(
-            cast(rarfile.RarInfo, self._member.raw_info), self._pwd, self._actual_crc
+            cast(RarInfo, self._member.raw_info), self._pwd, self._actual_crc
         )
         if not matches:
             raise CRCMismatchError(self._filename)
@@ -600,7 +600,7 @@ class RarStreamReader(BaseRarReader):
         pwd_bytes = str_to_bytes(self._pwd) if self._pwd is not None else None
         if (
             member.encrypted
-            and verify_rar5_password(pwd_bytes, cast(rarfile.RarInfo, member.raw_info))
+            and verify_rar5_password(pwd_bytes, cast(RarInfo, member.raw_info))
             == PasswordCheckResult.INCORRECT
         ):
             # unrar silently skips encrypted files with incorrect passwords

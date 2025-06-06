@@ -3,12 +3,6 @@ import pathlib
 import random
 import shutil
 
-from tests.archivey.sample_archives import SAMPLE_ARCHIVES
-
-CORRUPTED_ARCHIVES_DIR = pathlib.Path(__file__).parent / "test_corrupted_archives"
-ORIGINAL_ARCHIVES_DIR_NAME = "test_archives"  # Relative to tests/
-ORIGINAL_ARCHIVES_EXTERNAL_DIR_NAME = "test_archives_external"  # Relative to tests/
-
 
 def truncate_archive(
     original_path: pathlib.Path,
@@ -77,74 +71,9 @@ def corrupt_archive(
         elif corruption_type == "ffs":
             corrupted_data = bytes([0xFF] * num_bytes)
         else:
-            raise ValueError(f"Invalid corruption type: {corruption_type}")
+            raise ValueError(
+                f"Invalid corruption type: {corruption_type}"
+            )  # pragma: no cover
 
         f.seek(corruption_position)
         f.write(corrupted_data)
-
-
-def main():
-    """Generates corrupted archive variants."""
-    if CORRUPTED_ARCHIVES_DIR.exists():
-        print(f"Cleaning up existing directory: {CORRUPTED_ARCHIVES_DIR}")
-        for item in CORRUPTED_ARCHIVES_DIR.iterdir():
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                os.remove(item)
-    else:
-        CORRUPTED_ARCHIVES_DIR.mkdir(parents=True)
-        print(f"Created directory: {CORRUPTED_ARCHIVES_DIR}")
-
-    current_script_dir = pathlib.Path(__file__).parent
-
-    for archive_info in SAMPLE_ARCHIVES:
-        if archive_info.generate_corrupted_variants:
-            # Determine original archive path
-            if archive_info.creation_info.generation_method == "external":
-                original_archive_path = (
-                    current_script_dir
-                    / ORIGINAL_ARCHIVES_EXTERNAL_DIR_NAME
-                    / archive_info.filename
-                )
-            else:
-                original_archive_path = (
-                    current_script_dir
-                    / ORIGINAL_ARCHIVES_DIR_NAME
-                    / archive_info.filename
-                )
-
-            if not original_archive_path.exists():
-                print(f"SKIPPING: Original archive not found: {original_archive_path}")
-                continue
-
-            truncated_output_path = (
-                CORRUPTED_ARCHIVES_DIR / archive_info.get_archive_name("truncated")
-            )
-
-            print(
-                f"Generating truncated version for: {archive_info.filename} -> {truncated_output_path}"
-            )
-            truncate_archive(original_archive_path, truncated_output_path)
-
-            # Generate corrupted versions for each corruption type
-            for corruption_type in ["header", "data", "checksum"]:
-                corrupted_output_path = (
-                    CORRUPTED_ARCHIVES_DIR
-                    / archive_info.get_archive_name(f"corrupted_{corruption_type}")
-                )
-
-                print(
-                    f"Generating corrupted version ({corruption_type}) for: {archive_info.filename} -> {corrupted_output_path}"
-                )
-                corrupt_archive(
-                    original_archive_path,
-                    corrupted_output_path,
-                    corruption_type=corruption_type,
-                )
-
-    print("Corrupted archive generation complete.")
-
-
-if __name__ == "__main__":
-    main()

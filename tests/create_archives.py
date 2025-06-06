@@ -291,7 +291,7 @@ SINGLE_FILE_LIBRARY_OPENERS = {
         level_or_option={
             pyzstd.CParameter.checksumFlag: 1,
         },
-    )
+    )  # type: ignore[reportUnknownReturnType]
     if pyzstd is not None
     else None,
     ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,

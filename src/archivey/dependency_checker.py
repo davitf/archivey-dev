@@ -17,12 +17,10 @@ class DependencyVersions:
     lz4_version: Optional[str] = None
     zstandard_version: Optional[str] = None
     pycdlib_version: Optional[str] = None
-    backports_strenum_version: Optional[str] = None
-    tqdm_version: Optional[str] = None
-    unrar_version: Optional[str] = None
     rapidgzip_version: Optional[str] = None
     indexed_bzip2_version: Optional[str] = None
     python_xz_version: Optional[str] = None
+    unrar_version: Optional[str] = None
 
 
 def get_dependency_versions() -> DependencyVersions:
@@ -48,8 +46,6 @@ def get_dependency_versions() -> DependencyVersions:
         ("rapidgzip", "rapidgzip_version"),
         ("indexed_bzip2", "indexed_bzip2_version"),
         ("python-xz", "python_xz_version"),
-        ("backports.strenum", "backports_strenum_version"),
-        ("tqdm", "tqdm_version"),
     ]:
         try:
             setattr(versions, attr, version(package))
@@ -66,8 +62,13 @@ def get_dependency_versions() -> DependencyVersions:
                 stderr=subprocess.STDOUT,
                 text=True,
             )
-            first_line = proc.stdout.splitlines()[0] if proc.stdout else None
-            versions.unrar_version = first_line
+            if proc.stdout:
+                lines = [
+                    line.strip()
+                    for line in proc.stdout.splitlines()
+                    if "unrar" in line.lower()
+                ]
+                versions.unrar_version = lines[0].split("   ")[0] if lines else None
         except Exception:
             versions.unrar_version = "available"
     else:
