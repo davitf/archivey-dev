@@ -448,12 +448,9 @@ def create_single_file_compressed_archive_with_command_line(
         os.remove(abs_archive_path)
 
     with tempfile.TemporaryDirectory() as tempdir:
+        write_files_to_dir(tempdir, contents.files)
+
         temp_file_path = os.path.join(tempdir, file_info.name)
-        with open(temp_file_path, "wb") as f:
-            f.write(file_info.contents or b"")
-        os.utime(
-            temp_file_path, (file_info.mtime.timestamp(), file_info.mtime.timestamp())
-        )
         subprocess.run(["ls", "-l", temp_file_path])
 
         # Run the compression command
