@@ -4,9 +4,13 @@ import stat
 import struct
 import zipfile
 from datetime import datetime, timezone
-from typing import IO, List, Optional, cast
+from typing import IO, List, Optional, Callable, cast
 
-from archivey.base_reader import BaseArchiveReaderRandomAccess
+from archivey.base_reader import (
+    BaseArchiveReaderRandomAccess,
+    apply_members_metadata,
+    create_member_filter,
+)
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -258,17 +262,37 @@ class ZipReader(BaseArchiveReaderRandomAccess):
     def extractall(
         self,
         path: str | None = None,
+        members: list[ArchiveMember | str] | None = None,
         *,
         pwd: bytes | str | None = None,
+        filter: Callable[[ArchiveMember], bool] | None = None,
+        preserve_links: bool = True,
     ) -> None:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
+        target = path or os.getcwd()
+        filter_fn = create_member_filter(members, filter)
+
+        if not preserve_links:
+            super().extractall(target, members, pwd, filter, preserve_links)
+            return
+
         try:
-            self._archive.extractall(path=path, pwd=str_to_bytes(pwd or self._pwd))
+            if filter_fn is None:
+                self._archive.extractall(path=target, pwd=str_to_bytes(pwd or self._pwd))
+                selected = self.get_members()
+            else:
+                names = [m.filename for m in self.get_members() if filter_fn(m)]
+                if not names:
+                    return
+                self._archive.extractall(path=target, members=names, pwd=str_to_bytes(pwd or self._pwd))
+                selected = [m for m in self.get_members() if filter_fn(m)]
         except RuntimeError as e:
             if "password required" in str(e):
                 raise ArchiveEncryptedError("Archive is encrypted") from e
             raise ArchiveError(f"Error extracting archive: {e}") from e
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error extracting archive: {e}") from e
+
+        apply_members_metadata(selected, target)
