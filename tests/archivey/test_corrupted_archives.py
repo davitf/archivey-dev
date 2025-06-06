@@ -48,13 +48,17 @@ def test_read_corrupted_archives(
     if sample_archive.creation_info.format == ArchiveFormat.RAR:
         if get_dependency_versions().unrar_version is None:
             pytest.skip("unrar not installed, skipping RAR corruption test")
+    if sample_archive.creation_info.format in {ArchiveFormat.LZ4, ArchiveFormat.TAR_LZ4}:
+        pytest.importorskip("lz4")
+    if sample_archive.creation_info.format in {ArchiveFormat.ZSTD, ArchiveFormat.TAR_ZSTD}:
+        pytest.importorskip("zstandard")
     if (
         sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS
         and "truncate" not in corrupted_archive_path
     ):
         pytest.xfail("Tar archives have no integrity checks for modified data")
     if (
-        sample_archive.creation_info.format == ArchiveFormat.LZ4
+        sample_archive.creation_info.format in {ArchiveFormat.LZ4, ArchiveFormat.TAR_LZ4}
         and "truncate" not in corrupted_archive_path
     ):
         pytest.xfail("LZ4 library may not detect modified data")
@@ -97,6 +101,15 @@ def test_read_corrupted_archives_with_alternative_packages(
         use_indexed_bzip2=True,
         use_python_xz=True,
     )
+    deps = get_dependency_versions()
+    if config.use_rapidgzip and deps.rapidgzip_version is None:
+        pytest.skip("rapidgzip not installed, skipping alternative package test")
+    if config.use_indexed_bzip2 and deps.indexed_bzip2_version is None:
+        pytest.skip(
+            "indexed_bzip2 not installed, skipping alternative package test"
+        )
+    if config.use_python_xz and deps.python_xz_version is None:
+        pytest.skip("python-xz not installed, skipping alternative package test")
     if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
     if sample_archive.creation_info.format == ArchiveFormat.RAR and get_dependency_versions().unrar_version is None:
@@ -107,7 +120,7 @@ def test_read_corrupted_archives_with_alternative_packages(
     ):
         pytest.xfail("Tar archives have no integrity checks for modified data")
     if (
-        sample_archive.creation_info.format == ArchiveFormat.LZ4
+        sample_archive.creation_info.format in {ArchiveFormat.LZ4, ArchiveFormat.TAR_LZ4}
         and "truncate" not in corrupted_archive_path
     ):
         pytest.xfail("LZ4 library may not detect modified data")

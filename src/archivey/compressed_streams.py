@@ -17,7 +17,7 @@ else:
     try:
         import lz4.frame
     except ImportError:
-        lz4.frame = None
+        lz4 = None
 
     try:
         import zstandard
