@@ -94,7 +94,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
                     tar_mode = "r|"
                     self._streaming_only = True
                     self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
-                except lz4.frame.LZ4FrameError as e:
+                except Exception as e:  # lz4.frame does not expose a specific error type
                     if self._fileobj is not None:
                         self._fileobj.close()
                         self._fileobj = None
@@ -114,6 +114,20 @@ class TarReader(BaseArchiveReaderRandomAccess):
                     self._streaming_only = True
                     self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
                 except (ValueError, OSError) as e:
+                    if self._fileobj is not None:
+                        self._fileobj.close()
+                        self._fileobj = None
+                    raise ArchiveCorruptedError(
+                        f"Invalid compressed TAR archive {archive_path}: {e}"
+                    ) from e
+            elif format == ArchiveFormat.TAR_GZ:
+                import gzip
+                try:
+                    self._fileobj = gzip.open(archive_path, "rb")
+                    tar_mode = "r|"
+                    self._streaming_only = True
+                    self._archive = tarfile.open(fileobj=self._fileobj, mode=tar_mode)
+                except (OSError, gzip.BadGzipFile) as e:
                     if self._fileobj is not None:
                         self._fileobj.close()
                         self._fileobj = None
@@ -188,6 +202,40 @@ class TarReader(BaseArchiveReaderRandomAccess):
             self._archive = None
             self._members = None
         if getattr(self, "_fileobj", None) is not None:
+            try:
+                while True:
+                    chunk = self._fileobj.read(8192)
+                    if not chunk:
+                        break
+            except (OSError, gzip.BadGzipFile, lzma.LZMAError, RuntimeError) as e:
+                self._fileobj.close()
+                self._fileobj = None
+                raise ArchiveCorruptedError(
+                    f"Invalid compressed TAR archive {self.archive_path}: {e}"
+                ) from e
+            except Exception as e:
+                try:
+                    import zstandard
+                    from zstandard import ZstdError
+                except Exception:
+                    ZstdError = None
+                try:
+                    import lz4.frame
+                    LZ4Error = lz4.frame.LZ4FrameError  # type: ignore[attr-defined]
+                except Exception:
+                    LZ4Error = None
+                if (ZstdError and isinstance(e, ZstdError)) or (
+                    LZ4Error and isinstance(e, LZ4Error)
+                ):
+                    self._fileobj.close()
+                    self._fileobj = None
+                    raise ArchiveCorruptedError(
+                        f"Invalid compressed TAR archive {self.archive_path}: {e}"
+                    ) from e
+                else:
+                    self._fileobj.close()
+                    self._fileobj = None
+                    raise
             self._fileobj.close()
             self._fileobj = None
 

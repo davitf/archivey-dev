@@ -39,10 +39,15 @@ def corrupt_archive(
             return
 
         corruption_position = int(size * position_fraction)
-        f.seek(corruption_position)
-        current_byte = f.read(1)
-        f.seek(corruption_position)
-        f.write(bytes([current_byte[0] ^ 0xFF]))
+        if corruption_position >= size:
+            corruption_position = size - 1
+
+        # Remove a byte from the middle to force decompression failure
+        del content[corruption_position]
+
+        f.seek(0)
+        f.truncate(0)
+        f.write(content)
 
 
 def main():

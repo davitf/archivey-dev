@@ -224,6 +224,8 @@ class ZipReader(BaseArchiveReaderRandomAccess):
             raise ArchiveError(f"Error reading member {filename}: {e}") from e
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error reading member {filename}: {e}") from e
+        except OSError as e:
+            raise ArchiveCorruptedError(f"Error reading member {filename}: {e}") from e
 
     def extract(
         self,
