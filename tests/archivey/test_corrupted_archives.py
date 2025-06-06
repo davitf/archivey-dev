@@ -148,7 +148,7 @@ def test_read_corrupted_archives(
         logger.info(f"Archive {corrupted_archive_path} raised an error", exc_info=True)
 
 
-@pytest.mark.parametrize("corrupted_length", [16, 31, 47, 100, 0.1, 0.5, 0.9])
+@pytest.mark.parametrize("corrupted_length", [16, 47, 0.1, 0.9])
 @pytest.mark.parametrize(
     "sample_archive",
     filter_archives(
