@@ -199,6 +199,18 @@ TAR_GZ_TARFILE = ArchiveCreationInfo(
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
     features=_TAR_FORMAT_FEATURES,
 )
+TAR_ZSTD_CMD = ArchiveCreationInfo(
+    file_suffix="tarcmd.tar.zst",
+    format=ArchiveFormat.TAR_ZSTD,
+    generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES,
+)
+TAR_ZSTD_TARFILE = ArchiveCreationInfo(
+    file_suffix="tarfile.tar.zst",
+    format=ArchiveFormat.TAR_ZSTD,
+    generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES,
+)
 
 # No need to test both tarfile and cmdline for the other formats, as there shouldn't
 # be significant differences that won't be caught by the gz format.
@@ -211,12 +223,6 @@ TAR_BZ2 = ArchiveCreationInfo(
 TAR_XZ = ArchiveCreationInfo(
     file_suffix=".tar.xz",
     format=ArchiveFormat.TAR_XZ,
-    generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES,
-)
-TAR_ZSTD = ArchiveCreationInfo(
-    file_suffix=".tar.zst",
-    format=ArchiveFormat.TAR_ZSTD,
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES,
 )
@@ -335,12 +341,13 @@ BASIC_TAR_FORMATS = [
     TAR_PLAIN_TARFILE,
     TAR_GZ_CMD,
     TAR_GZ_TARFILE,
+    TAR_ZSTD_CMD,
+    TAR_ZSTD_TARFILE,
 ]
 
 ALL_TAR_FORMATS = BASIC_TAR_FORMATS + [
     TAR_BZ2,
     TAR_XZ,
-    TAR_ZSTD,
     TAR_LZ4,
 ]
 

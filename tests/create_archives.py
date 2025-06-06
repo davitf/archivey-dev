@@ -1,6 +1,7 @@
 import argparse
 import bz2
 import fnmatch
+import functools
 import gzip
 import io
 import logging
@@ -14,6 +15,8 @@ import tempfile
 import zipfile
 from datetime import timezone
 from typing import Any, Generator
+
+import pyzstd
 
 try:  # Optional dependency
     import lz4.frame as lz4_frame  # type: ignore
@@ -263,6 +266,8 @@ def create_tar_archive_with_command_line(
             command.append("-j")  # bzip2
         elif compression_format == ArchiveFormat.TAR_XZ:
             command.append("-J")  # xz
+        elif compression_format == ArchiveFormat.TAR_ZSTD:
+            command.append("--zstd")
         elif compression_format != ArchiveFormat.TAR:
             # This case should ideally not be reached if enums are used correctly
             raise ValueError(
@@ -281,7 +286,14 @@ SINGLE_FILE_LIBRARY_OPENERS = {
     ArchiveFormat.GZIP: gzip.GzipFile,
     ArchiveFormat.BZIP2: bz2.BZ2File,
     ArchiveFormat.XZ: lzma.LZMAFile,
-    ArchiveFormat.ZSTD: zstandard.open if zstandard is not None else None,
+    ArchiveFormat.ZSTD: functools.partial(
+        pyzstd.open,
+        level_or_option={
+            pyzstd.CParameter.checksumFlag: 1,
+        },
+    )
+    if pyzstd is not None
+    else None,
     ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
 }
 

@@ -137,8 +137,6 @@ def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
     logger.info("TRANSLATING XZ EXCEPTION", exc_info=e)
     if isinstance(e, xz.XZError):
         return ArchiveCorruptedError(f"Error reading XZ archive: {repr(e)}")
-    else:
-        logger.error(f"Unexpected exception: {e}", exc_info=e)
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
@@ -146,7 +144,7 @@ def open_python_xz_stream(path: str) -> IO[bytes]:
     if xz is None:
         raise PackageNotInstalledError(
             "xz package is not installed, required for XZ archives"
-        ) from None
+        ) from None  # pragma: no cover -- lz4 is installed for main tests
 
     return ExceptionTranslatingIO(lambda: xz.open(path), _translate_python_xz_exception)
 
@@ -161,7 +159,7 @@ def open_zstandard_stream(path: str) -> IO[bytes]:
     if zstandard is None:
         raise PackageNotInstalledError(
             "zstandard package is not installed, required for Zstandard archives"
-        ) from None
+        ) from None  # pragma: no cover -- lz4 is installed for main tests
     return ExceptionTranslatingIO(zstandard.open(path), _translate_zstandard_exception)
 
 
@@ -177,7 +175,7 @@ def open_pyzstd_stream(path: str) -> IO[bytes]:
     if pyzstd is None:
         raise PackageNotInstalledError(
             "pyzstd package is not installed, required for Zstandard archives"
-        ) from None
+        ) from None  # pragma: no cover -- lz4 is installed for main tests
     return ExceptionTranslatingIO(pyzstd.open(path), _translate_pyzstd_exception)
 
 
@@ -193,7 +191,7 @@ def open_lz4_stream(path: str) -> IO[bytes]:
     if lz4 is None:
         raise PackageNotInstalledError(
             "lz4 package is not installed, required for LZ4 archives"
-        ) from None
+        ) from None  # pragma: no cover -- lz4 is installed for main tests
 
     return ExceptionTranslatingIO(lz4.frame.open(path), _translate_lz4_exception)
 
@@ -229,4 +227,4 @@ def open_stream(
         else:
             return open_pyzstd_stream(path)
 
-    raise ValueError(f"Unsupported archive format: {format}")
+    raise ValueError(f"Unsupported archive format: {format}")  # pragma: no cover

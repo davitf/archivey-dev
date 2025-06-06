@@ -80,7 +80,7 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
     elif format == ArchiveFormat.BZIP2 and config.use_indexed_bzip2:
         pytest.importorskip("indexed_bzip2")
     elif format == ArchiveFormat.XZ and config.use_python_xz:
-        pytest.importorskip("lzma")
+        pytest.importorskip("xz")
     elif format == ArchiveFormat.ZSTD and config.use_zstandard:
         pytest.importorskip("zstandard")
     elif format == ArchiveFormat.ZSTD:
