@@ -1,5 +1,6 @@
 import bz2
 import gzip
+import io
 import lzma
 from typing import IO, TYPE_CHECKING, Optional
 
@@ -94,6 +95,8 @@ def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
     exc_text = str(e)
     if isinstance(e, RuntimeError) and "Calculated CRC" in exc_text:
         return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {e}")
+    elif isinstance(e, RuntimeError) and exc_text == "std::exception":
+        return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {e}")
     elif isinstance(e, ValueError) and "[BZip2 block data]" in exc_text:
         return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {e}")
 
@@ -154,8 +157,13 @@ def open_zstd_stream(path: str) -> IO[bytes]:
         raise PackageNotInstalledError(
             "zstandard package is not installed, required for Zstandard archives"
         ) from None
+    def _open() -> IO[bytes]:
+        with open(path, "rb") as f:
+            data = f.read()
+        decompressed = zstandard.decompress(data)
+        return io.BytesIO(decompressed)
 
-    return ExceptionTranslatingIO(zstandard.open(path), _translate_zstd_exception)
+    return ExceptionTranslatingIO(_open, _translate_zstd_exception)
 
 
 def _translate_lz4_exception(e: Exception) -> Optional[ArchiveError]:

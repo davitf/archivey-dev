@@ -2,11 +2,12 @@ import pytest
 
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
+from archivey.dependency_checker import get_dependency_versions
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
 )
-from archivey.types import ArchiveFormat
+from archivey.types import ArchiveFormat, TAR_COMPRESSED_FORMATS
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     ArchiveInfo,
@@ -44,6 +45,19 @@ def test_read_corrupted_archives(
     #     pytest.xfail("RAR library handles corrupted archives without error")
     if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
+    if sample_archive.creation_info.format == ArchiveFormat.RAR:
+        if get_dependency_versions().unrar_version is None:
+            pytest.skip("unrar not installed, skipping RAR corruption test")
+    if (
+        sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS
+        and "truncate" not in corrupted_archive_path
+    ):
+        pytest.xfail("Tar archives have no integrity checks for modified data")
+    if (
+        sample_archive.creation_info.format == ArchiveFormat.LZ4
+        and "truncate" not in corrupted_archive_path
+    ):
+        pytest.xfail("LZ4 library may not detect modified data")
 
     read_filenames = []
     with pytest.raises((ArchiveCorruptedError, ArchiveEOFError)):
@@ -83,6 +97,20 @@ def test_read_corrupted_archives_with_alternative_packages(
         use_indexed_bzip2=True,
         use_python_xz=True,
     )
+    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
+        pytest.importorskip("py7zr")
+    if sample_archive.creation_info.format == ArchiveFormat.RAR and get_dependency_versions().unrar_version is None:
+        pytest.skip("unrar not installed, skipping RAR corruption test")
+    if (
+        sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS
+        and "truncate" not in corrupted_archive_path
+    ):
+        pytest.xfail("Tar archives have no integrity checks for modified data")
+    if (
+        sample_archive.creation_info.format == ArchiveFormat.LZ4
+        and "truncate" not in corrupted_archive_path
+    ):
+        pytest.xfail("LZ4 library may not detect modified data")
 
     read_filenames = []
     with pytest.raises(ArchiveCorruptedError):
