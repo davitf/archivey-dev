@@ -6,7 +6,7 @@ import zipfile
 from datetime import datetime, timezone
 from typing import IO, List, Optional, cast
 
-from archivey.base_reader import BaseArchiveReaderRandomAccess, _set_member_metadata
+from archivey.base_reader import BaseArchiveReaderRandomAccess, apply_members_metadata
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -275,7 +275,4 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error extracting archive: {e}") from e
 
-        for member in self.get_members():
-            target_path = os.path.join(target, member.filename)
-            if os.path.exists(target_path):
-                _set_member_metadata(member, target_path)
+        apply_members_metadata(self.get_members(), target)

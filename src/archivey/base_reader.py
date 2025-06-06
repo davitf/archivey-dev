@@ -22,6 +22,15 @@ def _set_member_metadata(member: ArchiveMember, target_path: str) -> None:
         os.chmod(target_path, member.mode)
 
 
+def apply_members_metadata(members: Iterable[ArchiveMember], root_path: str) -> None:
+    """Apply stored metadata for a list of members extracted to ``root_path``."""
+
+    for member in members:
+        target_path = os.path.join(root_path, member.filename)
+        if os.path.exists(target_path):
+            _set_member_metadata(member, target_path)
+
+
 def _write_member(
     root_path: str,
     member: ArchiveMember,
