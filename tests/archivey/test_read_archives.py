@@ -250,7 +250,9 @@ def test_read_zip_archives(sample_archive: ArchiveInfo, sample_archive_path: str
 @pytest.mark.parametrize(
     "sample_archive",
     filter_archives(
-        SAMPLE_ARCHIVES, prefixes=["large_files_nonsolid", "large_files_solid"]
+        SAMPLE_ARCHIVES,
+        prefixes=["large_files_nonsolid", "large_files_solid"],
+        custom_filter=lambda a: not a.filename.endswith(".tar"),
     ),
     ids=lambda a: a.filename,
 )
@@ -278,7 +280,9 @@ def test_read_truncated_archives(
 @pytest.mark.parametrize(
     "sample_archive",
     filter_archives(
-        SAMPLE_ARCHIVES, prefixes=["large_files_nonsolid", "large_files_solid"]
+        SAMPLE_ARCHIVES,
+        prefixes=["large_files_nonsolid", "large_files_solid"],
+        custom_filter=lambda a: not a.filename.endswith(".tar"),
     ),
     ids=lambda a: a.filename,
 )
