@@ -6,7 +6,7 @@ import zipfile
 from datetime import datetime, timezone
 from typing import IO, List, Optional, cast
 
-from archivey.base_reader import BaseArchiveReaderRandomAccess
+from archivey.base_reader import BaseArchiveReaderRandomAccess, _set_member_metadata
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -264,11 +264,18 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         if self._archive is None:
             raise ValueError("Archive is closed")
 
+        target = path or os.getcwd()
+
         try:
-            self._archive.extractall(path=path, pwd=str_to_bytes(pwd or self._pwd))
+            self._archive.extractall(path=target, pwd=str_to_bytes(pwd or self._pwd))
         except RuntimeError as e:
             if "password required" in str(e):
                 raise ArchiveEncryptedError("Archive is encrypted") from e
             raise ArchiveError(f"Error extracting archive: {e}") from e
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error extracting archive: {e}") from e
+
+        for member in self.get_members():
+            target_path = os.path.join(target, member.filename)
+            if os.path.exists(target_path):
+                _set_member_metadata(member, target_path)
