@@ -647,7 +647,7 @@ TEST_PERMISSIONS_FILES = [
 LARGE_FILES = [
     FileInfo(
         name=f"large{i}.txt",
-        contents=_create_random_data(200000, i),
+        contents=f"Large file #{i}\n".encode() + _create_random_data(200000, i),
         mtime=_fake_mtime(i),
     ) for i in range(1, 6)
 ]
