@@ -96,6 +96,7 @@ class ArchiveReader(abc.ABC):
             else str(archive_path)
         )
         self.config: ArchiveyConfig = get_default_config()
+        self._member_map: dict[str, ArchiveMember] | None = None
 
     @abc.abstractmethod
     def close(self) -> None:

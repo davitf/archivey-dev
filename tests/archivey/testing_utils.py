@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import zlib
 from datetime import timezone
 from typing import Optional
 
@@ -85,3 +86,19 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         pytest.importorskip("zstandard")
     elif format == ArchiveFormat.ZSTD:
         pytest.importorskip("pyzstd")
+
+
+def normalize_newlines(s: str | None) -> str | None:
+    return s.replace("\r\n", "\n") if s else None
+
+
+def get_crc32(data: bytes) -> int:
+    """
+    Compute CRC32 checksum for a file within an archive.
+    Returns a hex string.
+    """
+    crc32_value: int = 0
+
+    # Read the file in chunks
+    crc32_value = zlib.crc32(data, crc32_value)
+    return crc32_value & 0xFFFFFFFF

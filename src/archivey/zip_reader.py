@@ -211,14 +211,11 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 if isinstance(member_or_filename, ArchiveMember)
                 else member_or_filename
             )
-            # logger.info(f"Opening member {filename} with password {pwd}")
+
             stream = self._archive.open(
                 info_or_filename,
                 pwd=str_to_bytes(pwd or self._pwd),
             )
-
-            # member = self.get_member(member_or_filename)
-            # stream = StreamCheckingIO(stream, member.crc32, member.file_size)
 
             return ExceptionTranslatingIO(
                 stream,

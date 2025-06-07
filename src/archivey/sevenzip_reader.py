@@ -61,8 +61,14 @@ class StreamingFile(Py7zIO):
             self._parent = parent
             self._buffer = bytearray()
             self._eof = False
+            self._first_read = True
 
         def read(self, size=-1) -> bytes:
+            logger.info(
+                f"Reading from reader file {self._parent._fname}: {size}",
+                stack_info=self._first_read,
+            )
+            self._first_read = False
             while not self._eof and (size < 0 or len(self._buffer) < size):
                 try:
                     chunk = self._parent._data_queue.get(timeout=0.1)
@@ -78,12 +84,19 @@ class StreamingFile(Py7zIO):
 
             data = self._buffer[:size]
             self._buffer = self._buffer[size:]
+            logger.info(
+                f"Read from reader file {self._parent._fname}: asked {size}, got {len(data)}"
+            )
             return bytes(data)
 
         def close(self):
+            logger.info(
+                f"Closing reader file {self._parent._fname}"
+            )  # , stack_info=True)
             self._parent._reader_alive = False
             self._parent._data_queue
             super().close()
+            logger.info(f"Closed reader file {self._parent._fname}")
 
         def readable(self):
             return True
@@ -93,6 +106,12 @@ class StreamingFile(Py7zIO):
 
         def seekable(self):
             return False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            self.close()
 
         # TODO: do we need to implement readall / readinto?
 
@@ -116,20 +135,25 @@ class StreamingFile(Py7zIO):
         return len(b)
 
     def seek(self, offset, whence=0):
+        logger.info(f"Seek to writer file {self._fname}: {offset} {whence}")
         # After py7zr has finished writing, it calls seek(0) to prepare the stream
         # for reading. But since the stream is already being read, we use this as
         # an indication that the writing is finished.
         if offset == 0 and whence == 0:
+            logger.info(f"Closing writer file {self._fname} because of seek(0, 0)")
             if not self._closed:
                 self._data_queue.put(None)
                 self._closed = True
+            logger.info(f"Closed writer file {self._fname} because of seek(0, 0)")
             return 0
         raise io.UnsupportedOperation()
 
     def close(self):
         if not self._closed:
+            logger.info(f"Closing writer file {self._fname}")
             self._data_queue.put(None)
             self._closed = True
+        logger.info(f"Closed writer file {self._fname}")
 
     def size(self):
         return None
@@ -168,6 +192,17 @@ class StreamingFactory(WriterFactory):
 
     def finish(self):
         self._queue.put(None)
+
+
+# class BufferedReaderContextManager(io.BufferedReader):
+#     def __init__(self, stream: io.RawIOBase):
+#         super().__init__(stream, 65 * 1024)
+
+#     def __enter__(self):
+#         return self
+
+#     def __exit__(self, exc_type, exc_value, traceback):
+#         self.close()
 
 
 class SevenZipReader(BaseArchiveReaderRandomAccess):
@@ -306,10 +341,12 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             An IO object for the member.
         """
 
+        logger.info(f"Opening member {member_or_filename} with password {pwd}")
         if self._archive is None:
             raise ValueError("Archive is closed")
 
         member = self.get_member(member_or_filename)
+        logger.info(f"member {member}")
 
         try:
             # Hack: py7zr only supports setting a password when creating the
@@ -321,11 +358,17 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 previous_password = file_info.folder.password
                 file_info.folder.password = bytes_to_str(pwd)
 
-            it = list(self.iter_members_with_io(files=[member.filename]))
+            logger.info("starting iterator")
+
+            it = list(
+                self.iter_members_with_io(files=[member.filename], close_streams=False)
+            )
+            logger.info("iterator done")
             assert len(it) == 1, (
                 f"Expected exactly one member, got {len(it)}. {member.filename}"
             )
-            return it[0][1]
+            stream = cast(StreamingFile.Reader, it[0][1])
+            return stream  # BufferedReaderContextManager(stream)
 
         except py7zr.exceptions.ArchiveError as e:
             raise ArchiveCorruptedError(f"Error reading member {member.filename}: {e}")
@@ -346,7 +389,12 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         self,
         files: list[str] | None = None,
         filter: Callable[[ArchiveMember], bool] | None = None,
+        *,
+        close_streams: bool = True,
+        pwd: bytes | str | None = None,
     ) -> Iterator[tuple[ArchiveMember, IO[bytes]]]:
+        # TODO: set pwd in the folders
+
         if self._archive is None:
             raise ValueError("Archive is closed")
         members_dict = {m.filename: m for m in self.get_members()}
@@ -359,7 +407,9 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 assert self._archive is not None
                 self._archive.reset()
                 factory = StreamingFactory(q)
+                logger.info(f"extracting {files}")
                 self._archive.extract(targets=files, factory=factory)
+                logger.info(f"extracting {files} done")
                 factory.finish()
             except Exception as e:
                 logger.error(
@@ -378,23 +428,32 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         try:
             while True:
+                logger.info("getting item")
                 item = q.get()
+                logger.info(f"got item {item}")
                 if item is None:
                     # End of file stream
                     break
                 if isinstance(item, Exception):
                     thread.join()
                     raise item
-                fname, io = item
+                fname, stream = item
+                assert isinstance(stream, StreamingFile.Reader)
+
+                logger.info(f"got item {fname} {stream}, closed = {stream.closed}")
                 member_info = members_dict.get(fname)
                 assert member_info is not None, f"Member {fname} not found"
                 if member_info.is_link and member_info.link_target is None:
-                    member_info.link_target = io.read().decode("utf-8")
+                    member_info.link_target = stream.read().decode("utf-8")
 
+                buffer_stream = stream  # io.BufferedReader(stream)
                 if filter is None or filter(member_info):
-                    yield member_info, io
+                    yield member_info, buffer_stream
 
-                io.close()
+                logger.info(f"closing io {io}")
+                if close_streams:
+                    stream.close()
+                logger.info(f"closed io {io}")
 
             # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)
         except (py7zr.exceptions.ArchiveError, lzma.LZMAError) as e:

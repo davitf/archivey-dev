@@ -44,8 +44,6 @@ _ALTERNATIVE_PACKAGES_FORMATS = (
     filter_archives(
         SAMPLE_ARCHIVES,
         prefixes=["large_files_nonsolid", "large_files_solid", "large_single_file"],
-        # Tar files don't have any kind of error detection, so we skip them.
-        # custom_filter=lambda a: a.creation_info.format != ArchiveFormat.TAR,
     ),
     ids=lambda a: a.filename,
 )
