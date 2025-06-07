@@ -1,24 +1,32 @@
 import pathlib
+
 import pytest
 
 from archivey.core import open_archive
-from archivey.types import ArchiveFormat, MemberType, TAR_COMPRESSED_FORMATS
+from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
 from tests.archivey.sample_archives import SAMPLE_ARCHIVES, ArchiveInfo, filter_archives
 from tests.archivey.testing_utils import skip_if_package_missing
-
 
 REPRESENTATIVE_ARCHIVES = [
     filter_archives(SAMPLE_ARCHIVES, extensions=["zip"])[0],
     filter_archives(SAMPLE_ARCHIVES, extensions=["tar.gz"])[0],
-    filter_archives(SAMPLE_ARCHIVES, prefixes=["large_single_file"], extensions=["gz"])[0],
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["large_single_file"], extensions=["gz"])[
+        0
+    ],
     filter_archives(SAMPLE_ARCHIVES, extensions=["rar"])[0],
 ]
 
 # Use archives with several files for iterator behavior tests.
 MULTIFILE_ARCHIVES = [
-    filter_archives(SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["zip"])[0],
-    filter_archives(SAMPLE_ARCHIVES, prefixes=["basic_solid"], extensions=["tar.gz"])[0],
-    filter_archives(SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["rar"])[0],
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["zip"])[
+        0
+    ],
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["basic_solid"], extensions=["tar.gz"])[
+        0
+    ],
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["rar"])[
+        0
+    ],
 ]
 
 
@@ -29,9 +37,14 @@ def _first_regular_file(sample: ArchiveInfo):
     raise ValueError("sample archive has no regular file")
 
 
-@pytest.mark.parametrize("sample_archive", REPRESENTATIVE_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.parametrize(
+    "sample_archive", REPRESENTATIVE_ARCHIVES, ids=lambda a: a.filename
+)
 def test_random_access_mode(sample_archive: ArchiveInfo, sample_archive_path: str):
-    if sample_archive.creation_info.format == ArchiveFormat.ISO and not pathlib.Path(sample_archive_path).exists():
+    if (
+        sample_archive.creation_info.format == ArchiveFormat.ISO
+        and not pathlib.Path(sample_archive_path).exists()
+    ):
         pytest.skip("ISO archive not available")
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
@@ -47,9 +60,14 @@ def test_random_access_mode(sample_archive: ArchiveInfo, sample_archive_path: st
         assert info is not None and len(info) == len(members)
 
 
-@pytest.mark.parametrize("sample_archive", REPRESENTATIVE_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.parametrize(
+    "sample_archive", REPRESENTATIVE_ARCHIVES, ids=lambda a: a.filename
+)
 def test_streaming_only_mode(sample_archive: ArchiveInfo, sample_archive_path: str):
-    if sample_archive.creation_info.format == ArchiveFormat.ISO and not pathlib.Path(sample_archive_path).exists():
+    if (
+        sample_archive.creation_info.format == ArchiveFormat.ISO
+        and not pathlib.Path(sample_archive_path).exists()
+    ):
         pytest.skip("ISO archive not available")
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
@@ -62,7 +80,10 @@ def test_streaming_only_mode(sample_archive: ArchiveInfo, sample_archive_path: s
             archive.open(first_file.name)
 
         info = archive.get_members_if_available()
-        if sample_archive.creation_info.format == ArchiveFormat.TAR or sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS:
+        if (
+            sample_archive.creation_info.format == ArchiveFormat.TAR
+            or sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS
+        ):
             assert info is None
         else:
             assert info is not None and len(info) >= 1
@@ -79,7 +100,9 @@ def test_streaming_only_mode(sample_archive: ArchiveInfo, sample_archive_path: s
 
 @pytest.mark.parametrize("sample_archive", MULTIFILE_ARCHIVES, ids=lambda a: a.filename)
 @pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
-def test_iter_members_filter(sample_archive: ArchiveInfo, sample_archive_path: str, streaming_only: bool):
+def test_iter_members_filter(
+    sample_archive: ArchiveInfo, sample_archive_path: str, streaming_only: bool
+):
     """Ensure iter_members_with_io honours the filter callable."""
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
@@ -100,7 +123,9 @@ def test_iter_members_filter(sample_archive: ArchiveInfo, sample_archive_path: s
 
 @pytest.mark.parametrize("sample_archive", MULTIFILE_ARCHIVES, ids=lambda a: a.filename)
 @pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
-def test_iter_members_partial_reads(sample_archive: ArchiveInfo, sample_archive_path: str, streaming_only: bool):
+def test_iter_members_partial_reads(
+    sample_archive: ArchiveInfo, sample_archive_path: str, streaming_only: bool
+):
     """Reading some members fully, partially or not at all should not break iteration."""
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
@@ -109,7 +134,9 @@ def test_iter_members_partial_reads(sample_archive: ArchiveInfo, sample_archive_
 
     with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
         read_index = 0
-        for member, stream in archive.iter_members_with_io(filter=lambda m: m.type == MemberType.FILE):
+        for member, stream in archive.iter_members_with_io(
+            filter=lambda m: m.type == MemberType.FILE
+        ):
             if member.filename not in {f.name for f in files}:
                 continue
 

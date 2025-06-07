@@ -100,7 +100,8 @@ def group_files_by_password_and_compression_method(
 
 
 def create_zip_archive_with_zipfile(
-    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat,
+    compression_method: str | None = None
 ):
     """
     Create a zip archive using the zipfile module.
@@ -144,9 +145,7 @@ def create_zip_archive_with_zipfile(
 
                 info = zipfile.ZipInfo(filename, date_time=file.mtime.timetuple()[:6])
                 info.compress_type = _COMPRESSION_METHOD_TO_ZIPFILE_VALUE[
-                    file.compression_method
-                    if file.compression_method is not None
-                    else DEFAULT_ZIP_COMPRESSION_METHOD
+                    file.compression_method or compression_method or DEFAULT_ZIP_COMPRESSION_METHOD
                 ]
                 info.comment = (file.comment or "").encode("utf-8")
 
@@ -166,7 +165,8 @@ def create_zip_archive_with_zipfile(
 
 
 def create_zip_archive_with_infozip_command_line(
-    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat,
+    compression_method: str | None = None
 ):
     """
     Create a zip archive using the zip command line tool.
@@ -197,7 +197,7 @@ def create_zip_archive_with_infozip_command_line(
             if password:
                 command += ["-P", password]
 
-            command += ["-Z", compression_method or DEFAULT_ZIP_COMPRESSION_METHOD]
+            command += ["-Z", compression_method or compression_method or DEFAULT_ZIP_COMPRESSION_METHOD]
             command += [abs_archive_path]
 
             # Pass the files to the command in the order they should be written to the archive.

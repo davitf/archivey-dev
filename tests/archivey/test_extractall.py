@@ -1,10 +1,10 @@
 import os
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from archivey.core import open_archive
-from datetime import datetime
 from archivey.types import ArchiveFormat, MemberType
 from tests.archivey.sample_archives import SAMPLE_ARCHIVES
 
@@ -113,7 +113,11 @@ def test_extractall_members(tmp_path: Path, filename: str):
     expected_paths = [dest / "file1.txt", dest / "subdir" / "file2.txt"]
     for p in expected_paths:
         assert p.exists() and p.is_file()
-        info = next(f for f in sample.contents.files if f.name == str(p.relative_to(dest)).replace(os.sep, "/"))
+        info = next(
+            f
+            for f in sample.contents.files
+            if f.name == str(p.relative_to(dest)).replace(os.sep, "/")
+        )
         with open(p, "rb") as f:
             assert f.read() == (info.contents or b"")
         _check_file_metadata(p, info, sample)

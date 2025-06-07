@@ -129,13 +129,23 @@ class ArchiveInfo:
 
 
 # Generation method constants
-ZIP_ZIPFILE = ArchiveCreationInfo(
-    file_suffix="zipfile.zip",
+ZIP_ZIPFILE_STORE = ArchiveCreationInfo(
+    file_suffix="zipfile_store.zip",
     format=ArchiveFormat.ZIP,
     generation_method=GenerationMethod.ZIPFILE,
     features=ArchiveFormatFeatures(
         file_comments=True, archive_comment=True, rounded_mtime=True
     ),
+    generation_method_options={"compression_method": "store"},
+)
+ZIP_ZIPFILE_DEFLATE = ArchiveCreationInfo(
+    file_suffix="zipfile_deflate.zip",
+    format=ArchiveFormat.ZIP,
+    generation_method=GenerationMethod.ZIPFILE,
+    features=ArchiveFormatFeatures(
+        file_comments=True, archive_comment=True, rounded_mtime=True
+    ),
+    generation_method_options={"compression_method": "deflate"},
 )
 ZIP_INFOZIP = ArchiveCreationInfo(
     file_suffix="infozip.zip",
@@ -352,7 +362,8 @@ ALL_TAR_FORMATS = BASIC_TAR_FORMATS + [
 ]
 
 ZIP_FORMATS = [
-    ZIP_ZIPFILE,
+    ZIP_ZIPFILE_STORE,
+    ZIP_ZIPFILE_DEFLATE,
     ZIP_INFOZIP,
 ]
 
@@ -635,20 +646,10 @@ TEST_PERMISSIONS_FILES = [
 
 LARGE_FILES = [
     FileInfo(
-        name="large1.txt",
-        contents=_create_random_data(100000, 1),
-        mtime=_fake_mtime(1),
-    ),
-    FileInfo(
-        name="large2.txt",
-        contents=_create_random_data(100000, 2),
-        mtime=_fake_mtime(2),
-    ),
-    FileInfo(
-        name="large3.txt",
-        contents=_create_random_data(100000, 3),
-        mtime=_fake_mtime(3),
-    ),
+        name=f"large{i}.txt",
+        contents=_create_random_data(200000, i),
+        mtime=_fake_mtime(i),
+    ) for i in range(1, 6)
 ]
 
 SINGLE_LARGE_FILE = FileInfo(
@@ -854,7 +855,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="compression_methods_lzma",
             files=COMPRESSION_METHOD_FILES_LZMA,
         ),
-        [ZIP_ZIPFILE],  # Infozip doesn't support lzma
+        [ZIP_ZIPFILE_STORE],  # Infozip doesn't support lzma
     ),
     (
         ArchiveContents(
@@ -918,7 +919,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
                 )
             ],
         ),
-        [ZIP_ZIPFILE],
+        [ZIP_ZIPFILE_STORE],
     ),
     (
         ArchiveContents(
