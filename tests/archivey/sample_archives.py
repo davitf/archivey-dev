@@ -649,7 +649,8 @@ LARGE_FILES = [
         name=f"large{i}.txt",
         contents=f"Large file #{i}\n".encode() + _create_random_data(200000, i),
         mtime=_fake_mtime(i),
-    ) for i in range(1, 6)
+    )
+    for i in range(1, 6)
 ]
 
 SINGLE_LARGE_FILE = FileInfo(

@@ -1,7 +1,6 @@
 import logging
 import os
 import pathlib
-import zlib
 from datetime import datetime
 from typing import Optional
 
@@ -18,23 +17,11 @@ from tests.archivey.sample_archives import (
     FileInfo,
     filter_archives,
 )
-from tests.archivey.testing_utils import skip_if_package_missing
-
-
-def normalize_newlines(s: str | None) -> str | None:
-    return s.replace("\r\n", "\n") if s else None
-
-
-def get_crc32(data: bytes) -> int:
-    """
-    Compute CRC32 checksum for a file within an archive.
-    Returns a hex string.
-    """
-    crc32_value: int = 0
-
-    # Read the file in chunks
-    crc32_value = zlib.crc32(data, crc32_value)
-    return crc32_value & 0xFFFFFFFF
+from tests.archivey.testing_utils import (
+    get_crc32,
+    normalize_newlines,
+    skip_if_package_missing,
+)
 
 
 def check_member_metadata(
