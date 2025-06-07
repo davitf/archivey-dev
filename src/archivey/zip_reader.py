@@ -4,7 +4,7 @@ import stat
 import struct
 import zipfile
 from datetime import datetime, timezone
-from typing import IO, List, Optional, Callable, cast
+from typing import IO, Callable, List, Optional, cast
 
 from archivey.base_reader import (
     BaseArchiveReaderRandomAccess,
@@ -211,7 +211,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 if isinstance(member_or_filename, ArchiveMember)
                 else member_or_filename
             )
-            logger.info(f"Opening member {filename} with password {pwd}")
+            # logger.info(f"Opening member {filename} with password {pwd}")
             stream = self._archive.open(
                 info_or_filename,
                 pwd=str_to_bytes(pwd or self._pwd),
@@ -280,13 +280,17 @@ class ZipReader(BaseArchiveReaderRandomAccess):
 
         try:
             if filter_fn is None:
-                self._archive.extractall(path=target, pwd=str_to_bytes(pwd or self._pwd))
+                self._archive.extractall(
+                    path=target, pwd=str_to_bytes(pwd or self._pwd)
+                )
                 selected = self.get_members()
             else:
                 names = [m.filename for m in self.get_members() if filter_fn(m)]
                 if not names:
                     return
-                self._archive.extractall(path=target, members=names, pwd=str_to_bytes(pwd or self._pwd))
+                self._archive.extractall(
+                    path=target, members=names, pwd=str_to_bytes(pwd or self._pwd)
+                )
                 selected = [m for m in self.get_members() if filter_fn(m)]
         except RuntimeError as e:
             if "password required" in str(e):
