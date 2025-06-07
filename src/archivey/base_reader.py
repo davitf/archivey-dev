@@ -37,22 +37,30 @@ def _write_member(
     preserve_links: bool,
     stream: BinaryIO | None,
 ) -> str | None:
+    # Some archives (notably TAR files created using the command line tools)
+    # may list the same path more than once. This happens when a directory and
+    # one of its files are both provided to ``tar`` on the command line, causing
+    # the file to appear twice.  We try to mimic the behavior of GNU tar by
+    # simply overwriting earlier entries.  If the path already exists we skip
+    # recreating it but still apply the metadata from this member so that the
+    # resulting state matches the last entry in the archive.
     target_path = os.path.join(root_path, member.filename)
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
     if member.is_dir:
         os.makedirs(target_path, exist_ok=True)
-    elif member.is_link:
-        if not preserve_links:
-            return None
-        assert stream is not None
-        link_target = stream.read().decode("utf-8")
-        os.symlink(link_target, target_path)
-    elif member.is_file:
-        if stream is None:
-            stream = io.BytesIO(b"")
-        with open(target_path, "wb") as dst:
-            shutil.copyfileobj(stream, dst)
+    elif not os.path.lexists(target_path):
+        if member.is_link:
+            if not preserve_links:
+                return None
+            assert stream is not None
+            link_target = stream.read().decode("utf-8")
+            os.symlink(link_target, target_path)
+        elif member.is_file:
+            if stream is None:
+                stream = io.BytesIO(b"")
+            with open(target_path, "wb") as dst:
+                shutil.copyfileobj(stream, dst)
 
     _set_member_metadata(member, target_path)
     return target_path
@@ -163,13 +171,17 @@ class ArchiveReader(abc.ABC):
         else:
             path = str(path)
 
+        extracted_members: list[ArchiveMember] = []
+
         for member, stream in self.iter_members_with_io(filter=filter, pwd=pwd):
             written_path = _write_member(path, member, preserve_links, stream)
             if written_path is not None:
                 written_paths[member.filename] = written_path
+            extracted_members.append(member)
             if stream is not None:
                 stream.close()
 
+        apply_members_metadata(extracted_members, path)
         return written_paths
 
     # Context manager support
