@@ -948,6 +948,19 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
 # Build all archive infos
 SAMPLE_ARCHIVES = build_archive_infos()
 
+# Backwards compatibility for older tests expecting the generic zipfile name
+for a in SAMPLE_ARCHIVES:
+    if a.filename == "basic_nonsolid__zipfile_deflate.zip":
+        SAMPLE_ARCHIVES.append(
+            ArchiveInfo(
+                filename="basic_nonsolid__zipfile.zip",
+                contents=a.contents,
+                creation_info=a.creation_info,
+                skip_test=a.skip_test,
+            )
+        )
+        break
+
 BASIC_ARCHIVES = filter_archives(
     SAMPLE_ARCHIVES, prefixes=["basic_nonsolid", "basic_solid"]
 )
