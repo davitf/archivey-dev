@@ -15,7 +15,7 @@ from archivey.types import (
 )
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
-    ArchiveInfo,
+    SampleArchive,
     filter_archives,
 )
 from tests.archivey.testing_utils import skip_if_package_missing
@@ -52,7 +52,7 @@ _ALTERNATIVE_PACKAGES_FORMATS = (
     "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
 )
 def test_read_corrupted_archives(
-    sample_archive: ArchiveInfo,
+    sample_archive: SampleArchive,
     corrupted_archive_path: str,
     read_streams: bool,
     alternative_packages: bool,
@@ -162,7 +162,7 @@ def test_read_corrupted_archives(
     "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
 )
 def test_read_truncated_archives(
-    sample_archive: ArchiveInfo,
+    sample_archive: SampleArchive,
     corrupted_length: int | float,
     tmp_path_factory: pytest.TempPathFactory,
     read_streams: bool,

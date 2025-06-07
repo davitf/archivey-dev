@@ -6,14 +6,10 @@ import pytest
 
 from archivey.core import open_archive
 from archivey.types import ArchiveFormat, MemberType
-from tests.archivey.sample_archives import SAMPLE_ARCHIVES
-
-
-def _get_sample(name: str):
-    for a in SAMPLE_ARCHIVES:
-        if a.filename == name:
-            return a
-    raise ValueError(name)
+from tests.archivey.sample_archives import (
+    BASIC_ARCHIVES,
+    SampleArchive,
+)
 
 
 def _check_file_metadata(path: Path, info, sample):
@@ -34,21 +30,23 @@ def _check_file_metadata(path: Path, info, sample):
 
 
 @pytest.mark.parametrize(
-    "filename",
-    ["basic_nonsolid__zipfile.zip", "basic_nonsolid__py7zr.7z"],
+    "sample_archive",
+    BASIC_ARCHIVES,
+    ids=lambda x: x.filename,
 )
-def test_extractall(tmp_path: Path, filename: str):
-    sample = _get_sample(filename)
-    if sample.creation_info.format == ArchiveFormat.SEVENZIP:
+def test_extractall(
+    tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
+):
+    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
 
     dest = tmp_path / "out"
     dest.mkdir()
 
-    with open_archive(sample.get_archive_path()) as archive:
+    with open_archive(sample_archive_path) as archive:
         archive.extractall(dest)
 
-    for info in sample.contents.files:
+    for info in sample_archive.contents.files:
         path = dest / info.name.rstrip("/")
         assert path.exists(), f"Missing {path}"
         if info.type == MemberType.DIR:
@@ -61,53 +59,59 @@ def test_extractall(tmp_path: Path, filename: str):
             with open(path, "rb") as f:
                 assert f.read() == (info.contents or b"")
 
-        _check_file_metadata(path, info, sample)
+        _check_file_metadata(path, info, sample_archive)
 
     extracted = {str(p.relative_to(dest)).replace(os.sep, "/") for p in dest.rglob("*")}
-    expected = {f.name.rstrip("/") for f in sample.contents.files}
+    expected = {f.name.rstrip("/") for f in sample_archive.contents.files}
     assert expected <= extracted
 
 
 @pytest.mark.parametrize(
-    "filename",
-    ["basic_nonsolid__zipfile.zip", "basic_nonsolid__py7zr.7z"],
+    "sample_archive",
+    BASIC_ARCHIVES,
+    ids=lambda x: x.filename,
 )
-def test_extractall_filter(tmp_path: Path, filename: str):
-    sample = _get_sample(filename)
-    if sample.creation_info.format == ArchiveFormat.SEVENZIP:
+def test_extractall_filter(
+    tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
+):
+    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
 
     dest = tmp_path / "out"
     dest.mkdir()
 
-    with open_archive(sample.get_archive_path()) as archive:
+    with open_archive(sample_archive_path) as archive:
         archive.extractall(dest, filter=lambda m: m.filename.endswith("file2.txt"))
 
     path = dest / "subdir" / "file2.txt"
     assert path.exists() and path.is_file()
-    info = next(f for f in sample.contents.files if f.name == "subdir/file2.txt")
+    info = next(
+        f for f in sample_archive.contents.files if f.name == "subdir/file2.txt"
+    )
     with open(path, "rb") as f:
         assert f.read() == (info.contents or b"")
-    _check_file_metadata(path, info, sample)
+    _check_file_metadata(path, info, sample_archive)
 
     assert not (dest / "file1.txt").exists()
     assert not (dest / "implicit_subdir" / "file3.txt").exists()
 
 
 @pytest.mark.parametrize(
-    "filename",
-    ["basic_nonsolid__zipfile.zip", "basic_nonsolid__py7zr.7z"],
+    "sample_archive",
+    BASIC_ARCHIVES,
+    ids=lambda x: x.filename,
 )
-def test_extractall_members(tmp_path: Path, filename: str):
-    sample = _get_sample(filename)
-    if sample.creation_info.format == ArchiveFormat.SEVENZIP:
+def test_extractall_members(
+    tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
+):
+    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
 
     dest = tmp_path / "out"
     dest.mkdir()
 
-    with open_archive(sample.get_archive_path()) as archive:
-        member_obj = archive.getinfo("file1.txt")
+    with open_archive(sample_archive_path) as archive:
+        member_obj = archive.get_member("file1.txt")
         archive.extractall(dest, members=[member_obj, "subdir/file2.txt"])
 
     expected_paths = [dest / "file1.txt", dest / "subdir" / "file2.txt"]
@@ -115,11 +119,11 @@ def test_extractall_members(tmp_path: Path, filename: str):
         assert p.exists() and p.is_file()
         info = next(
             f
-            for f in sample.contents.files
+            for f in sample_archive.contents.files
             if f.name == str(p.relative_to(dest)).replace(os.sep, "/")
         )
         with open(p, "rb") as f:
             assert f.read() == (info.contents or b"")
-        _check_file_metadata(p, info, sample)
+        _check_file_metadata(p, info, sample_archive)
 
     assert not (dest / "implicit_subdir" / "file3.txt").exists()

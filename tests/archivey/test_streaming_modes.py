@@ -5,11 +5,15 @@ import pytest
 
 from archivey.core import open_archive
 from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
-from tests.archivey.sample_archives import SAMPLE_ARCHIVES, ArchiveInfo, filter_archives
+from tests.archivey.sample_archives import (
+    SAMPLE_ARCHIVES,
+    SampleArchive,
+    filter_archives,
+)
 from tests.archivey.testing_utils import skip_if_package_missing
 
 
-def _first_regular_file(sample: ArchiveInfo):
+def _first_regular_file(sample: SampleArchive):
     for f in sample.contents.files:
         if f.type == MemberType.FILE:
             return f
@@ -27,7 +31,7 @@ logger = logging.getLogger(__name__)
     ),
     ids=lambda a: a.filename,
 )
-def test_random_access_mode(sample_archive: ArchiveInfo, sample_archive_path: str):
+def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: str):
     if (
         sample_archive.creation_info.format == ArchiveFormat.ISO
         and not pathlib.Path(sample_archive_path).exists()
@@ -89,7 +93,7 @@ def test_random_access_mode(sample_archive: ArchiveInfo, sample_archive_path: st
     ),
     ids=lambda a: a.filename,
 )
-def test_streaming_only_mode(sample_archive: ArchiveInfo, sample_archive_path: str):
+def test_streaming_only_mode(sample_archive: SampleArchive, sample_archive_path: str):
     if (
         sample_archive.creation_info.format == ArchiveFormat.ISO
         and not pathlib.Path(sample_archive_path).exists()
@@ -134,7 +138,7 @@ def test_streaming_only_mode(sample_archive: ArchiveInfo, sample_archive_path: s
 )
 @pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
 def test_iter_members_filter(
-    sample_archive: ArchiveInfo, sample_archive_path: str, streaming_only: bool
+    sample_archive: SampleArchive, sample_archive_path: str, streaming_only: bool
 ):
     """Ensure iter_members_with_io honours the filter callable."""
     skip_if_package_missing(sample_archive.creation_info.format, None)
@@ -164,7 +168,7 @@ def test_iter_members_filter(
 )
 @pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
 def test_iter_members_partial_reads(
-    sample_archive: ArchiveInfo, sample_archive_path: str, streaming_only: bool
+    sample_archive: SampleArchive, sample_archive_path: str, streaming_only: bool
 ):
     """Reading some members fully, partially or not at all should not break iteration."""
     skip_if_package_missing(sample_archive.creation_info.format, None)

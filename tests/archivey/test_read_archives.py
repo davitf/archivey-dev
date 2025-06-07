@@ -13,8 +13,8 @@ from archivey.types import ArchiveMember, CreateSystem, MemberType
 from tests.archivey.sample_archives import (
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
-    ArchiveInfo,
     FileInfo,
+    SampleArchive,
     filter_archives,
 )
 from tests.archivey.testing_utils import (
@@ -27,7 +27,7 @@ from tests.archivey.testing_utils import (
 def check_member_metadata(
     member: ArchiveMember,
     sample_file: FileInfo | None,
-    sample_archive: ArchiveInfo,
+    sample_archive: SampleArchive,
     archive_path: str | None = None,
 ):
     if sample_file is None:
@@ -103,7 +103,7 @@ def check_member_metadata(
 
 
 def check_iter_members(
-    sample_archive: ArchiveInfo,
+    sample_archive: SampleArchive,
     archive_path: str | None = None,
     use_rar_stream: bool = False,
     set_file_password_in_constructor: bool = True,
@@ -209,7 +209,7 @@ def check_iter_members(
     filter_archives(SAMPLE_ARCHIVES, extensions=["zip"]),
     ids=lambda x: x.filename,
 )
-def test_read_zip_archives(sample_archive: ArchiveInfo, sample_archive_path: str):
+def test_read_zip_archives(sample_archive: SampleArchive, sample_archive_path: str):
     check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 
@@ -226,7 +226,7 @@ logger = logging.getLogger(__name__)
 )
 @pytest.mark.parametrize("alternative_packages", [False, True])
 def test_read_tar_archives(
-    sample_archive: ArchiveInfo, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
     logger.info(
         f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
@@ -257,7 +257,7 @@ def test_read_tar_archives(
     filter_archives(SAMPLE_ARCHIVES, extensions=["iso"]),
     ids=lambda x: x.filename,
 )
-def test_read_iso_archives(sample_archive: ArchiveInfo, sample_archive_path: str):
+def test_read_iso_archives(sample_archive: SampleArchive, sample_archive_path: str):
     if not pathlib.Path(sample_archive_path).exists():
         pytest.skip("ISO archive not available")
     check_iter_members(sample_archive, archive_path=sample_archive_path)
@@ -270,7 +270,7 @@ def test_read_iso_archives(sample_archive: ArchiveInfo, sample_archive_path: str
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives(
-    sample_archive: ArchiveInfo, sample_archive_path: str, use_rar_stream: bool
+    sample_archive: SampleArchive, sample_archive_path: str, use_rar_stream: bool
 ):
     deps = get_dependency_versions()
     if (
@@ -324,7 +324,7 @@ def test_read_rar_archives(
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives_with_password_in_constructor(
-    sample_archive: ArchiveInfo, sample_archive_path: str, use_rar_stream: bool
+    sample_archive: SampleArchive, sample_archive_path: str, use_rar_stream: bool
 ):
     deps = get_dependency_versions()
     if use_rar_stream and deps.unrar_version is None:
@@ -351,7 +351,7 @@ def test_read_rar_archives_with_password_in_constructor(
     ids=lambda x: x.filename,
 )
 def test_read_zip_and_7z_archives_with_password_in_constructor(
-    sample_archive: ArchiveInfo,
+    sample_archive: SampleArchive,
     sample_archive_path: str,
 ):
     check_iter_members(
@@ -367,7 +367,7 @@ def test_read_zip_and_7z_archives_with_password_in_constructor(
     ids=lambda x: x.filename,
 )
 def test_read_sevenzip_py7zr_archives(
-    sample_archive: ArchiveInfo, sample_archive_path: str
+    sample_archive: SampleArchive, sample_archive_path: str
 ):
     check_iter_members(sample_archive, archive_path=sample_archive_path)
 
@@ -381,7 +381,7 @@ def test_read_sevenzip_py7zr_archives(
 )
 @pytest.mark.parametrize("alternative_packages", [False, True])
 def test_read_single_file_compressed_archives(
-    sample_archive: ArchiveInfo, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
     if alternative_packages:
         config = ArchiveyConfig(

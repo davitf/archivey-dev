@@ -58,9 +58,9 @@ from archivey.types import TAR_FORMAT_TO_COMPRESSION_FORMAT, ArchiveFormat, Memb
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     ArchiveContents,
-    ArchiveInfo,
     FileInfo,
     GenerationMethod,
+    SampleArchive,
 )
 from tests.archivey.testing_utils import write_files_to_dir
 
@@ -782,7 +782,7 @@ GENERATION_METHODS_TO_GENERATOR = {
 }
 
 
-def create_archive(archive_info: ArchiveInfo, base_dir: str) -> str:
+def create_archive(archive_info: SampleArchive, base_dir: str) -> str:
     full_path = archive_info.get_archive_path(base_dir)
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
@@ -811,8 +811,8 @@ def create_archive(archive_info: ArchiveInfo, base_dir: str) -> str:
 
 
 def filter_archives(
-    archives: list[ArchiveInfo], patterns: list[str] | None
-) -> list[ArchiveInfo]:
+    archives: list[SampleArchive], patterns: list[str] | None
+) -> list[SampleArchive]:
     """
     Filter archives based on filename patterns.
     If patterns is None or empty, return all archives.

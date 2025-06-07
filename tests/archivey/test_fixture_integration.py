@@ -2,7 +2,11 @@ import os
 
 import pytest
 
-from tests.archivey.sample_archives import SAMPLE_ARCHIVES, ArchiveInfo, filter_archives
+from tests.archivey.sample_archives import (
+    SAMPLE_ARCHIVES,
+    SampleArchive,
+    filter_archives,
+)
 from tests.archivey.test_read_archives import check_iter_members
 
 
@@ -12,7 +16,7 @@ from tests.archivey.test_read_archives import check_iter_members
     ids=lambda a: a.filename,
 )
 def test_fixture_generates_archives(
-    sample_archive: ArchiveInfo, sample_archive_path: str
+    sample_archive: SampleArchive, sample_archive_path: str
 ):
     assert os.path.exists(sample_archive_path)
     check_iter_members(sample_archive, archive_path=sample_archive_path)

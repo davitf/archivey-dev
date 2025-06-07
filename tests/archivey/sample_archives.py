@@ -98,7 +98,7 @@ TEST_ARCHIVES_EXTERNAL_DIR = "test_archives_external"
 
 
 @dataclass
-class ArchiveInfo:
+class SampleArchive:
     # Will be constructed as f"{contents.file_basename}__{format.file_suffix}"
     filename: str
 
@@ -660,13 +660,13 @@ SINGLE_LARGE_FILE = FileInfo(
 )
 
 
-def build_archive_infos() -> list[ArchiveInfo]:
+def build_archive_infos() -> list[SampleArchive]:
     """Build all ArchiveInfo objects from the definitions."""
     archives = []
     for contents, format_infos in ARCHIVE_DEFINITIONS:
         for format_info in format_infos:
             filename = f"{contents.file_basename}__{format_info.file_suffix}"
-            archive_info = ArchiveInfo(
+            archive_info = SampleArchive(
                 filename=filename,
                 contents=contents,
                 creation_info=format_info,
@@ -699,11 +699,11 @@ def build_archive_infos() -> list[ArchiveInfo]:
 
 
 def filter_archives(
-    archives: list[ArchiveInfo],
+    archives: list[SampleArchive],
     prefixes: list[str] | None = None,
     extensions: list[str] | None = None,
-    custom_filter: Callable[[ArchiveInfo], bool] | None = None,
-) -> list[ArchiveInfo]:
+    custom_filter: Callable[[SampleArchive], bool] | None = None,
+) -> list[SampleArchive]:
     """Filter archives by filename prefixes and/or extensions."""
     filtered = archives
     if prefixes:
@@ -948,19 +948,21 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
 # Build all archive infos
 SAMPLE_ARCHIVES = build_archive_infos()
 
-# Backwards compatibility for older tests expecting the generic zipfile name
-for a in SAMPLE_ARCHIVES:
-    if a.filename == "basic_nonsolid__zipfile_deflate.zip":
-        SAMPLE_ARCHIVES.append(
-            ArchiveInfo(
-                filename="basic_nonsolid__zipfile.zip",
-                contents=a.contents,
-                creation_info=a.creation_info,
-                skip_test=a.skip_test,
-            )
-        )
-        break
+# # Backwards compatibility for older tests expecting the generic zipfile name
+# for a in SAMPLE_ARCHIVES:
+#     if a.filename == "basic_nonsolid__zipfile_deflate.zip":
+#         SAMPLE_ARCHIVES.append(
+#             ArchiveInfo(
+#                 filename="basic_nonsolid__zipfile.zip",
+#                 contents=a.contents,
+#                 creation_info=a.creation_info,
+#                 skip_test=a.skip_test,
+#             )
+#         )
+#         break
 
 BASIC_ARCHIVES = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["basic_nonsolid", "basic_solid"]
+    SAMPLE_ARCHIVES,
+    prefixes=["basic_nonsolid", "basic_solid"],
+    custom_filter=lambda x: x.creation_info.format != ArchiveFormat.ISO,
 )

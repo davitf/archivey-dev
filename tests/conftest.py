@@ -4,7 +4,7 @@ import pathlib
 import pytest
 
 from archivey.exceptions import PackageNotInstalledError
-from tests.archivey.sample_archives import ArchiveInfo
+from tests.archivey.sample_archives import SampleArchive
 from tests.create_archives import create_archive
 from tests.create_corrupted_archives import corrupt_archive
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture
 def sample_archive_path(
-    sample_archive: ArchiveInfo, tmp_path_factory: pytest.TempPathFactory
+    sample_archive: SampleArchive, tmp_path_factory: pytest.TempPathFactory
 ) -> str:
     """Return path to the sample archive, creating it if needed."""
     path = pathlib.Path(sample_archive.get_archive_path())
@@ -32,7 +32,7 @@ def sample_archive_path(
 
 @pytest.fixture(params=["random", "zeroes", "ffs"])
 def corrupted_archive_path(
-    sample_archive: ArchiveInfo,
+    sample_archive: SampleArchive,
     sample_archive_path: str,
     tmp_path_factory: pytest.TempPathFactory,
     request: pytest.FixtureRequest,
