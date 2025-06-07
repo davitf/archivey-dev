@@ -313,7 +313,7 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
         *,
         pwd: bytes | str | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
-        return self.reader.iter_members_with_io(filter, pwd=pwd)
+        return self.reader.iter_members_with_io(filter=filter, pwd=pwd)
 
     def get_archive_info(self) -> ArchiveInfo:
         return self.reader.get_archive_info()
@@ -329,7 +329,13 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
         filter: Callable[[ArchiveMember], bool] | None = None,
         preserve_links: bool = True,
     ) -> dict[str, str]:
-        return self.reader.extractall(path, members, pwd, filter, preserve_links)
+        return self.reader.extractall(
+            path,
+            members,
+            pwd=pwd,
+            filter=filter,
+            preserve_links=preserve_links,
+        )
 
     # Unsupported methods for streaming-only readers
 
