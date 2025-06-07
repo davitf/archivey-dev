@@ -3,7 +3,7 @@ import logging
 import os
 import struct
 from datetime import datetime, timezone
-from typing import IO, List
+from typing import BinaryIO, List
 
 from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.compressed_streams import open_stream
@@ -256,7 +256,7 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
             extra=None,
         )
 
-    def open(self, member: ArchiveMember, *, pwd: bytes | None = None) -> IO[bytes]:
+    def open(self, member: ArchiveMember, *, pwd: bytes | None = None) -> BinaryIO:
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
         if member != self.member:

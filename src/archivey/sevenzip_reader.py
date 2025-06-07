@@ -5,7 +5,16 @@ import os
 import struct
 from queue import Empty, Queue
 from threading import Thread
-from typing import IO, TYPE_CHECKING, Callable, Iterator, List, Optional, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    BinaryIO,
+    Callable,
+    Iterator,
+    List,
+    Optional,
+    Union,
+    cast,
+)
 
 from archivey.base_reader import (
     BaseArchiveReaderRandomAccess,
@@ -182,7 +191,7 @@ class StreamingFactory(WriterFactory):
         logger.info(f"Creating streaming file {fname}")
         return StreamingFile(fname, self._queue)
 
-    def yield_files(self) -> Iterator[tuple[str, IO[bytes]]]:
+    def yield_files(self) -> Iterator[tuple[str, BinaryIO]]:
         while True:
             item = self._queue.get()
             if item is None:
@@ -327,7 +336,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: str | None = None
-    ) -> IO[bytes]:
+    ) -> BinaryIO:
         """Open a member of the archive.
 
         Warning: this is slow for 7-zip archives. Prefer using iter_members() if you
@@ -392,7 +401,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         *,
         close_streams: bool = True,
         pwd: bytes | str | None = None,
-    ) -> Iterator[tuple[ArchiveMember, IO[bytes]]]:
+    ) -> Iterator[tuple[ArchiveMember, BinaryIO]]:
         # TODO: set pwd in the folders
 
         if self._archive is None:
@@ -400,7 +409,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         members_dict = {m.filename: m for m in self.get_members()}
 
         # Allow the queue to carry tuples, exceptions, or None
-        q = Queue[tuple[str, IO[bytes]] | Exception | None]()
+        q = Queue[tuple[str, BinaryIO] | Exception | None]()
 
         def extractor():
             try:

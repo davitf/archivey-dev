@@ -8,7 +8,7 @@ import sys
 import zlib
 from datetime import datetime
 from importlib.metadata import version as package_version
-from typing import IO, Callable, Tuple
+from typing import BinaryIO, Callable, Tuple
 
 from tqdm import tqdm
 
@@ -39,7 +39,7 @@ def format_mode(member_type: MemberType, mode: int) -> str:
     return permissions_str
 
 
-def get_member_checksums(member_file: IO[bytes]) -> Tuple[int, str]:
+def get_member_checksums(member_file: BinaryIO) -> Tuple[int, str]:
     crc32_value: int = 0
     sha256 = hashlib.sha256()
     for block in iter(lambda: member_file.read(65536), b""):
@@ -62,12 +62,12 @@ def build_pattern_filter(patterns: list[str]) -> Callable[[ArchiveMember], bool]
 def process_member(
     member: ArchiveMember,
     archive: ArchiveReader,
-    stream: IO[bytes] | None = None,
+    stream: BinaryIO | None = None,
     *,
     verify: bool,
     pwd: str | None = None,
 ) -> None:
-    stream_to_close: IO[bytes] | None = None
+    stream_to_close: BinaryIO | None = None
 
     encrypted_str = "E" if member.encrypted else " "
     size_str = "?" * 12 if member.file_size is None else f"{member.file_size:12d}"

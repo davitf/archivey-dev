@@ -4,7 +4,7 @@ import stat
 import struct
 import zipfile
 from datetime import datetime, timezone
-from typing import IO, Callable, List, Optional, cast
+from typing import BinaryIO, Callable, List, Optional, cast
 
 from archivey.base_reader import (
     BaseArchiveReaderRandomAccess,
@@ -196,7 +196,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         member_or_filename: ArchiveMember | str,
         *,
         pwd: Optional[bytes | str] = None,
-    ) -> IO[bytes]:
+    ) -> BinaryIO:
         if self._archive is None:
             raise ValueError("Archive is closed")
 

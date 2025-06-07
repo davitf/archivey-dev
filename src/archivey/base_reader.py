@@ -4,7 +4,7 @@ import io
 import logging
 import os
 import shutil
-from typing import IO, Callable, Iterable, Iterator, List
+from typing import BinaryIO, Callable, Iterable, Iterator, List
 
 from archivey.config import ArchiveyConfig, get_default_config
 from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
@@ -35,7 +35,7 @@ def _write_member(
     root_path: str,
     member: ArchiveMember,
     preserve_links: bool,
-    stream: IO[bytes] | None,
+    stream: BinaryIO | None,
 ) -> str | None:
     target_path = os.path.join(root_path, member.filename)
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
@@ -114,7 +114,7 @@ class ArchiveReader(abc.ABC):
         filter: Callable[[ArchiveMember], bool] | None = None,
         *,
         pwd: bytes | str | None = None,
-    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """Iterate over all members in the archive.
 
         Args:
@@ -126,7 +126,7 @@ class ArchiveReader(abc.ABC):
             used when opening the archive. May not be supported by all archive formats.
 
         Returns:
-            A (ArchiveMember, IO[bytes]) iterator over the members. Each stream should
+            A (ArchiveMember, BinaryIO) iterator over the members. Each stream should
             be read before the next member is retrieved. The stream may be None if the
             member is not a file.
         """
@@ -189,7 +189,7 @@ class ArchiveReader(abc.ABC):
     @abc.abstractmethod
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
-    ) -> IO[bytes]:
+    ) -> BinaryIO:
         """Open a member for reading.
 
         Args:
@@ -263,7 +263,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         filter: Callable[[ArchiveMember], bool] | None = None,
         *,
         pwd: bytes | str | None = None,
-    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """Default implementation of iter_members for random access archives."""
         for member in self.get_members():
             if filter is None or filter(member):
@@ -312,7 +312,7 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
         filter: Callable[[ArchiveMember], bool] | None = None,
         *,
         pwd: bytes | str | None = None,
-    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         return self.reader.iter_members_with_io(filter, pwd=pwd)
 
     def get_archive_info(self) -> ArchiveInfo:
@@ -340,7 +340,7 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
 
     def open(
         self, member: ArchiveMember, *, pwd: bytes | str | None = None
-    ) -> IO[bytes]:
+    ) -> BinaryIO:
         raise ValueError("Streaming-only archive reader does not support open().")
 
     def extract(
