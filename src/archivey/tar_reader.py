@@ -2,7 +2,7 @@ import logging
 import stat
 import tarfile
 from datetime import datetime, timezone
-from typing import IO, Callable, Iterator, List, Optional, Union, cast
+from typing import BinaryIO, Callable, Iterator, List, Optional, Union, cast
 
 from archivey.base_reader import (
     ArchiveInfo,
@@ -200,7 +200,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
         member_or_filename: Union[str, ArchiveMember],
         *,
         pwd: bytes | str | None = None,
-    ) -> IO[bytes]:
+    ) -> BinaryIO:
         if self._archive is None:
             raise ValueError("Archive is closed")
         if self._streaming_only:
@@ -266,7 +266,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
         filter: Callable[[ArchiveMember], bool] | None = None,
         *,
         pwd: bytes | str | None = None,
-    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self._archive is None:
             raise ValueError("Archive is closed")
 

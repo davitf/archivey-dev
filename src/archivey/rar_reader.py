@@ -12,9 +12,9 @@ import subprocess
 import threading
 import zlib
 from typing import (
-    IO,
     TYPE_CHECKING,
     Any,
+    BinaryIO,
     Callable,
     Iterable,
     Iterator,
@@ -392,7 +392,7 @@ class RarReader(BaseRarReader):
         member_or_filename: ArchiveMember | str,
         *,
         pwd: Optional[str | bytes] = None,
-    ) -> IO[bytes]:
+    ) -> BinaryIO:
         member = self.get_member(member_or_filename)
 
         if member.encrypted:
@@ -409,9 +409,7 @@ class RarReader(BaseRarReader):
 
         try:
             # Apparently pwd can be either bytes or str.
-            inner: IO[bytes] = self._archive.open(
-                member.filename, pwd=bytes_to_str(pwd)
-            )  # type: ignore[arg-type]
+            inner: BinaryIO = self._archive.open(member.filename, pwd=bytes_to_str(pwd))  # type: ignore[arg-type]
             return ExceptionTranslatingIO(inner, self._exception_translator)
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(
@@ -436,11 +434,11 @@ class CRCMismatchError(ArchiveCorruptedError):
         super().__init__(f"CRC mismatch in {filename}")
 
 
-class RarStreamMemberFile(io.RawIOBase, IO[bytes]):
+class RarStreamMemberFile(io.RawIOBase, BinaryIO):
     def __init__(
         self,
         member: ArchiveMember,
-        shared_stream: IO[bytes],
+        shared_stream: BinaryIO,
         lock: threading.Lock,
         *,
         pwd: bytes | None = None,
@@ -559,7 +557,7 @@ class RarStreamReader(BaseRarReader):
 
     def _open_unrar_stream(
         self, pwd: bytes | str | None = None
-    ) -> tuple[subprocess.Popen, IO[bytes]]:
+    ) -> tuple[subprocess.Popen, BinaryIO]:
         if pwd is None:
             pwd = self._pwd
 
@@ -592,8 +590,8 @@ class RarStreamReader(BaseRarReader):
             ) from e
 
     def _get_member_file(
-        self, member: ArchiveMember, stream: IO[bytes], lock: threading.Lock
-    ) -> IO[bytes] | None:
+        self, member: ArchiveMember, stream: BinaryIO, lock: threading.Lock
+    ) -> BinaryIO | None:
         if not member.is_file:
             return None
 
@@ -615,7 +613,7 @@ class RarStreamReader(BaseRarReader):
         filter: Callable[[ArchiveMember], bool] | None = None,
         *,
         pwd: bytes | str | None = None,
-    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
@@ -645,7 +643,7 @@ class RarStreamReader(BaseRarReader):
 
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
-    ) -> IO[bytes]:
+    ) -> BinaryIO:
         raise NotImplementedError(
             "RarStreamReader does not support opening specific members"
         )

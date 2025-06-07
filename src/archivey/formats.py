@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import IO, cast
+from typing import BinaryIO, cast
 
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
@@ -22,7 +22,7 @@ _ISO_MAGIC_BYTES = (
 
 
 def detect_archive_format_by_signature(
-    path_or_file: str | bytes | IO[bytes],
+    path_or_file: str | bytes | BinaryIO,
 ) -> ArchiveFormat:
     # [signature, ...], offset, format
     SIGNATURES = [
@@ -44,7 +44,7 @@ def detect_archive_format_by_signature(
         ([b"ustar"], 257, ArchiveFormat.TAR),  # TAR "ustar" magic
         (_ISO_MAGIC_BYTES, 0x8001, ArchiveFormat.ISO),  # ISO9660
     ]
-    f: IO[bytes]
+    f: BinaryIO
 
     if isinstance(path_or_file, (str, bytes)):
         # If it's a path, check if it's a directory first
@@ -58,7 +58,7 @@ def detect_archive_format_by_signature(
                 ArchiveFormat.UNKNOWN
             )  # Or raise error, depending on desired behavior
     elif hasattr(path_or_file, "read") and hasattr(path_or_file, "seek"):
-        f = cast(IO[bytes], path_or_file)
+        f = cast(BinaryIO, path_or_file)
         # We can't check is_dir on a stream, assume it's not a folder for streams
         close_after = False
     else:

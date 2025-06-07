@@ -3,7 +3,7 @@ import os
 import stat
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import IO, Iterator, List, Optional
+from typing import BinaryIO, Iterator, List, Optional
 
 from archivey.base_reader import BaseArchiveReaderRandomAccess
 from archivey.exceptions import ArchiveError, ArchiveIOError, ArchiveMemberNotFoundError
@@ -96,7 +96,7 @@ class FolderReader(BaseArchiveReaderRandomAccess):
 
     def iter_members_with_io(
         self, *, pwd: bytes | str | None = None
-    ) -> Iterator[tuple[ArchiveMember, IO[bytes] | None]]:
+    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if pwd is not None:
             raise ArchiveError("Password is not supported for FolderReader")
 
@@ -131,7 +131,7 @@ class FolderReader(BaseArchiveReaderRandomAccess):
         member_or_filename: ArchiveMember | str,
         *,
         pwd: Optional[str | bytes] = None,
-    ) -> IO[bytes]:
+    ) -> BinaryIO:
         # pwd is ignored for FolderReader
 
         member_name = (

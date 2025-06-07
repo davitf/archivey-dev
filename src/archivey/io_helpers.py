@@ -1,14 +1,14 @@
 import io
 import logging
 from dataclasses import dataclass
-from typing import IO, Any, Callable, Optional, cast
+from typing import Any, BinaryIO, Callable, Optional, cast
 
 from archivey.exceptions import ArchiveError
 
 logger = logging.getLogger(__name__)
 
 
-class ErrorIOStream(io.RawIOBase, IO[bytes]):
+class ErrorIOStream(io.RawIOBase, BinaryIO):
     """A stream that raises an exception on read operations."""
 
     def __init__(self, exc: Exception):
@@ -83,7 +83,7 @@ class ErrorIOStream(io.RawIOBase, IO[bytes]):
 #         super().close()
 
 
-class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
+class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     """A wrapper around an IO object that translates exceptions during operations.
 
     Args:
@@ -94,12 +94,12 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
 
     def __init__(
         self,
-        inner: IO[bytes] | io.IOBase | Callable[..., IO[bytes] | io.IOBase],
+        inner: BinaryIO | io.IOBase | Callable[..., BinaryIO | io.IOBase],
         exception_translator: Callable[[Exception], Optional[ArchiveError]],
     ):
         super().__init__()
         self._translate = exception_translator
-        self._inner: IO[bytes] | io.IOBase | None = None
+        self._inner: BinaryIO | io.IOBase | None = None
 
         if isinstance(inner, Callable):
             try:
@@ -179,7 +179,7 @@ class ExceptionTranslatingIO(io.RawIOBase, IO[bytes]):
         super().close()
 
 
-class LazyOpenIO(io.RawIOBase, IO[bytes]):
+class LazyOpenIO(io.RawIOBase, BinaryIO):
     """A wrapper that defers opening of the underlying stream until needed.
 
     Args:
@@ -191,7 +191,7 @@ class LazyOpenIO(io.RawIOBase, IO[bytes]):
 
     def __init__(
         self,
-        open_fn: Callable[..., IO[bytes]],
+        open_fn: Callable[..., BinaryIO],
         *args: Any,
         seekable: bool,
         **kwargs: Any,
@@ -200,10 +200,10 @@ class LazyOpenIO(io.RawIOBase, IO[bytes]):
         self._open_fn = open_fn
         self._args = args
         self._kwargs = kwargs
-        self._inner: IO[bytes] | None = None
+        self._inner: BinaryIO | None = None
         self._seekable = seekable
 
-    def _ensure_open(self) -> IO[bytes]:
+    def _ensure_open(self) -> BinaryIO:
         if self.closed:
             raise ValueError("I/O operation on closed file.")
         if self._inner is None:
@@ -245,10 +245,10 @@ class IOStats:
     seek_calls: int = 0
 
 
-class StatsIO(io.RawIOBase, IO[bytes]):
+class StatsIO(io.RawIOBase, BinaryIO):
     """Wraps another IO object and tracks read/seek statistics."""
 
-    def __init__(self, inner: IO[bytes], stats: IOStats) -> None:
+    def __init__(self, inner: BinaryIO, stats: IOStats) -> None:
         super().__init__()
         self._inner = inner
         self.stats = stats
