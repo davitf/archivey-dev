@@ -169,7 +169,11 @@ SEVENZIP_PY7ZR = ArchiveCreationInfo(
     file_suffix="py7zr.7z",
     format=ArchiveFormat.SEVENZIP,
     generation_method=GenerationMethod.PY7ZR,
-    features=ArchiveFormatFeatures(dir_entries=False, archive_comment=True),
+    features=ArchiveFormatFeatures(
+        dir_entries=False,
+        archive_comment=True,
+        duplicate_files=True,
+    ),
 )
 SEVENZIP_7ZCMD = ArchiveCreationInfo(
     file_suffix="7zcmd.7z",
