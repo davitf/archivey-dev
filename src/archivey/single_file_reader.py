@@ -6,9 +6,15 @@ from datetime import datetime, timezone
 from typing import BinaryIO, List
 
 from archivey.base_reader import BaseArchiveReaderRandomAccess
-from archivey.compressed_streams import open_stream
+from archivey.compressed_streams import (
+    lz4,
+    open_stream,
+    pyzstd,
+    zstandard,
+)
 from archivey.exceptions import (
     ArchiveFormatError,
+    PackageNotInstalledError,
 )
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
@@ -207,6 +213,22 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
 
         if format not in SINGLE_FILE_COMPRESSED_FORMATS:
             raise ValueError(f"Unsupported archive format: {format}")
+
+        # Fail fast if the required library for this compression format is missing
+        if format == ArchiveFormat.LZ4 and lz4 is None:
+            raise PackageNotInstalledError(
+                "lz4 package is not installed, required for LZ4 archives"
+            )
+        if format == ArchiveFormat.ZSTD:
+            if self.config.use_zstandard:
+                if zstandard is None:
+                    raise PackageNotInstalledError(
+                        "zstandard package is not installed, required for Zstandard archives"
+                    )
+            elif pyzstd is None:
+                raise PackageNotInstalledError(
+                    "pyzstd package is not installed, required for Zstandard archives"
+                )
 
         self.archive_path = archive_path
         self.ext = os.path.splitext(archive_path)[1].lower()
