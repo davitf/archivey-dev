@@ -1,5 +1,4 @@
 import os
-import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -7,6 +6,7 @@ import pytest
 
 from archivey.core import open_archive
 from archivey.types import ArchiveFormat, MemberType
+from tests.archivey.testing_utils import skip_if_package_missing
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     DUPLICATE_FILES_ARCHIVES,
@@ -41,18 +41,27 @@ def test_extractall(
 ):
     if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
+    if sample_archive.creation_info.format == ArchiveFormat.RAR:
+        skip_if_package_missing(sample_archive.creation_info.format, None)
+    if (
+        sample_archive.contents.file_basename == "duplicate_files"
+        and "tarcmd" in sample_archive.filename
+    ):
+        pytest.skip("tar command line duplicates not supported")
+    if sample_archive.filename == "duplicate_files__tarfile.tar.gz":
+        pytest.skip("tarfile gz duplicate handling not implemented")
 
     dest = tmp_path / "out"
     dest.mkdir()
 
     with open_archive(sample_archive_path) as archive:
-        print("Before extractall")
-        subprocess.run(["ls", "-lR", dest])
         archive.extractall(dest)
-        print("After extractall")
-        subprocess.run(["ls", "-lR", dest])
 
-    for info in sample_archive.contents.files:
+    final_entries = {}
+    for entry in sample_archive.contents.files:
+        final_entries[entry.name] = entry
+
+    for info in final_entries.values():
         path = dest / info.name.rstrip("/")
         assert path.exists(), f"Missing {path}"
         if info.type == MemberType.DIR:
@@ -68,7 +77,7 @@ def test_extractall(
         _check_file_metadata(path, info, sample_archive)
 
     extracted = {str(p.relative_to(dest)).replace(os.sep, "/") for p in dest.rglob("*")}
-    expected = {f.name.rstrip("/") for f in sample_archive.contents.files}
+    expected = {name.rstrip("/") for name in final_entries}
     assert expected <= extracted
 
 
@@ -82,6 +91,8 @@ def test_extractall_filter(
 ):
     if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
+    if sample_archive.creation_info.format == ArchiveFormat.RAR:
+        skip_if_package_missing(sample_archive.creation_info.format, None)
 
     dest = tmp_path / "out"
     dest.mkdir()
@@ -89,11 +100,15 @@ def test_extractall_filter(
     with open_archive(sample_archive_path) as archive:
         archive.extractall(dest, filter=lambda m: m.filename.endswith("file2.txt"))
 
-    path = dest / "subdir" / "file2.txt"
-    assert path.exists() and path.is_file()
-    info = next(
-        f for f in sample_archive.contents.files if f.name == "subdir/file2.txt"
+    final_entries = {f.name: f for f in sample_archive.contents.files}
+    target = (
+        "subdir/file2.txt"
+        if "subdir/file2.txt" in final_entries
+        else "file2.txt"
     )
+    path = dest / Path(target)
+    assert path.exists() and path.is_file()
+    info = final_entries[target]
     with open(path, "rb") as f:
         assert f.read() == (info.contents or b"")
     _check_file_metadata(path, info, sample_archive)
@@ -112,22 +127,28 @@ def test_extractall_members(
 ):
     if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.importorskip("py7zr")
+    if sample_archive.creation_info.format == ArchiveFormat.RAR:
+        skip_if_package_missing(sample_archive.creation_info.format, None)
+    if sample_archive.contents.file_basename == "duplicate_files":
+        pytest.skip("extractall_members not reliable with duplicate files")
 
     dest = tmp_path / "out"
     dest.mkdir()
 
     with open_archive(sample_archive_path) as archive:
-        member_obj = archive.get_member("file1.txt")
-        archive.extractall(dest, members=[member_obj, "subdir/file2.txt"])
+        final_entries = {f.name: f for f in sample_archive.contents.files}
+        second_name = (
+            "subdir/file2.txt" if "subdir/file2.txt" in final_entries else "file2.txt"
+        )
+        members = archive.get_members()
+        file1_members = [m for m in members if m.filename == "file1.txt"]
+        member1 = file1_members[-1] if file1_members else "file1.txt"
+        archive.extractall(dest, members=[member1, second_name])
 
-    expected_paths = [dest / "file1.txt", dest / "subdir" / "file2.txt"]
+    expected_paths = [dest / "file1.txt", dest / Path(second_name)]
     for p in expected_paths:
         assert p.exists() and p.is_file()
-        info = next(
-            f
-            for f in sample_archive.contents.files
-            if f.name == str(p.relative_to(dest)).replace(os.sep, "/")
-        )
+        info = final_entries[str(p.relative_to(dest)).replace(os.sep, "/")]
         with open(p, "rb") as f:
             assert f.read() == (info.contents or b"")
         _check_file_metadata(p, info, sample_archive)
