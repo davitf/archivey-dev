@@ -265,10 +265,7 @@ def create_tar_archive_with_command_line(
     with tempfile.TemporaryDirectory() as tempdir:
         write_files_to_dir(tempdir, contents.files)
 
-        command = ["tar"]
-        command.append("-c")  # Create a new archive
-        command.append("-f")  # Specify the archive file
-        command.append(abs_archive_path)
+        command = ["tar", "-c", "--no-recursion", "-f", abs_archive_path]
 
         # Add compression flag based on the compression_format
         if compression_format == ArchiveFormat.TAR_GZ:
@@ -290,6 +287,8 @@ def create_tar_archive_with_command_line(
         for file_info in contents.files:
             command.append(file_info.name)
 
+        logger.info(f"Running command: {' '.join(command)}")
+        subprocess.run(["ls", "-lR", tempdir])
         subprocess.run(command, check=True, cwd=tempdir)
 
 
@@ -537,7 +536,7 @@ def create_rar_archive_with_command_line(
                 # However, to ensure empty directories or specific directory metadata (like mtime)
                 # are preserved as defined in FileInfo, we add them explicitly.
                 # RAR handles adding existing files/dirs.
-                command.append(file_info.name)
+                command.append(file_info.name.removesuffix("/"))
 
             subprocess.run(command, check=True, cwd=tempdir)
 

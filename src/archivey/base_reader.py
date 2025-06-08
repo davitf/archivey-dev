@@ -28,7 +28,10 @@ def apply_members_metadata(members: Iterable[ArchiveMember], root_path: str) -> 
     for member in members:
         target_path = os.path.join(root_path, member.filename)
         if os.path.exists(target_path):
+            logger.info(f"Setting metadata for {target_path}")
             _set_member_metadata(member, target_path)
+        else:
+            logger.info(f"Skipping metadata for {target_path} (not found)")
 
 
 def _write_member(
@@ -54,7 +57,6 @@ def _write_member(
         with open(target_path, "wb") as dst:
             shutil.copyfileobj(stream, dst)
 
-    _set_member_metadata(member, target_path)
     return target_path
 
 
@@ -156,6 +158,11 @@ class ArchiveReader(abc.ABC):
     ) -> dict[str, str]:
         written_paths: dict[str, str] = {}
 
+        for m in self.get_members():
+            logger.info(
+                f"Member {m.filename} is_file: {m.is_file}, is_dir: {m.is_dir}, is_link: {m.is_link}"
+            )
+
         filter = create_member_filter(members, filter)
 
         if path is None:
@@ -163,13 +170,17 @@ class ArchiveReader(abc.ABC):
         else:
             path = str(path)
 
+        written_members = []
         for member, stream in self.iter_members_with_io(filter=filter, pwd=pwd):
+            logger.info(f"Writing member {member.filename}")
             written_path = _write_member(path, member, preserve_links, stream)
             if written_path is not None:
                 written_paths[member.filename] = written_path
+                written_members.append(member)
             if stream is not None:
                 stream.close()
 
+        apply_members_metadata(written_members, path)
         return written_paths
 
     # Context manager support

@@ -1,4 +1,5 @@
 import os
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from archivey.core import open_archive
 from archivey.types import ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
+    DUPLICATE_FILES_ARCHIVES,
     SampleArchive,
 )
 
@@ -17,21 +19,21 @@ def _check_file_metadata(path: Path, info, sample):
     features = sample.creation_info.features
 
     if info.permissions is not None:
-        assert (stat.st_mode & 0o777) == info.permissions
+        assert (stat.st_mode & 0o777) == info.permissions, path
 
     if not features.mtime:
         return
 
     actual = datetime.fromtimestamp(stat.st_mtime)
     if features.rounded_mtime:
-        assert abs(actual.timestamp() - info.mtime.timestamp()) <= 1
+        assert abs(actual.timestamp() - info.mtime.timestamp()) <= 1, path
     else:
-        assert actual == info.mtime
+        assert actual == info.mtime, path
 
 
 @pytest.mark.parametrize(
     "sample_archive",
-    BASIC_ARCHIVES,
+    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES,
     ids=lambda x: x.filename,
 )
 def test_extractall(
@@ -44,7 +46,11 @@ def test_extractall(
     dest.mkdir()
 
     with open_archive(sample_archive_path) as archive:
+        print("Before extractall")
+        subprocess.run(["ls", "-lR", dest])
         archive.extractall(dest)
+        print("After extractall")
+        subprocess.run(["ls", "-lR", dest])
 
     for info in sample_archive.contents.files:
         path = dest / info.name.rstrip("/")
@@ -68,7 +74,7 @@ def test_extractall(
 
 @pytest.mark.parametrize(
     "sample_archive",
-    BASIC_ARCHIVES,
+    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES,
     ids=lambda x: x.filename,
 )
 def test_extractall_filter(
@@ -98,7 +104,7 @@ def test_extractall_filter(
 
 @pytest.mark.parametrize(
     "sample_archive",
-    BASIC_ARCHIVES,
+    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES,
     ids=lambda x: x.filename,
 )
 def test_extractall_members(

@@ -73,6 +73,7 @@ class ArchiveFormatFeatures:
     mtime: bool = True
     rounded_mtime: bool = False
     file_size: bool = True
+    duplicate_files: bool = False
 
 
 DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
@@ -134,7 +135,10 @@ ZIP_ZIPFILE_STORE = ArchiveCreationInfo(
     format=ArchiveFormat.ZIP,
     generation_method=GenerationMethod.ZIPFILE,
     features=ArchiveFormatFeatures(
-        file_comments=True, archive_comment=True, rounded_mtime=True
+        file_comments=True,
+        archive_comment=True,
+        rounded_mtime=True,
+        duplicate_files=True,
     ),
     generation_method_options={"compression_method": "store"},
 )
@@ -143,7 +147,10 @@ ZIP_ZIPFILE_DEFLATE = ArchiveCreationInfo(
     format=ArchiveFormat.ZIP,
     generation_method=GenerationMethod.ZIPFILE,
     features=ArchiveFormatFeatures(
-        file_comments=True, archive_comment=True, rounded_mtime=True
+        file_comments=True,
+        archive_comment=True,
+        rounded_mtime=True,
+        duplicate_files=True,
     ),
     generation_method_options={"compression_method": "deflate"},
 )
@@ -176,10 +183,11 @@ RAR_CMD = ArchiveCreationInfo(
     file_suffix=".rar",
     format=ArchiveFormat.RAR,
     generation_method=GenerationMethod.RAR_COMMAND_LINE,
-    features=ArchiveFormatFeatures(dir_entries=False, archive_comment=True),
+    features=ArchiveFormatFeatures(dir_entries=True, archive_comment=True),
 )
 
 _TAR_FORMAT_FEATURES = ArchiveFormatFeatures()
+_TAR_FORMAT_FEATURES_DUPLICATE_FILES = ArchiveFormatFeatures(duplicate_files=True)
 
 # TAR formats
 TAR_PLAIN_CMD = ArchiveCreationInfo(
@@ -194,7 +202,7 @@ TAR_PLAIN_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar",
     format=ArchiveFormat.TAR,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
 )
 
 TAR_GZ_CMD = ArchiveCreationInfo(
@@ -213,13 +221,13 @@ TAR_ZSTD_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar.zst",
     format=ArchiveFormat.TAR_ZSTD,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
 )
 TAR_ZSTD_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar.zst",
     format=ArchiveFormat.TAR_ZSTD,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
 )
 
 # No need to test both tarfile and cmdline for the other formats, as there shouldn't
@@ -228,19 +236,19 @@ TAR_BZ2 = ArchiveCreationInfo(
     file_suffix=".tar.bz2",
     format=ArchiveFormat.TAR_BZ2,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
 )
 TAR_XZ = ArchiveCreationInfo(
     file_suffix=".tar.xz",
     format=ArchiveFormat.TAR_XZ,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
 )
 TAR_LZ4 = ArchiveCreationInfo(
     file_suffix=".tar.lz4",
     format=ArchiveFormat.TAR_LZ4,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
 )
 
 # Single file compression formats
@@ -439,6 +447,7 @@ BASIC_FILES = [
         contents=b"Hello there!",
     ),
 ]
+
 
 COMMENT_FILES = [
     FileInfo(
@@ -658,6 +667,30 @@ SINGLE_LARGE_FILE = FileInfo(
     contents=_create_random_data(1000000, 1),
     mtime=MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
 )
+
+DUPLICATE_FILES = [
+    FileInfo(
+        name="file1.txt",
+        mtime=_fake_mtime(1),
+        contents=b"Old contents",  # len: 12, CRC: e8c902a6
+    ),
+    FileInfo(
+        name="file2.txt",
+        mtime=_fake_mtime(2),
+        contents=b"Duplicate contents",
+    ),
+    FileInfo(
+        name="file1.txt",
+        mtime=_fake_mtime(3),
+        contents=b"New contents!",  # len: 13, CRC: d61d71d2
+    ),
+    # Might get turned into a link or reference
+    FileInfo(
+        name="file2_dupe.txt",
+        mtime=_fake_mtime(4),
+        contents=b"Duplicate contents",
+    ),
+]
 
 
 def build_archive_infos() -> list[SampleArchive]:
@@ -943,6 +976,21 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     #     ),
     #     ISO_FORMATS,
     # ),
+    (
+        ArchiveContents(
+            file_basename="duplicate_files",
+            files=DUPLICATE_FILES,
+        ),
+        ZIP_RAR_7Z_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="duplicate_files",
+            files=DUPLICATE_FILES,
+            solid=True,
+        ),
+        ALL_TAR_FORMATS,
+    ),
 ]
 
 # Build all archive infos
@@ -964,5 +1012,11 @@ SAMPLE_ARCHIVES = build_archive_infos()
 BASIC_ARCHIVES = filter_archives(
     SAMPLE_ARCHIVES,
     prefixes=["basic_nonsolid", "basic_solid"],
+    custom_filter=lambda x: x.creation_info.format != ArchiveFormat.ISO,
+)
+
+DUPLICATE_FILES_ARCHIVES = filter_archives(
+    SAMPLE_ARCHIVES,
+    prefixes=["duplicate_files"],
     custom_filter=lambda x: x.creation_info.format != ArchiveFormat.ISO,
 )

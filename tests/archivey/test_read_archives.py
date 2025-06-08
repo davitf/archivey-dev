@@ -35,6 +35,12 @@ def check_member_metadata(
 
     features = sample_archive.creation_info.features
 
+    if member.is_file:
+        if features.file_size:
+            assert member.file_size == len(sample_file.contents or b"")
+        else:
+            assert member.file_size is None
+
     if member.is_file and member.crc32 is not None:
         sample_crc32 = get_crc32(sample_file.contents or b"")
         assert member.crc32 == sample_crc32, (
@@ -48,12 +54,6 @@ def check_member_metadata(
         assert member.comment == sample_file.comment
     else:
         assert member.comment is None
-
-    if member.is_file:
-        if features.file_size:
-            assert member.file_size == len(sample_file.contents or b"")
-        else:
-            assert member.file_size is None
 
     # Check permissions
     if sample_file.permissions is not None:
@@ -122,7 +122,17 @@ def check_iter_members(
 
     features = sample_archive.creation_info.features
 
-    files_by_name = {file.name: file for file in sample_archive.contents.files}
+    # If the archive may have duplicate files, we need to compare the files in the
+    # iterator with the ones in the sample_archive in the same order.
+    # Otherwise, the archive should have only the last version of the file.
+    files_by_name = {}
+    for file in sample_archive.contents.files:
+        filekey = file.name
+        if features.duplicate_files and filekey in files_by_name:
+            while filekey in files_by_name:
+                filekey = filekey + "_DUPE"
+
+        files_by_name[filekey] = file
 
     constructor_password = sample_archive.contents.header_password
 
@@ -163,8 +173,21 @@ def check_iter_members(
             else archive.iter_members_with_io()
         )
 
+        visited_files = set()
+
+        logger.info(f"files_by_name: {files_by_name}")
         for member, stream in members_iter:
-            sample_file = files_by_name.get(member.filename, None)
+            filekey = member.filename
+            if filekey in visited_files:
+                if features.duplicate_files:
+                    while filekey in visited_files:
+                        filekey = filekey + "_DUPE"
+                else:
+                    pytest.fail(f"Duplicate file name: {filekey}")
+
+            visited_files.add(filekey)
+            logger.info(f"filekey: {filekey}")
+            sample_file = files_by_name.get(filekey, None)
 
             check_member_metadata(
                 member,

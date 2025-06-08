@@ -93,19 +93,19 @@ class StreamingFile(Py7zIO):
 
             data = self._buffer[:size]
             self._buffer = self._buffer[size:]
-            logger.info(
-                f"Read from reader file {self._parent._fname}: asked {size}, got {len(data)}"
-            )
+            # logger.info(
+            #     f"Read from reader file {self._parent._fname}: asked {size}, got {len(data)}"
+            # )
             return bytes(data)
 
         def close(self):
-            logger.info(
-                f"Closing reader file {self._parent._fname}"
-            )  # , stack_info=True)
+            # logger.info(
+            #     f"Closing reader file {self._parent._fname}"
+            # )  # , stack_info=True)
             self._parent._reader_alive = False
             self._parent._data_queue
             super().close()
-            logger.info(f"Closed reader file {self._parent._fname}")
+            # logger.info(f"Closed reader file {self._parent._fname}")
 
         def readable(self):
             return True
@@ -134,7 +134,7 @@ class StreamingFile(Py7zIO):
         self._closed = False
 
     def write(self, b: Union[bytes, bytearray]) -> int:
-        logger.info(f"Writing to streaming file {self._fname}: {len(b)} bytes")
+        # logger.info(f"Writing to streaming file {self._fname}: {len(b)} bytes")
         if not self._started:
             self._started = True
             self._files_queue.put((self._fname, self._reader))
@@ -149,20 +149,20 @@ class StreamingFile(Py7zIO):
         # for reading. But since the stream is already being read, we use this as
         # an indication that the writing is finished.
         if offset == 0 and whence == 0:
-            logger.info(f"Closing writer file {self._fname} because of seek(0, 0)")
+            # logger.info(f"Closing writer file {self._fname} because of seek(0, 0)")
             if not self._closed:
                 self._data_queue.put(None)
                 self._closed = True
-            logger.info(f"Closed writer file {self._fname} because of seek(0, 0)")
+            # logger.info(f"Closed writer file {self._fname} because of seek(0, 0)")
             return 0
         raise io.UnsupportedOperation()
 
     def close(self):
         if not self._closed:
-            logger.info(f"Closing writer file {self._fname}")
+            # logger.info(f"Closing writer file {self._fname}")
             self._data_queue.put(None)
             self._closed = True
-        logger.info(f"Closed writer file {self._fname}")
+        # logger.info(f"Closed writer file {self._fname}")
 
     def size(self):
         return None
@@ -367,12 +367,12 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 previous_password = file_info.folder.password
                 file_info.folder.password = bytes_to_str(pwd)
 
-            logger.info("starting iterator")
+            # logger.info("starting iterator")
 
             it = list(
                 self.iter_members_with_io(files=[member.filename], close_streams=False)
             )
-            logger.info("iterator done")
+            # logger.info("iterator done")
             assert len(it) == 1, (
                 f"Expected exactly one member, got {len(it)}. {member.filename}"
             )
@@ -416,9 +416,9 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 assert self._archive is not None
                 self._archive.reset()
                 factory = StreamingFactory(q)
-                logger.info(f"extracting {files}")
+                # logger.info(f"extracting {files}")
                 self._archive.extract(targets=files, factory=factory)
-                logger.info(f"extracting {files} done")
+                # logger.info(f"extracting {files} done")
                 factory.finish()
             except Exception as e:
                 logger.error(
