@@ -40,24 +40,35 @@ def _write_member(
     preserve_links: bool,
     stream: BinaryIO | None,
 ) -> str | None:
-    target_path = os.path.join(root_path, member.filename)
-    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    file_to_write_path = os.path.join(root_path, member.filename)
+    os.makedirs(os.path.dirname(file_to_write_path), exist_ok=True)
 
     if member.is_dir:
-        os.makedirs(target_path, exist_ok=True)
+        os.makedirs(file_to_write_path, exist_ok=True)
     elif member.is_link:
         if not preserve_links:
             return None
         assert stream is not None
-        link_target = stream.read().decode("utf-8")
-        os.symlink(link_target, target_path)
+        link_target = member.link_target
+        if not link_target:
+            raise ValueError(f"Link target is empty for {member.filename}")
+
+        logger.info(f"Writing symlink src={link_target} to dst={file_to_write_path}")
+        logger.info(f"member={member}")
+        # if os.path.exists(file_to_write_path):
+        #     logger.warning(
+        #         f"Skipping symlink {member.filename} (already exists): {file_to_write_path}"
+        #     )
+        #     return None
+
+        os.symlink(link_target, file_to_write_path)
     elif member.is_file:
         if stream is None:
             stream = io.BytesIO(b"")
-        with open(target_path, "wb") as dst:
+        with open(file_to_write_path, "wb") as dst:
             shutil.copyfileobj(stream, dst)
 
-    return target_path
+    return file_to_write_path
 
 
 def create_member_filter(

@@ -12,7 +12,7 @@ from tests.archivey.sample_archives import (
     DUPLICATE_FILES_ARCHIVES,
     SampleArchive,
 )
-from tests.archivey.testing_utils import skip_if_package_missing
+from tests.archivey.testing_utils import remove_duplicate_files, skip_if_package_missing
 
 
 def _check_file_metadata(path: Path, info, sample):
@@ -52,7 +52,7 @@ def test_extractall(
         print("After extractall")
         subprocess.run(["ls", "-lR", dest])
 
-    for info in sample_archive.contents.files:
+    for info in remove_duplicate_files(sample_archive.contents.files):
         path = dest / info.name.rstrip("/")
         assert path.exists(), f"Missing {path}"
         if info.type == MemberType.DIR:

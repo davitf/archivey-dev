@@ -104,3 +104,8 @@ def get_crc32(data: bytes) -> int:
     # Read the file in chunks
     crc32_value = zlib.crc32(data, crc32_value)
     return crc32_value & 0xFFFFFFFF
+
+
+def remove_duplicate_files(files: list[FileInfo]) -> list[FileInfo]:
+    """Remove duplicate files, leaving only the last one for each file name."""
+    return list({file.name: file for file in files}.values())
