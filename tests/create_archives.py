@@ -83,17 +83,21 @@ def group_files_by_password_and_compression_method(
     current_password: str | None = None
     current_compression_method: str | None = None
     current_files: list[FileInfo] = []
+    seen_files_in_group: set[str] = set()
     for file in files:
         if (
             file.password != current_password
             or file.compression_method != current_compression_method
+            or file.name in seen_files_in_group
         ):
             if current_files:
                 yield (current_password, current_compression_method, current_files)
+                seen_files_in_group = set()
             current_password = file.password
             current_compression_method = file.compression_method
             current_files = []
         current_files.append(file)
+        seen_files_in_group.add(file.name)
 
     if current_files:
         yield (current_password, current_compression_method, current_files)
@@ -573,8 +577,6 @@ def create_7z_archive_with_py7zr(
         raise ValueError("Header password and file password cannot be different")
 
     with tempfile.TemporaryDirectory() as tempdir:
-        write_files_to_dir(tempdir, contents.files)
-
         file_groups: list[list[FileInfo]]
         if contents.solid:
             file_groups = [contents.files]
@@ -598,6 +600,7 @@ def create_7z_archive_with_py7zr(
                 group_files_by_password_and_compression_method(file_group)
             ):
                 # Use header password if provided, otherwise use file password
+                write_files_to_dir(tempdir, group_files)
 
                 with py7zr.SevenZipFile(
                     abs_archive_path,
