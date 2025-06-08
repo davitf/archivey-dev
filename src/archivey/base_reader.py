@@ -53,13 +53,16 @@ def _write_member(
         if not link_target:
             raise ValueError(f"Link target is empty for {member.filename}")
 
-        logger.info(f"Writing symlink src={link_target} to dst={file_to_write_path}")
+        logger.info(
+            f"Writing symlink src={link_target} to dst={file_to_write_path}"
+        )
         logger.info(f"member={member}")
-        # if os.path.exists(file_to_write_path):
-        #     logger.warning(
-        #         f"Skipping symlink {member.filename} (already exists): {file_to_write_path}"
-        #     )
-        #     return None
+
+        if os.path.lexists(file_to_write_path):
+            logger.info(
+                f"Skipping link {member.filename} (already exists): {file_to_write_path}"
+            )
+            return None
 
         os.symlink(link_target, file_to_write_path)
     elif member.is_file:
