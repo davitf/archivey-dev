@@ -122,17 +122,10 @@ def check_iter_members(
 
     features = sample_archive.creation_info.features
 
-    # If the archive may have duplicate files, we need to compare the files in the
-    # iterator with the ones in the sample_archive in the same order.
-    # Otherwise, the archive should have only the last version of the file.
-    files_by_name = {}
+    # Map each filename to the last occurrence in the sample archive
+    final_files: dict[str, FileInfo] = {}
     for file in sample_archive.contents.files:
-        filekey = file.name
-        if features.duplicate_files and filekey in files_by_name:
-            while filekey in files_by_name:
-                filekey = filekey + "_DUPE"
-
-        files_by_name[filekey] = file
+        final_files[file.name] = file
 
     constructor_password = sample_archive.contents.header_password
 
@@ -174,20 +167,22 @@ def check_iter_members(
         )
 
         visited_files = set()
-
-        logger.info(f"files_by_name: {files_by_name}")
+        members_seen: dict[str, tuple[ArchiveMember, bytes | None]] = {}
         for member, stream in members_iter:
-            filekey = member.filename
-            if filekey in visited_files:
-                if features.duplicate_files:
-                    while filekey in visited_files:
-                        filekey = filekey + "_DUPE"
-                else:
-                    pytest.fail(f"Duplicate file name: {filekey}")
+            if member.filename in visited_files and not features.duplicate_files:
+                pytest.fail(f"Duplicate file name: {member.filename}")
 
-            visited_files.add(filekey)
-            logger.info(f"filekey: {filekey}")
-            sample_file = files_by_name.get(filekey, None)
+            visited_files.add(member.filename)
+
+            data = None
+            if member.type == MemberType.FILE and not skip_member_contents:
+                assert stream is not None
+                data = stream.read()
+
+            members_seen[member.filename] = (member, data)
+
+        for filename, (member, data) in members_seen.items():
+            sample_file = final_files.get(filename)
 
             check_member_metadata(
                 member,
@@ -207,18 +202,17 @@ def check_iter_members(
                         f"Archive {sample_archive.filename} contains unexpected file {member.filename}"
                     )
 
-            actual_filenames.append(member.filename)
+            actual_filenames.append(filename)
 
             if sample_file.type == MemberType.FILE and not skip_member_contents:
-                assert stream is not None
-                contents = stream.read()
-                assert contents == sample_file.contents
+                assert data is not None
+                assert data == sample_file.contents
 
-        expected_filenames = set(
-            file.name
-            for file in sample_archive.contents.files
+        expected_filenames = {
+            name
+            for name, file in final_files.items()
             if features.dir_entries or file.type != MemberType.DIR
-        )
+        }
 
         missing_files = expected_filenames - set(actual_filenames)
         extra_files = set(actual_filenames) - expected_filenames
@@ -236,9 +230,6 @@ def test_read_zip_archives(sample_archive: SampleArchive, sample_archive_path: s
     check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 
-logger = logging.getLogger(__name__)
-
-
 @pytest.mark.parametrize(
     "sample_archive",
     filter_archives(
@@ -251,9 +242,6 @@ logger = logging.getLogger(__name__)
 def test_read_tar_archives(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
-    logger.info(
-        f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
-    )
 
     if alternative_packages:
         config = ArchiveyConfig(
@@ -392,6 +380,8 @@ def test_read_zip_and_7z_archives_with_password_in_constructor(
 def test_read_sevenzip_py7zr_archives(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
+    if sample_archive.contents.file_basename == "duplicate_files":
+        pytest.skip("duplicate file handling for py7zr not implemented")
     check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 

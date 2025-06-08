@@ -183,7 +183,10 @@ RAR_CMD = ArchiveCreationInfo(
     file_suffix=".rar",
     format=ArchiveFormat.RAR,
     generation_method=GenerationMethod.RAR_COMMAND_LINE,
-    features=ArchiveFormatFeatures(dir_entries=True, archive_comment=True),
+    features=ArchiveFormatFeatures(
+        dir_entries=True,
+        archive_comment=True,
+    ),
 )
 
 _TAR_FORMAT_FEATURES = ArchiveFormatFeatures()
@@ -194,7 +197,7 @@ TAR_PLAIN_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar",
     format=ArchiveFormat.TAR,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
 )
 
 # TAR formats
@@ -209,13 +212,13 @@ TAR_GZ_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar.gz",
     format=ArchiveFormat.TAR_GZ,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
 )
 TAR_GZ_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar.gz",
     format=ArchiveFormat.TAR_GZ,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
 )
 TAR_ZSTD_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar.zst",
