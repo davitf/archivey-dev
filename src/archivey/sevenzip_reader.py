@@ -463,7 +463,9 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 fname, stream = item
                 outputs.append((fname, cast(StreamingFile.Reader, stream)))
 
-            for fname, stream in sorted(outputs, key=lambda x: members_order.get(x[0], 0)):
+            for fname, stream in sorted(
+                outputs, key=lambda x: members_order.get(x[0], 0)
+            ):
                 member_info = members_dict[fname]
                 if member_info.is_link and member_info.link_target is None:
                     member_info.link_target = stream.read().decode("utf-8")

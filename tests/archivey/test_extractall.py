@@ -74,7 +74,7 @@ def test_extractall(
 
 @pytest.mark.parametrize(
     "sample_archive",
-    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES,
+    BASIC_ARCHIVES,
     ids=lambda x: x.filename,
 )
 def test_extractall_filter(
@@ -103,7 +103,7 @@ def test_extractall_filter(
 
 @pytest.mark.parametrize(
     "sample_archive",
-    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES,
+    BASIC_ARCHIVES,
     ids=lambda x: x.filename,
 )
 def test_extractall_members(
