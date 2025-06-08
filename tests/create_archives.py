@@ -140,7 +140,7 @@ def create_zip_archive_with_zipfile(
                         filename += "/"
                     file_contents = b""  # Directories have no content
 
-                elif file.type == MemberType.LINK:
+                elif file.type == MemberType.SYMLINK:
                     # For zipfile, if we have to write a link, we write its target path as content.
                     # The external_attr will mark it as a link.
                     file_contents = (file.link_target or "").encode("utf-8")
@@ -153,7 +153,7 @@ def create_zip_archive_with_zipfile(
                 ]
                 info.comment = (file.comment or "").encode("utf-8")
 
-                if file.type == MemberType.LINK:
+                if file.type == MemberType.SYMLINK:
                     info.external_attr |= (stat.S_IFLNK | 0o777) << 16
                 elif file.type == MemberType.DIR:
                     info.external_attr |= (stat.S_IFDIR | 0o775) << 16
@@ -373,7 +373,7 @@ def create_tar_archive_with_tarfile(
                 if sample_file.permissions is None:
                     tarinfo.mode = 0o755  # Default mode for directories
                 tf.addfile(tarinfo)  # No fileobj for directories
-            elif sample_file.type == MemberType.LINK:
+            elif sample_file.type == MemberType.SYMLINK:
                 tarinfo.type = tarfile.SYMTYPE
                 assert sample_file.link_target is not None, (
                     f"Link target required for {sample_file.name}"
@@ -632,7 +632,7 @@ def create_7z_archive_with_command_line(
         )
         logger.info("File groups: %s", file_groups)
         if len(file_groups) > 1 and any(
-            file.type == MemberType.LINK for file in contents.files
+            file.type == MemberType.SYMLINK for file in contents.files
         ):
             # There are some issues passing symlinks (specifically to directories) to 7z
             # command line, so we can't use the approach of passing the individual

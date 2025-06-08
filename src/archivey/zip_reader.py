@@ -160,7 +160,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 mtime=get_zipinfo_timestamp(info),
                 type=MemberType.DIR
                 if is_dir
-                else MemberType.LINK
+                else MemberType.SYMLINK
                 if is_link
                 else MemberType.FILE,
                 mode=stat.S_IMODE(info.external_attr >> 16)

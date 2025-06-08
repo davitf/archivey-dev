@@ -6,16 +6,17 @@ from pathlib import Path
 import pytest
 
 from archivey.core import open_archive
-from archivey.types import ArchiveFormat, MemberType
+from archivey.types import MemberType
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     DUPLICATE_FILES_ARCHIVES,
     SampleArchive,
 )
+from tests.archivey.testing_utils import skip_if_package_missing
 
 
 def _check_file_metadata(path: Path, info, sample):
-    stat = path.lstat() if info.type == MemberType.LINK else path.stat()
+    stat = path.lstat() if info.type == MemberType.SYMLINK else path.stat()
     features = sample.creation_info.features
 
     if info.permissions is not None:
@@ -39,8 +40,7 @@ def _check_file_metadata(path: Path, info, sample):
 def test_extractall(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
-    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
-        pytest.importorskip("py7zr")
+    skip_if_package_missing(sample_archive.creation_info.format, None)
 
     dest = tmp_path / "out"
     dest.mkdir()
@@ -57,7 +57,7 @@ def test_extractall(
         assert path.exists(), f"Missing {path}"
         if info.type == MemberType.DIR:
             assert path.is_dir()
-        elif info.type == MemberType.LINK:
+        elif info.type == MemberType.SYMLINK:
             assert path.is_symlink()
             assert os.readlink(path) == info.link_target
         else:
@@ -80,8 +80,7 @@ def test_extractall(
 def test_extractall_filter(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
-    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
-        pytest.importorskip("py7zr")
+    skip_if_package_missing(sample_archive.creation_info.format, None)
 
     dest = tmp_path / "out"
     dest.mkdir()
@@ -110,8 +109,7 @@ def test_extractall_filter(
 def test_extractall_members(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
-    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
-        pytest.importorskip("py7zr")
+    skip_if_package_missing(sample_archive.creation_info.format, None)
 
     dest = tmp_path / "out"
     dest.mkdir()

@@ -133,8 +133,10 @@ class TarReader(BaseArchiveReaderRandomAccess):
                 if info.isfile()
                 else MemberType.DIR
                 if info.isdir()
-                else MemberType.LINK
-                if info.issym() or info.islnk()
+                else MemberType.SYMLINK
+                if info.issym()
+                else MemberType.HARDLINK
+                if info.islnk()
                 else MemberType.OTHER
             ),
             mode=stat.S_IMODE(info.mode) if hasattr(info, "mode") else None,

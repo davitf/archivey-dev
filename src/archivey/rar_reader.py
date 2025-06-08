@@ -307,7 +307,7 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
                         if info.is_dir()
                         else MemberType.FILE
                         if info.is_file()
-                        else MemberType.LINK
+                        else MemberType.SYMLINK
                         if info.is_symlink()
                         else MemberType.OTHER
                     ),

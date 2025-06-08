@@ -534,7 +534,7 @@ SYMLINK_FILES = [
     FileInfo(
         name="symlink_to_file1.txt",
         mtime=_fake_mtime(2),
-        type=MemberType.LINK,
+        type=MemberType.SYMLINK,
         link_target="file1.txt",
     ),
     FileInfo(
@@ -545,13 +545,13 @@ SYMLINK_FILES = [
     FileInfo(
         name="subdir/link_to_file1.txt",
         mtime=_fake_mtime(4),
-        type=MemberType.LINK,
+        type=MemberType.SYMLINK,
         link_target="../file1.txt",
     ),
     FileInfo(
         name="subdir_link",
         mtime=_fake_mtime(5),
-        type=MemberType.LINK,
+        type=MemberType.SYMLINK,
         link_target="subdir",
         link_target_type=MemberType.DIR,
     ),

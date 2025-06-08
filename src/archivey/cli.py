@@ -29,7 +29,7 @@ def format_mode(member_type: MemberType, mode: int) -> str:
         "d"
         if member_type == MemberType.DIR
         else "l"
-        if member_type == MemberType.LINK
+        if member_type == MemberType.SYMLINK
         else "-"
     )
     permissions_str = type_char

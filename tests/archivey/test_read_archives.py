@@ -178,6 +178,18 @@ def check_iter_members(
         logger.info(f"files_by_name: {files_by_name}")
         for member, stream in members_iter:
             filekey = member.filename
+
+            if (
+                member.type == MemberType.HARDLINK
+                and member.link_target == member.filename
+            ):
+                # When we pass the same file multiple times to the tar command line,
+                # tar will create a hard link to the first file. We should ignore this.
+                logger.warning(
+                    f"Archive {sample_archive.filename} contains hard link to itself: {member.filename}"
+                )
+                continue
+
             if filekey in visited_files:
                 if features.duplicate_files:
                     while filekey in visited_files:

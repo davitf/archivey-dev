@@ -37,7 +37,7 @@ class FolderReader(BaseArchiveReaderRandomAccess):
         if stat.S_ISDIR(lstat_result.st_mode):
             return MemberType.DIR
         elif stat.S_ISLNK(lstat_result.st_mode):
-            return MemberType.LINK
+            return MemberType.SYMLINK
         elif stat.S_ISREG(lstat_result.st_mode):
             return MemberType.FILE
         return MemberType.OTHER
@@ -66,7 +66,7 @@ class FolderReader(BaseArchiveReaderRandomAccess):
         member_type = self._get_member_type(stat_result)
 
         link_target: Optional[str] = None
-        if member_type == MemberType.LINK:
+        if member_type == MemberType.SYMLINK:
             try:
                 link_target = os.readlink(entry_path)
             except OSError:

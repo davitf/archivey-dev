@@ -71,7 +71,8 @@ TAR_FORMAT_TO_COMPRESSION_FORMAT = {
 class MemberType(StrEnum):
     FILE = "file"
     DIR = "dir"
-    LINK = "link"
+    SYMLINK = "symlink"
+    HARDLINK = "hardlink"
     OTHER = "other"
 
 
@@ -153,7 +154,7 @@ class ArchiveMember:
 
     @property
     def is_link(self) -> bool:
-        return self.type == MemberType.LINK
+        return self.type == MemberType.SYMLINK or self.type == MemberType.HARDLINK
 
     @property
     def is_other(self) -> bool:

@@ -92,7 +92,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
         if self._is_pycdlib_dir(record):
             member_type = MemberType.DIR
         elif self._is_pycdlib_symlink(record):  # Check for symlink before regular file
-            member_type = MemberType.LINK
+            member_type = MemberType.SYMLINK
         elif record.is_file():
             member_type = MemberType.FILE
 
@@ -108,7 +108,7 @@ class IsoReader(BaseArchiveReaderRandomAccess):
                 mtime_dt = None
 
         link_target = None
-        if member_type == MemberType.LINK and record.has_rock_ridge():
+        if member_type == MemberType.SYMLINK and record.has_rock_ridge():
             rr_extensions = record.rock_ridge_extensions()
             for ext in rr_extensions:
                 if isinstance(ext, pycdlib.rockridge.SLExtension):

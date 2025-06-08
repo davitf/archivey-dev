@@ -31,7 +31,7 @@ def test_folder_reader(tmp_path: Path, files: list):
             assert member.type == file.type
             assert member.mtime == file.mtime
 
-            if file.type == MemberType.LINK:
+            if file.type == MemberType.SYMLINK:
                 assert member.link_target == file.link_target
             elif file.type == MemberType.FILE:
                 with archive.open(member) as fh:

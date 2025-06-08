@@ -307,7 +307,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                     type=(
                         MemberType.DIR
                         if file.is_directory
-                        else MemberType.LINK
+                        else MemberType.SYMLINK
                         if file.is_symlink
                         else MemberType.OTHER
                         if file.is_junction or file.is_socket
