@@ -406,7 +406,23 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         if self._archive is None:
             raise ValueError("Archive is closed")
-        members_dict = {m.filename: m for m in self.get_members()}
+        # py7zr renames duplicate files when extracting by appending a
+        # ``_<n>`` suffix to the later occurrences.  When we stream files
+        # through a custom ``WriterFactory`` we receive those renamed
+        # filenames, so we need to map them back to the actual archive
+        # members.  Replicate py7zr's naming logic to build this mapping.
+        members_dict: dict[str, ArchiveMember] = {}
+        members_order: dict[str, int] = {}
+        name_counters: dict[str, int] = {}
+        for member in self.get_members():
+            count = name_counters.get(member.filename, 0)
+            if count == 0:
+                outname = member.filename
+            else:
+                outname = f"{member.filename}_{count - 1}"
+            name_counters[member.filename] = count + 1
+            members_dict[outname] = member
+            members_order[outname] = len(members_order)
 
         # Allow the queue to carry tuples, exceptions, or None
         q = Queue[tuple[str, BinaryIO] | Exception | None]()
@@ -435,34 +451,26 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         thread = Thread(target=extractor)
         thread.start()
 
+        outputs: list[tuple[str, StreamingFile.Reader]] = []
         try:
             while True:
-                logger.info("getting item")
                 item = q.get()
-                logger.info(f"got item {item}")
                 if item is None:
-                    # End of file stream
                     break
                 if isinstance(item, Exception):
                     thread.join()
                     raise item
                 fname, stream = item
-                assert isinstance(stream, StreamingFile.Reader)
+                outputs.append((fname, cast(StreamingFile.Reader, stream)))
 
-                logger.info(f"got item {fname} {stream}, closed = {stream.closed}")
-                member_info = members_dict.get(fname)
-                assert member_info is not None, f"Member {fname} not found"
+            for fname, stream in sorted(outputs, key=lambda x: members_order.get(x[0], 0)):
+                member_info = members_dict[fname]
                 if member_info.is_link and member_info.link_target is None:
                     member_info.link_target = stream.read().decode("utf-8")
-
-                buffer_stream = stream  # io.BufferedReader(stream)
                 if filter is None or filter(member_info):
-                    yield member_info, buffer_stream
-
-                logger.info(f"closing io {io}")
+                    yield member_info, stream
                 if close_streams:
                     stream.close()
-                logger.info(f"closed io {io}")
 
             # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)
         except (py7zr.exceptions.ArchiveError, lzma.LZMAError) as e:
