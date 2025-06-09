@@ -255,93 +255,43 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 f"Error extracting member {filename}: {e}"
             ) from e
 
-    def extractall(
+    def _extract_files_batch(
         self,
-        path: str | None = None,
-        members: list[ArchiveMember | str] | None = None,
-        *,
-        pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], bool] | None = None,
-        preserve_links: bool = True,
+        files_to_extract: List[ArchiveMember],
+        target_path: str,
+        pwd: bytes | str | None,
+        written_paths: dict[str, str]
     ) -> None:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
-
-        target = path or os.getcwd()
-        # filter_fn = create_member_filter(members, filter) # TODO: Re-evaluate filtering logic based on new base class extractall
-
-        if not preserve_links:
-            # TODO: This call needs to be updated to match the new super().extractall signature
-            # For now, let's assume basic behavior or expect it to fail if called.
-            # super().extractall(target, members, pwd, filter, preserve_links)
-            # super().extractall(path=target, members=members, pwd=pwd, filter=None, preserve_links=preserve_links)
-            # The 'filter' here is the old boolean filter, the new 'filter' in base is tarfile-style.
-            # This delegation is now incorrect.
-            # For a quick fix to allow tests to run further, we might have to simplify or expect issues here.
-            # Option: Call super() with only compatible args, or implement zip's own loop.
-            # Let's defer to super() but acknowledge the signature mismatch for 'filter'.
-            # This will likely cause issues if this path is taken by tests.
-            # A simple way is to build the member_filter for the superclass.
-            _current_filter_for_iterator: Callable[[ArchiveMember], bool] | None = None
-            if callable(members) and not isinstance(members, list): # members is a boolean filter function
-                 _current_filter_for_iterator = members
-            elif isinstance(members, list) and members: # members is a list of names/objects
-                selected_filenames = { (m.filename if isinstance(m, ArchiveMember) else m) for m in members }
-                _current_filter_for_iterator = lambda m_obj: m_obj.filename in selected_filenames
-
-            # The 'filter' argument from zip_reader.extractall (old boolean filter) is also present.
-            # We need to combine it with _current_filter_for_iterator.
-            if filter is not None:
-                if _current_filter_for_iterator is not None:
-                    original_iter_filter = _current_filter_for_iterator
-                    _current_filter_for_iterator = lambda m_obj: original_iter_filter(m_obj) and filter(m_obj)
-                else:
-                    _current_filter_for_iterator = filter
-
-            super().extractall(path=target, members=_current_filter_for_iterator, pwd=pwd, filter=None, preserve_links=preserve_links)
+        if not files_to_extract:
             return
 
-        # TODO: The rest of this method needs to be updated to use the new filtering approach
-        # For now, this part will likely not work correctly with combined filters.
-        # The logic below uses filter_fn which was derived from create_member_filter.
-        # This needs to be replaced by logic similar to the new base_reader.extractall
-        # or by correctly calling super().extractall with all parameters.
+        if self._archive is None:
+            logger.error(f"ZipReader._archive is None for {self.archive_path}, cannot extract files.")
+            raise ArchiveError(f"Archive object not available for {self.archive_path} during _extract_files_batch")
 
-        # Quick placeholder for selected members, this is not correct for filtering.
-        selected = self.get_members()
-        final_members_to_extract_names: list[str] | None = None
-
-        _iter_filter_for_zip: Callable[[ArchiveMember], bool] | None = None
-        if callable(members) and not isinstance(members, list): # members is a boolean filter function
-            _iter_filter_for_zip = members
-        elif isinstance(members, list) and members: # members is a list of names/objects
-            selected_filenames = { (m.filename if isinstance(m, ArchiveMember) else m) for m in members }
-            _iter_filter_for_zip = lambda m_obj: m_obj.filename in selected_filenames
-
-        if filter is not None: # old boolean filter
-            if _iter_filter_for_zip is not None:
-                original_filter = _iter_filter_for_zip
-                _iter_filter_for_zip = lambda m_obj: original_filter(m_obj) and filter(m_obj)
-            else:
-                _iter_filter_for_zip = filter
-
-        if _iter_filter_for_zip is not None:
-            final_members_to_extract_names = [m.filename for m in self.get_members() if _iter_filter_for_zip(m)]
-            if not final_members_to_extract_names:
-                return # No members to extract
-            selected = [m for m in self.get_members() if m.filename in final_members_to_extract_names]
-
+        filenames_to_extract = [member.filename for member in files_to_extract]
+        effective_pwd_bytes = str_to_bytes(pwd if pwd is not None else self._pwd)
 
         try:
-            self._archive.extractall(
-                path=target, members=final_members_to_extract_names, pwd=str_to_bytes(pwd or self._pwd)
-            )
-            # 'selected' was determined above based on combined filters.
-        except RuntimeError as e:
-            if "password required" in str(e):
-                raise ArchiveEncryptedError("Archive is encrypted") from e
-            raise ArchiveError(f"Error extracting archive: {e}") from e
-        except zipfile.BadZipFile as e:
-            raise ArchiveCorruptedError(f"Error extracting archive: {e}") from e
+            self._archive.extractall(path=target_path, members=filenames_to_extract, pwd=effective_pwd_bytes)
 
-        apply_members_metadata(selected, target)
+            for member in files_to_extract:
+                extracted_file_path = os.path.join(target_path, member.filename)
+                if os.path.isfile(extracted_file_path):
+                    written_paths[member.filename] = extracted_file_path
+                elif os.path.exists(extracted_file_path):
+                     logger.debug(f"Path {extracted_file_path} for member {member.filename} exists but is not a file (likely a directory created by zipfile), not adding to written_paths as a file.")
+                else:
+                    logger.warning(f"File {member.filename} was targeted for extraction by zipfile from archive {self.archive_path} but not found at {extracted_file_path}.")
+        except RuntimeError as e:
+            if "password required" in str(e).lower(): # Check lowercase for robustness
+                logger.error(f"Password required for extracting files from zip archive {self.archive_path}: {e}", exc_info=True)
+                raise ArchiveEncryptedError(f"Password required for zip extraction from {self.archive_path}: {e}") from e
+            logger.error(f"Runtime error during zip batch extraction from {self.archive_path}: {e}", exc_info=True)
+            raise ArchiveError(f"Runtime error during zip batch extraction from {self.archive_path}: {e}") from e
+        except zipfile.BadZipFile as e:
+            logger.error(f"Bad zip file during batch extraction from {self.archive_path}: {e}", exc_info=True)
+            raise ArchiveCorruptedError(f"Bad zip file during batch extraction from {self.archive_path}: {e}") from e
+        except Exception as e: # Catch any other unexpected errors
+            logger.error(f"Unexpected error during zip batch extraction from {self.archive_path}: {e}", exc_info=True)
+            raise ArchiveError(f"Unexpected error during zip batch extraction from {self.archive_path}: {e}") from e
