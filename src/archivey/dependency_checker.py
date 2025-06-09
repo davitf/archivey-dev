@@ -54,6 +54,12 @@ def get_dependency_versions() -> DependencyVersions:
         except PackageNotFoundError:
             pass
 
+    if versions.zstandard_version is None:
+        try:
+            versions.zstandard_version = version("pyzstd")
+        except PackageNotFoundError:
+            pass
+
     # Check if the unrar command is available
     unrar_path = shutil.which("unrar")
     if unrar_path:

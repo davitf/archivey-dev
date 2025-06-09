@@ -414,7 +414,8 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         members_dict: dict[str, ArchiveMember] = {}
         members_order: dict[str, int] = {}
         name_counters: dict[str, int] = {}
-        for member in self.get_members():
+        all_members = self.get_members()
+        for member in all_members:
             count = name_counters.get(member.filename, 0)
             if count == 0:
                 outname = member.filename
@@ -423,6 +424,11 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             name_counters[member.filename] = count + 1
             members_dict[outname] = member
             members_order[outname] = len(members_order)
+
+        # Yield directories first so they are created before files
+        for member in all_members:
+            if member.is_dir and (filter is None or filter(member)):
+                yield member, None
 
         # Allow the queue to carry tuples, exceptions, or None
         q = Queue[tuple[str, BinaryIO] | Exception | None]()
@@ -516,49 +522,16 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         filter: Callable[[ArchiveMember], bool] | None = None,
         preserve_links: bool = True,
     ) -> None:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
-
+        # py7zr renames duplicate files when extracting directly.  Use the
+        # generic implementation based on ``iter_members_with_io`` so that later
+        # occurrences overwrite earlier ones instead of being renamed.
+        super().extractall(
+            path=path,
+            members=members,
+            filter=filter,
+            preserve_links=preserve_links,
+        )
         target = path or os.getcwd()
-        filter_fn = create_member_filter(members, filter)
-
-        if filter_fn is not None or not preserve_links:
-            names = [
-                m.filename
-                for m in self.get_members()
-                if filter_fn is None or filter_fn(m)
-            ]
-            if not names:
-                return
-            try:
-                self._archive.extract(path=target, targets=names)
-            except py7zr.PasswordRequired as e:
-                raise ArchiveEncryptedError(
-                    "Password required to extract archive"
-                ) from e
-            except py7zr.Bad7zFile as e:
-                raise ArchiveCorruptedError(
-                    f"Invalid 7-Zip archive {self.archive_path}"
-                ) from e
-            except py7zr.exceptions.ArchiveError as e:
-                raise ArchiveError(f"Error extracting archive: {e}") from e
-            apply_members_metadata(
-                [m for m in self.get_members() if filter_fn is None or filter_fn(m)],
-                target,
-            )
-            return
-
-        try:
-            self._archive.extractall(path=target)
-        except py7zr.PasswordRequired as e:
-            raise ArchiveEncryptedError("Password required to extract archive") from e
-        except py7zr.Bad7zFile as e:
-            raise ArchiveCorruptedError(
-                f"Invalid 7-Zip archive {self.archive_path}"
-            ) from e
-        except py7zr.exceptions.ArchiveError as e:
-            raise ArchiveError(f"Error extracting archive: {e}") from e
-
         apply_members_metadata(self.get_members(), target)
 
     def get_archive_info(self) -> ArchiveInfo:
