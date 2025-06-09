@@ -8,7 +8,6 @@ from typing import BinaryIO, Callable, List, Optional, cast
 
 from archivey.base_reader import (
     BaseArchiveReaderRandomAccess,
-    apply_members_metadata,
     create_member_filter,
 )
 from archivey.exceptions import (
@@ -256,39 +255,24 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 f"Error extracting member {filename}: {e}"
             ) from e
 
-    def extractall(
-        self,
-        path: str | None = None,
-        members: list[ArchiveMember | str] | None = None,
-        *,
-        pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], bool] | None = None,
-        preserve_links: bool = True,
-    ) -> None:
+    def _extract_regular_files(
+        self, path: str, members: list[ArchiveMember], pwd: bytes | str | None
+    ) -> dict[str, str]:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
-        target = path or os.getcwd()
-        filter_fn = create_member_filter(members, filter)
+        written: dict[str, str] = {}
+        if not members:
+            return written
 
-        if not preserve_links:
-            super().extractall(target, members, pwd, filter, preserve_links)
-            return
+        names = [m.filename for m in members]
 
         try:
-            if filter_fn is None:
-                self._archive.extractall(
-                    path=target, pwd=str_to_bytes(pwd or self._pwd)
-                )
-                selected = self.get_members()
+            if len(set(names)) == len(names):
+                self._archive.extractall(path=path, members=names, pwd=str_to_bytes(pwd or self._pwd))
             else:
-                names = [m.filename for m in self.get_members() if filter_fn(m)]
-                if not names:
-                    return
-                self._archive.extractall(
-                    path=target, members=names, pwd=str_to_bytes(pwd or self._pwd)
-                )
-                selected = [m for m in self.get_members() if filter_fn(m)]
+                for n in names:
+                    self._archive.extract(n, path=path, pwd=str_to_bytes(pwd or self._pwd))
         except RuntimeError as e:
             if "password required" in str(e):
                 raise ArchiveEncryptedError("Archive is encrypted") from e
@@ -296,4 +280,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error extracting archive: {e}") from e
 
-        apply_members_metadata(selected, target)
+        for m in members:
+            written[m.filename] = os.path.join(path, m.filename)
+
+        return written

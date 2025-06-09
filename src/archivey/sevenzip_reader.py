@@ -18,8 +18,8 @@ from typing import (
 
 from archivey.base_reader import (
     BaseArchiveReaderRandomAccess,
-    apply_members_metadata,
     create_member_filter,
+    _write_member,
 )
 
 if TYPE_CHECKING:
@@ -508,48 +508,30 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         return os.path.join(path or os.getcwd(), member_obj.filename)
 
-    def extractall(
-        self,
-        path: str | None = None,
-        members: list[ArchiveMember | str] | None = None,
-        *,
-        filter: Callable[[ArchiveMember], bool] | None = None,
-        preserve_links: bool = True,
-    ) -> None:
+    def _extract_regular_files(
+        self, path: str, members: list[ArchiveMember], pwd: bytes | str | None
+    ) -> dict[str, str]:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
-        target = path or os.getcwd()
-        filter_fn = create_member_filter(members, filter)
+        written: dict[str, str] = {}
+        if not members:
+            return written
 
-        if filter_fn is not None or not preserve_links:
-            names = [
-                m.filename
-                for m in self.get_members()
-                if filter_fn is None or filter_fn(m)
-            ]
-            if not names:
-                return
-            try:
-                self._archive.extract(path=target, targets=names)
-            except py7zr.PasswordRequired as e:
-                raise ArchiveEncryptedError(
-                    "Password required to extract archive"
-                ) from e
-            except py7zr.Bad7zFile as e:
-                raise ArchiveCorruptedError(
-                    f"Invalid 7-Zip archive {self.archive_path}"
-                ) from e
-            except py7zr.exceptions.ArchiveError as e:
-                raise ArchiveError(f"Error extracting archive: {e}") from e
-            apply_members_metadata(
-                [m for m in self.get_members() if filter_fn is None or filter_fn(m)],
-                target,
-            )
-            return
+        names = [m.filename for m in members]
+        if len(set(names)) != len(names):
+            for m in members:
+                for info, stream in self.iter_members_with_io(
+                    files=[m.filename], filter=lambda x, r=m: x.raw_info is r.raw_info, pwd=pwd
+                ):
+                    wp = _write_member(path, m, True, stream)
+                    if wp is not None:
+                        written[m.filename] = wp
+                    stream.close()
+            return written
 
         try:
-            self._archive.extractall(path=target)
+            self._archive.extract(path=path, targets=names)
         except py7zr.PasswordRequired as e:
             raise ArchiveEncryptedError("Password required to extract archive") from e
         except py7zr.Bad7zFile as e:
@@ -558,8 +540,10 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             ) from e
         except py7zr.exceptions.ArchiveError as e:
             raise ArchiveError(f"Error extracting archive: {e}") from e
+        for m in members:
+            written[m.filename] = os.path.join(path, m.filename)
 
-        apply_members_metadata(self.get_members(), target)
+        return written
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
