@@ -16,7 +16,10 @@ import zipfile
 from datetime import timezone
 from typing import Any, Generator
 
-import pyzstd
+try:
+    import pyzstd
+except ModuleNotFoundError:
+    pyzstd = None
 
 try:  # Optional dependency
     import lz4.frame as lz4_frame  # type: ignore

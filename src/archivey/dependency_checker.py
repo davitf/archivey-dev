@@ -21,6 +21,7 @@ class DependencyVersions:
     indexed_bzip2_version: Optional[str] = None
     python_xz_version: Optional[str] = None
     unrar_version: Optional[str] = None
+    pyzstd_version: Optional[str] = None
 
 
 def get_dependency_versions() -> DependencyVersions:
@@ -46,6 +47,7 @@ def get_dependency_versions() -> DependencyVersions:
         ("rapidgzip", "rapidgzip_version"),
         ("indexed_bzip2", "indexed_bzip2_version"),
         ("python-xz", "python_xz_version"),
+        ("pyzstd", "pyzstd_version"),
     ]:
         try:
             setattr(versions, attr, version(package))

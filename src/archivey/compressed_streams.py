@@ -143,7 +143,7 @@ def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
 def open_python_xz_stream(path: str) -> BinaryIO:
     if xz is None:
         raise PackageNotInstalledError(
-            "xz package is not installed, required for XZ archives"
+            "python-xz package is not installed, required for XZ archives"
         ) from None  # pragma: no cover -- lz4 is installed for main tests
 
     return ExceptionTranslatingIO(lambda: xz.open(path), _translate_python_xz_exception)

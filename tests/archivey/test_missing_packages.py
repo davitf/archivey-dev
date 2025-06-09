@@ -1,3 +1,4 @@
+import logging
 import os
 from unittest.mock import patch
 
@@ -12,6 +13,8 @@ from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     filter_archives,
 )
+
+logger = logging.getLogger(__name__)
 
 # Tests for LibraryNotInstalledError
 BASIC_RAR_ARCHIVE = filter_archives(
@@ -53,7 +56,7 @@ BASIC_ZSTD_ARCHIVE = filter_archives(
         ("pycdlib", BASIC_ISO_ARCHIVE.get_archive_path()),
         ("rarfile", BASIC_RAR_ARCHIVE.get_archive_path()),
         ("py7zr", BASIC_7Z_ARCHIVE.get_archive_path()),
-        ("zstandard", BASIC_ZSTD_ARCHIVE.get_archive_path()),
+        ("pyzstd", BASIC_ZSTD_ARCHIVE.get_archive_path()),
         ("lz4", BASIC_LZ4_ARCHIVE.get_archive_path()),
     ],
     ids=lambda x: os.path.basename(x),
@@ -67,6 +70,7 @@ def test_missing_package_raises_exception(library_name: str, archive_path: str):
 
     with pytest.raises(PackageNotInstalledError) as excinfo:
         open_archive(archive_path)
+
     assert f"{library_name} package is not installed" in str(excinfo.value)
 
 

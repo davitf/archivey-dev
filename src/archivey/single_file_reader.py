@@ -72,8 +72,6 @@ def read_gzip_metadata(
         extra_fields["compress_type"] = cm  # 8 = deflate, consistent with ZIP
         extra_fields["compress_level"] = xfl  # Compression level (0-9)
 
-        # Add operating system
-        extra_fields["create_system"] = os  # 0 = FAT, 3 = Unix, etc.
         member.create_system = (
             CreateSystem(os)
             if os in CreateSystem._value2member_map_
@@ -240,9 +238,16 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         elif self.format == ArchiveFormat.XZ:
             read_xz_metadata(archive_path, self.member)
 
+        # Open the file to see if it's supported by the library and valid.
+        # To avoid opening the file twice, we'll store the reference and return it
+        # on the first open() call.
+        self.fileobj = open_stream(self.format, self.archive_path, self.config)
+
     def close(self) -> None:
         """Close the archive and release any resources."""
-        pass
+        if self.fileobj is not None:
+            self.fileobj.close()
+            self.fileobj = None
 
     def get_members(self) -> List[ArchiveMember]:
         """Get a list of all members in the archive."""
@@ -262,5 +267,12 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         if member != self.member:
             raise ValueError("Requested member is not part of this archive")
 
-        fileobj = open_stream(self.format, self.archive_path, self.config)
-        return fileobj
+        if self.fileobj is None:
+            return open_stream(self.format, self.archive_path, self.config)
+
+        else:
+            # If there's an open file already, return it, but set the class field
+            # to None so that further open() calls will open new streams.
+            fileobj = self.fileobj
+            self.fileobj = None
+            return fileobj
