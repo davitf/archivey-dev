@@ -259,36 +259,40 @@ class ZipReader(BaseArchiveReaderRandomAccess):
     def extractall(
         self,
         path: str | None = None,
-        members: list[ArchiveMember | str] | None = None,
+        members: list[ArchiveMember | str]
+        | Callable[[ArchiveMember], bool]
+        | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], bool] | None = None,
+        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
         preserve_links: bool = True,
     ) -> None:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
         target = path or os.getcwd()
-        filter_fn = create_member_filter(members, filter)
+        bool_filter = members if callable(members) else None
+        member_list = None if callable(members) else members
+        member_filter = create_member_filter(member_list, bool_filter)
 
-        if not preserve_links:
+        if not preserve_links or filter is not None:
             super().extractall(target, members, pwd, filter, preserve_links)
             return
 
         try:
-            if filter_fn is None:
+            if member_filter is None:
                 self._archive.extractall(
                     path=target, pwd=str_to_bytes(pwd or self._pwd)
                 )
                 selected = self.get_members()
             else:
-                names = [m.filename for m in self.get_members() if filter_fn(m)]
+                names = [m.filename for m in self.get_members() if member_filter(m)]
                 if not names:
                     return
                 self._archive.extractall(
                     path=target, members=names, pwd=str_to_bytes(pwd or self._pwd)
                 )
-                selected = [m for m in self.get_members() if filter_fn(m)]
+                selected = [m for m in self.get_members() if member_filter(m)]
         except RuntimeError as e:
             if "password required" in str(e):
                 raise ArchiveEncryptedError("Archive is encrypted") from e

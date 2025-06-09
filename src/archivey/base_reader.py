@@ -9,7 +9,7 @@ from typing import BinaryIO, Callable, Iterable, Iterator, List
 from archivey.config import ArchiveyConfig, get_default_config
 from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
 from archivey.io_helpers import ErrorIOStream, LazyOpenIO
-from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember
+from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 logger = logging.getLogger(__name__)
 
@@ -48,21 +48,35 @@ def _write_member(
     elif member.is_link:
         if not preserve_links:
             return None
-        assert stream is not None
         link_target = member.link_target
         if not link_target:
             raise ValueError(f"Link target is empty for {member.filename}")
 
-        logger.info(f"Writing symlink src={link_target} to dst={file_to_write_path}")
-        logger.info(f"member={member}")
-        # if os.path.exists(file_to_write_path):
-        #     logger.warning(
-        #         f"Skipping symlink {member.filename} (already exists): {file_to_write_path}"
-        #     )
-        #     return None
+        if os.path.lexists(file_to_write_path):
+            os.unlink(file_to_write_path)
 
-        os.symlink(link_target, file_to_write_path)
+        if member.type == MemberType.SYMLINK:
+            logger.info(
+                f"Writing symlink src={link_target} to dst={file_to_write_path}"
+            )
+            os.symlink(link_target, file_to_write_path)
+        else:
+            # Hard link
+            link_target_path = os.path.join(root_path, link_target)
+            if os.path.exists(link_target_path):
+                os.link(link_target_path, file_to_write_path)
+            else:
+                # Fallback to copying the data if target does not exist
+                logger.info(
+                    "Hardlink target missing, writing file contents instead"
+                )
+                if stream is None:
+                    stream = io.BytesIO(b"")
+                with open(file_to_write_path, "wb") as dst:
+                    shutil.copyfileobj(stream, dst)
     elif member.is_file:
+        if os.path.exists(file_to_write_path):
+            os.unlink(file_to_write_path)
         if stream is None:
             stream = io.BytesIO(b"")
         with open(file_to_write_path, "wb") as dst:
@@ -72,9 +86,15 @@ def _write_member(
 
 
 def create_member_filter(
-    members: Iterable[ArchiveMember | str] | None,
+    members: Iterable[ArchiveMember | str] | Callable[[ArchiveMember], bool] | None,
     filter: Callable[[ArchiveMember], bool] | None,
 ) -> Callable[[ArchiveMember], bool] | None:
+    if callable(members):
+        members_filter = members
+        if filter is None:
+            return members_filter
+        return lambda m: members_filter(m) and filter(m)
+
     if members is None:
         return filter
 
@@ -83,9 +103,9 @@ def create_member_filter(
         for member in members
     }
 
-    return lambda member: member.filename in members_to_write and (
-        filter is None or filter(member)
-    )
+    if filter is None:
+        return lambda m: m.filename in members_to_write
+    return lambda m: m.filename in members_to_write and filter(m)
 
 
 class ArchiveReader(abc.ABC):
@@ -162,9 +182,11 @@ class ArchiveReader(abc.ABC):
     def extractall(
         self,
         path: str | os.PathLike | None = None,
-        members: list[ArchiveMember | str] | None = None,
+        members: list[ArchiveMember | str]
+        | Callable[[ArchiveMember], bool]
+        | None = None,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], bool] | None = None,
+        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
         preserve_links: bool = True,
     ) -> dict[str, str]:
         written_paths: dict[str, str] = {}
@@ -174,7 +196,9 @@ class ArchiveReader(abc.ABC):
                 f"Member {m.filename} is_file: {m.is_file}, is_dir: {m.is_dir}, is_link: {m.is_link}"
             )
 
-        filter = create_member_filter(members, filter)
+        bool_filter = members if callable(members) else None
+        member_list = None if callable(members) else members
+        member_filter = create_member_filter(member_list, bool_filter)
 
         if path is None:
             path = os.getcwd()
@@ -182,7 +206,15 @@ class ArchiveReader(abc.ABC):
             path = str(path)
 
         written_members = []
-        for member, stream in self.iter_members_with_io(filter=filter, pwd=pwd):
+        for member, stream in self.iter_members_with_io(filter=member_filter, pwd=pwd):
+            if filter is not None:
+                new_member = filter(member)
+                if new_member is None:
+                    if stream is not None:
+                        stream.close()
+                    continue
+                member = new_member
+
             logger.info(f"Writing member {member.filename}")
             written_path = _write_member(path, member, preserve_links, stream)
             if written_path is not None:
@@ -346,9 +378,11 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
     def extractall(
         self,
         path: str | None = None,
-        members: list[ArchiveMember | str] | None = None,
+        members: list[ArchiveMember | str]
+        | Callable[[ArchiveMember], bool]
+        | None = None,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], bool] | None = None,
+        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
         preserve_links: bool = True,
     ) -> dict[str, str]:
         return self.reader.extractall(

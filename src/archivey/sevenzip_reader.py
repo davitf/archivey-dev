@@ -511,45 +511,46 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
     def extractall(
         self,
         path: str | None = None,
-        members: list[ArchiveMember | str] | None = None,
+        members: list[ArchiveMember | str]
+        | Callable[[ArchiveMember], bool]
+        | None = None,
         *,
-        filter: Callable[[ArchiveMember], bool] | None = None,
+        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
         preserve_links: bool = True,
     ) -> None:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
         target = path or os.getcwd()
-        filter_fn = create_member_filter(members, filter)
+        bool_filter = members if callable(members) else None
+        member_list = None if callable(members) else members
+        filter_fn = create_member_filter(member_list, bool_filter)
 
-        if filter_fn is not None or not preserve_links:
-            names = [
-                m.filename
-                for m in self.get_members()
-                if filter_fn is None or filter_fn(m)
-            ]
-            if not names:
-                return
-            try:
-                self._archive.extract(path=target, targets=names)
-            except py7zr.PasswordRequired as e:
-                raise ArchiveEncryptedError(
-                    "Password required to extract archive"
-                ) from e
-            except py7zr.Bad7zFile as e:
-                raise ArchiveCorruptedError(
-                    f"Invalid 7-Zip archive {self.archive_path}"
-                ) from e
-            except py7zr.exceptions.ArchiveError as e:
-                raise ArchiveError(f"Error extracting archive: {e}") from e
-            apply_members_metadata(
-                [m for m in self.get_members() if filter_fn is None or filter_fn(m)],
+        has_duplicates = len({m.filename for m in self.get_members()}) != len(
+            self.get_members()
+        )
+
+        if filter_fn is not None or not preserve_links or filter is not None or has_duplicates:
+            super().extractall(
                 target,
+                members=members,
+                pwd=None,
+                filter=filter,
+                preserve_links=preserve_links,
             )
+            apply_members_metadata(self.get_members(), target)
             return
 
         try:
-            self._archive.extractall(path=target)
+            if filter_fn is None:
+                self._archive.extractall(path=target)
+                selected = self.get_members()
+            else:
+                names = [m.filename for m in self.get_members() if filter_fn(m)]
+                if not names:
+                    return
+                self._archive.extract(path=target, targets=names)
+                selected = [m for m in self.get_members() if filter_fn(m)]
         except py7zr.PasswordRequired as e:
             raise ArchiveEncryptedError("Password required to extract archive") from e
         except py7zr.Bad7zFile as e:
@@ -559,7 +560,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         except py7zr.exceptions.ArchiveError as e:
             raise ArchiveError(f"Error extracting archive: {e}") from e
 
-        apply_members_metadata(self.get_members(), target)
+        apply_members_metadata(selected, target)
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
