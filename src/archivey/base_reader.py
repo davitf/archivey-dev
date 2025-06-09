@@ -4,6 +4,7 @@ import io
 import logging
 import os
 import shutil
+from dataclasses import replace
 from typing import BinaryIO, Callable, Iterable, Iterator, List
 
 from archivey.config import ArchiveyConfig, get_default_config
@@ -344,6 +345,118 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
             if member.filename == name:
                 return member
         raise ArchiveMemberNotFoundError(f"Member not found: {name}")
+
+    def _extract_regular_files(
+        self,
+        path: str,
+        members: List[ArchiveMember],
+        pwd: bytes | str | None,
+    ) -> dict[str, str]:
+        """Extract only regular file ``members`` into ``path``.
+
+        Subclasses may override this to use optimized extraction provided by
+        the underlying library.  The default implementation simply opens each
+        member and writes it using :func:`_write_member`.
+        """
+
+        written: dict[str, str] = {}
+        for member in members:
+            with self.open(member, pwd=pwd) as stream:
+                file_member = member if member.is_file else replace(member, type=MemberType.FILE)
+                written_path = _write_member(path, file_member, True, stream)
+                if written_path is not None:
+                    written[member.filename] = written_path
+        return written
+
+    def extractall(
+        self,
+        path: str | os.PathLike | None = None,
+        members: list[ArchiveMember | str] | Callable[[ArchiveMember], bool] | None = None,
+        pwd: bytes | str | None = None,
+        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
+        preserve_links: bool = True,
+    ) -> dict[str, str]:
+        if path is None:
+            path = os.getcwd()
+        else:
+            path = str(path)
+
+        bool_filter = members if callable(members) else None
+        member_list = None if callable(members) else members
+        member_filter = create_member_filter(member_list, bool_filter)
+
+        selected_members = [
+            m for m in self.get_members() if member_filter is None or member_filter(m)
+        ]
+
+        processed_members: List[ArchiveMember] = []
+        for m in selected_members:
+            if filter is not None:
+                new_m = filter(m)
+                if new_m is None:
+                    continue
+                m = new_m
+            processed_members.append(m)
+
+        dirs: List[ArchiveMember] = []
+        files: List[ArchiveMember] = []
+        links: List[ArchiveMember] = []
+        others: List[ArchiveMember] = []
+        for m in processed_members:
+            if m.is_dir:
+                dirs.append(m)
+            elif m.is_file:
+                files.append(m)
+            elif m.is_link:
+                links.append(m)
+            else:
+                others.append(m)
+
+        written_paths: dict[str, str] = {}
+        written_members: List[ArchiveMember] = []
+
+        # Ensure directories exist first
+        for d in dirs:
+            wp = _write_member(path, d, preserve_links, None)
+            if wp is not None:
+                written_paths[d.filename] = wp
+                written_members.append(d)
+
+        # Extract regular file members
+        written = self._extract_regular_files(path, files, pwd)
+        written_paths.update(written)
+        for m in files:
+            if m.filename in written:
+                written_members.append(m)
+
+        # Handle links
+        if preserve_links:
+            for l in links:
+                with self.open(l, pwd=pwd) as stream:
+                    wp = _write_member(path, l, preserve_links, stream)
+                    if wp is not None:
+                        written_paths[l.filename] = wp
+                        written_members.append(l)
+        else:
+            # When not preserving links, copy the linked file contents
+            for l in links:
+                with self.open(l, pwd=pwd) as stream:
+                    file_m = replace(l, type=MemberType.FILE)
+                    wp = _write_member(path, file_m, True, stream)
+                    if wp is not None:
+                        written_paths[l.filename] = wp
+                        written_members.append(l)
+
+        # Fallback for other member types
+        for o in others:
+            with self.open(o, pwd=pwd) as stream:
+                wp = _write_member(path, o, preserve_links, stream)
+                if wp is not None:
+                    written_paths[o.filename] = wp
+                    written_members.append(o)
+
+        apply_members_metadata(processed_members, path)
+        return written_paths
 
 
 class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
