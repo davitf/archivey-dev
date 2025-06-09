@@ -4,12 +4,12 @@ import io
 import logging
 import os
 import shutil
-from typing import BinaryIO, Callable, Iterable, Iterator, List
+from typing import BinaryIO, Callable, Iterable, Iterator, List, Union
 
 from archivey.config import ArchiveyConfig, get_default_config
 from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
 from archivey.io_helpers import ErrorIOStream, LazyOpenIO
-from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember
+from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 logger = logging.getLogger(__name__)
 
@@ -41,51 +41,91 @@ def _write_member(
     stream: BinaryIO | None,
 ) -> str | None:
     file_to_write_path = os.path.join(root_path, member.filename)
+    # Ensure parent directory exists
     os.makedirs(os.path.dirname(file_to_write_path), exist_ok=True)
 
-    if member.is_dir:
+    hardlink_source_path = None
+    if member.type == MemberType.HARDLINK and member.link_target:
+        hardlink_source_path = os.path.join(root_path, member.link_target)
+
+    # Handle pre-existing file/directory/link at the target location
+    perform_unlink = True
+    if member.type == MemberType.HARDLINK and \
+       hardlink_source_path == file_to_write_path and \
+       os.path.lexists(file_to_write_path) and \
+       not os.path.isdir(file_to_write_path): # Ensure it's a file/link, not a dir
+        logger.info(f"Hardlink {member.filename} target {member.link_target} already exists at {file_to_write_path}. Skipping removal.")
+        perform_unlink = False # Do not remove the existing file, it's the hardlink source
+
+    if perform_unlink and os.path.lexists(file_to_write_path):
+        if os.path.isdir(file_to_write_path) and not os.path.islink(file_to_write_path): # It's a real directory
+            if member.type != MemberType.DIR:
+                logger.info(f"Removing existing directory at {file_to_write_path} to replace with {member.type.value}")
+                shutil.rmtree(file_to_write_path)
+        else: # It's a file or a symlink
+            logger.info(f"Removing existing file/symlink at {file_to_write_path} to replace with {member.type.value}")
+            os.unlink(file_to_write_path)
+
+    if member.type == MemberType.DIR:
         os.makedirs(file_to_write_path, exist_ok=True)
-    elif member.is_link:
+    elif member.type == MemberType.SYMLINK:
         if not preserve_links:
             return None
-        assert stream is not None
+        # stream is not used for symlinks, but link_target is crucial
         link_target = member.link_target
         if not link_target:
-            raise ValueError(f"Link target is empty for {member.filename}")
+            # Log a warning or raise error, consistent with how tarfile handles this
+            logger.warning(f"Symlink target is empty for {member.filename}, skipping.")
+            return None
 
-        logger.info(f"Writing symlink src={link_target} to dst={file_to_write_path}")
-        logger.info(f"member={member}")
-        # if os.path.exists(file_to_write_path):
-        #     logger.warning(
-        #         f"Skipping symlink {member.filename} (already exists): {file_to_write_path}"
-        #     )
-        #     return None
-
+        logger.info(f"Creating symlink: {file_to_write_path} -> {link_target}")
         os.symlink(link_target, file_to_write_path)
-    elif member.is_file:
+    elif member.type == MemberType.HARDLINK:
+        if not preserve_links:
+            return None
+        # stream is not used for hardlinks
+        link_target = member.link_target
+        if not link_target:
+            logger.warning(f"Hardlink target is empty for {member.filename}, skipping.")
+            return None
+
+        # Hardlink target path needs to be relative to the root_path, or absolute.
+        # tarfile makes linkname relative to the extraction directory.
+        # Assuming link_target is stored appropriately (e.g., relative to archive root).
+        # The actual source file for the hardlink must exist.
+        # hardlink_source_path is already defined and calculated before pre-existing checks.
+
+        # If the source and target are the same and the file already exists (handled by perform_unlink = False),
+        # we don't need to do anything here.
+        if not (hardlink_source_path == file_to_write_path and \
+                os.path.exists(file_to_write_path) and \
+                not os.path.isdir(file_to_write_path)): # ensure it is not a directory
+            logger.info(f"Creating hardlink: {file_to_write_path} -> {hardlink_source_path}")
+            try:
+                os.link(hardlink_source_path, file_to_write_path)
+            except OSError as e:
+                logger.error(f"Failed to create hardlink {file_to_write_path} -> {hardlink_source_path}: {e}. "
+                             "The target file might not have been extracted yet or is outside the extraction root.")
+                return None
+        else:
+            logger.info(f"Skipping os.link for hardlink {file_to_write_path} as source and target are identical and file exists.")
+
+    elif member.type == MemberType.FILE:
         if stream is None:
-            stream = io.BytesIO(b"")
-        with open(file_to_write_path, "wb") as dst:
-            shutil.copyfileobj(stream, dst)
+            # This case should ideally not happen for a file member if iter_members_with_io is correct.
+            # However, to be safe, create an empty file.
+            logger.warning(f"No stream provided for file member {member.filename}, creating empty file.")
+            with open(file_to_write_path, "wb") as dst:
+                pass # Creates an empty file
+        else:
+            with open(file_to_write_path, "wb") as dst:
+                shutil.copyfileobj(stream, dst)
+    else: # MemberType.OTHER or unhandled
+        logger.warning(f"Unsupported member type {member.type} for {member.filename}, skipping.")
+        return None
+
 
     return file_to_write_path
-
-
-def create_member_filter(
-    members: Iterable[ArchiveMember | str] | None,
-    filter: Callable[[ArchiveMember], bool] | None,
-) -> Callable[[ArchiveMember], bool] | None:
-    if members is None:
-        return filter
-
-    members_to_write = {
-        member.filename if isinstance(member, ArchiveMember) else member
-        for member in members
-    }
-
-    return lambda member: member.filename in members_to_write and (
-        filter is None or filter(member)
-    )
 
 
 class ArchiveReader(abc.ABC):
@@ -159,39 +199,52 @@ class ArchiveReader(abc.ABC):
         """Check if opening members is possible (i.e. not streaming-only access)."""
         pass
 
-    def extractall(
-        self,
-        path: str | os.PathLike | None = None,
-        members: list[ArchiveMember | str] | None = None,
-        pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], bool] | None = None,
-        preserve_links: bool = True,
-    ) -> dict[str, str]:
+    def extractall(self, path: str | os.PathLike | None = None, members: Union[List[Union[ArchiveMember, str]], Callable[[ArchiveMember], bool], None] = None, pwd: bytes | str | None = None, *, filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None, preserve_links: bool = True) -> dict[str, str]:
         written_paths: dict[str, str] = {}
-
-        for m in self.get_members():
-            logger.info(
-                f"Member {m.filename} is_file: {m.is_file}, is_dir: {m.is_dir}, is_link: {m.is_link}"
-            )
-
-        filter = create_member_filter(members, filter)
 
         if path is None:
             path = os.getcwd()
         else:
             path = str(path)
 
-        written_members = []
-        for member, stream in self.iter_members_with_io(filter=filter, pwd=pwd):
-            logger.info(f"Writing member {member.filename}")
-            written_path = _write_member(path, member, preserve_links, stream)
+        current_filter_for_iterator: Callable[[ArchiveMember], bool] | None
+        if callable(members) and not isinstance(members, list):
+            current_filter_for_iterator = members
+        elif isinstance(members, list):
+            if not members:  # Checks if the list is empty
+                return {}
+            selected_filenames = {
+                member.filename if isinstance(member, ArchiveMember) else member
+                for member in members
+            }
+
+            def _list_based_filter(member_obj: ArchiveMember) -> bool:
+                return member_obj.filename in selected_filenames
+            current_filter_for_iterator = _list_based_filter
+        else:  # members is None
+            current_filter_for_iterator = None
+
+        written_members_metadata = []
+        for member, stream in self.iter_members_with_io(filter=current_filter_for_iterator, pwd=pwd):
+            member_to_extract = member
+            if filter:  # New tarfile-style filter
+                result = filter(member)  # Call the tarfile-style filter
+                if result is None:
+                    if stream:
+                        stream.close()
+                    continue
+                member_to_extract = result  # Use the potentially modified member
+
+            logger.info(f"Writing member {member_to_extract.filename}")
+            written_path = _write_member(path, member_to_extract, preserve_links, stream)
             if written_path is not None:
-                written_paths[member.filename] = written_path
-                written_members.append(member)
-            if stream is not None:
+                written_paths[member_to_extract.filename] = written_path
+                written_members_metadata.append(member_to_extract)
+
+            if stream:
                 stream.close()
 
-        apply_members_metadata(written_members, path)
+        apply_members_metadata(written_members_metadata, path)
         return written_paths
 
     # Context manager support

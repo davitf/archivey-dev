@@ -86,7 +86,7 @@ def test_extractall_filter(
     dest.mkdir()
 
     with open_archive(sample_archive_path) as archive:
-        archive.extractall(dest, filter=lambda m: m.filename.endswith("file2.txt"))
+        archive.extractall(dest, members=lambda m: m.filename.endswith("file2.txt"))
 
     path = dest / "subdir" / "file2.txt"
     assert path.exists() and path.is_file()
