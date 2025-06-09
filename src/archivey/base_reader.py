@@ -34,6 +34,100 @@ def apply_members_metadata(members: Iterable[ArchiveMember], root_path: str) -> 
             logger.info(f"Skipping metadata for {target_path} (not found)")
 
 
+def _ensure_parent_dir_and_clean_path(
+    target_full_path: str,
+    member_type_to_write: MemberType,
+    hardlink_source_path_for_skip_check: str | None = None
+) -> None:
+    os.makedirs(os.path.dirname(target_full_path), exist_ok=True)
+
+    perform_unlink = True
+    if member_type_to_write == MemberType.HARDLINK and \
+       hardlink_source_path_for_skip_check == target_full_path and \
+       os.path.lexists(target_full_path) and \
+       not os.path.isdir(target_full_path):
+        logger.info(f"Path {target_full_path} is a hardlink source/target match. Skipping removal.")
+        perform_unlink = False
+
+    if perform_unlink and os.path.lexists(target_full_path):
+        if os.path.isdir(target_full_path) and not os.path.islink(target_full_path):
+            if member_type_to_write != MemberType.DIR: # Don't remove if we are writing a dir to a dir
+                logger.info(f"Removing existing directory at {target_full_path} to replace with {member_type_to_write.value}")
+                shutil.rmtree(target_full_path)
+        else: # It's a file or a symlink
+            logger.info(f"Removing existing file/symlink at {target_full_path} to replace with {member_type_to_write.value}")
+            os.unlink(target_full_path)
+
+def _create_directory_internal(target_full_path: str) -> str | None:
+    try:
+        os.makedirs(target_full_path, exist_ok=True)
+        logger.info(f"Successfully created directory: {target_full_path}")
+        return target_full_path
+    except OSError as e:
+        logger.error(f"Failed to create directory {target_full_path}: {e}", exc_info=True)
+        return None
+
+def _create_symlink_internal(member_filename: str, link_target_attr: str | None, target_full_path: str) -> str | None:
+    if not link_target_attr:
+        logger.warning(f"Symlink target is empty for {member_filename}, skipping.")
+        return None
+    try:
+        os.symlink(link_target_attr, target_full_path)
+        logger.info(f"Successfully created symlink: {target_full_path} -> {link_target_attr}")
+        return target_full_path
+    except OSError as e:
+        logger.error(f"Failed to create symlink {target_full_path} -> {link_target_attr}: {e}", exc_info=True)
+        return None
+
+def _create_hardlink_internal(member_filename: str, link_target_attr: str | None, target_full_path: str, root_path: str) -> str | None:
+    if not link_target_attr:
+        logger.warning(f"Hardlink target is empty for {member_filename}, skipping.")
+        return None
+
+    hardlink_source_path = os.path.join(root_path, link_target_attr)
+
+    # This specific check for identical source/target AND target existence should be handled before path cleaning.
+    # However, _ensure_parent_dir_and_clean_path now has logic to avoid unlinking in this case.
+    # So, we proceed to attempt the link. If _ensure_parent_dir_and_clean_path correctly skipped unlinking,
+    # and the file is already there and is the target, os.link might fail if it's truly identical (errno EEXIST often for hardlinks),
+    # or it might succeed if it's just another name for the same inode.
+    # If the file exists because it's the source, we effectively want to "skip" linking.
+
+    if hardlink_source_path == target_full_path and os.path.exists(target_full_path):
+        logger.info(f"Skipping os.link for hardlink {target_full_path} as source and target are identical and file exists.")
+        return target_full_path # File is already in place
+
+    try:
+        os.link(hardlink_source_path, target_full_path)
+        logger.info(f"Successfully created hardlink: {target_full_path} -> {hardlink_source_path}")
+        return target_full_path
+    except OSError as e:
+        logger.error(f"Failed to create hardlink {target_full_path} -> {hardlink_source_path}: {e}. "
+                     "The target file might not have been extracted yet or is outside the extraction root.", exc_info=True)
+        return None
+
+def _write_file_internal(member_filename: str, target_full_path: str, stream: BinaryIO | None) -> str | None:
+    try:
+        if stream is None:
+            logger.warning(f"No stream provided for file member {member_filename}, creating empty file.")
+            with open(target_full_path, "wb") as dst:
+                pass # Creates an empty file
+        else:
+            with open(target_full_path, "wb") as dst:
+                shutil.copyfileobj(stream, dst)
+        logger.info(f"Successfully wrote file: {target_full_path}")
+        return target_full_path
+    except OSError as e:
+        logger.error(f"Failed to write file {target_full_path}: {e}", exc_info=True)
+        # Attempt to clean up partially written file
+        if os.path.exists(target_full_path):
+            try:
+                os.remove(target_full_path)
+                logger.info(f"Removed partially written file: {target_full_path}")
+            except OSError as roe:
+                logger.error(f"Failed to remove partially written file {target_full_path}: {roe}", exc_info=True)
+        return None
+
 def _write_member(
     root_path: str,
     member: ArchiveMember,
@@ -41,92 +135,28 @@ def _write_member(
     stream: BinaryIO | None,
 ) -> str | None:
     file_to_write_path = os.path.join(root_path, member.filename)
-    # Ensure parent directory exists
-    os.makedirs(os.path.dirname(file_to_write_path), exist_ok=True)
 
-    hardlink_source_path = None
+    hardlink_source_path_for_cleaner: str | None = None
     if member.type == MemberType.HARDLINK and member.link_target:
-        hardlink_source_path = os.path.join(root_path, member.link_target)
+        hardlink_source_path_for_cleaner = os.path.join(root_path, member.link_target)
 
-    # Handle pre-existing file/directory/link at the target location
-    perform_unlink = True
-    if member.type == MemberType.HARDLINK and \
-       hardlink_source_path == file_to_write_path and \
-       os.path.lexists(file_to_write_path) and \
-       not os.path.isdir(file_to_write_path): # Ensure it's a file/link, not a dir
-        logger.info(f"Hardlink {member.filename} target {member.link_target} already exists at {file_to_write_path}. Skipping removal.")
-        perform_unlink = False # Do not remove the existing file, it's the hardlink source
-
-    if perform_unlink and os.path.lexists(file_to_write_path):
-        if os.path.isdir(file_to_write_path) and not os.path.islink(file_to_write_path): # It's a real directory
-            if member.type != MemberType.DIR:
-                logger.info(f"Removing existing directory at {file_to_write_path} to replace with {member.type.value}")
-                shutil.rmtree(file_to_write_path)
-        else: # It's a file or a symlink
-            logger.info(f"Removing existing file/symlink at {file_to_write_path} to replace with {member.type.value}")
-            os.unlink(file_to_write_path)
+    _ensure_parent_dir_and_clean_path(file_to_write_path, member.type, hardlink_source_path_for_cleaner)
 
     if member.type == MemberType.DIR:
-        os.makedirs(file_to_write_path, exist_ok=True)
+        return _create_directory_internal(file_to_write_path)
     elif member.type == MemberType.SYMLINK:
         if not preserve_links:
             return None
-        # stream is not used for symlinks, but link_target is crucial
-        link_target = member.link_target
-        if not link_target:
-            # Log a warning or raise error, consistent with how tarfile handles this
-            logger.warning(f"Symlink target is empty for {member.filename}, skipping.")
-            return None
-
-        logger.info(f"Creating symlink: {file_to_write_path} -> {link_target}")
-        os.symlink(link_target, file_to_write_path)
+        return _create_symlink_internal(member.filename, member.link_target, file_to_write_path)
     elif member.type == MemberType.HARDLINK:
         if not preserve_links:
             return None
-        # stream is not used for hardlinks
-        link_target = member.link_target
-        if not link_target:
-            logger.warning(f"Hardlink target is empty for {member.filename}, skipping.")
-            return None
-
-        # Hardlink target path needs to be relative to the root_path, or absolute.
-        # tarfile makes linkname relative to the extraction directory.
-        # Assuming link_target is stored appropriately (e.g., relative to archive root).
-        # The actual source file for the hardlink must exist.
-        # hardlink_source_path is already defined and calculated before pre-existing checks.
-
-        # If the source and target are the same and the file already exists (handled by perform_unlink = False),
-        # we don't need to do anything here.
-        if not (hardlink_source_path == file_to_write_path and \
-                os.path.exists(file_to_write_path) and \
-                not os.path.isdir(file_to_write_path)): # ensure it is not a directory
-            logger.info(f"Creating hardlink: {file_to_write_path} -> {hardlink_source_path}")
-            try:
-                os.link(hardlink_source_path, file_to_write_path)
-            except OSError as e:
-                logger.error(f"Failed to create hardlink {file_to_write_path} -> {hardlink_source_path}: {e}. "
-                             "The target file might not have been extracted yet or is outside the extraction root.")
-                return None
-        else:
-            logger.info(f"Skipping os.link for hardlink {file_to_write_path} as source and target are identical and file exists.")
-
+        return _create_hardlink_internal(member.filename, member.link_target, file_to_write_path, root_path)
     elif member.type == MemberType.FILE:
-        if stream is None:
-            # This case should ideally not happen for a file member if iter_members_with_io is correct.
-            # However, to be safe, create an empty file.
-            logger.warning(f"No stream provided for file member {member.filename}, creating empty file.")
-            with open(file_to_write_path, "wb") as dst:
-                pass # Creates an empty file
-        else:
-            with open(file_to_write_path, "wb") as dst:
-                shutil.copyfileobj(stream, dst)
-    else: # MemberType.OTHER or unhandled
-        logger.warning(f"Unsupported member type {member.type} for {member.filename}, skipping.")
+        return _write_file_internal(member.filename, file_to_write_path, stream)
+    else:
+        logger.warning(f"Unsupported member type {member.type} for {member.filename} in _write_member, skipping.")
         return None
-
-
-    return file_to_write_path
-
 
 class ArchiveReader(abc.ABC):
     """Abstract base class for archive streams."""
@@ -365,6 +395,140 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
             if member.filename == name:
                 return member
         raise ArchiveMemberNotFoundError(f"Member not found: {name}")
+
+    def extractall(self, path: str | os.PathLike | None = None, members: Union[List[Union[ArchiveMember, str]], Callable[[ArchiveMember], bool], None] = None, pwd: bytes | str | None = None, *, filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None, preserve_links: bool = True) -> dict[str, str]:
+        # 1. Path Setup
+        if path is None:
+            current_path = os.getcwd()
+        else:
+            current_path = str(path)
+        written_paths: dict[str, str] = {}
+
+        # 2. Get and Filter Members
+        all_members_objects = self.get_members()
+
+        candidate_members: List[ArchiveMember]
+        if isinstance(members, list):
+            if not members:
+                return {}
+            selected_filenames = {
+                member.filename if isinstance(member, ArchiveMember) else member
+                for member in members
+            }
+            candidate_members = [m for m in all_members_objects if m.filename in selected_filenames]
+        elif callable(members): # boolean filter function
+            candidate_members = [m for m in all_members_objects if members(m)]
+        else: # members is None
+            candidate_members = all_members_objects
+
+        final_members_to_extract: List[ArchiveMember] = []
+        if filter: # tarfile-style filter
+            for m in candidate_members:
+                filtered_m = filter(m)
+                if filtered_m is not None:
+                    final_members_to_extract.append(filtered_m)
+        else:
+            final_members_to_extract = candidate_members
+
+        if not final_members_to_extract:
+            return {}
+
+        # 3. Categorize Members
+        directories: List[ArchiveMember] = []
+        symlinks: List[ArchiveMember] = []
+        hardlinks: List[ArchiveMember] = []
+        regular_files: List[ArchiveMember] = []
+
+        for member in final_members_to_extract:
+            if member.type == MemberType.DIR:
+                directories.append(member)
+            elif member.type == MemberType.SYMLINK:
+                symlinks.append(member)
+            elif member.type == MemberType.HARDLINK:
+                hardlinks.append(member)
+            elif member.type == MemberType.FILE:
+                regular_files.append(member)
+            else:
+                logger.warning(f"Unsupported member type {member.type} for {member.filename} during categorized extraction, skipping.")
+
+
+        # 4. Create Directories
+        # Sort by path depth to ensure parent dirs are created first
+        directories.sort(key=lambda d: len(d.filename.split(os.sep)))
+        for d_member in directories:
+            dir_path = os.path.join(current_path, d_member.filename)
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+                written_paths[d_member.filename] = dir_path
+            except OSError as e:
+                logger.error(f"Failed to create directory {dir_path}: {e}")
+
+        # 5. Extract Regular Files
+        self._extract_files_batch(regular_files, current_path, pwd, written_paths)
+
+        # 6. Create Links (Placeholders)
+        if preserve_links:
+            for s_member in symlinks:
+                link_path = os.path.join(current_path, s_member.filename)
+                _ensure_parent_dir_and_clean_path(link_path, MemberType.SYMLINK, None)
+                result_path = _create_symlink_internal(s_member.filename, s_member.link_target, link_path)
+                if result_path:
+                    written_paths[s_member.filename] = result_path
+
+            for h_member in hardlinks:
+                link_path = os.path.join(current_path, h_member.filename)
+                hardlink_source_on_fs = None
+                if h_member.link_target:
+                    hardlink_source_on_fs = os.path.join(current_path, h_member.link_target)
+
+                _ensure_parent_dir_and_clean_path(link_path, MemberType.HARDLINK,
+                                                  hardlink_source_path_for_skip_check=hardlink_source_on_fs)
+
+                result_path = _create_hardlink_internal(h_member.filename, h_member.link_target, link_path, current_path)
+                if result_path:
+                    written_paths[h_member.filename] = result_path
+
+        # 7. & 8. Apply Metadata
+        successfully_written_members = [
+            m for m in final_members_to_extract if m.filename in written_paths
+        ]
+        apply_members_metadata(successfully_written_members, current_path)
+
+        # 9. Return written_paths
+        return written_paths
+
+    def _extract_files_batch(
+        self,
+        files_to_extract: List[ArchiveMember],
+        target_path: str, # This is the root extraction path
+        pwd: bytes | str | None,
+        written_paths: dict[str, str] # To be updated with paths of successfully extracted files
+    ) -> None:
+        for member in files_to_extract:
+            if member.type != MemberType.FILE:
+                logger.warning(f"Skipping non-file member {member.filename} in _extract_files_batch")
+                continue
+
+            file_to_write_path = os.path.join(target_path, member.filename)
+
+            # Prepare path by ensuring parent directory exists and cleaning any pre-existing file/dir
+            # For files, hardlink_source_path_for_skip_check is None as it's not a hardlink.
+            _ensure_parent_dir_and_clean_path(file_to_write_path, MemberType.FILE, None)
+
+            try:
+                # Open stream for the member
+                with self.open(member, pwd=pwd) as stream:
+                    # Write the file using the internal helper
+                    if _write_file_internal(member.filename, file_to_write_path, stream):
+                        written_paths[member.filename] = file_to_write_path
+                    # _write_file_internal handles its own logging for success/failure & partial file cleanup
+            except Exception as e:
+                # Log error for opening stream or if _write_file_internal itself raises an unexpected error
+                # _write_file_internal is expected to catch OS PError during write and return None,
+                # but self.open() could raise, or other unexpected issues.
+                logger.error(f"Failed to process or open stream for file {member.filename}: {e}", exc_info=True)
+                # _write_file_internal attempts cleanup if it started writing.
+                # If self.open failed, there's no file to clean from this operation.
 
 
 class StreamingOnlyArchiveReaderWrapper(ArchiveReader):

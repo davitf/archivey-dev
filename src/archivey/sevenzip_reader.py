@@ -19,7 +19,6 @@ from typing import (
 from archivey.base_reader import (
     BaseArchiveReaderRandomAccess,
     apply_members_metadata,
-    create_member_filter,
 )
 
 if TYPE_CHECKING:
@@ -560,6 +559,51 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             raise ArchiveError(f"Error extracting archive: {e}") from e
 
         apply_members_metadata(self.get_members(), target)
+
+    def _extract_files_batch(
+        self,
+        files_to_extract: List[ArchiveMember],
+        target_path: str,
+        pwd: bytes | str | None, # Note: py7zr uses password from SevenZipFile instance
+        written_paths: dict[str, str]
+    ) -> None:
+        if not files_to_extract:
+            return
+
+        if self._archive is None:
+            logger.error(f"SevenZipReader._archive is None for {self.archive_path}, cannot extract files.")
+            # Raise an error to make it clear that the operation cannot proceed.
+            raise ArchiveError(f"Archive object not available for {self.archive_path} during _extract_files_batch")
+
+        filenames_to_extract = [member.filename for member in files_to_extract]
+
+        try:
+            # py7zr's extract method can take a list of targets.
+            # Password is handled by the self._archive instance, set at initialization.
+            self._archive.extract(path=target_path, targets=filenames_to_extract)
+
+            # Verify extraction and update written_paths
+            for member in files_to_extract:
+                extracted_file_path = os.path.join(target_path, member.filename)
+                # We are interested if the *file* was created.
+                # py7zr might create parent directories, but _extract_files_batch is for files.
+                if os.path.isfile(extracted_file_path):
+                    written_paths[member.filename] = extracted_file_path
+                elif os.path.exists(extracted_file_path): # It's not a file, maybe a dir
+                    logger.debug(f"Path {extracted_file_path} for member {member.filename} exists but is not a file (likely a directory created by py7zr), not adding to written_paths as a file.")
+                else:
+                    # This case means py7zr was asked to extract it, but it's not there.
+                    logger.warning(f"File {member.filename} was targeted for extraction by py7zr from archive {self.archive_path} but not found at {extracted_file_path}.")
+        except py7zr.exceptions.PasswordRequired as e:
+            logger.error(f"Password required for extracting files from 7zip archive {self.archive_path}: {e}", exc_info=True)
+            # Ensure this error propagates, as it's a critical failure for these files.
+            raise ArchiveEncryptedError(f"Password required for 7zip extraction from {self.archive_path}: {e}") from e
+        except (py7zr.exceptions.ArchiveError, lzma.LZMAError) as e:
+            logger.error(f"Error during 7zip batch extraction from {self.archive_path}: {e}", exc_info=True)
+            raise ArchiveError(f"Error during 7zip batch extraction from {self.archive_path}: {e}") from e
+        except Exception as e: # Catch any other unexpected errors
+            logger.error(f"Unexpected error during 7zip batch extraction from {self.archive_path}: {e}", exc_info=True)
+            raise ArchiveError(f"Unexpected error during 7zip batch extraction from {self.archive_path}: {e}") from e
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
