@@ -32,7 +32,7 @@ def _build_member_included_func(members: Collection[Union[ArchiveMember, str]] |
     return lambda m: m.filename in filenames or m.internal_id in internal_ids
 
 
-def _build_iterator_filter(members: Collection[Union[ArchiveMember, str]] | Callable[[ArchiveMember], bool] | None, filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None) -> Callable[[ArchiveMember], ArchiveMember | None]:
+def _build_iterator_filter(members: Collection[Union[ArchiveMember, str]] | Callable[[ArchiveMember], bool] | None, filter: Callable[[ArchiveMember], bool] | None) -> Callable[[ArchiveMember], ArchiveMember | None]:
     """Build a filter function for the iterator.
     
     Args:
@@ -47,15 +47,14 @@ def _build_iterator_filter(members: Collection[Union[ArchiveMember, str]] | Call
         if not member_included(member):
             return None
 
-        if filter is None:
-            return member
+        if filter is None: # filter is the Callable[[ArchiveMember], bool] | None
+            return member # No filter provided, so return the member
         else:
-            filtered = filter(member)
-            # Check the filtered still refers to the same member
-            if filtered is not None and filtered.internal_id != member.internal_id:
-                raise ValueError(f"Filter returned a member with a different internal ID: {member.filename} {member.internal_id} -> {filtered.filename} {filtered.internal_id}")
-
-            return filtered
+            # filter(member) now returns a bool
+            if filter(member): # If the filter returns True
+                return member # Include this member
+            else:
+                return None   # Otherwise, exclude it
 
     return _apply_filter
     
@@ -129,7 +128,7 @@ class ArchiveReader(abc.ABC):
         ] = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
+        filter: Callable[[ArchiveMember], bool] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """Iterate over all members in the archive.
 
@@ -171,7 +170,7 @@ class ArchiveReader(abc.ABC):
         ] = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
+        filter: Callable[[ArchiveMember], bool] | None = None,
     ) -> dict[str, str]:
         written_paths: dict[str, str] = {}
 
@@ -299,7 +298,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         ] = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
+        filter: Callable[[ArchiveMember], bool] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """Default implementation of iter_members for random access archives."""
 
@@ -355,7 +354,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         ] = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
+        filter: Callable[[ArchiveMember], bool] | None = None,
     ) -> dict[str, str]:
         written_paths: dict[str, str] = {}
 
