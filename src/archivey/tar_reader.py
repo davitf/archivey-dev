@@ -194,6 +194,8 @@ class TarReader(BaseArchiveReaderRandomAccess):
                 self._members.append(member)
                 self.register_member(member)
 
+            self.set_all_members_retrieved()
+
             if self.config.check_tar_integrity and tarinfo is not None:
                 self._check_tar_integrity(tarinfo)
 
@@ -320,6 +322,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
             if self._members is None:
                 self._members = members
+                self.set_all_members_retrieved()
 
             if self.config.check_tar_integrity and tarinfo is not None:
                 self._check_tar_integrity(tarinfo)

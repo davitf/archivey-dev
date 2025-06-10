@@ -83,6 +83,8 @@ class ArchiveReader(abc.ABC):
         )
         self.config: ArchiveyConfig = get_default_config()
         self._member_map: dict[str, ArchiveMember] = {}
+        self._members_retrieved: bool = False
+
 
     def register_member(self, member: ArchiveMember) -> None:
         logger.info(f"Registering member {member.filename} ({member.internal_id})")
@@ -105,6 +107,9 @@ class ArchiveReader(abc.ABC):
                 # it's guaranteed to point to the non-link member, so we don't need
                 # to follow the chain recursively.
                 member.link_target_member = member.link_target_member.link_target_member
+
+    def set_all_members_retrieved(self) -> None:
+        self._members_retrieved = True
 
     @abc.abstractmethod
     def close(self) -> None:
@@ -227,6 +232,9 @@ class ArchiveReader(abc.ABC):
         if isinstance(member_or_filename, ArchiveMember):
             # TODO: check that the member is from this archive
             return member_or_filename
+
+        if not self._members_retrieved:
+            self.get_members()
 
         if member_or_filename not in self._member_map:
             raise ArchiveMemberNotFoundError(f"Member not found: {member_or_filename}")
