@@ -19,6 +19,7 @@ from typing import (
 
 from archivey.base_reader import (
     BaseArchiveReaderRandomAccess,
+    _build_member_included_func,
 )
 
 if TYPE_CHECKING:
@@ -58,6 +59,7 @@ from archivey.types import (
     ArchiveMember,
     MemberType,
 )
+from archivey.extraction_helper import ExtractionHelper
 from archivey.utils import bytes_to_str
 
 logger = logging.getLogger(__name__)
@@ -322,14 +324,17 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 if member.is_link:
                     links_to_resolve[member.filename] = member
                 self._members.append(member)
+                self.register_member(member)
 
             if links_to_resolve and self._resolve_links_in_get_members:
                 for filename, file_io in self.iter_members_with_io(
-                    files=list(links_to_resolve.keys())
+                    members=list(links_to_resolve.keys())
                 ):
                     links_to_resolve[filename].link_target = file_io.read().decode(
                         "utf-8"
                     )
+
+            self.set_all_members_retrieved()
 
         return self._members
 
@@ -367,7 +372,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 file_info.folder.password = bytes_to_str(pwd)
 
             it = list(
-                self.iter_members_with_io(files=[member], close_streams=False)
+                self.iter_members_with_io(members=[member], close_streams=False)
             )
             # logger.info("iterator done")
             assert len(it) == 1, (
@@ -414,7 +419,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
     def iter_members_with_io(
         self,
-        files: list[str | ArchiveMember] | None = None,
+        members: list[str | ArchiveMember] | Callable[[ArchiveMember], bool] | None = None,
         filter: Callable[[ArchiveMember], bool] | None = None,
         *,
         close_streams: bool = True,
@@ -426,8 +431,13 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             raise ValueError("Archive is closed")
 
         members_dict = self._get_py7zr_filename_to_members_dict()
-        
-        files_to_extract = [members_dict[f] if isinstance(f, str) else f for f in files]
+
+        reverse_map = {m.internal_id: name for name, m in members_dict.items()}
+
+        member_included = _build_member_included_func(members)
+        members_to_extract = [m for m in self.get_members() if member_included(m)]
+        members_order = {reverse_map[m.internal_id]: i for i, m in enumerate(members_to_extract)}
+        files = [reverse_map[m.internal_id] for m in members_to_extract]
 
         # Allow the queue to carry tuples, exceptions, or None
         q = Queue[tuple[str, BinaryIO] | Exception | None]()
@@ -583,6 +593,16 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             raise ArchiveError(
                 f"Unexpected error during 7zip batch extraction from {self.archive_path}: {e}"
             ) from e
+
+    def _extract_regular_files(
+        self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None
+    ) -> None:
+        members_to_extract = [m for m in extraction_helper.get_pending_extractions() if m.is_file]
+
+        for member in members_to_extract:
+            extracted_path = self.extract(member, path)
+            rel_path = os.path.relpath(extracted_path, path)
+            extraction_helper.process_external_extraction(member, rel_path)
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.

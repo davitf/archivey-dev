@@ -148,7 +148,7 @@ def test_iter_members_filter(
     with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
         seen = []
         for member, stream in archive.iter_members_with_io(
-            filter=lambda m: m.filename == target.name
+            members=lambda m: m.filename == target.name
         ):
             seen.append(member.filename)
             if member.type == MemberType.FILE:
@@ -178,7 +178,7 @@ def test_iter_members_partial_reads(
 
     with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
         for i, (member, stream) in enumerate(
-            archive.iter_members_with_io(filter=lambda m: m.type == MemberType.FILE)
+            archive.iter_members_with_io(members=lambda m: m.type == MemberType.FILE)
         ):
             if member.filename not in {f.name for f in files}:
                 continue
