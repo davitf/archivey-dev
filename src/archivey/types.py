@@ -1,6 +1,8 @@
 import sys
 from typing import TYPE_CHECKING
 
+from archivey.unique_ids import UNIQUE_ID_GENERATOR
+
 if TYPE_CHECKING:
     from enum import StrEnum
 elif sys.version_info >= (3, 11):
@@ -116,6 +118,7 @@ class ArchiveMember:
     compress_size: Optional[int]
     mtime: Optional[datetime]
     type: MemberType
+
     mode: Optional[int] = None
     crc32: Optional[int] = None
     compression_method: Optional[str] = None  # e.g. "deflate", "lzma", etc.
@@ -125,9 +128,13 @@ class ArchiveMember:
     extra: dict[str, Any] = field(default_factory=dict)
     link_target: Optional[str] = None
     link_target_type: Optional[MemberType] = None
+    link_target_member: Optional["ArchiveMember"] = None
 
     # The raw info from the archive reader
     raw_info: Optional[Any] = None
+
+    # A globally unique id for the member, used to identify the member in the archive.
+    internal_id: int = field(default_factory=UNIQUE_ID_GENERATOR.next_id)
 
     # Properties for zipfile compatibility (and others, as much as possible)
     @property

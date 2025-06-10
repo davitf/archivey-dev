@@ -57,3 +57,13 @@ class ArchiveIOError(ArchiveError):
     """Raised when an I/O error occurs."""
 
     pass
+
+
+class ArchiveFileExistsError(ArchiveError):
+    """Raised when a file already exists while extracting."""
+    pass
+
+
+class ArchiveLinkTargetNotFoundError(ArchiveError):
+    """Raised when a link target is not found in the archive."""
+    pass

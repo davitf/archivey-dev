@@ -3,6 +3,14 @@ from __future__ import annotations
 import contextvars
 from contextlib import contextmanager
 from dataclasses import dataclass
+from enum import Enum
+
+
+class OverwriteMode(Enum):
+    OVERWRITE = 1
+    SKIP = 2
+    ERROR = 3
+
 
 
 @dataclass
@@ -18,6 +26,8 @@ class ArchiveyConfig:
     use_zstandard: bool = False
 
     check_tar_integrity: bool = True
+    overwrite_mode: OverwriteMode = OverwriteMode.ERROR
+
 
 
 _default_config_var: contextvars.ContextVar[ArchiveyConfig] = contextvars.ContextVar(

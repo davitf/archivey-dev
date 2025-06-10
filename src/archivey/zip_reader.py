@@ -4,11 +4,10 @@ import stat
 import struct
 import zipfile
 from datetime import datetime, timezone
-from typing import BinaryIO, Callable, List, Optional, cast
+from typing import BinaryIO, List, Optional, cast
 
 from archivey.base_reader import (
     BaseArchiveReaderRandomAccess,
-    apply_members_metadata,
 )
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -30,7 +29,6 @@ def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
     """Get the timestamp from a ZipInfo object, handling extended timestamp fields."""
     main_modtime = datetime(*zip_info.date_time)
     if not zip_info.extra:
-        logger.info(f"No extra: {main_modtime}")
         return main_modtime
 
     # Parse extended timestamp extra field (0x5455)
@@ -54,7 +52,7 @@ def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
                     extra_modtime = datetime.fromtimestamp(
                         mod_time, tz=timezone.utc
                     ).replace(tzinfo=None)
-                    logger.info(
+                    logger.debug(
                         f"Modtime: main={main_modtime}, extra={extra_modtime} timestamp={mod_time}"
                     )
                     return extra_modtime
@@ -185,8 +183,9 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 },
                 raw_info=info,
                 link_target=self._get_link_target(info),
-            )
+            )   
             self._members.append(member)
+            self.register_member(member)
 
         return self._members
 
@@ -229,69 +228,99 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error reading member {filename}: {e}") from e
 
-    def extract(
-        self,
-        member: ArchiveMember | str,
-        root_path: str | None = None,
-        *,
-        pwd: bytes | str | None = None,
-    ) -> str:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+    # def extract(
+    #     self,
+    #     member: ArchiveMember | str,
+    #     root_path: str | None = None,
+    #     *,
+    #     pwd: bytes | str | None = None,
+    # ) -> str:
+    #     if self._archive is None:
+    #         raise ValueError("Archive is closed")
 
-        filename = member.filename if isinstance(member, ArchiveMember) else member
-        try:
-            return self._archive.extract(
-                filename,
-                path=root_path,
-                pwd=str_to_bytes(pwd or self._pwd),
-            )
-        except RuntimeError as e:
-            if "password required" in str(e):
-                raise ArchiveEncryptedError(f"Member {filename} is encrypted") from e
-            raise ArchiveError(f"Error extracting member {filename}: {e}") from e
-        except zipfile.BadZipFile as e:
-            raise ArchiveCorruptedError(
-                f"Error extracting member {filename}: {e}"
-            ) from e
+    #     filename = member.filename if isinstance(member, ArchiveMember) else member
+    #     try:
+    #         return self._archive.extract(
+    #             filename,
+    #             path=root_path,
+    #             pwd=str_to_bytes(pwd or self._pwd),
+    #         )
+    #     except RuntimeError as e:
+    #         if "password required" in str(e):
+    #             raise ArchiveEncryptedError(f"Member {filename} is encrypted") from e
+    #         raise ArchiveError(f"Error extracting member {filename}: {e}") from e
+    #     except zipfile.BadZipFile as e:
+    #         raise ArchiveCorruptedError(
+    #             f"Error extracting member {filename}: {e}"
+    #         ) from e
 
-    def _extract_files_batch(
-        self,
-        files_to_extract: List[ArchiveMember],
-        target_path: str,
-        pwd: bytes | str | None,
-        written_paths: dict[str, str]
-    ) -> None:
-        if not files_to_extract:
-            return
+    # def _extract_files_batch(
+    #     self,
+    #     files_to_extract: List[ArchiveMember],
+    #     target_path: str,
+    #     pwd: bytes | str | None,
+    #     written_paths: dict[str, str],
+    # ) -> None:
+    #     if not files_to_extract:
+    #         return
 
-        if self._archive is None:
-            logger.error(f"ZipReader._archive is None for {self.archive_path}, cannot extract files.")
-            raise ArchiveError(f"Archive object not available for {self.archive_path} during _extract_files_batch")
+    #     if self._archive is None:
+    #         logger.error(
+    #             f"ZipReader._archive is None for {self.archive_path}, cannot extract files."
+    #         )
+    #         raise ArchiveError(
+    #             f"Archive object not available for {self.archive_path} during _extract_files_batch"
+    #         )
 
-        filenames_to_extract = [member.filename for member in files_to_extract]
-        effective_pwd_bytes = str_to_bytes(pwd if pwd is not None else self._pwd)
+    #     filenames_to_extract = [member.filename for member in files_to_extract]
+    #     effective_pwd_bytes = str_to_bytes(pwd if pwd is not None else self._pwd)
 
-        try:
-            self._archive.extractall(path=target_path, members=filenames_to_extract, pwd=effective_pwd_bytes)
+    #     try:
+    #         self._archive.extractall(
+    #             path=target_path, members=filenames_to_extract, pwd=effective_pwd_bytes
+    #         )
 
-            for member in files_to_extract:
-                extracted_file_path = os.path.join(target_path, member.filename)
-                if os.path.isfile(extracted_file_path):
-                    written_paths[member.filename] = extracted_file_path
-                elif os.path.exists(extracted_file_path):
-                     logger.debug(f"Path {extracted_file_path} for member {member.filename} exists but is not a file (likely a directory created by zipfile), not adding to written_paths as a file.")
-                else:
-                    logger.warning(f"File {member.filename} was targeted for extraction by zipfile from archive {self.archive_path} but not found at {extracted_file_path}.")
-        except RuntimeError as e:
-            if "password required" in str(e).lower(): # Check lowercase for robustness
-                logger.error(f"Password required for extracting files from zip archive {self.archive_path}: {e}", exc_info=True)
-                raise ArchiveEncryptedError(f"Password required for zip extraction from {self.archive_path}: {e}") from e
-            logger.error(f"Runtime error during zip batch extraction from {self.archive_path}: {e}", exc_info=True)
-            raise ArchiveError(f"Runtime error during zip batch extraction from {self.archive_path}: {e}") from e
-        except zipfile.BadZipFile as e:
-            logger.error(f"Bad zip file during batch extraction from {self.archive_path}: {e}", exc_info=True)
-            raise ArchiveCorruptedError(f"Bad zip file during batch extraction from {self.archive_path}: {e}") from e
-        except Exception as e: # Catch any other unexpected errors
-            logger.error(f"Unexpected error during zip batch extraction from {self.archive_path}: {e}", exc_info=True)
-            raise ArchiveError(f"Unexpected error during zip batch extraction from {self.archive_path}: {e}") from e
+    #         for member in files_to_extract:
+    #             extracted_file_path = os.path.join(target_path, member.filename)
+    #             if os.path.isfile(extracted_file_path):
+    #                 written_paths[member.filename] = extracted_file_path
+    #             elif os.path.exists(extracted_file_path):
+    #                 logger.debug(
+    #                     f"Path {extracted_file_path} for member {member.filename} exists but is not a file (likely a directory created by zipfile), not adding to written_paths as a file."
+    #                 )
+    #             else:
+    #                 logger.warning(
+    #                     f"File {member.filename} was targeted for extraction by zipfile from archive {self.archive_path} but not found at {extracted_file_path}."
+    #                 )
+    #     except RuntimeError as e:
+    #         if "password required" in str(e).lower():  # Check lowercase for robustness
+    #             logger.error(
+    #                 f"Password required for extracting files from zip archive {self.archive_path}: {e}",
+    #                 exc_info=True,
+    #             )
+    #             raise ArchiveEncryptedError(
+    #                 f"Password required for zip extraction from {self.archive_path}: {e}"
+    #             ) from e
+    #         logger.error(
+    #             f"Runtime error during zip batch extraction from {self.archive_path}: {e}",
+    #             exc_info=True,
+    #         )
+    #         raise ArchiveError(
+    #             f"Runtime error during zip batch extraction from {self.archive_path}: {e}"
+    #         ) from e
+    #     except zipfile.BadZipFile as e:
+    #         logger.error(
+    #             f"Bad zip file during batch extraction from {self.archive_path}: {e}",
+    #             exc_info=True,
+    #         )
+    #         raise ArchiveCorruptedError(
+    #             f"Bad zip file during batch extraction from {self.archive_path}: {e}"
+    #         ) from e
+    #     except Exception as e:  # Catch any other unexpected errors
+    #         logger.error(
+    #             f"Unexpected error during zip batch extraction from {self.archive_path}: {e}",
+    #             exc_info=True,
+    #         )
+    #         raise ArchiveError(
+    #             f"Unexpected error during zip batch extraction from {self.archive_path}: {e}"
+    #         ) from e
