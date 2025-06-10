@@ -401,11 +401,14 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
 
     def iter_members_with_io(
         self,
-        filter: Callable[[ArchiveMember], bool] | None = None,
+        members: Union[
+            Collection[Union[ArchiveMember, str]], Callable[[ArchiveMember], bool], None
+        ] = None,
         *,
         pwd: bytes | str | None = None,
+        filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
-        return self.reader.iter_members_with_io(filter=filter, pwd=pwd)
+        return self.reader.iter_members_with_io(members=members, filter=filter, pwd=pwd)
 
     def get_archive_info(self) -> ArchiveInfo:
         return self.reader.get_archive_info()

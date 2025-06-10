@@ -8,6 +8,7 @@ from archivey.base_reader import (
     ArchiveInfo,
     ArchiveMember,
     BaseArchiveReaderRandomAccess,
+    _build_iterator_filter,
 )
 from archivey.compressed_streams import open_stream
 from archivey.exceptions import (
@@ -269,15 +270,18 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
     def iter_members_with_io(
         self,
-        filter: Callable[[ArchiveMember], bool] | None = None,
+        members: Union[List[ArchiveMember | str], Callable[[ArchiveMember], bool], None] = None,
         *,
         pwd: bytes | str | None = None,
+        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
         if pwd is not None:
             raise ValueError("TAR format does not support password protection.")
+
+        filter_func = _build_iterator_filter(members, filter)
 
         # The iterator on a tarfile can only run once, so we need to use the members list
         # if it's been retrieved (as it exhausts the iterator).
@@ -292,7 +296,8 @@ class TarReader(BaseArchiveReaderRandomAccess):
                 members.append(member)
                 self.register_member(member)
 
-                if filter is not None and not filter(member):
+                filtered_member = filter_func(member)
+                if filtered_member is None:
                     continue
 
                 try:
@@ -305,11 +310,11 @@ class TarReader(BaseArchiveReaderRandomAccess):
                         stream = ExceptionTranslatingIO(
                             stream_obj, _translate_tar_exception
                         )
-                        yield member, stream
+                        yield filtered_member, stream
                         stream.close()
                     else:
                         stream = LazyOpenIO(self.open, member, seekable=True)
-                        yield member, stream
+                        yield filtered_member, stream
                         stream.close()
 
                 except tarfile.ReadError as e:
