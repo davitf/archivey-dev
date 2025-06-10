@@ -190,7 +190,9 @@ class TarReader(BaseArchiveReaderRandomAccess):
             self._members = []
             tarinfo = None
             for tarinfo in self._archive.getmembers():
-                self._members.append(self._tarinfo_to_archive_member(tarinfo))
+                member = self._tarinfo_to_archive_member(tarinfo)
+                self._members.append(member)
+                self.register_member(member)
 
             if self.config.check_tar_integrity and tarinfo is not None:
                 self._check_tar_integrity(tarinfo)
@@ -275,12 +277,19 @@ class TarReader(BaseArchiveReaderRandomAccess):
         if pwd is not None:
             raise ValueError("TAR format does not support password protection.")
 
-        iterator = iter(self._archive)
+        # The iterator on a tarfile can only run once, so we need to use the members list
+        # if it's been retrieved (as it exhausts the iterator).
+        iterator = iter(self._archive) if self._members is None else self._members
+
         try:
             tarinfo = None
 
+            members = []
             for tarinfo in iterator:
                 member = self._tarinfo_to_archive_member(tarinfo)
+                members.append(member)
+                self.register_member(member)
+
                 if filter is not None and not filter(member):
                     continue
 
@@ -308,6 +317,9 @@ class TarReader(BaseArchiveReaderRandomAccess):
                         member,
                         ErrorIOStream(translated or ArchiveCorruptedError(str(e))),
                     )
+
+            if self._members is None:
+                self._members = members
 
             if self.config.check_tar_integrity and tarinfo is not None:
                 self._check_tar_integrity(tarinfo)

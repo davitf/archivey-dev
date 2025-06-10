@@ -1,3 +1,4 @@
+import collections
 import io
 import logging
 import lzma
@@ -18,7 +19,6 @@ from typing import (
 
 from archivey.base_reader import (
     BaseArchiveReaderRandomAccess,
-    apply_members_metadata,
 )
 
 if TYPE_CHECKING:
@@ -366,10 +366,8 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 previous_password = file_info.folder.password
                 file_info.folder.password = bytes_to_str(pwd)
 
-            # logger.info("starting iterator")
-
             it = list(
-                self.iter_members_with_io(files=[member.filename], close_streams=False)
+                self.iter_members_with_io(files=[member], close_streams=False)
             )
             # logger.info("iterator done")
             assert len(it) == 1, (
@@ -393,9 +391,30 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             if pwd is not None and file_info.folder is not None:
                 file_info.folder.password = previous_password
 
+    def _get_py7zr_filename_to_members_dict(self) -> dict[str, ArchiveMember]:
+        # py7zr renames duplicate files when extracting by appending a
+        # ``_<n>`` suffix to the later occurrences.  When we stream files
+        # through a custom ``WriterFactory`` we receive those renamed
+        # filenames, so we need to map them back to the actual archive
+        # members.  Replicate py7zr's naming logic to build this mapping.
+        members_dict: dict[str, ArchiveMember] = {}
+        name_counters: collections.defaultdict[str, int] = collections.defaultdict(int)
+
+        for member in self.get_members():
+            count = name_counters[member.filename]
+            if count == 0:
+                outname = member.filename
+            else:
+                outname = f"{member.filename}_{count - 1}"
+
+            name_counters[member.filename] += 1
+            members_dict[outname] = member
+
+        return members_dict
+
     def iter_members_with_io(
         self,
-        files: list[str] | None = None,
+        files: list[str | ArchiveMember] | None = None,
         filter: Callable[[ArchiveMember], bool] | None = None,
         *,
         close_streams: bool = True,
@@ -405,23 +424,10 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         if self._archive is None:
             raise ValueError("Archive is closed")
-        # py7zr renames duplicate files when extracting by appending a
-        # ``_<n>`` suffix to the later occurrences.  When we stream files
-        # through a custom ``WriterFactory`` we receive those renamed
-        # filenames, so we need to map them back to the actual archive
-        # members.  Replicate py7zr's naming logic to build this mapping.
-        members_dict: dict[str, ArchiveMember] = {}
-        members_order: dict[str, int] = {}
-        name_counters: dict[str, int] = {}
-        for member in self.get_members():
-            count = name_counters.get(member.filename, 0)
-            if count == 0:
-                outname = member.filename
-            else:
-                outname = f"{member.filename}_{count - 1}"
-            name_counters[member.filename] = count + 1
-            members_dict[outname] = member
-            members_order[outname] = len(members_order)
+
+        members_dict = self._get_py7zr_filename_to_members_dict()
+        
+        files_to_extract = [members_dict[f] if isinstance(f, str) else f for f in files]
 
         # Allow the queue to carry tuples, exceptions, or None
         q = Queue[tuple[str, BinaryIO] | Exception | None]()
@@ -507,73 +513,24 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         return os.path.join(path or os.getcwd(), member_obj.filename)
 
-    def extractall(
-        self,
-        path: str | None = None,
-        members: list[ArchiveMember | str] | None = None,
-        *,
-        filter: Callable[[ArchiveMember], bool] | None = None,
-        preserve_links: bool = True,
-    ) -> None:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
-
-        target = path or os.getcwd()
-        filter_fn = create_member_filter(members, filter)
-
-        if filter_fn is not None or not preserve_links:
-            names = [
-                m.filename
-                for m in self.get_members()
-                if filter_fn is None or filter_fn(m)
-            ]
-            if not names:
-                return
-            try:
-                self._archive.extract(path=target, targets=names)
-            except py7zr.PasswordRequired as e:
-                raise ArchiveEncryptedError(
-                    "Password required to extract archive"
-                ) from e
-            except py7zr.Bad7zFile as e:
-                raise ArchiveCorruptedError(
-                    f"Invalid 7-Zip archive {self.archive_path}"
-                ) from e
-            except py7zr.exceptions.ArchiveError as e:
-                raise ArchiveError(f"Error extracting archive: {e}") from e
-            apply_members_metadata(
-                [m for m in self.get_members() if filter_fn is None or filter_fn(m)],
-                target,
-            )
-            return
-
-        try:
-            self._archive.extractall(path=target)
-        except py7zr.PasswordRequired as e:
-            raise ArchiveEncryptedError("Password required to extract archive") from e
-        except py7zr.Bad7zFile as e:
-            raise ArchiveCorruptedError(
-                f"Invalid 7-Zip archive {self.archive_path}"
-            ) from e
-        except py7zr.exceptions.ArchiveError as e:
-            raise ArchiveError(f"Error extracting archive: {e}") from e
-
-        apply_members_metadata(self.get_members(), target)
-
     def _extract_files_batch(
         self,
         files_to_extract: List[ArchiveMember],
         target_path: str,
-        pwd: bytes | str | None, # Note: py7zr uses password from SevenZipFile instance
-        written_paths: dict[str, str]
+        pwd: bytes | str | None,  # Note: py7zr uses password from SevenZipFile instance
+        written_paths: dict[str, str],
     ) -> None:
         if not files_to_extract:
             return
 
         if self._archive is None:
-            logger.error(f"SevenZipReader._archive is None for {self.archive_path}, cannot extract files.")
+            logger.error(
+                f"SevenZipReader._archive is None for {self.archive_path}, cannot extract files."
+            )
             # Raise an error to make it clear that the operation cannot proceed.
-            raise ArchiveError(f"Archive object not available for {self.archive_path} during _extract_files_batch")
+            raise ArchiveError(
+                f"Archive object not available for {self.archive_path} during _extract_files_batch"
+            )
 
         filenames_to_extract = [member.filename for member in files_to_extract]
 
@@ -589,21 +546,43 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 # py7zr might create parent directories, but _extract_files_batch is for files.
                 if os.path.isfile(extracted_file_path):
                     written_paths[member.filename] = extracted_file_path
-                elif os.path.exists(extracted_file_path): # It's not a file, maybe a dir
-                    logger.debug(f"Path {extracted_file_path} for member {member.filename} exists but is not a file (likely a directory created by py7zr), not adding to written_paths as a file.")
+                elif os.path.exists(
+                    extracted_file_path
+                ):  # It's not a file, maybe a dir
+                    logger.debug(
+                        f"Path {extracted_file_path} for member {member.filename} "
+                        "exists but is not a file (likely a directory created by py7zr), not adding to written_paths as a file."
+                    )
                 else:
                     # This case means py7zr was asked to extract it, but it's not there.
-                    logger.warning(f"File {member.filename} was targeted for extraction by py7zr from archive {self.archive_path} but not found at {extracted_file_path}.")
+                    logger.warning(
+                        f"File {member.filename} was targeted for extraction by py7zr from archive {self.archive_path} but not found at {extracted_file_path}."
+                    )
         except py7zr.exceptions.PasswordRequired as e:
-            logger.error(f"Password required for extracting files from 7zip archive {self.archive_path}: {e}", exc_info=True)
+            logger.error(
+                f"Password required for extracting files from 7zip archive {self.archive_path}: {e}",
+                exc_info=True,
+            )
             # Ensure this error propagates, as it's a critical failure for these files.
-            raise ArchiveEncryptedError(f"Password required for 7zip extraction from {self.archive_path}: {e}") from e
+            raise ArchiveEncryptedError(
+                f"Password required for 7zip extraction from {self.archive_path}: {e}"
+            ) from e
         except (py7zr.exceptions.ArchiveError, lzma.LZMAError) as e:
-            logger.error(f"Error during 7zip batch extraction from {self.archive_path}: {e}", exc_info=True)
-            raise ArchiveError(f"Error during 7zip batch extraction from {self.archive_path}: {e}") from e
-        except Exception as e: # Catch any other unexpected errors
-            logger.error(f"Unexpected error during 7zip batch extraction from {self.archive_path}: {e}", exc_info=True)
-            raise ArchiveError(f"Unexpected error during 7zip batch extraction from {self.archive_path}: {e}") from e
+            logger.error(
+                f"Error during 7zip batch extraction from {self.archive_path}: {e}",
+                exc_info=True,
+            )
+            raise ArchiveError(
+                f"Error during 7zip batch extraction from {self.archive_path}: {e}"
+            ) from e
+        except Exception as e:  # Catch any other unexpected errors
+            logger.error(
+                f"Unexpected error during 7zip batch extraction from {self.archive_path}: {e}",
+                exc_info=True,
+            )
+            raise ArchiveError(
+                f"Unexpected error during 7zip batch extraction from {self.archive_path}: {e}"
+            ) from e
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -625,3 +604,27 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 },
             )
         return self._format_info
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) != 2:
+        print("Usage: python -m archivey.sevenzip_reader <archive_path>")
+        sys.exit(1)
+
+    archive_path = sys.argv[1]
+    with SevenZipReader(archive_path) as archive:
+        for member in archive.get_members():
+            print(member)
+
+        print()
+        for member, stream in archive.iter_members_with_io():
+            assert isinstance(member.raw_info, ArchiveFile)
+            print(member.internal_id, member.filename, member.raw_info.filename, stream.read() if stream is not None else "NO STREAM")
+
+        print()
+        for member in archive.get_members():
+            assert isinstance(member.raw_info, ArchiveFile)
+            stream = archive.open(member)
+            print(member.internal_id, member.filename, member.raw_info.filename, stream.read() if stream is not None else "NO STREAM")
