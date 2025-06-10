@@ -20,6 +20,8 @@ from typing import (
 from archivey.base_reader import (
     BaseArchiveReaderRandomAccess,
 )
+from archivey.extraction_helper import ExtractionHelper
+
 
 if TYPE_CHECKING:
     import py7zr
@@ -318,6 +320,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                     encrypted=self._is_member_encrypted(file),
                     raw_info=file,
                 )
+                self.register_member(member)
 
                 if member.is_link:
                     links_to_resolve[member.filename] = member
@@ -325,12 +328,13 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
             if links_to_resolve and self._resolve_links_in_get_members:
                 for filename, file_io in self.iter_members_with_io(
-                    files=list(links_to_resolve.keys())
+                    members=list(links_to_resolve.keys())
                 ):
                     links_to_resolve[filename].link_target = file_io.read().decode(
                         "utf-8"
                     )
 
+        self.set_all_members_retrieved()
         return self._members
 
     def open(
@@ -367,7 +371,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 file_info.folder.password = bytes_to_str(pwd)
 
             it = list(
-                self.iter_members_with_io(files=[member], close_streams=False)
+                self.iter_members_with_io(members=[member], close_streams=False)
             )
             # logger.info("iterator done")
             assert len(it) == 1, (
@@ -414,9 +418,9 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
     def iter_members_with_io(
         self,
-        files: list[str | ArchiveMember] | None = None,
+        members: list[str | ArchiveMember] | None = None, # Renamed from files
+        *,                                              # Make subsequent args keyword-only
         filter: Callable[[ArchiveMember], bool] | None = None,
-        *,
         close_streams: bool = True,
         pwd: bytes | str | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO]]:
@@ -427,7 +431,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         members_dict = self._get_py7zr_filename_to_members_dict()
         
-        files_to_extract = [members_dict[f] if isinstance(f, str) else f for f in files]
+        files_to_extract = [members_dict[f] if isinstance(f, str) else f for f in members] if members else None
 
         # Allow the queue to carry tuples, exceptions, or None
         q = Queue[tuple[str, BinaryIO] | Exception | None]()
@@ -437,9 +441,14 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 assert self._archive is not None
                 self._archive.reset()
                 factory = StreamingFactory(q)
-                # logger.info(f"extracting {files}")
-                self._archive.extract(targets=files, factory=factory)
-                # logger.info(f"extracting {files} done")
+                # logger.info(f"extracting {members}")
+                # Corrected logic for targets
+                target_filenames: list[str] | None = None
+                if files_to_extract: # files_to_extract was derived from the 'members' parameter
+                    target_filenames = [m.filename for m in files_to_extract]
+
+                self._archive.extract(targets=target_filenames, factory=factory)
+                # logger.info(f"extracting {members} done")
                 factory.finish()
             except Exception as e:
                 logger.error(
@@ -486,84 +495,43 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         finally:
             thread.join()
 
-    def extract(
+    def _extract_regular_files(
         self,
-        member: ArchiveMember | str,
-        path: str | None = None,
-    ) -> str:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
-
-        member_obj = self.get_member(member)
-
-        try:
-            self._archive.extract(path=path, targets=[member_obj.filename])
-        except py7zr.PasswordRequired as e:
-            raise ArchiveEncryptedError(
-                f"Password required to extract member {member_obj.filename}"
-            ) from e
-        except py7zr.Bad7zFile as e:
-            raise ArchiveCorruptedError(
-                f"Invalid 7-Zip archive {self.archive_path}"
-            ) from e
-        except py7zr.exceptions.ArchiveError as e:
-            raise ArchiveError(
-                f"Error extracting member {member_obj.filename}: {e}"
-            ) from e
-
-        return os.path.join(path or os.getcwd(), member_obj.filename)
-
-    def _extract_files_batch(
-        self,
-        files_to_extract: List[ArchiveMember],
-        target_path: str,
-        pwd: bytes | str | None,  # Note: py7zr uses password from SevenZipFile instance
-        written_paths: dict[str, str],
+        path: str,  # This is the root extraction path
+        extraction_helper: "ExtractionHelper",
+        pwd: bytes | str | None,
     ) -> None:
-        if not files_to_extract:
+        members_to_extract = extraction_helper.get_pending_extractions()
+        if not members_to_extract:
             return
 
         if self._archive is None:
             logger.error(
                 f"SevenZipReader._archive is None for {self.archive_path}, cannot extract files."
             )
-            # Raise an error to make it clear that the operation cannot proceed.
             raise ArchiveError(
-                f"Archive object not available for {self.archive_path} during _extract_files_batch"
+                f"Archive object not available for {self.archive_path} during _extract_regular_files"
             )
 
-        filenames_to_extract = [member.filename for member in files_to_extract]
+        filenames_to_extract = [member.filename for member in members_to_extract]
 
         try:
-            # py7zr's extract method can take a list of targets.
-            # Password is handled by the self._archive instance, set at initialization.
-            self._archive.extract(path=target_path, targets=filenames_to_extract)
+            # Password for py7zr is set during SevenZipFile initialization
+            self._archive.extract(path=path, targets=filenames_to_extract)
 
-            # Verify extraction and update written_paths
-            for member in files_to_extract:
-                extracted_file_path = os.path.join(target_path, member.filename)
-                # We are interested if the *file* was created.
-                # py7zr might create parent directories, but _extract_files_batch is for files.
+            for member in members_to_extract:
+                extracted_file_path = os.path.join(path, member.filename)
                 if os.path.isfile(extracted_file_path):
-                    written_paths[member.filename] = extracted_file_path
-                elif os.path.exists(
-                    extracted_file_path
-                ):  # It's not a file, maybe a dir
-                    logger.debug(
-                        f"Path {extracted_file_path} for member {member.filename} "
-                        "exists but is not a file (likely a directory created by py7zr), not adding to written_paths as a file."
-                    )
+                    extraction_helper.process_external_extraction(member, member.filename)
                 else:
-                    # This case means py7zr was asked to extract it, but it's not there.
                     logger.warning(
-                        f"File {member.filename} was targeted for extraction by py7zr from archive {self.archive_path} but not found at {extracted_file_path}."
+                        f"File {member.filename} was targeted for extraction by py7zr from archive {self.archive_path} but not found or not a file at {extracted_file_path}."
                     )
         except py7zr.exceptions.PasswordRequired as e:
             logger.error(
                 f"Password required for extracting files from 7zip archive {self.archive_path}: {e}",
                 exc_info=True,
             )
-            # Ensure this error propagates, as it's a critical failure for these files.
             raise ArchiveEncryptedError(
                 f"Password required for 7zip extraction from {self.archive_path}: {e}"
             ) from e
