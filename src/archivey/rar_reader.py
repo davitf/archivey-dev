@@ -77,6 +77,15 @@ RarEncryptionInfo = collections.namedtuple(
 )
 
 
+def is_rar_info_hardlink(rarinfo: RarInfo) -> bool:
+    if not isinstance(rarinfo, Rar5Info):
+        return False
+    return (
+        rarinfo.file_redir is not None
+        and rarinfo.file_redir[0] == rarfile.RAR5_XREDIR_HARD_LINK
+    )
+
+
 def get_encryption_info(rarinfo: RarInfo) -> RarEncryptionInfo | None:
     # The file_encryption attribute is not publicly defined, but it's there.
     if not isinstance(rarinfo, Rar5Info):
@@ -254,7 +263,7 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
             self._members = None
 
     def _get_link_target(self, info: RarInfo) -> Optional[str]:
-        if not info.is_symlink():
+        if not info.is_symlink() and not is_rar_info_hardlink(info):
             return None
         if info.file_redir:
             return info.file_redir[2]
@@ -297,13 +306,16 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
                 else:
                     has_encrypted_crc = False
 
+                logger.info(f"{info.filename=} {info.file_redir=}")
                 member = ArchiveMember(
                     filename=info.filename or "",  # Will never actually be None
                     file_size=info.file_size,
                     compress_size=info.compress_size,
                     mtime=info.mtime.replace(tzinfo=None) if info.mtime else None,
                     type=(
-                        MemberType.DIR
+                        MemberType.HARDLINK
+                        if is_rar_info_hardlink(info)
+                        else MemberType.DIR
                         if info.is_dir()
                         else MemberType.FILE
                         if info.is_file()
