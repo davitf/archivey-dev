@@ -50,6 +50,8 @@ testpaths = ["tests"]
 addopts = "--log-level=DEBUG --cov=archivey --cov-report=term-missing"
 timeout = 5
 timeout_method = "thread"
+log_format = "%(asctime)s %(levelname)s %(threadName)s %(name)s:%(filename)s:%(lineno)d %(message)s"
+log_date_format = "%Y-%m-%d %H:%M:%S"
 
 [tool.hatch.envs.default]
 python = "3.13"
