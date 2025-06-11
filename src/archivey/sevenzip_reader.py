@@ -426,8 +426,14 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             raise ValueError("Archive is closed")
 
         members_dict = self._get_py7zr_filename_to_members_dict()
-        
-        files_to_extract = [members_dict[f] if isinstance(f, str) else f for f in files]
+
+        if files is None:
+            files_to_extract = list(members_dict.values())
+            files = [m.filename for m in files_to_extract]
+        else:
+            files_to_extract = [members_dict[f] if isinstance(f, str) else f for f in files]
+
+        members_order = {m.filename: i for i, m in enumerate(files_to_extract)}
 
         # Allow the queue to carry tuples, exceptions, or None
         q = Queue[tuple[str, BinaryIO] | Exception | None]()
