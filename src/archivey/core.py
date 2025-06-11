@@ -74,7 +74,9 @@ def open_archive(
         elif format == ArchiveFormat.SEVENZIP:
             from archivey.sevenzip_reader import SevenZipReader
 
-            reader = SevenZipReader(archive_path, pwd=pwd)
+            reader = SevenZipReader(
+                archive_path, pwd=pwd, streaming_only=streaming_only
+            )
 
         elif format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
             from archivey.tar_reader import TarReader
