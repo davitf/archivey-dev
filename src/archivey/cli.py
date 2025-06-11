@@ -13,7 +13,7 @@ from typing import BinaryIO, Callable, Tuple
 from tqdm import tqdm
 
 from .base_reader import ArchiveReader
-from .config import ArchiveyConfig
+from .config import ArchiveyConfig, OverwriteMode
 from .core import open_archive
 from .dependency_checker import format_dependency_versions, get_dependency_versions
 from .exceptions import ArchiveError
@@ -30,6 +30,8 @@ def format_mode(member_type: MemberType, mode: int) -> str:
         if member_type == MemberType.DIR
         else "l"
         if member_type == MemberType.SYMLINK
+        else "H"
+        if member_type == MemberType.HARDLINK
         else "-"
     )
     permissions_str = type_char
@@ -211,6 +213,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=".",
         help="Destination directory for extraction (default: current directory)",
     )
+    parser.add_argument(
+        "--overwrite-mode",
+        choices=["overwrite", "skip", "error"],
+        default="error",
+        help="What to do when extracting files that already exist (default: error)",
+    )
     return parser
 
 
@@ -266,6 +274,7 @@ def main(argv: list[str] | None = None) -> None:
                 use_rapidgzip=args.use_rapidgzip,
                 use_indexed_bzip2=args.use_indexed_bzip2,
                 use_python_xz=args.use_python_xz,
+                overwrite_mode=OverwriteMode[args.overwrite_mode.upper()],
             )
             with open_archive(
                 archive_path,
@@ -280,9 +289,7 @@ def main(argv: list[str] | None = None) -> None:
                 verify = args.mode == "test"
 
                 if args.mode == "extract":
-                    archive.extractall(
-                        path=args.dest, preserve_links=True, filter=member_filter
-                    )
+                    archive.extractall(path=args.dest, members=member_filter)
 
                 if args.stream:
                     members_if_available = archive.get_members_if_available()
@@ -298,6 +305,7 @@ def main(argv: list[str] | None = None) -> None:
                         if members_if_available is not None
                         else None,
                     ):
+                        print(member)
                         process_member(
                             member, archive, stream, verify=verify, pwd=args.password
                         )

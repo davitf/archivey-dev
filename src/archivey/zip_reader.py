@@ -183,7 +183,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 },
                 raw_info=info,
                 link_target=self._get_link_target(info),
-            )   
+            )
             self._members.append(member)
             self.register_member(member)
 

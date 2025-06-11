@@ -197,7 +197,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
             self.set_all_members_retrieved()
 
-            if self.config.check_tar_integrity and tarinfo is not None:
+            if self.config.tar_check_integrity and tarinfo is not None:
                 self._check_tar_integrity(tarinfo)
 
         return self._members
@@ -270,7 +270,9 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
     def iter_members_with_io(
         self,
-        members: Union[List[ArchiveMember | str], Callable[[ArchiveMember], bool], None] = None,
+        members: Union[
+            List[ArchiveMember | str], Callable[[ArchiveMember], bool], None
+        ] = None,
         *,
         pwd: bytes | str | None = None,
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
@@ -329,7 +331,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
                 self._members = members
                 self.set_all_members_retrieved()
 
-            if self.config.check_tar_integrity and tarinfo is not None:
+            if self.config.tar_check_integrity and tarinfo is not None:
                 self._check_tar_integrity(tarinfo)
 
         except tarfile.ReadError as e:

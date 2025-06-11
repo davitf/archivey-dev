@@ -12,7 +12,6 @@ class OverwriteMode(Enum):
     ERROR = 3
 
 
-
 @dataclass
 class ArchiveyConfig:
     """Configuration for :func:`archivey.open_archive`."""
@@ -25,9 +24,11 @@ class ArchiveyConfig:
     use_python_xz: bool = False
     use_zstandard: bool = False
 
-    check_tar_integrity: bool = True
-    overwrite_mode: OverwriteMode = OverwriteMode.ERROR
+    tar_check_integrity: bool = True
 
+    sevenzip_read_link_targets_eagerly: bool = False
+
+    overwrite_mode: OverwriteMode = OverwriteMode.ERROR
 
 
 _default_config_var: contextvars.ContextVar[ArchiveyConfig] = contextvars.ContextVar(

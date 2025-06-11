@@ -1,4 +1,3 @@
-
 import multiprocessing
 import threading
 
@@ -6,7 +5,7 @@ import threading
 class GlobalUniqueIdGenerator:
     def __init__(self, batch_size=1000):
         self._batch_size = batch_size
-        self._global_counter = multiprocessing.Value('i', 1)
+        self._global_counter = multiprocessing.Value("i", 1)
         self._lock = threading.Lock()
 
     def next_id(self):
@@ -15,8 +14,10 @@ class GlobalUniqueIdGenerator:
             self._global_counter.value += 1
             return value
 
+
 _global_generator = GlobalUniqueIdGenerator()
 _BATCH_SIZE = 1000
+
 
 class UniqueIdGenerator:
     def __init__(self):
@@ -37,4 +38,3 @@ class UniqueIdGenerator:
 
 
 UNIQUE_ID_GENERATOR = UniqueIdGenerator()
-
