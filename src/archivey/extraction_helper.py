@@ -2,6 +2,7 @@ import collections
 import logging
 import os
 import shutil
+import threading
 from typing import BinaryIO
 
 from archivey.config import OverwriteMode
@@ -27,19 +28,17 @@ class ExtractionHelper:
         overwrite_mode: OverwriteMode,
         can_process_pending_extractions: bool = True,
     ):
+        assert isinstance(overwrite_mode, OverwriteMode)
+
         self.archive_name = archive_name
         self.root_path = root_path
         self.overwrite_mode = overwrite_mode
         self.can_process_pending_extractions = can_process_pending_extractions
 
-        assert isinstance(self.overwrite_mode, OverwriteMode)
+        self._lock = threading.Lock()
 
         self.extracted_members_by_path: dict[str, ArchiveMember] = {}
         self.extracted_path_by_source_id: dict[int, str] = {}
-
-        # List of (member, path) tuples that were not extracted because they were
-        # pointing to a file that doesn't exist in the filesystem.
-        # self.pending_hardlinks_to_create: list[tuple[ArchiveMember, str]] = []
 
         self.failed_extractions: list[ArchiveMember] = []
 
@@ -68,6 +67,14 @@ class ExtractionHelper:
         if path in self.extracted_members_by_path:
             # The file was created during this extraction, so we can overwrite it regardless
             # of the overwrite mode.
+            # But we only want to keep the last version of the file, so don't let an
+            # earlier version overwrite a later one.
+            if self.extracted_members_by_path[path].internal_id > member.internal_id:
+                logger.info(
+                    f"Skipping {member.type.value} {path} as it's a later version of the same file"
+                )
+                return False
+
             logger.info(
                 f"Overwriting existing {member.type.value} {path} as it was created during this extraction"
             )
@@ -108,9 +115,6 @@ class ExtractionHelper:
 
     def process_file_extracted(self, member: ArchiveMember, normpath: str) -> None:
         """Called for files that had a delayed extraction."""
-        if member.is_link:
-            return self.process_link_extracted(member, normpath)
-
         assert member.is_file
 
         targets = self.pending_target_members_by_source_id.get(member.internal_id)
@@ -266,13 +270,13 @@ class ExtractionHelper:
         self.extracted_members_by_path[member_path] = member
         return True
 
-    def process_link_extracted(self, member: ArchiveMember) -> None:
-        if member.link_target is None:
-            raise ValueError(
-                f"Link target not set for {member.filename} after external extraction"
-            )
+    # def process_link_extracted(self, member: ArchiveMember) -> None:
+    #     if member.link_target is None:
+    #         raise ValueError(
+    #             f"Link target not set for {member.filename} after external extraction"
+    #         )
 
-        self.create_link(member, self.get_output_path(member))
+    #     self.create_link(member, self.get_output_path(member))
 
     def extract_member(self, member: ArchiveMember, stream: BinaryIO | None) -> bool:
         path = self.get_output_path(member)
