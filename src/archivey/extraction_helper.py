@@ -54,6 +54,11 @@ class ExtractionHelper:
         # TODO: should we handle the case where some entry in the path to the file
         # is actually a symlink pointing outside the root path? Is that a possible
         # security issue?
+        logger.info(
+            f"Checking overwrites for {member.filename} [{member.internal_id}] to {path}",
+            stack_info=True,
+        )
+        logger.info(f"Extracted members by path: {self.extracted_members_by_path}")
 
         if not os.path.lexists(path):
             # File doesn't exist, nothing to do
@@ -101,6 +106,7 @@ class ExtractionHelper:
                 f"Cannot create {member.type.value} {path} as it already exists as a dir"
             )
 
+        logger.info(f"Removing existing file {path}")
         os.remove(path)
 
         return True
@@ -113,11 +119,25 @@ class ExtractionHelper:
         self.extracted_members_by_path[path] = member
         return True
 
-    def process_file_extracted(self, member: ArchiveMember, normpath: str) -> None:
+    def process_file_extracted(
+        self, member: ArchiveMember, extracted_path: str | None
+    ) -> None:
         """Called for files that had a delayed extraction."""
-        assert member.is_file
+        logger.info(
+            f"Processing external extraction of {member.filename} [{member.internal_id}] to {extracted_path}",
+            stack_info=True,
+        )
+        if member.is_link:
+            self.extract_member(member, None)
 
-        targets = self.pending_target_members_by_source_id.get(member.internal_id)
+        if extracted_path is None:
+            logger.error(
+                f"No extracted path for {member.filename} [{member.internal_id}]"
+            )
+            self.failed_extractions.append(member)
+            return
+
+        targets = self.pending_target_members_by_source_id.pop(member.internal_id, None)
         if not targets:
             # We were not expecting this file to be extracted. TODO: should we delete it?
             logger.error(
@@ -127,28 +147,55 @@ class ExtractionHelper:
 
         self.pending_files_to_extract_by_id.pop(member.internal_id, None)
 
-        for i, target in enumerate(targets):
+        self.can_move_file = True
+        for target in targets:
+            logger.info(
+                f"  Processing target {target.filename} [{target.internal_id}] (member [{member.internal_id}])"
+            )
             # TODO: handle exceptions
 
             target_path = self.get_output_path(target)
 
-            if i == 0:
+            if self.can_move_file:
                 # The first target is either the original member or, if it was not
                 # extracted, the first hardlink that pointed to it, but which should become a regular file.
                 # In both cases, move the file if it is not in the expected location
                 # (which can happen even for the original member, if the library renamed it
                 # if there were several files with the same name -- py7zr does this,
                 # or if the filter function renamed it).
-                if os.path.realpath(target_path) != os.path.realpath(normpath):
-                    self.check_overwrites(member, target_path)
-                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                    shutil.move(normpath, target_path)
+
+                if os.path.realpath(target_path) == os.path.realpath(extracted_path):
+                    logger.info(
+                        f"  File {target.filename} is already in the expected location"
+                    )
+                    with self._lock:
+                        self.can_move_file = False
+                        self.extracted_members_by_path[target_path] = target
+                else:
+                    with self._lock:
+                        logger.info(
+                            f"  Moving file from {extracted_path} to {target_path}"
+                        )
+                        if not self.check_overwrites(member, target_path):
+                            continue
+
+                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                        shutil.move(extracted_path, target_path)
+                        self.extracted_members_by_path[target_path] = target
 
             else:
                 # Create a hardlink to the first target.
+                logger.info(
+                    f"  Creating hardlink for {target.filename} [{target.internal_id}] (member [{member.internal_id}])"
+                )
                 try:
-                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                    os.link(target_path, self.get_output_path(target))
+                    with self._lock:
+                        if not self.check_overwrites(member, target_path):
+                            continue
+
+                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                        os.link(target_path, self.get_output_path(target))
+                        self.extracted_members_by_path[target_path] = target
 
                 except (AttributeError, NotImplementedError, OSError):
                     # os.link failed, so we need to create a copy as a regular file.
@@ -156,12 +203,10 @@ class ExtractionHelper:
                     logger.info(
                         f"Creating hardlink for {target.filename} failed, copying the file instead"
                     )
-                    shutil.copyfile(normpath, target_path)
+                    shutil.copyfile(extracted_path, target_path)
 
             # Remove the file from the pending list.
-            self.pending_target_members_by_source_id[member.internal_id].remove(target)
             self.extracted_path_by_source_id[target.internal_id] = target_path
-            self.extracted_members_by_path[target_path] = target
 
     def create_regular_file(
         self, member: ArchiveMember, stream: BinaryIO | None, path: str
@@ -270,18 +315,10 @@ class ExtractionHelper:
         self.extracted_members_by_path[member_path] = member
         return True
 
-    # def process_link_extracted(self, member: ArchiveMember) -> None:
-    #     if member.link_target is None:
-    #         raise ValueError(
-    #             f"Link target not set for {member.filename} after external extraction"
-    #         )
-
-    #     self.create_link(member, self.get_output_path(member))
-
     def extract_member(self, member: ArchiveMember, stream: BinaryIO | None) -> bool:
         path = self.get_output_path(member)
         logger.info(
-            f"Extracting {member.filename} to {path}, stream: {stream is not None}"
+            f"Extracting {member.filename} [{member.internal_id}] to {path}, stream: {stream is not None}"
         )
 
         if member.is_dir:
@@ -298,10 +335,10 @@ class ExtractionHelper:
             logger.error(f"Unexpected member type: {member.type}")
             return False
 
-    def process_external_extraction(self, member: ArchiveMember, rel_path: str) -> None:
-        """Called for files that were extracted by an external library."""
-        full_path = os.path.realpath(os.path.join(self.root_path, rel_path))
-        self.process_file_extracted(member, full_path)
+    # def process_external_extraction(self, member: ArchiveMember, rel_path: str) -> None:
+    #     """Called for files that were extracted by an external library."""
+    #     full_path = os.path.realpath(os.path.join(self.root_path, rel_path))
+    #     self.process_file_extracted(member, full_path)
 
     def get_pending_extractions(self) -> list[ArchiveMember]:
         logger.info(

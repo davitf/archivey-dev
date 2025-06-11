@@ -68,7 +68,37 @@ from archivey.utils import bytes_to_str
 logger = logging.getLogger(__name__)
 
 
-class StreamingFile(Py7zIO):
+class BasePy7zIOWriter(Py7zIO):
+    def seek(self, offset, whence=0):
+        if offset == 0 and whence == 0:
+            self.close()
+            return 0
+        raise io.UnsupportedOperation()
+
+    @abstractmethod
+    def close(self):
+        pass
+
+    def readable(self) -> bool:
+        return False
+
+    def writable(self) -> bool:
+        return True
+
+    def seekable(self) -> bool:
+        return False
+
+    def read(self, size: Optional[int] = None) -> bytes:
+        raise io.UnsupportedOperation()
+
+    def flush(self):
+        raise io.UnsupportedOperation()
+
+    def size(self) -> int:
+        raise io.UnsupportedOperation()
+
+
+class StreamingFile(BasePy7zIOWriter):
     class Reader(io.RawIOBase, BinaryIO):
         def __init__(self, parent: "StreamingFile"):
             self._parent = parent
@@ -77,10 +107,6 @@ class StreamingFile(Py7zIO):
             self._first_read = True
 
         def read(self, size=-1) -> bytes:
-            # logger.info(
-            #     f"Reading from reader file {self._parent._fname}: {size}",
-            #     stack_info=self._first_read,
-            # )
             self._first_read = False
             while not self._eof and (size < 0 or len(self._buffer) < size):
                 try:
@@ -140,44 +166,10 @@ class StreamingFile(Py7zIO):
         self._data_queue.put(b)
         return len(b)
 
-    def seek(self, offset, whence=0):
-        logger.info(f"Seek to writer file {self._fname}: {offset} {whence}")
-        # After py7zr has finished writing, it calls seek(0) to prepare the stream
-        # for reading. But since the stream is already being read, we use this as
-        # an indication that the writing is finished.
-        if offset == 0 and whence == 0:
-            # logger.info(f"Closing writer file {self._fname} because of seek(0, 0)")
-            if not self._closed:
-                self._data_queue.put(None)
-                self._closed = True
-            # logger.info(f"Closed writer file {self._fname} because of seek(0, 0)")
-            return 0
-        raise io.UnsupportedOperation()
-
     def close(self):
         if not self._closed:
-            # logger.info(f"Closing writer file {self._fname}")
             self._data_queue.put(None)
             self._closed = True
-        # logger.info(f"Closed writer file {self._fname}")
-
-    def size(self):
-        return None
-
-    def readable(self):
-        return False
-
-    def writable(self):
-        return True
-
-    def seekable(self):
-        return False
-
-    def read(self, size: Optional[int] = None) -> bytes:
-        raise NotImplementedError("read not supported")
-
-    def flush(self):
-        raise NotImplementedError("flush not supported")
 
 
 class StreamingFactory(WriterFactory):
@@ -200,78 +192,34 @@ class StreamingFactory(WriterFactory):
         self._queue.put(None)
 
 
-class BaseExtractWriter(Py7zIO):
-    def __init__(
-        self, member: ArchiveMember | None, extraction_helper: ExtractionHelper
-    ):
-        self._member = member
-        self._extraction_helper = extraction_helper
+class ExtractFileWriter(BasePy7zIOWriter):
+    def __init__(self, full_path: str):
+        self.full_path = full_path
+        os.makedirs(os.path.dirname(self.full_path), exist_ok=True)
 
-    def seek(self, offset, whence=0):
-        if offset == 0 and whence == 0:
-            self.close()
-            return 0
-        raise io.UnsupportedOperation()
-
-    @abstractmethod
-    def close(self):
-        pass
-
-    def readable(self) -> bool:
-        return False
-
-    def writable(self) -> bool:
-        return True
-
-    def seekable(self) -> bool:
-        return False
-
-    def read(self, size: Optional[int] = None) -> bytes:
-        raise io.UnsupportedOperation()
-
-    def flush(self):
-        raise io.UnsupportedOperation()
-
-    def size(self) -> int:
-        raise io.UnsupportedOperation()
-
-
-class ExtractFileWriter(BaseExtractWriter):
-    def __init__(
-        self, member: ArchiveMember, extraction_helper: ExtractionHelper, full_path: str
-    ):
-        super().__init__(member, extraction_helper)
-        self._full_path = full_path
-        os.makedirs(os.path.dirname(self._full_path), exist_ok=True)
-        self._file = open(self._full_path, "wb")
+        self.file = open(self.full_path, "wb")
 
     def write(self, b: Union[bytes, bytearray]) -> int:
-        self._file.write(b)
+        self.file.write(b)
         return len(b)
 
     def close(self):
-        assert self._member is not None
-        logger.error(f"Closing file writer for {self._member.filename}")
-        self._file.close()
-        self._extraction_helper.process_file_extracted(self._member, self._full_path)
+        logger.error(f"Closing file writer for {self.full_path}")
+        self.file.close()
 
 
-class ExtractLinkWriter(BaseExtractWriter):
-    def __init__(self, member: ArchiveMember, extraction_helper: ExtractionHelper):
-        super().__init__(member, extraction_helper)
+class ExtractLinkWriter(BasePy7zIOWriter):
+    def __init__(self, member: ArchiveMember):
         self.data = bytearray()
+        self.member = member
 
     def write(self, b: Union[bytes, bytearray]) -> int:
         self.data.extend(b)
         return len(b)
 
     def close(self):
-        assert self._member is not None
-        logger.error(
-            f"Closing link writer for {self._member.filename}, target={self.data.decode('utf-8')}"
-        )
-        self._member.link_target = self.data.decode("utf-8")
-        self._extraction_helper.extract_member(self._member, None)
+        self.member.link_target = self.data.decode("utf-8")
+        # self._extraction_helper.extract_member(self._member, None)
 
 
 class ExtractWriterFactory(WriterFactory):
@@ -279,34 +227,33 @@ class ExtractWriterFactory(WriterFactory):
         self,
         path: str,
         extract_filename_to_member: dict[str, ArchiveMember],
-        extraction_helper: ExtractionHelper,
     ):
         self._path = path
         self._extract_filename_to_member = extract_filename_to_member
-        self._extraction_helper = extraction_helper
+        self.member_id_to_outfile: dict[int, str] = {}
+        self.outfiles: set[str] = set()
 
     def create(self, fname: str) -> Py7zIO:
-        logger.error(f"Creating writer for {fname}, path={self._path}")
-
-        # if os.path.commonpath([self._path, fname]) == self._path:
-        #     fname = os.path.relpath(fname, self._path)
-        #     logger.error(f"fname={fname}")
-
         member = self._extract_filename_to_member.get(fname)
         if member is None:
             logger.error(f"Member {fname} not found")
             return py7zr.io.NullIO()
-        if member.is_file:
-            logger.error(f"Extracting file {fname}")
-            return ExtractFileWriter(
-                member, self._extraction_helper, os.path.join(self._path, fname)
-            )
         elif member.is_link:
             logger.error(f"Extracting link {fname}")
-            return ExtractLinkWriter(member, self._extraction_helper)
-        else:
-            logger.error(f"Ignoring member {fname}")
+            return ExtractLinkWriter(member)
+        elif not member.is_file:
+            logger.error(f"Ignoring non-file member {fname}")
             return py7zr.io.NullIO()
+
+        full_path = os.path.join(self._path, fname)
+        if os.path.lexists(full_path) or full_path in self.outfiles:
+            full_path += f"_{member.internal_id}"
+
+        self.member_id_to_outfile[member.internal_id] = full_path
+        self.outfiles.add(full_path)
+
+        logger.error(f"Creating writer for {fname}, path={full_path}")
+        return ExtractFileWriter(full_path)
 
 
 class SevenZipReader(BaseArchiveReaderRandomAccess):
@@ -629,77 +576,6 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         return os.path.join(path or os.getcwd(), member_obj.filename)
 
-    # def _extract_files_batch(
-    #     self,
-    #     files_to_extract: List[ArchiveMember],
-    #     target_path: str,
-    #     pwd: bytes | str | None,  # Note: py7zr uses password from SevenZipFile instance
-    #     written_paths: dict[str, str],
-    # ) -> None:
-    #     if not files_to_extract:
-    #         return
-
-    #     if self._archive is None:
-    #         logger.error(
-    #             f"SevenZipReader._archive is None for {self.archive_path}, cannot extract files."
-    #         )
-    #         # Raise an error to make it clear that the operation cannot proceed.
-    #         raise ArchiveError(
-    #             f"Archive object not available for {self.archive_path} during _extract_files_batch"
-    #         )
-
-    #     filenames_to_extract = [member.filename for member in files_to_extract]
-
-    #     try:
-    #         # py7zr's extract method can take a list of targets.
-    #         # Password is handled by the self._archive instance, set at initialization.
-    #         self._archive.extract(path=target_path, targets=filenames_to_extract)
-
-    #         # Verify extraction and update written_paths
-    #         for member in files_to_extract:
-    #             extracted_file_path = os.path.join(target_path, member.filename)
-    #             # We are interested if the *file* was created.
-    #             # py7zr might create parent directories, but _extract_files_batch is for files.
-    #             if os.path.isfile(extracted_file_path):
-    #                 written_paths[member.filename] = extracted_file_path
-    #             elif os.path.exists(
-    #                 extracted_file_path
-    #             ):  # It's not a file, maybe a dir
-    #                 logger.debug(
-    #                     f"Path {extracted_file_path} for member {member.filename} "
-    #                     "exists but is not a file (likely a directory created by py7zr), not adding to written_paths as a file."
-    #                 )
-    #             else:
-    #                 # This case means py7zr was asked to extract it, but it's not there.
-    #                 logger.warning(
-    #                     f"File {member.filename} was targeted for extraction by py7zr from archive {self.archive_path} but not found at {extracted_file_path}."
-    #                 )
-    #     except py7zr.exceptions.PasswordRequired as e:
-    #         logger.error(
-    #             f"Password required for extracting files from 7zip archive {self.archive_path}: {e}",
-    #             exc_info=True,
-    #         )
-    #         # Ensure this error propagates, as it's a critical failure for these files.
-    #         raise ArchiveEncryptedError(
-    #             f"Password required for 7zip extraction from {self.archive_path}: {e}"
-    #         ) from e
-    #     except (py7zr.exceptions.ArchiveError, lzma.LZMAError) as e:
-    #         logger.error(
-    #             f"Error during 7zip batch extraction from {self.archive_path}: {e}",
-    #             exc_info=True,
-    #         )
-    #         raise ArchiveError(
-    #             f"Error during 7zip batch extraction from {self.archive_path}: {e}"
-    #         ) from e
-    #     except Exception as e:  # Catch any other unexpected errors
-    #         logger.error(
-    #             f"Unexpected error during 7zip batch extraction from {self.archive_path}: {e}",
-    #             exc_info=True,
-    #         )
-    #         raise ArchiveError(
-    #             f"Unexpected error during 7zip batch extraction from {self.archive_path}: {e}"
-    #         ) from e
-
     def _extract_pending_files(
         self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None
     ) -> None:
@@ -719,9 +595,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         pending_extractions_to_member = {
             _py7zr_full_path(member): member for member in pending_extractions
         }
-        factory = ExtractWriterFactory(
-            path, pending_extractions_to_member, extraction_helper
-        )
+        factory = ExtractWriterFactory(path, pending_extractions_to_member)
 
         logger.info(f"Extracting {paths_to_extract} to {path}")
         self._archive.extract(
@@ -729,9 +603,9 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         )
         logger.info("Extraction done")
 
-        # for member in pending_extractions:
-        #     rel_path = os.path.relpath(member.filename, path)
-        #     extraction_helper.process_external_extraction(member, rel_path)
+        for member in pending_extractions:
+            outfile = factory.member_id_to_outfile.get(member.internal_id)
+            extraction_helper.process_file_extracted(member, outfile)
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
