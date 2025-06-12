@@ -264,7 +264,6 @@ class ArchiveReader(abc.ABC):
         member_or_filename: ArchiveMember | str,
         path: str | None = None,
         pwd: bytes | str | None = None,
-        preserve_links: bool = True,
     ) -> str | None:
         if path is None:
             path = os.getcwd()

@@ -298,13 +298,13 @@ def main(argv: list[str] | None = None) -> None:
                         members_if_available = [
                             m for m in members_if_available if member_filter(m)
                         ]
-                    filter_fn = (
-                        (lambda m: m if member_filter(m) else None)
-                        if member_filter is not None
-                        else None
-                    )
+                    # filter_fn = (
+                    #     (lambda m: m if member_filter(m) else None)
+                    #     if member_filter is not None
+                    #     else None
+                    # )
                     for member, stream in tqdm(
-                        archive.iter_members_with_io(filter=filter_fn),
+                        archive.iter_members_with_io(members=member_filter),
                         desc="Computing checksums" if verify else "Listing members",
                         disable=args.hide_progress,
                         total=len(members_if_available)
