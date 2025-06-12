@@ -363,7 +363,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         regular files, or links if the archive does not store link targets in the header.
         Metadata attributes for the extracted files will be applied afterwards.
         """
-        members_to_extract = extraction_helper.get_pending_extractions()
+        members_to_extract = extraction_helper.get_pending_extractions(bla=123)
         for member in members_to_extract:
             stream = self.open(member, pwd=pwd) if member.is_file else None
             extraction_helper.extract_member(member, stream)
@@ -383,7 +383,8 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         written_paths: dict[str, str] = {}
 
         if path is None:
-            path = os.getcwd()
+            pass
+            # path = os.getcwd()
         else:
             path = str(path)
 
