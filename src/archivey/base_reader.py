@@ -1,7 +1,9 @@
 import abc
 import logging
 import os
+import posixpath
 import threading
+from collections import defaultdict
 from typing import BinaryIO, Callable, Collection, Iterator, List, Union
 
 from archivey.config import ArchiveyConfig, get_default_config
@@ -95,12 +97,58 @@ class ArchiveReader(abc.ABC):
         )
         self.config: ArchiveyConfig = get_default_config()
         self._member_id_to_member: dict[int, ArchiveMember] = {}
-        self._filename_to_member: dict[str, ArchiveMember] = {}
+        self._filename_to_members: dict[str, list[ArchiveMember]] = defaultdict(list)
+        self._normalized_path_to_last_member: dict[str, ArchiveMember] = {}
         self._members_retrieved: bool = False
 
         self._member_id_counter: int = 0
         self._member_id_lock: threading.Lock = threading.Lock()
         self._archive_id: int = UNIQUE_ID_GENERATOR.next_id()
+
+    def _resolve_link_target(self, member: ArchiveMember) -> None:
+        if member.link_target is None:
+            return
+
+        # Run the search even if we had previously resolved the link target, as it
+        # may have been overwritten by a later member with the same filename.
+
+        link_target = member.link_target
+        if member.type == MemberType.HARDLINK:
+            # Look for the last member with the same filename and a lower member_id.
+            members = self._filename_to_members.get(link_target, [])
+            if not members:
+                logger.warning(
+                    f"Hardlink target {link_target} not found for {member.filename}"
+                )
+                return
+
+            target_member = max(
+                (m for m in members if m.member_id < member.member_id),
+                key=lambda m: m.member_id,
+                default=None,
+            )
+            if target_member is None:
+                logger.warning(
+                    f"Hardlink target {link_target} with id < {member.member_id} not found for {member.filename}"
+                )
+                return
+
+            member.link_target_member = target_member
+
+        elif member.type == MemberType.SYMLINK:
+            normalized_link_target = posixpath.normpath(
+                posixpath.join(posixpath.dirname(member.filename), member.link_target)
+            )
+            target_member = self._normalized_path_to_last_member.get(
+                normalized_link_target
+            )
+            if target_member is None:
+                logger.warning(
+                    f"Symlink target {normalized_link_target} not found for {member.filename}"
+                )
+                return
+
+            member.link_target_member = target_member
 
     def register_member(self, member: ArchiveMember) -> None:
         with self._member_id_lock:
@@ -109,29 +157,22 @@ class ArchiveReader(abc.ABC):
         member._archive_id = self._archive_id
 
         logger.info(f"Registering member {member.filename} ({member.member_id})")
-        self._filename_to_member[member.filename] = member
+
+        members_with_filename = self._filename_to_members[member.filename]
+        if member not in members_with_filename:
+            members_with_filename.append(member)
+            members_with_filename.sort(key=lambda m: m.member_id)
+
+        normalized_path = posixpath.normpath(member.filename)
+        if (
+            normalized_path not in self._normalized_path_to_last_member
+            or self._normalized_path_to_last_member[normalized_path].member_id
+            < member.member_id
+        ):
+            self._normalized_path_to_last_member[normalized_path] = member
         self._member_id_to_member[member.member_id] = member
 
-        if member.type == MemberType.HARDLINK:
-            # Store a reference to the target member. As the original member may be
-            # overwritten later if there's another member with the same filename,
-            # we need to keep a reference to the original member.
-            link_target = member.link_target
-
-            if link_target is not None:
-                member.link_target_member = self._filename_to_member.get(link_target)
-
-            if member.link_target_member is None:
-                logger.warning(
-                    f"Hardlink target {link_target} not found for {member.filename}"
-                )
-            elif member.link_target_member.link_target_member is not None:
-                # The target member is a hardlink to yet another member.
-                # We need to keep the reference to the original member.
-                # As the previous member was already resolved in this same manner,
-                # it's guaranteed to point to the non-link member, so we don't need
-                # to follow the chain recursively.
-                member.link_target_member = member.link_target_member.link_target_member
+        self._resolve_link_target(member)
 
     def set_all_members_retrieved(self) -> None:
         self._members_retrieved = True
@@ -244,6 +285,30 @@ class ArchiveReader(abc.ABC):
         """Get a list of all members in the archive. May need to read the archive to get the members."""
         pass
 
+    def _resolve_member_to_open(
+        self, member_or_filename: ArchiveMember | str
+    ) -> tuple[ArchiveMember, str]:
+        filename = (
+            member_or_filename.filename
+            if isinstance(member_or_filename, ArchiveMember)
+            else member_or_filename
+        )
+        member = self.get_member(member_or_filename)
+
+        if member.is_link:
+            # If the user is opening a link, open the target member instead.
+            self._resolve_link_target(member)
+            if member.link_target_member is None:
+                raise ArchiveMemberNotFoundError(
+                    f"Link target not found: {member.filename} (when opening {filename})"
+                )
+            member = member.link_target_member
+
+        if not member.is_file:
+            raise ValueError(f"Cannot open non-file member: {filename}")
+
+        return member, filename
+
     @abc.abstractmethod
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
@@ -268,9 +333,9 @@ class ArchiveReader(abc.ABC):
         if not self._members_retrieved:
             self.get_members()
 
-        if member_or_filename not in self._filename_to_member:
+        if member_or_filename not in self._filename_to_members:
             raise ArchiveMemberNotFoundError(f"Member not found: {member_or_filename}")
-        return self._filename_to_member[member_or_filename]
+        return self._filename_to_members[member_or_filename][-1]
 
     def extract(
         self,
@@ -339,35 +404,25 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
 
         filter_func = _build_iterator_filter(members, filter)
 
-        # actual_open = functools.partial(self.open, pwd=pwd)
-
         for member in self.get_members():
             filtered = filter_func(member)
             if filtered is None:
                 continue
 
-            # stream: LazyOpenIO | None = None
-            stream = (
-                LazyOpenIO(self.open, member, pwd=pwd, seekable=False)
-                if member.is_file
-                else None
-            )
-            yield member, stream
+            try:
+                # TODO: some libraries support fast seeking for files (either all,
+                # or only non-compressed ones), so we should set seekable=True
+                # if possible.
+                stream = (
+                    LazyOpenIO(self.open, member, pwd=pwd, seekable=False)
+                    if member.is_file
+                    else None
+                )
+                yield member, stream
 
-            # try:
-            #     # TODO: some libraries support fast seeking for files (either all,
-            #     # or only non-compressed ones), so we should set seekable=True
-            #     # if possible.
-            # except (ArchiveError, OSError) as e:
-            #     logger.warning(
-            #         "Error opening member %s", member.filename, exc_info=True
-            #     )
-            #     # The caller should only get the exception if it actually tries
-            #     # to read from the stream.
-            #     yield member, ErrorIOStream(e)
-            # finally:
-            #     if stream is not None:
-            #         stream.close()
+            finally:
+                if stream is not None:
+                    stream.close()
 
     def _extract_pending_files(
         self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None

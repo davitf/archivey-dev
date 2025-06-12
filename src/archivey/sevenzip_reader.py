@@ -420,8 +420,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         if self._archive is None:
             raise ValueError("Archive is closed")
 
-        member = self.get_member(member_or_filename)
-        # logger.info(f"member {member}")
+        member, filename = self._resolve_member_to_open(member_or_filename)
 
         try:
             # Hack: py7zr only supports setting a password when creating the
@@ -434,7 +433,6 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 file_info.folder.password = bytes_to_str(pwd)
 
             it = list(self.iter_members_with_io(members=[member], close_streams=False))
-            # logger.info("iterator done")
             assert len(it) == 1, (
                 f"Expected exactly one member, got {len(it)}. {member.filename}"
             )

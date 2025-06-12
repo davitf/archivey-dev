@@ -189,13 +189,14 @@ def check_iter_members(
             )
             filekey = member.filename
 
-            if member.type == MemberType.DIR or member.type == MemberType.SYMLINK:
+            if member.type == MemberType.DIR: # or member.type == MemberType.SYMLINK:
                 if stream is not None:
                     stream_data = stream.read()
                     assert stream is None, (
                         f"Stream provided for {member.filename} ({member.type}) ({stream_data=})"
                     )
 
+            # TODO: compare data for resolved links
             data = stream.read() if stream is not None else None
 
             if (
@@ -457,3 +458,25 @@ def test_read_single_file_compressed_archives(
         config = ArchiveyConfig(use_single_file_stored_metadata=True)
 
     check_iter_members(sample_archive, archive_path=sample_archive_path, config=config)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["symlinks", "symlinks_solid"]),
+    ids=lambda x: x.filename,
+)
+def test_read_symlinks_archives(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    check_iter_members(sample_archive, archive_path=sample_archive_path)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["hardlinks", "hardlinks_solid"]),
+    ids=lambda x: x.filename,
+)
+def test_read_hardlinks_archives(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    check_iter_members(sample_archive, archive_path=sample_archive_path)

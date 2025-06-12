@@ -540,6 +540,7 @@ SYMLINK_FILES = [
         mtime=_fake_mtime(2),
         type=MemberType.SYMLINK,
         link_target="file1.txt",
+        contents=b"Hello, world!",
     ),
     FileInfo(
         name="subdir/",
@@ -558,6 +559,65 @@ SYMLINK_FILES = [
         type=MemberType.SYMLINK,
         link_target="subdir",
         link_target_type=MemberType.DIR,
+    ),
+]
+
+HARD_LINK_FILES = [
+    FileInfo(
+        name="file1.txt",
+        mtime=_fake_mtime(1),
+        contents=b"Hello 1!",
+    ),
+    FileInfo(
+        name="subdir/file2.txt",
+        mtime=_fake_mtime(2),
+        contents=b"Hello 2!",
+    ),
+    FileInfo(
+        name="subdir/hardlink_to_file1.txt",
+        mtime=_fake_mtime(3),
+        type=MemberType.HARDLINK,
+        link_target="file1.txt",
+    ),
+    FileInfo(
+        name="hardlink_to_file2.txt",
+        mtime=_fake_mtime(4),
+        type=MemberType.HARDLINK,
+        link_target="subdir/file2.txt",
+    ),
+]
+
+# In tar archives, a hard link refers to the entry with the same name previously in
+# the archive, even if that entry is later overwritten. So in this case, the first
+# hard link should refer to the first file version, and the second hard link should
+# refer to the second file version.
+HARD_LINK_WITH_DUPLICATE_FILES = [
+    FileInfo(
+        name="file1.txt",
+        mtime=_fake_mtime(1),
+        contents=b"Old contents",
+    ),
+    FileInfo(
+        name="hardlink_to_file1_old.txt",
+        mtime=_fake_mtime(2),
+        type=MemberType.HARDLINK,
+        link_target="file1.txt",
+    ),
+    FileInfo(
+        name="file1.txt",
+        mtime=_fake_mtime(3),
+        contents=b"New contents!",
+    ),
+    FileInfo(
+        name="hardlink_to_file1_new.txt",
+        mtime=_fake_mtime(4),
+        type=MemberType.HARDLINK,
+        link_target="file1.txt",
+    ),
+    FileInfo(
+        name="file1.txt",
+        mtime=_fake_mtime(5),
+        contents=b"Newer contents!!",
     ),
 ]
 
@@ -860,6 +920,22 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     ),
     (
         ArchiveContents(
+            file_basename="hardlinks_nonsolid",
+            files=HARD_LINK_FILES,
+            solid=True,
+        ),
+        RAR_FORMATS + ALL_TAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="hardlinks_solid",
+            files=HARD_LINK_FILES,
+            solid=True,
+        ),
+        RAR_FORMATS + ALL_TAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
             file_basename="encoding",
             files=ENCODING_FILES,
         ),
@@ -1014,6 +1090,7 @@ DUPLICATE_FILES_ARCHIVES = filter_archives(
 
 
 # TODO: add tests and fixes for:
+#   - rar4 archives
 #   - empty files
 #   - hard links (tar and rar)
 #      - open() hard links should open the referenced file

@@ -263,6 +263,8 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
             self._members = None
 
     def _get_link_target(self, info: RarInfo) -> Optional[str]:
+        # TODO: in RAR4 format, link targets are stored as the file contents. is it
+        # possible that the link target itself is encrypted?
         if not info.is_symlink() and not is_rar_info_hardlink(info):
             return None
         if info.file_redir:
@@ -410,7 +412,9 @@ class RarReader(BaseRarReader):
         *,
         pwd: Optional[str | bytes] = None,
     ) -> BinaryIO:
-        member = self.get_member(member_or_filename)
+        # TODO: in RAR4 format, link targets are stored as the file contents. is it
+        # possible that the link target itself is encrypted?
+        member, filename = self._resolve_member_to_open(member_or_filename)
 
         if member.encrypted:
             pwd_check = verify_rar5_password(

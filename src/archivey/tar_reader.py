@@ -222,19 +222,11 @@ class TarReader(BaseArchiveReaderRandomAccess):
         if pwd is not None:
             raise ValueError("TAR format does not support password protection.")
 
-        info_or_filename = (
-            cast(tarfile.TarInfo, member_or_filename.raw_info)
-            if isinstance(member_or_filename, ArchiveMember)
-            else member_or_filename
-        )
-        filename = (
-            member_or_filename.filename
-            if isinstance(member_or_filename, ArchiveMember)
-            else member_or_filename
-        )
+        member, filename = self._resolve_member_to_open(member_or_filename)
+        tarinfo = cast(tarfile.TarInfo, member.raw_info)
 
         try:
-            stream = self._archive.extractfile(info_or_filename)
+            stream = self._archive.extractfile(tarinfo)
             if stream is None:
                 raise ArchiveMemberCannotBeOpenedError(
                     f"Member {filename} cannot be opened"

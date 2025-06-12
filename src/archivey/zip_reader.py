@@ -120,6 +120,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         if self._archive is None:
             raise ValueError("Archive is closed")
 
+        # Zip archives store the link target as the contents of the file.
         # TODO: do we need to handle the UTF8 flag or fallback encodings?
         if stat.S_ISLNK(info.external_attr >> 16):
             with self._archive.open(info.filename) as f:
@@ -199,20 +200,11 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         if self._archive is None:
             raise ValueError("Archive is closed")
 
-        try:
-            info_or_filename = (
-                cast(zipfile.ZipInfo, member_or_filename.raw_info)
-                if isinstance(member_or_filename, ArchiveMember)
-                else member_or_filename
-            )
-            filename = (
-                member_or_filename.filename
-                if isinstance(member_or_filename, ArchiveMember)
-                else member_or_filename
-            )
+        member, filename = self._resolve_member_to_open(member_or_filename)
 
+        try:
             stream = self._archive.open(
-                info_or_filename,
+                cast(zipfile.ZipInfo, member.raw_info),
                 pwd=str_to_bytes(pwd or self._pwd),
             )
 
@@ -228,100 +220,3 @@ class ZipReader(BaseArchiveReaderRandomAccess):
             raise ArchiveError(f"Error reading member {filename}: {e}") from e
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error reading member {filename}: {e}") from e
-
-    # def extract(
-    #     self,
-    #     member: ArchiveMember | str,
-    #     root_path: str | None = None,
-    #     *,
-    #     pwd: bytes | str | None = None,
-    # ) -> str:
-    #     if self._archive is None:
-    #         raise ValueError("Archive is closed")
-
-    #     filename = member.filename if isinstance(member, ArchiveMember) else member
-    #     try:
-    #         return self._archive.extract(
-    #             filename,
-    #             path=root_path,
-    #             pwd=str_to_bytes(pwd or self._pwd),
-    #         )
-    #     except RuntimeError as e:
-    #         if "password required" in str(e):
-    #             raise ArchiveEncryptedError(f"Member {filename} is encrypted") from e
-    #         raise ArchiveError(f"Error extracting member {filename}: {e}") from e
-    #     except zipfile.BadZipFile as e:
-    #         raise ArchiveCorruptedError(
-    #             f"Error extracting member {filename}: {e}"
-    #         ) from e
-
-    # def _extract_files_batch(
-    #     self,
-    #     files_to_extract: List[ArchiveMember],
-    #     target_path: str,
-    #     pwd: bytes | str | None,
-    #     written_paths: dict[str, str],
-    # ) -> None:
-    #     if not files_to_extract:
-    #         return
-
-    #     if self._archive is None:
-    #         logger.error(
-    #             f"ZipReader._archive is None for {self.archive_path}, cannot extract files."
-    #         )
-    #         raise ArchiveError(
-    #             f"Archive object not available for {self.archive_path} during _extract_files_batch"
-    #         )
-
-    #     filenames_to_extract = [member.filename for member in files_to_extract]
-    #     effective_pwd_bytes = str_to_bytes(pwd if pwd is not None else self._pwd)
-
-    #     try:
-    #         self._archive.extractall(
-    #             path=target_path, members=filenames_to_extract, pwd=effective_pwd_bytes
-    #         )
-
-    #         for member in files_to_extract:
-    #             extracted_file_path = os.path.join(target_path, member.filename)
-    #             if os.path.isfile(extracted_file_path):
-    #                 written_paths[member.filename] = extracted_file_path
-    #             elif os.path.exists(extracted_file_path):
-    #                 logger.debug(
-    #                     f"Path {extracted_file_path} for member {member.filename} exists but is not a file (likely a directory created by zipfile), not adding to written_paths as a file."
-    #                 )
-    #             else:
-    #                 logger.warning(
-    #                     f"File {member.filename} was targeted for extraction by zipfile from archive {self.archive_path} but not found at {extracted_file_path}."
-    #                 )
-    #     except RuntimeError as e:
-    #         if "password required" in str(e).lower():  # Check lowercase for robustness
-    #             logger.error(
-    #                 f"Password required for extracting files from zip archive {self.archive_path}: {e}",
-    #                 exc_info=True,
-    #             )
-    #             raise ArchiveEncryptedError(
-    #                 f"Password required for zip extraction from {self.archive_path}: {e}"
-    #             ) from e
-    #         logger.error(
-    #             f"Runtime error during zip batch extraction from {self.archive_path}: {e}",
-    #             exc_info=True,
-    #         )
-    #         raise ArchiveError(
-    #             f"Runtime error during zip batch extraction from {self.archive_path}: {e}"
-    #         ) from e
-    #     except zipfile.BadZipFile as e:
-    #         logger.error(
-    #             f"Bad zip file during batch extraction from {self.archive_path}: {e}",
-    #             exc_info=True,
-    #         )
-    #         raise ArchiveCorruptedError(
-    #             f"Bad zip file during batch extraction from {self.archive_path}: {e}"
-    #         ) from e
-    #     except Exception as e:  # Catch any other unexpected errors
-    #         logger.error(
-    #             f"Unexpected error during zip batch extraction from {self.archive_path}: {e}",
-    #             exc_info=True,
-    #         )
-    #         raise ArchiveError(
-    #             f"Unexpected error during zip batch extraction from {self.archive_path}: {e}"
-    #         ) from e
