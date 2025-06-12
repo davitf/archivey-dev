@@ -300,6 +300,20 @@ LZ4_CMD = ArchiveCreationInfo(
     generation_method_options={"compression_cmd": "lz4"},
     features=ArchiveFormatFeatures(file_size=False),
 )
+COMPRESS_Z_CMD = ArchiveCreationInfo(
+    file_suffix="cmd.z",
+    format=ArchiveFormat.COMPRESS_Z,
+    generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
+    generation_method_options={"compression_cmd": "compress"},
+    features=ArchiveFormatFeatures(file_size=False),
+)
+BROTLI_CMD = ArchiveCreationInfo(
+    file_suffix="cmd.br",
+    format=ArchiveFormat.BROTLI,
+    generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
+    generation_method_options={"compression_cmd": "brotli"},
+    features=ArchiveFormatFeatures(file_size=False),
+)
 
 GZIP_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.gz",
@@ -351,6 +365,8 @@ ALL_SINGLE_FILE_FORMATS = [
     XZ_CMD,
     ZSTD_CMD,
     LZ4_CMD,
+    COMPRESS_Z_CMD,
+    BROTLI_CMD,
     GZIP_LIBRARY,
     BZIP2_LIBRARY,
     XZ_LIBRARY,

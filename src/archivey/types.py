@@ -25,6 +25,8 @@ class ArchiveFormat(StrEnum):
 
     GZIP = "gz"
     BZIP2 = "bz2"
+    BROTLI = "br"
+    COMPRESS_Z = "z"
     XZ = "xz"
     ZSTD = "zstd"
     LZ4 = "lz4"
@@ -35,6 +37,8 @@ class ArchiveFormat(StrEnum):
     TAR_XZ = "tar.xz"
     TAR_ZSTD = "tar.zstd"
     TAR_LZ4 = "tar.lz4"
+    TAR_BR = "tar.br"
+    TAR_Z = "tar.z"
 
     ISO = "iso"
     FOLDER = "folder"
@@ -45,6 +49,8 @@ class ArchiveFormat(StrEnum):
 SINGLE_FILE_COMPRESSED_FORMATS = [
     ArchiveFormat.GZIP,
     ArchiveFormat.BZIP2,
+    ArchiveFormat.BROTLI,
+    ArchiveFormat.COMPRESS_Z,
     ArchiveFormat.XZ,
     ArchiveFormat.ZSTD,
     ArchiveFormat.LZ4,
@@ -55,6 +61,8 @@ TAR_COMPRESSED_FORMATS = [
     ArchiveFormat.TAR_XZ,
     ArchiveFormat.TAR_ZSTD,
     ArchiveFormat.TAR_LZ4,
+    ArchiveFormat.TAR_BR,
+    ArchiveFormat.TAR_Z,
 ]
 
 COMPRESSION_FORMAT_TO_TAR_FORMAT = {
@@ -63,6 +71,8 @@ COMPRESSION_FORMAT_TO_TAR_FORMAT = {
     ArchiveFormat.XZ: ArchiveFormat.TAR_XZ,
     ArchiveFormat.ZSTD: ArchiveFormat.TAR_ZSTD,
     ArchiveFormat.LZ4: ArchiveFormat.TAR_LZ4,
+    ArchiveFormat.BROTLI: ArchiveFormat.TAR_BR,
+    ArchiveFormat.COMPRESS_Z: ArchiveFormat.TAR_Z,
 }
 
 TAR_FORMAT_TO_COMPRESSION_FORMAT = {
