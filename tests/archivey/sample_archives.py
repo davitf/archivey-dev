@@ -1000,19 +1000,6 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
 # Build all archive infos
 SAMPLE_ARCHIVES = build_archive_infos()
 
-# # Backwards compatibility for older tests expecting the generic zipfile name
-# for a in SAMPLE_ARCHIVES:
-#     if a.filename == "basic_nonsolid__zipfile_deflate.zip":
-#         SAMPLE_ARCHIVES.append(
-#             ArchiveInfo(
-#                 filename="basic_nonsolid__zipfile.zip",
-#                 contents=a.contents,
-#                 creation_info=a.creation_info,
-#                 skip_test=a.skip_test,
-#             )
-#         )
-#         break
-
 BASIC_ARCHIVES = filter_archives(
     SAMPLE_ARCHIVES,
     prefixes=["basic_nonsolid", "basic_solid"],
@@ -1024,3 +1011,14 @@ DUPLICATE_FILES_ARCHIVES = filter_archives(
     prefixes=["duplicate_files"],
     custom_filter=lambda x: x.creation_info.format != ArchiveFormat.ISO,
 )
+
+
+# TODO: add tests and fixes for:
+#   - empty files
+#   - hard links (tar and rar)
+#      - open() hard links should open the referenced file
+#   - duplicate files:
+#      - open(member) should open the correct file
+#      - open(filename) should open the last file with that name
+#   - filter function
+#      - open() with filtered members should work
