@@ -11,10 +11,17 @@ if TYPE_CHECKING:
     import indexed_bzip2
     import lz4.frame
     import pyzstd
+    import brotli
     import rapidgzip
+    import unlzw
     import xz
     import zstandard
 else:
+    try:
+        import brotli
+    except ImportError:
+        brotli = None
+
     try:
         import lz4.frame
     except ImportError:
@@ -44,6 +51,11 @@ else:
         import xz
     except ImportError:
         xz = None
+
+    try:
+        import unlzw
+    except ImportError:
+        unlzw = None
 
 
 from archivey.exceptions import (
@@ -204,6 +216,38 @@ def open_lz4_stream(path: str) -> BinaryIO:
     return ExceptionTranslatingIO(lz4.frame.open(path), _translate_lz4_exception)
 
 
+def _translate_brotli_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, brotli.Error):
+        return ArchiveCorruptedError(f"Error reading Brotli archive: {repr(e)}")
+    elif isinstance(e, EOFError):
+        return ArchiveEOFError(f"Brotli file is truncated: {repr(e)}")
+    return None
+
+
+def open_brotli_stream(path: str) -> BinaryIO:
+    if brotli is None:
+        raise PackageNotInstalledError(
+            "brotli package is not installed, required for Brotli archives"
+        ) from None
+    return ExceptionTranslatingIO(brotli.open(path, mode="rb"), _translate_brotli_exception)
+
+
+def _translate_compress_z_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, unlzw.LZWError):
+        return ArchiveCorruptedError(f"Error reading Z Compress archive: {repr(e)}")
+    elif isinstance(e, EOFError):
+        return ArchiveEOFError(f"Z Compress file is truncated: {repr(e)}")
+    return None
+
+
+def open_compress_z_stream(path: str) -> BinaryIO:
+    if unlzw is None:
+        raise PackageNotInstalledError(
+            "unlzw package is not installed, required for Z Compress archives"
+        ) from None
+    return ExceptionTranslatingIO(unlzw.open(path, mode="rb"), _translate_compress_z_exception)
+
+
 def open_stream(
     format: ArchiveFormat, path: str | PathLike, config: ArchiveyConfig
 ) -> BinaryIO:
@@ -234,5 +278,11 @@ def open_stream(
             return open_zstandard_stream(path)
         else:
             return open_pyzstd_stream(path)
+
+    elif format == ArchiveFormat.BROTLI:
+        return open_brotli_stream(path)
+
+    elif format == ArchiveFormat.COMPRESS_Z:
+        return open_compress_z_stream(path)
 
     raise ValueError(f"Unsupported archive format: {format}")  # pragma: no cover

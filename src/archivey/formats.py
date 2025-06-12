@@ -41,6 +41,7 @@ def detect_archive_format_by_signature(
         ([b"\xfd\x37\x7a\x58\x5a\x00"], 0, ArchiveFormat.XZ),
         ([b"\x28\xb5\x2f\xfd"], 0, ArchiveFormat.ZSTD),
         ([b"\x04\x22\x4d\x18"], 0, ArchiveFormat.LZ4),
+        ([b"\x1f\x9d"], 0, ArchiveFormat.COMPRESS_Z),
         ([b"ustar"], 257, ArchiveFormat.TAR),  # TAR "ustar" magic
         (_ISO_MAGIC_BYTES, 0x8001, ArchiveFormat.ISO),  # ISO9660
     ]
@@ -97,6 +98,8 @@ _EXTENSION_TO_FORMAT = {
     ".xz": ArchiveFormat.XZ,
     ".zst": ArchiveFormat.ZSTD,
     ".lz4": ArchiveFormat.LZ4,
+    ".z": ArchiveFormat.COMPRESS_Z,
+    ".br": ArchiveFormat.BROTLI,
     ".zip": ArchiveFormat.ZIP,
     ".rar": ArchiveFormat.RAR,
     ".7z": ArchiveFormat.SEVENZIP,
