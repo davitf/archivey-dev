@@ -332,7 +332,9 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
                     encrypted=info.needs_password(),
                     create_system=_RAR_HOST_OS_TO_CREATE_SYSTEM.get(
                         info.host_os, CreateSystem.UNKNOWN
-                    ),
+                    )
+                    if info.host_os is not None
+                    else None,
                     raw_info=info,
                     link_target=self._get_link_target(info),
                     extra={"host_os": getattr(info, "host_os", None)},
