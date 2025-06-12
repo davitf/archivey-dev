@@ -24,12 +24,16 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Install dependencies
         run: |
-          python -m venv .venv
+          uv venv
           source .venv/bin/activate
-          pip install -e ".[optional]"
-          pip install devtools>=0.12.2 pytest>=8.3.5 pytest-timeout>=2.3.1 pytest-cov>=5.0.0 ruff>=0.11.11
+          uv sync --extra optional
           npm install -g pyright
 
       - name: Run Ruff checks
@@ -39,5 +43,4 @@ jobs:
 
       - name: Run Pyright
         run: |
-          source .venv/bin/activate
           npx pyright . 
