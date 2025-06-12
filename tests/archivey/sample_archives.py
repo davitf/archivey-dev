@@ -575,13 +575,13 @@ HARD_LINK_FILES = [
     ),
     FileInfo(
         name="subdir/hardlink_to_file1.txt",
-        mtime=_fake_mtime(3),
+        mtime=_fake_mtime(1),
         type=MemberType.HARDLINK,
         link_target="file1.txt",
     ),
     FileInfo(
         name="hardlink_to_file2.txt",
-        mtime=_fake_mtime(4),
+        mtime=_fake_mtime(2),
         type=MemberType.HARDLINK,
         link_target="subdir/file2.txt",
     ),

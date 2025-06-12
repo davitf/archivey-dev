@@ -305,27 +305,30 @@ class TarReader(BaseArchiveReaderRandomAccess):
                     continue
 
                 try:
-                    if self._streaming_only:
-                        info = (
-                            tarinfo
-                            if self._members is None
-                            else cast(tarfile.TarInfo, member.raw_info)
-                        )
-                        assert info is not None
-                        stream_obj = self._archive.extractfile(info)
-                        if stream_obj is None:
-                            raise ArchiveMemberCannotBeOpenedError(
-                                f"Member {member.filename} cannot be opened"
+                    if member.is_file:
+                        if self._streaming_only:
+                            info = (
+                                tarinfo
+                                if self._members is None
+                                else cast(tarfile.TarInfo, member.raw_info)
                             )
-                        stream = ExceptionTranslatingIO(
-                            cast(BinaryIO, stream_obj), _translate_tar_exception
-                        )
-                        yield filtered_member, stream
-                        stream.close()
+                            assert info is not None
+                            stream_obj = self._archive.extractfile(info)
+                            if stream_obj is None:
+                                raise ArchiveMemberCannotBeOpenedError(
+                                    f"Member {member.filename} cannot be opened"
+                                )
+                            stream = ExceptionTranslatingIO(
+                                cast(BinaryIO, stream_obj), _translate_tar_exception
+                            )
+                            yield filtered_member, stream
+                            stream.close()
+                        else:
+                            stream = LazyOpenIO(self.open, member, seekable=True)
+                            yield filtered_member, stream
+                            stream.close()
                     else:
-                        stream = LazyOpenIO(self.open, member, seekable=True)
-                        yield filtered_member, stream
-                        stream.close()
+                        yield filtered_member, None
 
                 except tarfile.ReadError as e:
                     logger.warning("Error opening member %s: %s", member.filename, e)
