@@ -424,6 +424,11 @@ class RarReader(BaseRarReader):
         if self._archive is None:
             raise ValueError("Archive is closed")
 
+        if member.type == MemberType.DIR:  # or member.type == MemberType.SYMLINK:
+            raise ValueError(
+                f"Cannot open directories in RAR archives: {member.filename}"
+            )
+
         try:
             # Apparently pwd can be either bytes or str.
             inner: BinaryIO = self._archive.open(member.filename, pwd=bytes_to_str(pwd))  # type: ignore[arg-type]

@@ -189,6 +189,13 @@ def check_iter_members(
             )
             filekey = member.filename
 
+            if member.type == MemberType.DIR or member.type == MemberType.SYMLINK:
+                if stream is not None:
+                    stream_data = stream.read()
+                    assert stream is None, (
+                        f"Stream provided for {member.filename} ({member.type}) ({stream_data=})"
+                    )
+
             data = stream.read() if stream is not None else None
 
             if (

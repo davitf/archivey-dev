@@ -1,14 +1,13 @@
 import abc
-import functools
 import logging
 import os
 import threading
 from typing import BinaryIO, Callable, Collection, Iterator, List, Union
 
 from archivey.config import ArchiveyConfig, get_default_config
-from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
+from archivey.exceptions import ArchiveMemberNotFoundError
 from archivey.extraction_helper import ExtractionHelper
-from archivey.io_helpers import ErrorIOStream, LazyOpenIO
+from archivey.io_helpers import LazyOpenIO
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 from archivey.unique_ids import UNIQUE_ID_GENERATOR
 
@@ -340,29 +339,35 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
 
         filter_func = _build_iterator_filter(members, filter)
 
+        # actual_open = functools.partial(self.open, pwd=pwd)
+
         for member in self.get_members():
             filtered = filter_func(member)
             if filtered is None:
                 continue
 
-            stream: LazyOpenIO | None = None
-            try:
-                # TODO: some libraries support fast seeking for files (either all,
-                # or only non-compressed ones), so we should set seekable=True
-                # if possible.
-                actual_open = functools.partial(self.open, pwd=pwd)
-                stream = LazyOpenIO(actual_open, member, seekable=False)
-                yield member, stream
-            except (ArchiveError, OSError) as e:
-                logger.warning(
-                    "Error opening member %s", member.filename, exc_info=True
-                )
-                # The caller should only get the exception if it actually tries
-                # to read from the stream.
-                yield member, ErrorIOStream(e)
-            finally:
-                if stream is not None:
-                    stream.close()
+            # stream: LazyOpenIO | None = None
+            stream = (
+                LazyOpenIO(self.open, member, pwd=pwd, seekable=False)
+                if member.is_file
+                else None
+            )
+            yield member, stream
+
+            # try:
+            #     # TODO: some libraries support fast seeking for files (either all,
+            #     # or only non-compressed ones), so we should set seekable=True
+            #     # if possible.
+            # except (ArchiveError, OSError) as e:
+            #     logger.warning(
+            #         "Error opening member %s", member.filename, exc_info=True
+            #     )
+            #     # The caller should only get the exception if it actually tries
+            #     # to read from the stream.
+            #     yield member, ErrorIOStream(e)
+            # finally:
+            #     if stream is not None:
+            #         stream.close()
 
     def _extract_pending_files(
         self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None

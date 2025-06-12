@@ -485,33 +485,38 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         # members_to_extract = [] #m for m in self.get_members() if member_included(m)]
         filenames_to_extract = []
-
-        empty_members = []
         for member in self.get_members():
             if not member_included(member):
                 continue
-            if member.is_dir or (member.is_file and member.file_size == 0):
+
+            if member.is_link and member.link_target is None:
+                # We'll need to resolve the link target later.
+                filenames_to_extract.append(member.filename)
+                continue
+
+            filtered_member = filter(member) if filter is not None else member
+            if filtered_member is None:
+                continue
+
+            if member.is_dir or member.is_link:
+                yield filtered_member, None
+
+            elif member.is_file and member.file_size == 0:
                 # Yield any empty files immediately, as py7zr doesn't actually call any
                 # methods on the PyZ7IO object for them, and so they're not added to the
                 # queue.
-                empty_members.append(member)
-                filtered_member = filter(member) if filter is not None else member
-                if filtered_member is not None:
-                    yield filtered_member, io.BytesIO(b"")
+                yield filtered_member, io.BytesIO(b"")
 
-            else:
-                # members_to_extract.append(m)
+            elif member.is_file:
                 filenames_to_extract.append(member.filename)
-
-        # files = [m.filename for m in members_to_extract]
+            else:
+                logger.error(
+                    f"Unknown member type: {member.type} for {member.filename}"
+                )
+                continue
 
         # Allow the queue to carry tuples, exceptions, or None
         q = Queue[tuple[str, BinaryIO] | Exception | None]()
-
-        # for extract_filename, member in extract_filename_to_member.items():
-        #     if member.is_file and member.file_size == 0:
-        #         q.put((extract_filename, io.BytesIO(b'')))
-        #         del files[member.internal_id]  # Don't pass this file to the extractor.
 
         # TODO: check that all the requested files to extract() were actually
         # extracted exactly once.
@@ -550,11 +555,13 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                     raise item
                 fname, stream = item
 
-                # logger.info(f"Yielding member {fname} {type(stream)} {stream}")
                 member_info = extract_filename_to_member[fname]
-                if member_info.is_link and member_info.link_target is None:
+                if member_info.is_link:
+                    # The filtering was delayed until the link target was resolved.
+                    assert member_info.link_target is None
+
+                    # TODO: also fill link_target_member for hard links
                     member_info.link_target = stream.read().decode("utf-8")
-                    # TODO: fill link_target_member for hard links
 
                 filtered_member = (
                     filter(member_info) if filter is not None else member_info
