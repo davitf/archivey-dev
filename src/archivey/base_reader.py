@@ -294,7 +294,6 @@ class ArchiveReader(abc.ABC):
             path=path,
             members=[member_or_filename],
             pwd=pwd,
-            preserve_links=preserve_links,
         )
         return list(d.values())[0] if len(d) else None
 

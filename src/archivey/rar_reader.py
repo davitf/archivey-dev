@@ -572,7 +572,7 @@ class RarStreamReader(BaseRarReader):
 
     def _open_unrar_stream(
         self, pwd: bytes | str | None = None
-    ) -> tuple[subprocess.Popen, BinaryIO]:
+    ) -> tuple[subprocess.Popen[bytes], BinaryIO]:
         if pwd is None:
             pwd = self._pwd
 
@@ -596,7 +596,7 @@ class RarStreamReader(BaseRarReader):
             )
             if proc.stdout is None:
                 raise RuntimeError("Could not open unrar output stream")
-            stream = proc.stdout  # type: ignore
+            stream = cast(BinaryIO, proc.stdout)
             return proc, stream
 
         except (OSError, subprocess.SubprocessError) as e:

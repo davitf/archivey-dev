@@ -58,9 +58,9 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
         super().__init__(format, archive_path)
         self._streaming_only = streaming_only
-        self._members = None
-        self._format_info = None
-        self._fileobj = None
+        self._members: list[ArchiveMember] | None = None
+        self._format_info: ArchiveInfo | None = None
+        self._fileobj: BinaryIO | None = None
 
         logger.info(f"TarReader init: {archive_path} {format} {streaming_only}")
 
@@ -197,7 +197,11 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
             self.set_all_members_retrieved()
 
-            if self.config.tar_check_integrity and tarinfo is not None:
+            if (
+                self.config.tar_check_integrity
+                and self._members is None
+                and tarinfo is not None
+            ):
                 self._check_tar_integrity(tarinfo)
 
         return self._members
@@ -235,7 +239,9 @@ class TarReader(BaseArchiveReaderRandomAccess):
                 raise ArchiveMemberCannotBeOpenedError(
                     f"Member {filename} cannot be opened"
                 )
-            return ExceptionTranslatingIO(stream, _translate_tar_exception)
+            return ExceptionTranslatingIO(
+                cast(BinaryIO, stream), _translate_tar_exception
+            )
 
         except tarfile.ReadError as e:
             translated = _translate_tar_exception(e)
@@ -287,15 +293,19 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
         # The iterator on a tarfile can only run once, so we need to use the members list
         # if it's been retrieved (as it exhausts the iterator).
-        iterator = iter(self._archive) if self._members is None else self._members
+        iterator = iter(self._archive) if self._members is None else iter(self._members)
 
         try:
-            tarinfo = None
+            tarinfo: tarfile.TarInfo | None = None
 
-            members = []
-            for tarinfo in iterator:
-                member = self._tarinfo_to_archive_member(tarinfo)
-                members.append(member)
+            members_list: list[ArchiveMember] = []
+            for item in iterator:
+                if self._members is None:
+                    tarinfo = cast(tarfile.TarInfo, item)
+                    member = self._tarinfo_to_archive_member(tarinfo)
+                    members_list.append(member)
+                else:
+                    member = cast(ArchiveMember, item)
                 self.register_member(member)
 
                 filtered_member = filter_func(member)
@@ -304,13 +314,19 @@ class TarReader(BaseArchiveReaderRandomAccess):
 
                 try:
                     if self._streaming_only:
-                        stream_obj = self._archive.extractfile(tarinfo)
+                        info = (
+                            tarinfo
+                            if self._members is None
+                            else cast(tarfile.TarInfo, member.raw_info)
+                        )
+                        assert info is not None
+                        stream_obj = self._archive.extractfile(info)
                         if stream_obj is None:
                             raise ArchiveMemberCannotBeOpenedError(
                                 f"Member {member.filename} cannot be opened"
                             )
                         stream = ExceptionTranslatingIO(
-                            stream_obj, _translate_tar_exception
+                            cast(BinaryIO, stream_obj), _translate_tar_exception
                         )
                         yield filtered_member, stream
                         stream.close()
@@ -328,7 +344,7 @@ class TarReader(BaseArchiveReaderRandomAccess):
                     )
 
             if self._members is None:
-                self._members = members
+                self._members = members_list
                 self.set_all_members_retrieved()
 
             if self.config.tar_check_integrity and tarinfo is not None:

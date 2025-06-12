@@ -8,7 +8,7 @@ import sys
 import zlib
 from datetime import datetime
 from importlib.metadata import version as package_version
-from typing import BinaryIO, Callable, Tuple
+from typing import BinaryIO, Callable, Tuple, cast
 
 from tqdm import tqdm
 
@@ -249,17 +249,18 @@ def main(argv: list[str] | None = None) -> None:
         target_paths = {os.path.abspath(p) for p in args.files}
 
         def patched_open(file, mode="r", *oargs, **okwargs):
-            path = None
+            path: str | None = None
             if isinstance(file, (str, bytes, os.PathLike)):
-                path = os.path.abspath(file)
+                path = str(os.path.abspath(os.fspath(file)))
             if (
-                path in target_paths
+                path is not None
+                and path in target_paths
                 and "r" in mode
                 and not any(m in mode for m in ["w", "a", "+"])
             ):
                 f = original_open(file, mode, *oargs, **okwargs)
                 stats = stats_per_file.setdefault(path, IOStats())
-                return StatsIO(f, stats)
+                return StatsIO(cast(BinaryIO, f), stats)
             return original_open(file, mode, *oargs, **okwargs)
 
         builtins.open = patched_open
@@ -297,8 +298,13 @@ def main(argv: list[str] | None = None) -> None:
                         members_if_available = [
                             m for m in members_if_available if member_filter(m)
                         ]
+                    filter_fn = (
+                        (lambda m: m if member_filter(m) else None)
+                        if member_filter is not None
+                        else None
+                    )
                     for member, stream in tqdm(
-                        archive.iter_members_with_io(filter=member_filter),
+                        archive.iter_members_with_io(filter=filter_fn),
                         desc="Computing checksums" if verify else "Listing members",
                         disable=args.hide_progress,
                         total=len(members_if_available)
