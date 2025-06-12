@@ -53,7 +53,7 @@ BASIC_ZSTD_ARCHIVE = filter_archives(
 @pytest.mark.parametrize(
     ["library_name", "archive_path"],
     [
-        ("pycdlib", BASIC_ISO_ARCHIVE.get_archive_path()),
+        # ("pycdlib", BASIC_ISO_ARCHIVE.get_archive_path()),
         ("rarfile", BASIC_RAR_ARCHIVE.get_archive_path()),
         ("py7zr", BASIC_7Z_ARCHIVE.get_archive_path()),
         ("pyzstd", BASIC_ZSTD_ARCHIVE.get_archive_path()),

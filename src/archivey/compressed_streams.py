@@ -79,7 +79,11 @@ def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
         return ArchiveEOFError(f"Possibly truncated GZIP stream: {repr(e)}")
 
     # Found in rapidgzip 0.11.0
-    elif isinstance(e, ValueError) and "End of file encountered when trying to read zero-terminated string" in exc_text:
+    elif (
+        isinstance(e, ValueError)
+        and "End of file encountered when trying to read zero-terminated string"
+        in exc_text
+    ):
         return ArchiveEOFError(f"Possibly truncated GZIP stream: {repr(e)}")
     return None  # pragma: no cover -- all possible exceptions should have been handled
 

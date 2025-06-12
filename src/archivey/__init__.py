@@ -21,7 +21,6 @@ from archivey.exceptions import (
 )
 from archivey.folder_reader import FolderReader
 from archivey.formats import detect_archive_format_by_signature
-from archivey.iso_reader import IsoReader
 from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
@@ -30,9 +29,11 @@ from archivey.types import (
     MemberType,
 )
 
+# from archivey.iso_reader import IsoReader
+
 __all__ = [
     "open_archive",
-    "IsoReader",
+    # "IsoReader",
     "FolderReader",
     "ArchiveError",
     "ArchiveFormatError",

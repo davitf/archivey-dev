@@ -6,12 +6,13 @@ from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.folder_reader import FolderReader
 from archivey.formats import detect_archive_format
-from archivey.iso_reader import IsoReader
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
     ArchiveFormat,
 )
+
+# from archivey.iso_reader import IsoReader
 
 
 def _normalize_archive_path(archive_path: str | bytes | os.PathLike) -> str:
@@ -95,7 +96,8 @@ def open_archive(
             )
 
         elif format == ArchiveFormat.ISO:
-            reader = IsoReader(archive_path, password=pwd)
+            raise NotImplementedError("ISO reader is not yet implemented")
+            # reader = IsoReader(archive_path, password=pwd)
 
         elif format == ArchiveFormat.FOLDER:
             reader = FolderReader(archive_path)
