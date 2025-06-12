@@ -269,6 +269,13 @@ def create_tar_archive_with_command_line(
     if os.path.exists(archive_path):
         os.remove(archive_path)
 
+    if any(f.type == MemberType.HARDLINK for f in contents.files):
+        # The tar command cannot represent hardlinks with different metadata
+        # from their targets. Fallback to the tarfile-based implementation.
+        return create_tar_archive_with_tarfile(
+            archive_path, contents, compression_format
+        )
+
     with tempfile.TemporaryDirectory() as tempdir:
         write_files_to_dir(tempdir, contents.files)
 
@@ -389,6 +396,14 @@ def create_tar_archive_with_tarfile(
                 if sample_file.permissions is None:
                     tarinfo.mode = 0o777  # Default mode for symlinks
                 tf.addfile(tarinfo)  # No fileobj for symlinks
+            elif sample_file.type == MemberType.HARDLINK:
+                tarinfo.type = tarfile.LNKTYPE
+                assert sample_file.link_target is not None, (
+                    f"Link target required for {sample_file.name}"
+                )
+                tarinfo.linkname = sample_file.link_target
+                tarinfo.size = 0
+                tf.addfile(tarinfo)
             else:  # MemberType.FILE
                 assert file_contents_bytes is not None, (
                     f"Contents required for file {sample_file.name}"

@@ -22,12 +22,9 @@ from tests.archivey.sample_archives import (
 
 def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
     """Write the provided FileInfo objects to ``dir``."""
-    for file in sorted(
-        files,
-        key=lambda x: [MemberType.FILE, MemberType.SYMLINK, MemberType.DIR].index(
-            x.type
-        ),
-    ):
+    order = [MemberType.FILE, MemberType.SYMLINK, MemberType.HARDLINK, MemberType.DIR]
+    info_by_name = {f.name: f for f in files}
+    for file in sorted(files, key=lambda x: order.index(x.type)):
         full_path = os.path.join(dir, file.name)
         if file.type == MemberType.DIR:
             os.makedirs(full_path, exist_ok=True)
@@ -39,27 +36,44 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
                 full_path,
                 target_is_directory=file.link_target_type == MemberType.DIR,
             )
+        elif file.type == MemberType.HARDLINK:
+            assert file.link_target is not None, "Link target is required"
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            target_path = os.path.join(dir, file.link_target)
+            os.link(target_path, full_path)
+            # Set the mtime for the hardlink then restore the target's mtime
+            link_mtime = file.mtime.replace(tzinfo=timezone.utc).timestamp()
+            os.utime(full_path, (link_mtime, link_mtime), follow_symlinks=False)
+            target_info = info_by_name.get(file.link_target)
+            if target_info:
+                target_mtime = target_info.mtime.replace(tzinfo=timezone.utc).timestamp()
+                os.utime(target_path, (target_mtime, target_mtime), follow_symlinks=False)
+            continue
         else:
             assert file.contents is not None, "File contents are required"
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
             with open(full_path, "wb") as f:
                 f.write(file.contents)
 
-        os.utime(
-            full_path,
-            (
-                file.mtime.replace(tzinfo=timezone.utc).timestamp(),
-                file.mtime.replace(tzinfo=timezone.utc).timestamp(),
-            ),
-            follow_symlinks=False,
-        )
+        if file.type != MemberType.HARDLINK:
+            os.utime(
+                full_path,
+                (
+                    file.mtime.replace(tzinfo=timezone.utc).timestamp(),
+                    file.mtime.replace(tzinfo=timezone.utc).timestamp(),
+                ),
+                follow_symlinks=False,
+            )
 
-        default_permissions_by_type = {
-            MemberType.DIR: 0o755,
-            MemberType.SYMLINK: 0o777,
-            MemberType.FILE: 0o644,
-        }
-        os.chmod(full_path, file.permissions or default_permissions_by_type[file.type])
+            default_permissions_by_type = {
+                MemberType.DIR: 0o755,
+                MemberType.SYMLINK: 0o777,
+                MemberType.FILE: 0o644,
+            }
+            os.chmod(
+                full_path,
+                file.permissions or default_permissions_by_type[file.type],
+            )
 
     # List the files with ls
     subprocess.run(["ls", "-alF", "-R", "--time-style=full-iso", dir], check=True)
