@@ -188,6 +188,17 @@ class ExtractionHelper:
                 logger.info(
                     f"  Creating hardlink for {target.filename} [{target.member_id}] (member [{member.member_id}])"
                 )
+                if os.path.realpath(target_path) == os.path.realpath(extracted_path):
+                    # Some archives (notably tar) may encode duplicate files as
+                    # hard links pointing back to themselves. In that scenario
+                    # we simply record the member without attempting to create a
+                    # self-referential link, otherwise the target would be
+                    # removed before the link is created.
+                    logger.info(
+                        f"  Skipping hardlink to self for {target.filename}"
+                    )
+                    self.extracted_members_by_path[target_path] = target
+                    continue
                 try:
                     with self._lock:
                         if not self.check_overwrites(member, target_path):
