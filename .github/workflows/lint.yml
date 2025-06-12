@@ -26,7 +26,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install ruff
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -e ".[optional,dev]"
           npm install -g pyright
 
       - name: Run Ruff checks
@@ -35,4 +37,6 @@ jobs:
           ruff format .
 
       - name: Run Pyright
-        run: npx pyright . 
+        run: |
+          source .venv/bin/activate
+          npx pyright . 
