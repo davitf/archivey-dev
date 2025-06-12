@@ -311,7 +311,7 @@ def main(argv: list[str] | None = None) -> None:
                         if members_if_available is not None
                         else None,
                     ):
-                        print(member)
+                        # print(member)
                         process_member(
                             member, archive, stream, verify=verify, pwd=args.password
                         )

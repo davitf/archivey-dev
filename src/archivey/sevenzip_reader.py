@@ -167,6 +167,7 @@ class StreamingFile(BasePy7zIOWriter):
         return len(b)
 
     def close(self):
+        # logger.info(f"Closing streaming file {self._fname}")
         if not self._closed:
             self._data_queue.put(None)
             self._closed = True
@@ -177,7 +178,7 @@ class StreamingFactory(WriterFactory):
         self._queue = q
 
     def create(self, fname: str) -> Py7zIO:
-        logger.info(f"Creating streaming file {fname}")
+        # logger.info(f"Creating streaming file {fname}")
         return StreamingFile(fname, self._queue)
 
     def yield_files(self) -> Iterator[tuple[str, BinaryIO]]:
@@ -185,7 +186,7 @@ class StreamingFactory(WriterFactory):
             item = self._queue.get()
             if item is None:
                 break
-            logger.info(f"Yielding streaming file {item}")
+            # logger.info(f"Yielding streaming file {item}")
             yield item
 
     def finish(self):
@@ -415,12 +416,12 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             An IO object for the member.
         """
 
-        logger.info(f"Opening member {member_or_filename} with password {pwd}")
+        # logger.info(f"Opening member {member_or_filename} with password {pwd}")
         if self._archive is None:
             raise ValueError("Archive is closed")
 
         member = self.get_member(member_or_filename)
-        logger.info(f"member {member}")
+        # logger.info(f"member {member}")
 
         try:
             # Hack: py7zr only supports setting a password when creating the
@@ -465,6 +466,9 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
         close_streams: bool = True,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
+        # print()
+        # logger.info(f"iter_members_with_io {members} {pwd} {filter} {close_streams}")
+
         # TODO: set pwd in the folders
 
         if self._archive is None:
@@ -477,30 +481,52 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         extract_filename_to_member = {
             member.extra["extract_filename"]: member for member in filtered_members
         }
-
-        reverse_map = {
-            m.internal_id: name for name, m in extract_filename_to_member.items()
-        }
-
         member_included = _build_member_included_func(members)
-        members_to_extract = [m for m in self.get_members() if member_included(m)]
-        members_order = {
-            reverse_map[m.internal_id]: i for i, m in enumerate(members_to_extract)
-        }
-        files = [reverse_map[m.internal_id] for m in members_to_extract]
+
+        # members_to_extract = [] #m for m in self.get_members() if member_included(m)]
+        filenames_to_extract = []
+
+        empty_members = []
+        for member in self.get_members():
+            if not member_included(member):
+                continue
+            if member.is_dir or (member.is_file and member.file_size == 0):
+                # Yield any empty files immediately, as py7zr doesn't actually call any
+                # methods on the PyZ7IO object for them, and so they're not added to the
+                # queue.
+                empty_members.append(member)
+                filtered_member = filter(member) if filter is not None else member
+                if filtered_member is not None:
+                    yield filtered_member, io.BytesIO(b"")
+
+            else:
+                # members_to_extract.append(m)
+                filenames_to_extract.append(member.filename)
+
+        # files = [m.filename for m in members_to_extract]
 
         # Allow the queue to carry tuples, exceptions, or None
         q = Queue[tuple[str, BinaryIO] | Exception | None]()
 
+        # for extract_filename, member in extract_filename_to_member.items():
+        #     if member.is_file and member.file_size == 0:
+        #         q.put((extract_filename, io.BytesIO(b'')))
+        #         del files[member.internal_id]  # Don't pass this file to the extractor.
+
+        # TODO: check that all the requested files to extract() were actually
+        # extracted exactly once.
         def extractor():
             try:
                 assert self._archive is not None
                 self._archive.reset()
                 factory = StreamingFactory(q)
-                # logger.info(f"extracting {files}")
+                # print()
+                # print()
+                # logger.info(f"extracting {filenames_to_extract}")
 
-                self._archive.extract(targets=files, factory=factory)
-                # logger.info(f"extracting {files} done")
+                self._archive.extract(targets=filenames_to_extract, factory=factory)
+                # logger.info(f"extracting {filenames_to_extract} done")
+                # print()
                 factory.finish()
             except Exception as e:
                 logger.error(
@@ -514,7 +540,6 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         thread = Thread(target=extractor)
         thread.start()
 
-        outputs: list[tuple[str, StreamingFile.Reader]] = []
         try:
             while True:
                 item = q.get()
@@ -524,11 +549,8 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                     thread.join()
                     raise item
                 fname, stream = item
-                outputs.append((fname, cast(StreamingFile.Reader, stream)))
 
-            for fname, stream in sorted(
-                outputs, key=lambda x: members_order.get(x[0], 0)
-            ):
+                # logger.info(f"Yielding member {fname} {type(stream)} {stream}")
                 member_info = extract_filename_to_member[fname]
                 if member_info.is_link and member_info.link_target is None:
                     member_info.link_target = stream.read().decode("utf-8")
