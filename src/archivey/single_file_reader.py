@@ -238,6 +238,8 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         elif self.format == ArchiveFormat.XZ:
             read_xz_metadata(archive_path, self.member)
 
+        self.register_member(self.member)
+
         # Open the file to see if it's supported by the library and valid.
         # To avoid opening the file twice, we'll store the reference and return it
         # on the first open() call.

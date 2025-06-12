@@ -248,9 +248,9 @@ class ExtractWriterFactory(WriterFactory):
 
         full_path = os.path.join(self._path, fname)
         if os.path.lexists(full_path) or full_path in self.outfiles:
-            full_path += f"_{member.internal_id}"
+            full_path += f"_{member.member_id}"
 
-        self.member_id_to_outfile[member.internal_id] = full_path
+        self.member_id_to_outfile[member.member_id] = full_path
         self.outfiles.add(full_path)
 
         logger.error(f"Creating writer for {fname}, path={full_path}")
@@ -626,7 +626,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         logger.info("Extraction done")
 
         for member in pending_extractions:
-            outfile = factory.member_id_to_outfile.get(member.internal_id)
+            outfile = factory.member_id_to_outfile.get(member.member_id)
             extraction_helper.process_file_extracted(member, outfile)
 
     def get_archive_info(self) -> ArchiveInfo:
@@ -667,7 +667,7 @@ if __name__ == "__main__":
         for member, stream in archive.iter_members_with_io():
             assert isinstance(member.raw_info, ArchiveFile)
             print(
-                member.internal_id,
+                member.member_id,
                 member.filename,
                 member.raw_info.filename,
                 stream.read() if stream is not None else "NO STREAM",
@@ -678,7 +678,7 @@ if __name__ == "__main__":
             assert isinstance(member.raw_info, ArchiveFile)
             stream = archive.open(member)
             print(
-                member.internal_id,
+                member.member_id,
                 member.filename,
                 member.raw_info.filename,
                 stream.read() if stream is not None else "NO STREAM",

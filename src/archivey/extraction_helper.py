@@ -55,7 +55,7 @@ class ExtractionHelper:
         # is actually a symlink pointing outside the root path? Is that a possible
         # security issue?
         logger.info(
-            f"Checking overwrites for {member.filename} [{member.internal_id}] to {path}",
+            f"Checking overwrites for {member.filename} [{member.member_id}] to {path}",
             stack_info=True,
         )
         logger.info(f"Extracted members by path: {self.extracted_members_by_path}")
@@ -74,7 +74,7 @@ class ExtractionHelper:
             # of the overwrite mode.
             # But we only want to keep the last version of the file, so don't let an
             # earlier version overwrite a later one.
-            if self.extracted_members_by_path[path].internal_id > member.internal_id:
+            if self.extracted_members_by_path[path].member_id > member.member_id:
                 logger.info(
                     f"Skipping {member.type.value} {path} as it's a later version of the same file"
                 )
@@ -124,7 +124,7 @@ class ExtractionHelper:
     ) -> None:
         """Called for files that had a delayed extraction."""
         logger.info(
-            f"Processing external extraction of {member.filename} [{member.internal_id}] to {extracted_path}",
+            f"Processing external extraction of {member.filename} [{member.member_id}] to {extracted_path}",
             stack_info=True,
         )
         if member.is_link:
@@ -132,12 +132,12 @@ class ExtractionHelper:
 
         if extracted_path is None:
             logger.error(
-                f"No extracted path for {member.filename} [{member.internal_id}]"
+                f"No extracted path for {member.filename} [{member.member_id}]"
             )
             self.failed_extractions.append(member)
             return
 
-        targets = self.pending_target_members_by_source_id.pop(member.internal_id, None)
+        targets = self.pending_target_members_by_source_id.pop(member.member_id, None)
         if not targets:
             # We were not expecting this file to be extracted. TODO: should we delete it?
             logger.error(
@@ -145,12 +145,12 @@ class ExtractionHelper:
             )
             return
 
-        self.pending_files_to_extract_by_id.pop(member.internal_id, None)
+        self.pending_files_to_extract_by_id.pop(member.member_id, None)
 
         self.can_move_file = True
         for target in targets:
             logger.info(
-                f"  Processing target {target.filename} [{target.internal_id}] (member [{member.internal_id}])"
+                f"  Processing target {target.filename} [{target.member_id}] (member [{member.member_id}])"
             )
             # TODO: handle exceptions
 
@@ -186,7 +186,7 @@ class ExtractionHelper:
             else:
                 # Create a hardlink to the first target.
                 logger.info(
-                    f"  Creating hardlink for {target.filename} [{target.internal_id}] (member [{member.internal_id}])"
+                    f"  Creating hardlink for {target.filename} [{target.member_id}] (member [{member.member_id}])"
                 )
                 try:
                     with self._lock:
@@ -206,7 +206,7 @@ class ExtractionHelper:
                     shutil.copyfile(extracted_path, target_path)
 
             # Remove the file from the pending list.
-            self.extracted_path_by_source_id[target.internal_id] = target_path
+            self.extracted_path_by_source_id[target.member_id] = target_path
 
     def create_regular_file(
         self, member: ArchiveMember, stream: BinaryIO | None, path: str
@@ -217,17 +217,17 @@ class ExtractionHelper:
         if stream is None:
             # This is a delayed extraction, so we need to store the member and the path
             # for later.
-            self.pending_files_to_extract_by_id[member.internal_id] = member
-            self.pending_target_members_by_source_id[member.internal_id].append(member)
+            self.pending_files_to_extract_by_id[member.member_id] = member
+            self.pending_target_members_by_source_id[member.member_id].append(member)
             return True
 
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as dst:
             shutil.copyfileobj(stream, dst)
         self.extracted_members_by_path[path] = member
-        self.extracted_path_by_source_id[member.internal_id] = path
+        self.extracted_path_by_source_id[member.member_id] = path
 
-        if member.internal_id in self.pending_target_members_by_source_id:
+        if member.member_id in self.pending_target_members_by_source_id:
             self.process_file_extracted(member, path)
 
         return True
@@ -242,7 +242,7 @@ class ExtractionHelper:
                 logger.info(
                     f"Link target not set for {member.filename}, storing for later extraction"
                 )
-                self.pending_files_to_extract_by_id[member.internal_id] = member
+                self.pending_files_to_extract_by_id[member.member_id] = member
 
                 return True
             else:
@@ -260,9 +260,7 @@ class ExtractionHelper:
                     f"Hardlink target {member.link_target} not found for {member.filename}"
                 )
 
-            target_path = self.extracted_path_by_source_id.get(
-                target_member.internal_id
-            )
+            target_path = self.extracted_path_by_source_id.get(target_member.member_id)
             if target_path is None:
                 # The target file was not extracted, so we need to store it for later
                 # extraction if possible.
@@ -270,11 +268,11 @@ class ExtractionHelper:
                     logger.info(
                         f"Storing hardlink {member.filename} for later extraction as its target {target_member.filename} was not extracted"
                     )
-                    self.pending_files_to_extract_by_id[target_member.internal_id] = (
+                    self.pending_files_to_extract_by_id[target_member.member_id] = (
                         target_member
                     )
                     self.pending_target_members_by_source_id[
-                        target_member.internal_id
+                        target_member.member_id
                     ].append(member)
                     return True
                 else:
@@ -318,7 +316,7 @@ class ExtractionHelper:
     def extract_member(self, member: ArchiveMember, stream: BinaryIO | None) -> bool:
         path = self.get_output_path(member)
         logger.info(
-            f"Extracting {member.filename} [{member.internal_id}] to {path}, stream: {stream is not None}"
+            f"Extracting {member.filename} [{member.member_id}] to {path}, stream: {stream is not None}"
         )
 
         if member.is_dir:

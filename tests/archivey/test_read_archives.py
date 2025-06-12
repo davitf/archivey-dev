@@ -1,3 +1,4 @@
+import collections
 import logging
 import os
 import pathlib
@@ -125,14 +126,15 @@ def check_iter_members(
     # If the archive may have duplicate files, we need to compare the files in the
     # iterator with the ones in the sample_archive in the same order.
     # Otherwise, the archive should have only the last version of the file.
-    files_by_name = {}
-    for file in sample_archive.contents.files:
-        filekey = file.name
-        if features.duplicate_files and filekey in files_by_name:
-            while filekey in files_by_name:
-                filekey = filekey + "_DUPE"
+    expected_files_by_filename: collections.defaultdict[str, list[FileInfo]] = (
+        collections.defaultdict(list)
+    )
 
-        files_by_name[filekey] = file
+    for sample_file in sample_archive.contents.files:
+        if features.dir_entries or sample_file.type != MemberType.DIR:
+            expected_files_by_filename[sample_file.name].append(sample_file)
+
+    # expected_filenames = set(expected_files_by_filename.keys())
 
     constructor_password = sample_archive.contents.header_password
 
@@ -165,7 +167,6 @@ def check_iter_members(
         assert normalize_newlines(format_info.comment) == normalize_newlines(
             sample_archive.contents.archive_comment
         )
-        actual_filenames: list[str] = []
 
         members_iter = (
             ((m, None) for m in archive.get_members())
@@ -173,11 +174,22 @@ def check_iter_members(
             else archive.iter_members_with_io()
         )
 
-        visited_files = set()
+        logger.info(f"files_by_name: {expected_files_by_filename}")
+        logger.info(f"skip_member_contents: {skip_member_contents}")
+        logger.info(f"members_iter: {members_iter}")
 
-        logger.info(f"files_by_name: {files_by_name}")
+        all_contents_by_filename: collections.defaultdict[
+            str, list[tuple[ArchiveMember, bytes | None]]
+        ] = collections.defaultdict(list)
+        all_non_dirs_in_archive = set()
+
         for member, stream in members_iter:
+            logger.info(
+                f"member: {member.filename} [{member.type}] [{member.member_id}]"
+            )
             filekey = member.filename
+
+            data = stream.read() if stream is not None else None
 
             if (
                 member.type == MemberType.HARDLINK
@@ -190,53 +202,61 @@ def check_iter_members(
                 )
                 continue
 
-            if filekey in visited_files:
-                if features.duplicate_files:
-                    while filekey in visited_files:
-                        filekey = filekey + "_DUPE"
-                else:
-                    pytest.fail(f"Duplicate file name: {filekey}")
+            all_contents_by_filename[filekey].append((member, data))
+            if member.type != MemberType.DIR:
+                all_non_dirs_in_archive.add(filekey)
 
-            visited_files.add(filekey)
-            logger.info(f"filekey: {filekey}")
-            sample_file = files_by_name.get(filekey, None)
-
-            check_member_metadata(
-                member,
-                sample_file,
-                sample_archive,
-                archive_path=archive_path_resolved,
-            )
-
-            if sample_file is None:
-                if member.type == MemberType.DIR:
-                    logging.warning(
-                        f"Archive {sample_archive.filename} contains unexpected dir {member.filename}"
-                    )
-                    continue
-                else:
-                    pytest.fail(
-                        f"Archive {sample_archive.filename} contains unexpected file {member.filename}"
-                    )
-
-            actual_filenames.append(member.filename)
-
-            if sample_file.type == MemberType.FILE and not skip_member_contents:
-                assert stream is not None
-                contents = stream.read()
-                assert contents == sample_file.contents
-
-        expected_filenames = set(
-            file.name
-            for file in sample_archive.contents.files
-            if features.dir_entries or file.type != MemberType.DIR
+        # Check that all expected filenames are present in the archive.
+        assert not set(expected_files_by_filename.keys()) - set(
+            all_contents_by_filename.keys()
+        ), (
+            f"Expected files {set(expected_files_by_filename.keys()) - set(all_contents_by_filename.keys())} not found in archive"
+        )
+        # The archive may contain extra dirs that were implicit in the file list,
+        # but not other unexpected files.
+        assert not all_non_dirs_in_archive - set(expected_files_by_filename.keys()), (
+            f"Extra files {all_non_dirs_in_archive - set(expected_files_by_filename.keys())} found in archive"
         )
 
-        missing_files = expected_filenames - set(actual_filenames)
-        extra_files = set(actual_filenames) - expected_filenames
+        # Check that the contents of the members are the same as the contents of the files.
+        for filename, expected_files in expected_files_by_filename.items():
+            # if filename not in all_contents_by_filename:
+            #     pytest.fail(f"File {filename} not found in archive. Archive contains {all_contents_by_filename.keys()}")
 
-        assert not missing_files, f"Missing files: {missing_files}"
-        assert not extra_files, f"Extra files: {extra_files}"
+            actual_files = all_contents_by_filename[filename]
+            if features.duplicate_files:
+                assert len(actual_files) == len(expected_files), (
+                    f"Expected {len(expected_files)} files for {filename}, got {len(actual_files)}"
+                )
+            else:
+                assert len(actual_files) == 1, (
+                    f"Expected 1 file for {filename}, got {len(actual_files)}"
+                )
+                # We expect only the last file with a given filename to be present.
+                expected_files = [expected_files[-1]]
+
+            actual_files.sort(key=lambda x: x[0].member_id)
+
+            for i in range(len(expected_files)):
+                logger.info(f"Checking {filename} ({i})")
+                sample_file = expected_files[i]
+                member, contents = actual_files[i]
+
+                check_member_metadata(
+                    member,
+                    sample_file,
+                    sample_archive,
+                    archive_path=archive_path_resolved,
+                )
+
+                if sample_file.type == MemberType.FILE and not skip_member_contents:
+                    assert contents == sample_file.contents
+
+        # missing_files = expected_filenames - set(actual_filenames)
+        # extra_files = set(actual_filenames) - expected_filenames
+
+        # assert not missing_files, f"Missing files: {missing_files}"
+        # assert not extra_files, f"Extra files: {extra_files}"
 
 
 @pytest.mark.parametrize(

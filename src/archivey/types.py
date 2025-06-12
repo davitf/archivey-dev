@@ -1,8 +1,6 @@
 import sys
 from typing import TYPE_CHECKING
 
-from archivey.unique_ids import UNIQUE_ID_GENERATOR
-
 if TYPE_CHECKING:
     from enum import StrEnum
 elif sys.version_info >= (3, 11):
@@ -133,8 +131,25 @@ class ArchiveMember:
     # The raw info from the archive reader
     raw_info: Optional[Any] = None
 
-    # A globally unique id for the member, used to identify the member in the archive.
-    internal_id: int = field(default_factory=UNIQUE_ID_GENERATOR.next_id)
+    # A unique identifier for this member within the archive. Used to distinguish members
+    # and preserve ordering, but not for direct indexing. Assigned by register_member().
+    _member_id: Optional[int] = None
+
+    @property
+    def member_id(self) -> int:
+        if self._member_id is None:
+            raise ValueError("Member index not yet set")
+        return self._member_id
+
+    # A unique identifier for the archive. Used to distinguish between archives.
+    # Filled by register_member().
+    _archive_id: Optional[int] = None
+
+    @property
+    def archive_id(self) -> int:
+        if self._archive_id is None:
+            raise ValueError("Archive ID not yet set")
+        return self._archive_id
 
     # Properties for zipfile compatibility (and others, as much as possible)
     @property

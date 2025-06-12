@@ -2,6 +2,7 @@ import abc
 import functools
 import logging
 import os
+import threading
 from typing import BinaryIO, Callable, Collection, Iterator, List, Union
 
 from archivey.config import ArchiveyConfig, get_default_config
@@ -9,6 +10,7 @@ from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
 from archivey.extraction_helper import ExtractionHelper
 from archivey.io_helpers import ErrorIOStream, LazyOpenIO
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
+from archivey.unique_ids import UNIQUE_ID_GENERATOR
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +31,11 @@ def _build_member_included_func(
     if members is not None and not isinstance(members, Callable):
         for member in members:
             if isinstance(member, ArchiveMember):
-                internal_ids.add(member.internal_id)
+                internal_ids.add(member.member_id)
             else:
                 filenames.add(member)
 
-    return lambda m: m.filename in filenames or m.internal_id in internal_ids
+    return lambda m: m.filename in filenames or m.member_id in internal_ids
 
 
 def _build_iterator_filter(
@@ -62,9 +64,9 @@ def _build_iterator_filter(
         else:
             filtered = filter(member)
             # Check the filtered still refers to the same member
-            if filtered is not None and filtered.internal_id != member.internal_id:
+            if filtered is not None and filtered.member_id != member.member_id:
                 raise ValueError(
-                    f"Filter returned a member with a different internal ID: {member.filename} {member.internal_id} -> {filtered.filename} {filtered.internal_id}"
+                    f"Filter returned a member with a different internal ID: {member.filename} {member.member_id} -> {filtered.filename} {filtered.member_id}"
                 )
 
             return filtered
@@ -97,10 +99,19 @@ class ArchiveReader(abc.ABC):
         self._filename_to_member: dict[str, ArchiveMember] = {}
         self._members_retrieved: bool = False
 
+        self._member_id_counter: int = 0
+        self._member_id_lock: threading.Lock = threading.Lock()
+        self._archive_id: int = UNIQUE_ID_GENERATOR.next_id()
+
     def register_member(self, member: ArchiveMember) -> None:
-        logger.info(f"Registering member {member.filename} ({member.internal_id})")
+        with self._member_id_lock:
+            self._member_id_counter += 1
+            member._member_id = self._member_id_counter
+        member._archive_id = self._archive_id
+
+        logger.info(f"Registering member {member.filename} ({member.member_id})")
         self._filename_to_member[member.filename] = member
-        self._member_id_to_member[member.internal_id] = member
+        self._member_id_to_member[member.member_id] = member
 
         if member.type == MemberType.HARDLINK:
             # Store a reference to the target member. As the original member may be
@@ -249,7 +260,10 @@ class ArchiveReader(abc.ABC):
 
     def get_member(self, member_or_filename: ArchiveMember | str) -> ArchiveMember:
         if isinstance(member_or_filename, ArchiveMember):
-            # TODO: check that the member is from this archive
+            if member_or_filename.archive_id != self._archive_id:
+                raise ValueError(
+                    f"Member {member_or_filename.filename} is not from this archive"
+                )
             return member_or_filename
 
         if not self._members_retrieved:
