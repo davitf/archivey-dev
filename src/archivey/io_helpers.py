@@ -260,7 +260,7 @@ class StatsIO(io.RawIOBase, BinaryIO):
         return data
 
     def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
-        n = self._inner.readinto(b)
+        n = cast(io.BufferedIOBase, self._inner).readinto(b)
         self.stats.bytes_read += n
         return n
 

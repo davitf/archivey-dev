@@ -217,7 +217,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
             )
 
             return ExceptionTranslatingIO(
-                stream,
+                cast(BinaryIO, stream),
                 lambda e: ArchiveCorruptedError(f"Error reading member {filename}: {e}")
                 if isinstance(e, zipfile.BadZipFile)
                 else None,
