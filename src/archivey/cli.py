@@ -337,6 +337,7 @@ def main(argv: list[str] | None = None) -> None:
                 print(
                     f"IO stats for {archive_path}: {stats.bytes_read} bytes read, {stats.seek_calls} seeks"
                 )
+                print(stats.read_ranges)
         print()
 
     if args.track_io:

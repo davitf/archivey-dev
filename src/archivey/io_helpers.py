@@ -1,6 +1,6 @@
 import io
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, BinaryIO, Callable, Optional, cast
 
 from archivey.exceptions import ArchiveError
@@ -243,6 +243,7 @@ class IOStats:
 
     bytes_read: int = 0
     seek_calls: int = 0
+    read_ranges: list[list[int]] = field(default_factory=lambda: [[0, 0]])
 
 
 class StatsIO(io.RawIOBase, BinaryIO):
@@ -257,16 +258,31 @@ class StatsIO(io.RawIOBase, BinaryIO):
     def read(self, n: int = -1) -> bytes:
         data = self._inner.read(n)
         self.stats.bytes_read += len(data)
+        self.stats.read_ranges[-1][1] += len(data)
         return data
 
     def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
-        n = cast(io.BufferedIOBase, self._inner).readinto(b)
+        if isinstance(self._inner, io.BufferedIOBase):
+            n = self._inner.readinto(b)
+        else:
+            logger.info(f"Reading {len(b)} bytes into buffer")
+            data = self._inner.read(len(b))
+            assert len(data) <= len(b)
+            b[: len(data)] = data
+            n = len(data)
+
         self.stats.bytes_read += n
+        self.stats.read_ranges[-1][1] += n
         return n
 
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        print(
+            f"Seeking to {offset} whence={whence}, prev read range: {self.stats.read_ranges[-1]}"
+        )
         self.stats.seek_calls += 1
-        return self._inner.seek(offset, whence)
+        newpos = self._inner.seek(offset, whence)
+        self.stats.read_ranges.append([newpos, 0])
+        return newpos
 
     def readable(self) -> bool:  # pragma: no cover - trivial
         return self._inner.readable()
