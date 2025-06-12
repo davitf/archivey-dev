@@ -389,6 +389,16 @@ def create_tar_archive_with_tarfile(
                 if sample_file.permissions is None:
                     tarinfo.mode = 0o777  # Default mode for symlinks
                 tf.addfile(tarinfo)  # No fileobj for symlinks
+            elif sample_file.type == MemberType.HARDLINK:
+                tarinfo.type = tarfile.LNKTYPE
+                assert sample_file.link_target is not None, (
+                    f"Link target required for {sample_file.name}"
+                )
+                tarinfo.linkname = sample_file.link_target
+                tarinfo.size = 0
+                if sample_file.permissions is None:
+                    tarinfo.mode = 0o644  # Default mode for hard links
+                tf.addfile(tarinfo)
             else:  # MemberType.FILE
                 assert file_contents_bytes is not None, (
                     f"Contents required for file {sample_file.name}"

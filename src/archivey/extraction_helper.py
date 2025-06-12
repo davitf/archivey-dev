@@ -182,6 +182,7 @@ class ExtractionHelper:
                         os.makedirs(os.path.dirname(target_path), exist_ok=True)
                         shutil.move(extracted_path, target_path)
                         self.extracted_members_by_path[target_path] = target
+                        extracted_path = target_path
 
             else:
                 # Create a hardlink to the first target.
@@ -194,7 +195,7 @@ class ExtractionHelper:
                             continue
 
                         os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                        os.link(target_path, self.get_output_path(target))
+                        os.link(extracted_path, target_path)
                         self.extracted_members_by_path[target_path] = target
 
                 except (AttributeError, NotImplementedError, OSError):
