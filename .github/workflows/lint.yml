@@ -31,15 +31,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv venv
-          source .venv/bin/activate
-          uv sync --extra optional
-          npm install -g pyright
+          uv run --extra optional python --version
 
       - name: Run Ruff checks
         run: |
-          ruff check --fix .
-          ruff format .
+          uv run --extra optional ruff check --fix .
+          uv run --extra optional ruff format .
 
       - name: Run Pyright
         run: |
