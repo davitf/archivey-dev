@@ -1,0 +1,38 @@
+name: Lint
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  lint:
+    name: Run Ruff and Pyright
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          pip install ruff
+          npm install -g pyright
+
+      - name: Run Ruff checks
+        run: |
+          ruff check --fix .
+          ruff format .
+
+      - name: Run Pyright
+        run: npx pyright . 
