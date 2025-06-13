@@ -105,23 +105,23 @@ class ArchiveReader(abc.ABC):
         self._member_id_lock: threading.Lock = threading.Lock()
         self._archive_id: int = UNIQUE_ID_GENERATOR.next_id()
 
-    def _resolve_link_target(self, member: ArchiveMember) -> None:
+    def _resolve_link_target(
+        self, member: ArchiveMember, visited_members: set[int] = set()
+    ) -> None:
         if member.link_target is None:
             return
 
         # Run the search even if we had previously resolved the link target, as it
         # may have been overwritten by a later member with the same filename.
 
-        link_target = member.link_target
         if member.type == MemberType.HARDLINK:
             # Look for the last member with the same filename and a lower member_id.
-            members = self._filename_to_members.get(link_target, [])
-            if not members:
-                logger.warning(
-                    f"Hardlink target {link_target} not found for {member.filename}"
-                )
+            link_target = member.link_target
+            if link_target is None:
+                logger.warning(f"Hardlink target is None for {member.filename}")
                 return
 
+            members = self._filename_to_members.get(link_target, [])
             target_member = max(
                 (m for m in members if m.member_id < member.member_id),
                 key=lambda m: m.member_id,
@@ -129,11 +129,25 @@ class ArchiveReader(abc.ABC):
             )
             if target_member is None:
                 logger.warning(
-                    f"Hardlink target {link_target} with id < {member.member_id} not found for {member.filename}"
+                    f"Hardlink target {link_target} not found for {member.filename}"
                 )
                 return
 
+            # If the target is another hardlink, recursively resolve it.
+            # As we always look for members with a lower member_id, this will not
+            # loop forever.
+            if target_member.type == MemberType.HARDLINK:
+                self._resolve_link_target(target_member)
+                # This is guaranteed to point to the final non-hardlink in the chain.
+                target_member = target_member.link_target_member
+                if target_member is None:
+                    logger.warning(
+                        f"Hardlink target {link_target} not found for {member.filename} (when following hardlink)"
+                    )
+                    return
+
             member.link_target_member = target_member
+            member.link_target_type = target_member.type
 
         elif member.type == MemberType.SYMLINK:
             normalized_link_target = posixpath.normpath(
@@ -148,7 +162,18 @@ class ArchiveReader(abc.ABC):
                 )
                 return
 
+            if target_member.is_link:
+                if target_member.member_id in visited_members:
+                    logger.error(
+                        f"Symlink loop detected: {member.filename} -> {target_member.filename}"
+                    )
+                    return
+                self._resolve_link_target(
+                    target_member, visited_members | {member.member_id}
+                )
+
             member.link_target_member = target_member
+            member.link_target_type = target_member.type
 
     def register_member(self, member: ArchiveMember) -> None:
         with self._member_id_lock:
