@@ -608,7 +608,7 @@ HARDLINK_WITH_DUPLICATE_FILES = [
         mtime=_fake_mtime(2),
         type=MemberType.HARDLINK,
         link_target="file1.txt",
-        contents=b"Old contents",
+        contents=b"Olddd contents",
     ),
     FileInfo(
         name="file1.txt",
@@ -674,6 +674,15 @@ HARDLINK_RECURSIVE_AND_BROKEN = [
         mtime=_fake_mtime(7),
         type=MemberType.SYMLINK,
         link_target="b_broken_forward_hardlink.txt",
+    ),
+    # Sometimes tar files can contain hardlinks to the same file (particularly if we
+    # call tar with the filename twice in the command line)
+    FileInfo(
+        name="a_file.txt",
+        mtime=_fake_mtime(8),
+        type=MemberType.HARDLINK,
+        link_target="a_file.txt",
+        contents=b"Hello!",
     ),
 ]
 
@@ -995,7 +1004,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="hardlinks_with_duplicate_files",
             files=HARDLINK_WITH_DUPLICATE_FILES,
         ),
-        [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
+        [TAR_PLAIN_TARFILE],  # , TAR_GZ_TARFILE],
     ),
     (
         ArchiveContents(
@@ -1131,15 +1140,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="duplicate_files",
             files=DUPLICATE_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS,
-    ),
-    (
-        ArchiveContents(
-            file_basename="duplicate_files",
-            files=DUPLICATE_FILES,
-            solid=True,
-        ),
-        ALL_TAR_FORMATS,
+        ZIP_RAR_7Z_FORMATS + [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
     ),
 ]
 

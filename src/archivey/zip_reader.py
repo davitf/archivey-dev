@@ -188,7 +188,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
             self._members.append(member)
             self.register_member(member)
 
-        self.set_all_members_retrieved()
+        self.set_all_members_registered()
         return self._members
 
     def open(

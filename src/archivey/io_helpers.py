@@ -1,7 +1,7 @@
 import io
 import logging
 from dataclasses import dataclass, field
-from typing import Any, BinaryIO, Callable, Optional, cast
+from typing import IO, Any, BinaryIO, Callable, Optional, cast
 
 from archivey.exceptions import ArchiveError
 
@@ -94,12 +94,13 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
 
     def __init__(
         self,
-        inner: BinaryIO | io.IOBase | Callable[..., BinaryIO | io.IOBase],
+        # TODO: can we reduce the number of types here?
+        inner: BinaryIO | io.IOBase | Callable[..., BinaryIO | io.IOBase] | IO[bytes],
         exception_translator: Callable[[Exception], Optional[ArchiveError]],
     ):
         super().__init__()
         self._translate = exception_translator
-        self._inner: BinaryIO | io.IOBase | None = None
+        self._inner: BinaryIO | io.IOBase | IO[bytes] | None = None
 
         if isinstance(inner, Callable):
             try:
@@ -191,7 +192,7 @@ class LazyOpenIO(io.RawIOBase, BinaryIO):
 
     def __init__(
         self,
-        open_fn: Callable[..., BinaryIO],
+        open_fn: Callable[..., IO[bytes]],
         *args: Any,
         seekable: bool,
         **kwargs: Any,
@@ -200,10 +201,10 @@ class LazyOpenIO(io.RawIOBase, BinaryIO):
         self._open_fn = open_fn
         self._args = args
         self._kwargs = kwargs
-        self._inner: BinaryIO | None = None
+        self._inner: IO[bytes] | None = None
         self._seekable = seekable
 
-    def _ensure_open(self) -> BinaryIO:
+    def _ensure_open(self) -> IO[bytes]:
         if self.closed:
             raise ValueError("I/O operation on closed file.")
         if self._inner is None:

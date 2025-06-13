@@ -188,30 +188,37 @@ def check_iter_members(
 
         for member, stream in members_iter:
             logger.info(
-                f"member: {member.filename} [{member.type}] [{member.member_id}]"
+                f"member: {member.filename} [{member.type}] [{member.member_id}] {stream=}"
             )
             filekey = member.filename
 
-            if member.type == MemberType.DIR:  # or member.type == MemberType.SYMLINK:
-                if stream is not None:
-                    stream_data = stream.read()
-                    assert stream is None, (
-                        f"Stream provided for {member.filename} ({member.type}) ({stream_data=})"
-                    )
+            if not skip_member_contents and member.is_file:
+                assert stream is not None, (
+                    f"Stream not provided for {member.filename} ({member.type})"
+                )
+                # The stream should be a lazy-open object, to avoid opening members
+                # unnecessarily.
+                # assert isinstance(stream, io_helpers.LazyOpenIO), f"Stream is not a LazyOpenIO for {member.filename}: {stream=}"
+                # stream_data = stream.read()
+                # assert stream_data == sample_file.contents, f"Wrong contents for {member.filename} ({sample_file=})"
+            else:
+                assert stream is None, (
+                    f"Stream provided for {member.filename} ({member.type}) (data={stream.read()})"
+                )
 
             # TODO: compare data for resolved links
             data = stream.read() if stream is not None else None
 
-            if (
-                member.type == MemberType.HARDLINK
-                and member.link_target == member.filename
-            ):
-                # When we pass the same file multiple times to the tar command line,
-                # tar will create a hard link to the first file. We should ignore this.
-                logger.warning(
-                    f"Archive {sample_archive.filename} contains hard link to itself: {member.filename}"
-                )
-                continue
+            # if (
+            #     member.type == MemberType.HARDLINK
+            #     and member.link_target == member.filename
+            # ):
+            #     # When we pass the same file multiple times to the tar command line,
+            #     # tar will create a hard link to the first file. We should ignore this.
+            #     logger.warning(
+            #         f"Archive {sample_archive.filename} contains hard link to itself: {member.filename}"
+            #     )
+            #     continue
 
             all_contents_by_filename[filekey].append((member, data))
             if member.type != MemberType.DIR:

@@ -7,7 +7,10 @@ from collections import defaultdict
 from typing import BinaryIO, Callable, Collection, Iterator, List, Union
 
 from archivey.config import ArchiveyConfig, get_default_config
-from archivey.exceptions import ArchiveMemberNotFoundError
+from archivey.exceptions import (
+    ArchiveMemberCannotBeOpenedError,
+    ArchiveMemberNotFoundError,
+)
 from archivey.extraction_helper import ExtractionHelper
 from archivey.io_helpers import LazyOpenIO
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
@@ -82,6 +85,8 @@ class ArchiveReader(abc.ABC):
         self,
         format: ArchiveFormat,
         archive_path: str | bytes | os.PathLike,
+        random_access_available: bool,
+        members_list_available: bool,
     ):
         """Initialize the archive reader.
 
@@ -99,11 +104,14 @@ class ArchiveReader(abc.ABC):
         self._member_id_to_member: dict[int, ArchiveMember] = {}
         self._filename_to_members: dict[str, list[ArchiveMember]] = defaultdict(list)
         self._normalized_path_to_last_member: dict[str, ArchiveMember] = {}
-        self._members_retrieved: bool = False
-
+        self._all_members_registered: bool = False
         self._member_id_counter: int = 0
         self._member_id_lock: threading.Lock = threading.Lock()
+
         self._archive_id: int = UNIQUE_ID_GENERATOR.next_id()
+
+        self._random_access_supported = random_access_available
+        self._members_list_available = members_list_available
 
     def _resolve_link_target(
         self, member: ArchiveMember, visited_members: set[int] = set()
@@ -181,6 +189,10 @@ class ArchiveReader(abc.ABC):
             member._member_id = self._member_id_counter
         member._archive_id = self._archive_id
 
+        assert member.member_id not in self._member_id_to_member, (
+            f"Member {member.filename} already registered with member_id {member.member_id}"
+        )
+
         logger.info(f"Registering member {member.filename} ({member.member_id})")
 
         members_with_filename = self._filename_to_members[member.filename]
@@ -195,32 +207,37 @@ class ArchiveReader(abc.ABC):
             < member.member_id
         ):
             self._normalized_path_to_last_member[normalized_path] = member
+
         self._member_id_to_member[member.member_id] = member
 
         self._resolve_link_target(member)
 
-    def set_all_members_retrieved(self) -> None:
-        self._members_retrieved = True
+    def set_all_members_registered(self) -> None:
+        self._all_members_registered = True
 
     @abc.abstractmethod
     def close(self) -> None:
         """Close the archive stream and release any resources."""
         pass
 
-    @abc.abstractmethod
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         """Get a list of all members in the archive, or None if not available. May not be available for stream archives."""
-        pass
+        if self._all_members_registered:
+            return list(self._member_id_to_member.values())
 
-    @abc.abstractmethod
+        if not self._members_list_available:
+            return None
+
+        return self.get_members()
+
     def iter_members_with_io(
         self,
         members: Union[
-            List[Union[ArchiveMember, str]], Callable[[ArchiveMember], bool], None
+            Collection[Union[ArchiveMember, str]], Callable[[ArchiveMember], bool], None
         ] = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
+        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """Iterate over all members in the archive.
 
@@ -237,7 +254,33 @@ class ArchiveReader(abc.ABC):
             be read before the next member is retrieved. The stream may be None if the
             member is not a file.
         """
-        pass
+        # This is a default implementation for random-access readers which support
+        # open().
+        assert self._random_access_supported, (
+            "Non-random access readers must override iter_members_with_io()"
+        )
+
+        filter_func = _build_iterator_filter(members, filter)
+
+        for member in self.get_members():
+            filtered = filter_func(member)
+            if filtered is None:
+                continue
+
+            try:
+                # TODO: some libraries support fast seeking for files (either all,
+                # or only non-compressed ones), so we should set seekable=True
+                # if possible.
+                stream = (
+                    LazyOpenIO(self.open, member, pwd=pwd, seekable=False)
+                    if member.is_file
+                    else None
+                )
+                yield member, stream
+
+            finally:
+                if stream is not None:
+                    stream.close()
 
     @abc.abstractmethod
     def get_archive_info(self) -> ArchiveInfo:
@@ -248,10 +291,62 @@ class ArchiveReader(abc.ABC):
         """
         pass
 
-    @abc.abstractmethod
     def has_random_access(self) -> bool:
         """Check if opening members is possible (i.e. not streaming-only access)."""
-        pass
+        return self._random_access_supported
+
+    def _extract_pending_files(
+        self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None
+    ):
+        """Extract pending files from the archive. Intended to be overridden by subclasses.
+
+        For some libraries, extraction using extractall() or similar is faster than
+        opening each member individually, so subclasses should override this method
+        if it's beneficial.
+
+        All directories needed are guaranteed to exist. The pending files are either
+        regular files, or links if the archive does not store link targets in the header.
+        Metadata attributes for the extracted files will be applied afterwards.
+        """
+        members_to_extract = extraction_helper.get_pending_extractions()
+        for member in members_to_extract:
+            stream = self.open(member, pwd=pwd) if member.is_file else None
+            extraction_helper.extract_member(member, stream)
+            if stream:
+                stream.close()
+
+    def _extractall_with_random_access(
+        self,
+        path: str,
+        filter_func: Callable[[ArchiveMember], Union[ArchiveMember, None]],
+        pwd: bytes | str | None,
+        extraction_helper: ExtractionHelper,
+    ):
+        # For readers that support random access, register all members first to get
+        # a complete list of members that need to be extracted, so that the
+        # subclass can extract all files at once (which may be faster).
+        for member in self.get_members():
+            filtered_member = filter_func(member)
+            if filtered_member is None:
+                continue
+
+            extraction_helper.extract_member(member, None)
+
+        # Extract regular files
+        self._extract_pending_files(path, extraction_helper, pwd=pwd)
+
+    def _extractall_with_streaming_mode(
+        self,
+        path: str,
+        filter_func: Callable[[ArchiveMember], Union[ArchiveMember, None]],
+        pwd: bytes | str | None,
+        extraction_helper: ExtractionHelper,
+    ):
+        for member, stream in self.iter_members_with_io(filter=filter_func, pwd=pwd):
+            logger.debug(f"Writing member {member.filename}")
+            extraction_helper.extract_member(member, stream)
+            if stream:
+                stream.close()
 
     def extractall(
         self,
@@ -262,13 +357,13 @@ class ArchiveReader(abc.ABC):
         *,
         pwd: bytes | str | None = None,
         filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
-    ) -> dict[str, str]:
-        written_paths: dict[str, str] = {}
-
+    ) -> dict[str, ArchiveMember]:
         if path is None:
             path = os.getcwd()
         else:
             path = str(path)
+
+        filter_func = _build_iterator_filter(members, filter)
 
         extraction_helper = ExtractionHelper(
             self.archive_path,
@@ -277,24 +372,18 @@ class ArchiveReader(abc.ABC):
             can_process_pending_extractions=self.has_random_access(),
         )
 
-        for member, stream in self.iter_members_with_io(
-            members=members, pwd=pwd, filter=filter
-        ):
-            logger.debug(f"Writing member {member.filename}")
-            extraction_helper.extract_member(member, stream)
-            if stream:
-                stream.close()
-
-        if extraction_helper.get_pending_extractions():
-            for member in extraction_helper.get_pending_extractions():
-                stream = self.open(member, pwd=pwd) if member.is_file else None
-                extraction_helper.extract_member(member, stream)
-                if stream:
-                    stream.close()
+        if self._random_access_supported:
+            self._extractall_with_random_access(
+                path, filter_func, pwd, extraction_helper
+            )
+        else:
+            self._extractall_with_streaming_mode(
+                path, filter_func, pwd, extraction_helper
+            )
 
         extraction_helper.apply_metadata()
 
-        return written_paths
+        return extraction_helper.extracted_members_by_path
 
     # Context manager support
     def __enter__(self) -> "ArchiveReader":
@@ -303,12 +392,21 @@ class ArchiveReader(abc.ABC):
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
-    # Methods only available for random access readers
-
-    @abc.abstractmethod
     def get_members(self) -> List[ArchiveMember]:
         """Get a list of all members in the archive. May need to read the archive to get the members."""
-        pass
+        if not self._members_list_available:
+            raise ValueError("Archive reader does not support get_members().")
+
+        # Default implementation for random-access readers.
+        assert self._random_access_supported, (
+            "Non-random access readers must override get_members()"
+        )
+        if not self._all_members_registered:
+            for _ in self.iter_members_with_io():
+                pass
+            assert self._all_members_registered
+
+        return list(self._member_id_to_member.values())
 
     def _resolve_member_to_open(
         self, member_or_filename: ArchiveMember | str
@@ -318,21 +416,28 @@ class ArchiveReader(abc.ABC):
             if isinstance(member_or_filename, ArchiveMember)
             else member_or_filename
         )
-        member = self.get_member(member_or_filename)
+        final_member = member = self.get_member(member_or_filename)
 
         if member.is_link:
             # If the user is opening a link, open the target member instead.
             self._resolve_link_target(member)
             if member.link_target_member is None:
-                raise ArchiveMemberNotFoundError(
+                raise ArchiveMemberCannotBeOpenedError(
                     f"Link target not found: {member.filename} (when opening {filename})"
                 )
-            member = member.link_target_member
+            final_member = member.link_target_member
 
-        if not member.is_file:
-            raise ValueError(f"Cannot open non-file member: {filename}")
+        if not final_member.is_file:
+            if final_member is not member:
+                raise ArchiveMemberCannotBeOpenedError(
+                    f"Cannot open {final_member.type} {final_member.filename} (redirected from {filename})"
+                )
 
-        return member, filename
+            raise ArchiveMemberCannotBeOpenedError(
+                f"Cannot open {final_member.type} {filename}"
+            )
+
+        return final_member, filename
 
     @abc.abstractmethod
     def open(
@@ -355,7 +460,7 @@ class ArchiveReader(abc.ABC):
                 )
             return member_or_filename
 
-        if not self._members_retrieved:
+        if not self._all_members_registered:
             self.get_members()
 
         if member_or_filename not in self._filename_to_members:
@@ -371,7 +476,7 @@ class ArchiveReader(abc.ABC):
         if path is None:
             path = os.getcwd()
 
-        if self.has_random_access():
+        if self._random_access_supported:
             member = self.get_member(member_or_filename)
             extraction_helper = ExtractionHelper(
                 self.archive_path,
@@ -397,7 +502,7 @@ class ArchiveReader(abc.ABC):
             members=[member_or_filename],
             pwd=pwd,
         )
-        return list(d.values())[0] if len(d) else None
+        return list(d.keys())[0] if len(d) else None
 
 
 class BaseArchiveReaderRandomAccess(ArchiveReader):
@@ -408,106 +513,59 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
         format: ArchiveFormat,
         archive_path: str | bytes | os.PathLike,
     ):
-        super().__init__(format, archive_path)
-
-    def get_members_if_available(self) -> List[ArchiveMember] | None:
-        return self.get_members()
-
-    def has_random_access(self) -> bool:
-        return True
-
-    def iter_members_with_io(
-        self,
-        members: Union[
-            Collection[Union[ArchiveMember, str]], Callable[[ArchiveMember], bool], None
-        ] = None,
-        *,
-        pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
-    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
-        """Default implementation of iter_members for random access archives."""
-
-        filter_func = _build_iterator_filter(members, filter)
-
-        for member in self.get_members():
-            filtered = filter_func(member)
-            if filtered is None:
-                continue
-
-            try:
-                # TODO: some libraries support fast seeking for files (either all,
-                # or only non-compressed ones), so we should set seekable=True
-                # if possible.
-                stream = (
-                    LazyOpenIO(self.open, member, pwd=pwd, seekable=False)
-                    if member.is_file
-                    else None
-                )
-                yield member, stream
-
-            finally:
-                if stream is not None:
-                    stream.close()
-
-    def _extract_pending_files(
-        self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None
-    ):
-        """Extract pending files from the archive. Intended to be overridden by subclasses.
-
-        For some libraries, extraction using extractall() or similar is faster than
-        opening each member individually, so subclasses should override this method
-        if it's beneficial.
-
-        All directories needed are guaranteed to exist. The pending files are either
-        regular files, or links if the archive does not store link targets in the header.
-        Metadata attributes for the extracted files will be applied afterwards.
-        """
-        members_to_extract = extraction_helper.get_pending_extractions()
-        for member in members_to_extract:
-            stream = self.open(member, pwd=pwd) if member.is_file else None
-            extraction_helper.extract_member(member, stream)
-            if stream:
-                stream.close()
-
-    def extractall(
-        self,
-        path: str | os.PathLike | None = None,
-        members: Union[
-            List[Union[ArchiveMember, str]], Callable[[ArchiveMember], bool], None
-        ] = None,
-        *,
-        pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
-    ) -> dict[str, str]:
-        written_paths: dict[str, str] = {}
-
-        if path is None:
-            path = os.getcwd()
-        else:
-            path = str(path)
-
-        filter_func = _build_iterator_filter(members, filter)
-
-        extraction_helper = ExtractionHelper(
-            self.archive_path,
-            path,
-            self.config.overwrite_mode,
-            can_process_pending_extractions=True,
+        super().__init__(
+            format,
+            archive_path,
+            random_access_available=True,
+            members_list_available=True,
         )
 
-        for member in self.get_members():
-            filtered_member = filter_func(member)
-            if filtered_member is None:
-                continue
 
-            extraction_helper.extract_member(member, None)
+#     def get_members_if_available(self) -> List[ArchiveMember] | None:
+#         return self.get_members()
 
-        # Extract regular files
-        self._extract_pending_files(path, extraction_helper, pwd=pwd)
+#     def has_random_access(self) -> bool:
+#         return True
 
-        extraction_helper.apply_metadata()
+#     def extractall(
+#         self,
+#         path: str | os.PathLike | None = None,
+#         members: Union[
+#             List[Union[ArchiveMember, str]], Callable[[ArchiveMember], bool], None
+#         ] = None,
+#         *,
+#         pwd: bytes | str | None = None,
+#         filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
+#     ) -> dict[str, str]:
+#         written_paths: dict[str, str] = {}
 
-        return written_paths
+#         if path is None:
+#             path = os.getcwd()
+#         else:
+#             path = str(path)
+
+#         filter_func = _build_iterator_filter(members, filter)
+
+#         extraction_helper = ExtractionHelper(
+#             self.archive_path,
+#             path,
+#             self.config.overwrite_mode,
+#             can_process_pending_extractions=True,
+#         )
+
+#         for member in self.get_members():
+#             filtered_member = filter_func(member)
+#             if filtered_member is None:
+#                 continue
+
+#             extraction_helper.extract_member(member, None)
+
+#         # Extract regular files
+#         self._extract_pending_files(path, extraction_helper, pwd=pwd)
+
+#         extraction_helper.apply_metadata()
+
+#         return written_paths
 
 
 class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
@@ -536,7 +594,7 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
     def has_random_access(self) -> bool:
         return False
 
-    def extractall(self, *args, **kwargs) -> dict[str, str]:
+    def extractall(self, *args, **kwargs) -> dict[str, ArchiveMember]:
         return self.reader.extractall(*args, **kwargs)
 
     # Unsupported methods for streaming-only readers

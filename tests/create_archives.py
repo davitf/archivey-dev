@@ -380,6 +380,7 @@ def create_tar_archive_with_tarfile(
                 if sample_file.permissions is None:
                     tarinfo.mode = 0o755  # Default mode for directories
                 tf.addfile(tarinfo)  # No fileobj for directories
+                logger.info(f"Adding dir {tarinfo}")
             elif sample_file.type == MemberType.SYMLINK:
                 tarinfo.type = tarfile.SYMTYPE
                 assert sample_file.link_target is not None, (
@@ -388,6 +389,7 @@ def create_tar_archive_with_tarfile(
                 tarinfo.linkname = sample_file.link_target
                 if sample_file.permissions is None:
                     tarinfo.mode = 0o777  # Default mode for symlinks
+                logger.info(f"Adding symlink {tarinfo}")
                 tf.addfile(tarinfo)  # No fileobj for symlinks
             elif sample_file.type == MemberType.HARDLINK:
                 tarinfo.type = tarfile.LNKTYPE
@@ -396,6 +398,7 @@ def create_tar_archive_with_tarfile(
                 )
                 tarinfo.linkname = sample_file.link_target
                 tarinfo.mode = 0o644  # Default mode for hardlinks
+                logger.info(f"Adding hardlink {tarinfo}")
                 tf.addfile(tarinfo)  # No fileobj for hardlinks
             else:  # MemberType.FILE
                 assert file_contents_bytes is not None, (
@@ -405,6 +408,7 @@ def create_tar_archive_with_tarfile(
                 tarinfo.size = len(file_contents_bytes)
                 if sample_file.permissions is None:
                     tarinfo.mode = 0o644  # Default mode for regular files
+                logger.info(f"Adding file {tarinfo}")
                 tf.addfile(tarinfo, io.BytesIO(file_contents_bytes))
 
     if output_stream is not None:

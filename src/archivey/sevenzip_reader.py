@@ -396,7 +396,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             ):
                 pass
 
-        self.set_all_members_retrieved()
+        self.set_all_members_registered()
 
         return self._members
 

@@ -30,7 +30,7 @@ def format_mode(member_type: MemberType, mode: int) -> str:
         if member_type == MemberType.DIR
         else "l"
         if member_type == MemberType.SYMLINK
-        else "H"
+        else "h"
         if member_type == MemberType.HARDLINK
         else "-"
     )
