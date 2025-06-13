@@ -77,6 +77,9 @@ def check_member_metadata(
 
     if not features.mtime:
         assert member.mtime is None
+    elif not features.hardlink_mtime and member.type == MemberType.HARDLINK:
+        # Hardlinks may have the timestamp of the pointed file, don't check it.
+        pass
     elif sample_file.mtime == MARKER_MTIME_BASED_ON_ARCHIVE_NAME:
         archive_file_mtime = datetime.fromtimestamp(
             os.path.getmtime(archive_path or sample_archive.get_archive_path())

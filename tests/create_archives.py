@@ -259,7 +259,7 @@ def create_tar_archive_with_command_line(
     """
     Create a tar archive using the tar command line tool.
     """
-    assert contents.solid, "TAR archives are always solid"
+    assert contents.solid is not False, "TAR archives are always solid"
 
     assert contents.archive_comment is None, (
         "TAR format does not support archive comments"
@@ -324,13 +324,13 @@ def create_tar_archive_with_tarfile(
     Create a tar archive using Python's tarfile module.
     Supports setting file modes and different compression formats.
     """
-    assert contents.solid, "TAR archives are always solid"
+    assert contents.solid is not False, "TAR archives are always solid"
     assert contents.archive_comment is None, (
         "TAR format does not support archive comments"
     )
 
     logger.info(
-        f"Creating TAR archive {archive_path} with compression format {compression_format}"
+        f"Creating TAR archive (tarfile) {archive_path} with compression format {compression_format}"
     )
 
     abs_archive_path = os.path.abspath(archive_path)
@@ -389,6 +389,14 @@ def create_tar_archive_with_tarfile(
                 if sample_file.permissions is None:
                     tarinfo.mode = 0o777  # Default mode for symlinks
                 tf.addfile(tarinfo)  # No fileobj for symlinks
+            elif sample_file.type == MemberType.HARDLINK:
+                tarinfo.type = tarfile.LNKTYPE
+                assert sample_file.link_target is not None, (
+                    f"Link target required for {sample_file.name}"
+                )
+                tarinfo.linkname = sample_file.link_target
+                tarinfo.mode = 0o644  # Default mode for hardlinks
+                tf.addfile(tarinfo)  # No fileobj for hardlinks
             else:  # MemberType.FILE
                 assert file_contents_bytes is not None, (
                     f"Contents required for file {sample_file.name}"
@@ -788,6 +796,7 @@ GENERATION_METHODS_TO_GENERATOR = {
 
 
 def create_archive(archive_info: SampleArchive, base_dir: str) -> str:
+    print(archive_info)
     full_path = archive_info.get_archive_path(base_dir)
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
@@ -801,6 +810,9 @@ def create_archive(archive_info: SampleArchive, base_dir: str) -> str:
     generator = GENERATION_METHODS_TO_GENERATOR[
         archive_info.creation_info.generation_method
     ]
+    logger.info(
+        f"Creating archive {archive_info.filename} with generator {archive_info.creation_info.generation_method} {generator}"
+    )
     try:
         generator(
             full_path,

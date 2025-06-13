@@ -46,7 +46,7 @@ class ArchiveContents:
     file_basename: str  # Base name for the archive (e.g., "basic", "encryption")
     files: list[FileInfo]  # List of files to include
     archive_comment: str | None = None  # Optional archive comment
-    solid: bool = False  # Whether archive should be solid
+    solid: Optional[bool] = None  # Whether archive should be solid
     header_password: str | None = None  # Optional header password
     generate_corrupted_variants: bool = (
         True  # Whether to generate corrupted variants for testing
@@ -74,6 +74,7 @@ class ArchiveFormatFeatures:
     rounded_mtime: bool = False
     file_size: bool = True
     duplicate_files: bool = False
+    hardlink_mtime: bool = False
 
 
 DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
@@ -190,15 +191,17 @@ RAR_CMD = ArchiveCreationInfo(
     features=ArchiveFormatFeatures(dir_entries=True, archive_comment=True),
 )
 
-_TAR_FORMAT_FEATURES = ArchiveFormatFeatures()
-_TAR_FORMAT_FEATURES_DUPLICATE_FILES = ArchiveFormatFeatures(duplicate_files=True)
+_TAR_FORMAT_FEATURES_TARCMD = ArchiveFormatFeatures()
+_TAR_FORMAT_FEATURES_TARFILE = ArchiveFormatFeatures(
+    duplicate_files=True, hardlink_mtime=True
+)
 
 # TAR formats
 TAR_PLAIN_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar",
     format=ArchiveFormat.TAR,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_TARCMD,
 )
 
 # TAR formats
@@ -206,32 +209,32 @@ TAR_PLAIN_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar",
     format=ArchiveFormat.TAR,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 
 TAR_GZ_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar.gz",
     format=ArchiveFormat.TAR_GZ,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
-    features=_TAR_FORMAT_FEATURES,
+    features=_TAR_FORMAT_FEATURES_TARCMD,
 )
 TAR_GZ_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar.gz",
     format=ArchiveFormat.TAR_GZ,
-    generation_method=GenerationMethod.TAR_COMMAND_LINE,
-    features=_TAR_FORMAT_FEATURES,
+    generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 TAR_ZSTD_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar.zst",
     format=ArchiveFormat.TAR_ZSTD,
-    generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
+    generation_method=GenerationMethod.TAR_COMMAND_LINE,
+    features=_TAR_FORMAT_FEATURES_TARCMD,
 )
 TAR_ZSTD_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar.zst",
     format=ArchiveFormat.TAR_ZSTD,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 
 # No need to test both tarfile and cmdline for the other formats, as there shouldn't
@@ -240,19 +243,19 @@ TAR_BZ2 = ArchiveCreationInfo(
     file_suffix=".tar.bz2",
     format=ArchiveFormat.TAR_BZ2,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 TAR_XZ = ArchiveCreationInfo(
     file_suffix=".tar.xz",
     format=ArchiveFormat.TAR_XZ,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 TAR_LZ4 = ArchiveCreationInfo(
     file_suffix=".tar.lz4",
     format=ArchiveFormat.TAR_LZ4,
     generation_method=GenerationMethod.TAR_LIBRARY,
-    features=_TAR_FORMAT_FEATURES_DUPLICATE_FILES,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 
 # Single file compression formats
@@ -562,7 +565,7 @@ SYMLINK_FILES = [
     ),
 ]
 
-HARD_LINK_FILES = [
+HARDLINK_FILES = [
     FileInfo(
         name="file1.txt",
         mtime=_fake_mtime(1),
@@ -578,20 +581,23 @@ HARD_LINK_FILES = [
         mtime=_fake_mtime(3),
         type=MemberType.HARDLINK,
         link_target="file1.txt",
+        contents=b"Hello 1!",
     ),
     FileInfo(
         name="hardlink_to_file2.txt",
         mtime=_fake_mtime(4),
         type=MemberType.HARDLINK,
         link_target="subdir/file2.txt",
+        contents=b"Hello 2!",
     ),
 ]
+
 
 # In tar archives, a hard link refers to the entry with the same name previously in
 # the archive, even if that entry is later overwritten. So in this case, the first
 # hard link should refer to the first file version, and the second hard link should
 # refer to the second file version.
-HARD_LINK_WITH_DUPLICATE_FILES = [
+HARDLINK_WITH_DUPLICATE_FILES = [
     FileInfo(
         name="file1.txt",
         mtime=_fake_mtime(1),
@@ -602,6 +608,7 @@ HARD_LINK_WITH_DUPLICATE_FILES = [
         mtime=_fake_mtime(2),
         type=MemberType.HARDLINK,
         link_target="file1.txt",
+        contents=b"Old contents",
     ),
     FileInfo(
         name="file1.txt",
@@ -613,6 +620,7 @@ HARD_LINK_WITH_DUPLICATE_FILES = [
         mtime=_fake_mtime(4),
         type=MemberType.HARDLINK,
         link_target="file1.txt",
+        contents=b"New contents!",
     ),
     FileInfo(
         name="file1.txt",
@@ -620,6 +628,55 @@ HARD_LINK_WITH_DUPLICATE_FILES = [
         contents=b"Newer contents!!",
     ),
 ]
+
+HARDLINK_RECURSIVE_AND_BROKEN = [
+    FileInfo(
+        name="a_file.txt",
+        mtime=_fake_mtime(1),
+        contents=b"Hello!",
+    ),
+    FileInfo(
+        name="b_broken_forward_hardlink.txt",
+        mtime=_fake_mtime(2),
+        type=MemberType.HARDLINK,
+        link_target="d_hardlink.txt",
+        # This is a broken hardlink, as the target is not earlier in the archive.
+    ),
+    FileInfo(
+        name="c_forward_symlink.txt",
+        mtime=_fake_mtime(3),
+        type=MemberType.SYMLINK,
+        link_target="d_hardlink.txt",
+        contents=b"Hello!",
+    ),
+    FileInfo(
+        name="d_hardlink.txt",
+        mtime=_fake_mtime(4),
+        type=MemberType.HARDLINK,
+        link_target="file1.txt",
+        contents=b"Hello 1!",
+    ),
+    FileInfo(
+        name="e_double_hardlink.txt",
+        mtime=_fake_mtime(5),
+        type=MemberType.HARDLINK,
+        link_target="d_hardlink.txt",
+        contents=b"Hello 1!",
+    ),
+    FileInfo(
+        name="f_hardlink_to_broken.txt",
+        mtime=_fake_mtime(6),
+        type=MemberType.HARDLINK,
+        link_target="b_broken_forward_hardlink.txt",
+    ),
+    FileInfo(
+        name="g_symlink_to_broken.txt",
+        mtime=_fake_mtime(7),
+        type=MemberType.SYMLINK,
+        link_target="b_broken_forward_hardlink.txt",
+    ),
+]
+
 
 ENCODING_FILES = [
     FileInfo(
@@ -921,7 +978,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     (
         ArchiveContents(
             file_basename="hardlinks_nonsolid",
-            files=HARD_LINK_FILES,
+            files=HARDLINK_FILES,
             solid=True,
         ),
         RAR_FORMATS + ALL_TAR_FORMATS,
@@ -929,10 +986,23 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     (
         ArchiveContents(
             file_basename="hardlinks_solid",
-            files=HARD_LINK_FILES,
-            solid=True,
+            files=HARDLINK_FILES,
         ),
-        RAR_FORMATS + ALL_TAR_FORMATS,
+        RAR_FORMATS + BASIC_TAR_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="hardlinks_with_duplicate_files",
+            files=HARDLINK_WITH_DUPLICATE_FILES,
+        ),
+        [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
+    ),
+    (
+        ArchiveContents(
+            file_basename="hardlinks_recursive_and_broken",
+            files=HARDLINK_RECURSIVE_AND_BROKEN,
+        ),
+        [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
     ),
     (
         ArchiveContents(
