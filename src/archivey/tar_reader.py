@@ -301,7 +301,10 @@ class TarReader(ArchiveReader):
                 filtered_member = filter_func(member)
                 if filtered_member is None:
                     continue
-                yield filtered_member, _get_stream_for_member(member)
+                stream = _get_stream_for_member(member)
+                yield filtered_member, stream
+                if stream is not None:
+                    stream.close()
 
         try:
             tarinfo: tarfile.TarInfo | None = None
@@ -314,7 +317,10 @@ class TarReader(ArchiveReader):
                 if filtered_member is None:
                     continue
 
-                yield filtered_member, _get_stream_for_member(member)
+                stream = _get_stream_for_member(member)
+                yield filtered_member, stream
+                if stream is not None:
+                    stream.close()
 
                 # try:
                 #     if self._streaming_only:

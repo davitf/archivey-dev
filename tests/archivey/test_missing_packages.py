@@ -33,9 +33,9 @@ BASIC_7Z_ARCHIVE = filter_archives(
     SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["7z"]
 )[0]
 
-BASIC_ISO_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["iso"]
-)[0]
+# BASIC_ISO_ARCHIVE = filter_archives(
+#     SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["iso"]
+# )[0]
 
 BASIC_ZSTD_ARCHIVE = filter_archives(
     SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["zst"]

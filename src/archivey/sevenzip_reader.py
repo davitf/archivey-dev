@@ -107,6 +107,9 @@ class StreamingFile(BasePy7zIOWriter):
             self._first_read = True
 
         def read(self, size=-1) -> bytes:
+            if self.closed:
+                raise ValueError("Stream is closed")
+
             self._first_read = False
             while not self._eof and (size < 0 or len(self._buffer) < size):
                 try:
@@ -127,8 +130,10 @@ class StreamingFile(BasePy7zIOWriter):
 
         def close(self):
             self._parent._reader_alive = False
-            self._parent._data_queue
+            self._parent._data_queue.put(None)
             super().close()
+            self._buffer = bytearray()
+            self._eof = True
 
         def readable(self) -> bool:
             return True
@@ -353,8 +358,14 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
             name_counters[file.filename] += 1
 
+            # 7z format doesn't include the trailing slash for directories, so we need
+            # to add them for consistent behavior.
+            filename = file.filename
+            if file.is_directory and not filename.endswith("/"):
+                filename += "/"
+
             member = ArchiveMember(
-                filename=file.filename,
+                filename=filename,
                 # The uncompressed field is wrongly typed in py7zr as list[int].
                 # It's actually an int.
                 file_size=file.uncompressed,  # type: ignore
@@ -483,27 +494,36 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         # members_to_extract = [] #m for m in self.get_members() if member_included(m)]
         filenames_to_extract = []
+        logger.info(f"members: {[f.filename for f in self.get_members()]}")
         for member in self.get_members():
+            logger.info(f"iter_members_with_io: {member.filename}")
             if not member_included(member):
+                logger.info(f"iter_members_with_io: {member.filename} not included")
                 continue
 
             if member.is_link and member.link_target is None:
                 # We'll need to resolve the link target later.
                 filenames_to_extract.append(member.filename)
+                logger.info(f"iter_members_with_io: {member.filename} added to extract")
                 continue
 
             filtered_member = filter(member) if filter is not None else member
             if filtered_member is None:
+                logger.info(f"iter_members_with_io: {member.filename} filtered out")
                 continue
 
             if member.is_dir or member.is_link:
+                logger.info(f"iter_members_with_io: {member.filename} is dir or link")
                 yield filtered_member, None
 
             elif member.is_file and member.file_size == 0:
                 # Yield any empty files immediately, as py7zr doesn't actually call any
                 # methods on the PyZ7IO object for them, and so they're not added to the
                 # queue.
-                yield filtered_member, io.BytesIO(b"")
+                logger.info(f"iter_members_with_io: {member.filename} is empty file")
+                stream = io.BytesIO(b"")
+                yield filtered_member, stream
+                stream.close()
 
             elif member.is_file:
                 filenames_to_extract.append(member.filename)

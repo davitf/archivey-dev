@@ -1,5 +1,5 @@
 import logging
-import pathlib
+from typing import IO
 
 import pytest
 
@@ -11,6 +11,13 @@ from tests.archivey.sample_archives import (
     filter_archives,
 )
 from tests.archivey.testing_utils import skip_if_package_missing
+
+
+def _last_regular_file(sample: SampleArchive):
+    for f in reversed(sample.contents.files):
+        if f.type == MemberType.FILE:
+            return f
+    raise ValueError("sample archive has no regular file")
 
 
 def _first_regular_file(sample: SampleArchive):
@@ -32,11 +39,6 @@ logger = logging.getLogger(__name__)
     ids=lambda a: a.filename,
 )
 def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: str):
-    if (
-        sample_archive.creation_info.format == ArchiveFormat.ISO
-        and not pathlib.Path(sample_archive_path).exists()
-    ):
-        pytest.skip("ISO archive not available")
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
     with open_archive(sample_archive_path) as archive:
@@ -46,26 +48,24 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
 
         assert members_if_available == members
 
-        # Open a file as a non-context manager
-        f = archive.open("large3.txt")
-        logger.warning("opened large3.txt")
-        data = f.read(100)
-        assert data.startswith(b"Large file #3\n")
-        logger.warning(f"closing large3.txt, closed = {f.closed}")
-        f.close()
-        logger.warning(f"closed large3.txt, closed = {f.closed}")
+        for sample_file in reversed(sample_archive.contents.files):
+            # Open file without context manager
+            f = archive.open(sample_file.name)
+            data = f.read()
+            assert sample_file.contents == data, f"{sample_file.name} contents mismatch"
+            f.close()
 
-        logger.warning("will open large3.txt again")
-
-        with archive.open("large3.txt") as f:
-            data = f.read(100)
-            assert len(data) == 100
-            data += f.read()  # Read the rest of the file
-
-            assert data.startswith(b"Large file #3\n")
-            member = archive.get_member("large3.txt")
-            assert archive.get_member(member) is member
-            assert data == sample_archive.contents.files[2].contents
+        for sample_file in reversed(sample_archive.contents.files):
+            # Open file with context manager
+            with archive.open(sample_file.name) as f:
+                data = f.read(100)
+                assert len(data) == 100
+                data += (
+                    f.read()
+                )  # Read the rest of the file, which should be the whole file
+                assert sample_file.contents == data, (
+                    f"{sample_file.name} contents mismatch"
+                )
 
         # Read multiple files at once
         sorted_members = sorted(members, key=lambda m: m.filename)
@@ -81,8 +81,11 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
                 == sample_archive.contents.files[i].contents
             )
 
-        for f in files:
-            f.close()
+    # After the archive context manager is closed, all streams should have been closed.
+    # TODO: this is not actually true. Should this be implemented? Or should we test
+    # that trying to read() from these streams raises an error?
+    # for f in files:
+    #     assert f.closed
 
 
 @pytest.mark.parametrize(
@@ -93,17 +96,16 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
     ),
     ids=lambda a: a.filename,
 )
-def test_streaming_only_mode(sample_archive: SampleArchive, sample_archive_path: str):
-    if (
-        sample_archive.creation_info.format == ArchiveFormat.ISO
-        and not pathlib.Path(sample_archive_path).exists()
-    ):
-        pytest.skip("ISO archive not available")
+@pytest.mark.parametrize("close_streams", [False, True], ids=["noclose", "close"])
+def test_streaming_only_mode(
+    sample_archive: SampleArchive, sample_archive_path: str, close_streams: bool
+):
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
     first_file = _first_regular_file(sample_archive)
     with open_archive(sample_archive_path, streaming_only=True) as archive:
         assert not archive.has_random_access()
+
         with pytest.raises(ValueError):
             archive.get_members()
         with pytest.raises(ValueError):
@@ -118,44 +120,21 @@ def test_streaming_only_mode(sample_archive: SampleArchive, sample_archive_path:
         else:
             assert info is not None and len(info) >= 1
 
-        found = False
+        previous_stream: IO[bytes] | None = None
         for m, stream in archive.iter_members_with_io():
-            if m.filename == first_file.name:
-                assert stream is not None
-                assert stream.read() == (first_file.contents or b"")
-                found = True
-                break
-        assert found
+            if previous_stream is not None:
+                assert previous_stream.closed
+                with pytest.raises(ValueError):
+                    data = previous_stream.read()
+                    logger.info(
+                        f"previous_stream.read() = {data[:20]} -- {previous_stream=}"
+                    )
 
+            previous_stream = stream
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
-        SAMPLE_ARCHIVES,
-        prefixes=["large_files_nonsolid", "large_files_solid"],
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
-def test_iter_members_filter(
-    sample_archive: SampleArchive, sample_archive_path: str, streaming_only: bool
-):
-    """Ensure iter_members_with_io honours the filter callable."""
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
-    target = next(f for f in sample_archive.contents.files if f.type == MemberType.FILE)
-
-    with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
-        seen = []
-        for member, stream in archive.iter_members_with_io(
-            members=lambda m: m.filename == target.name
-        ):
-            seen.append(member.filename)
-            if member.type == MemberType.FILE:
-                assert stream is not None
-                assert stream.read() == (target.contents or b"")
-
-        assert seen == [target.name]
+            assert (stream is None) == (m.type != MemberType.FILE)
+            if close_streams and stream is not None:
+                stream.close()  # Should be a no-op, not raise anything
 
 
 @pytest.mark.parametrize(
@@ -194,3 +173,41 @@ def test_iter_members_partial_reads(
             else:
                 # Do not read the third file at all
                 pass
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["basic_nonsolid", "basic_solid", "duplicate_files"],
+    ),
+    ids=lambda a: a.filename,
+)
+@pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
+def test_iter_members_list_filter(
+    sample_archive: SampleArchive, sample_archive_path: str, streaming_only: bool
+):
+    """Ensure iter_members_with_io honours the filter callable."""
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+    if (
+        sample_archive.filename.startswith("duplicate_files")
+        and not sample_archive.creation_info.features.duplicate_files
+    ):
+        pytest.skip("Duplicate files feature is not enabled for this archive")
+
+    file_names = {f.name for f in sample_archive.contents.files[::2]}
+    file_contents = [
+        (f.name, f.contents)
+        for f in sample_archive.contents.files
+        if f.name in file_names
+    ]
+    read_contents = []
+
+    with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
+        for member, stream in archive.iter_members_with_io(members=file_names):
+            assert member.filename in file_names
+            read_contents.append(
+                (member.filename, stream.read() if stream is not None else None)
+            )
+
+    assert sorted(file_contents) == sorted(read_contents), file_names
