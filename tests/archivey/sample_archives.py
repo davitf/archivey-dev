@@ -399,10 +399,12 @@ ISO_FORMATS = [
 ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
 
 # Skip test filenames
-SKIP_TEST_FILENAMES = set(
+SKIP_TEST_FILENAMES = {
     # "basic_nonsolid__genisoimage.iso",
     # "basic_nonsolid__pycdlib.iso",
-)
+    "symlink_loop__infozip.zip",
+    "symlink_loop__tarfile.tar",
+}
 
 
 def _create_random_data(size: int, seed: int, chars: bytes = b"0123456789 ") -> bytes:
@@ -568,6 +570,42 @@ SYMLINKS_FILES = [
         type=MemberType.SYMLINK,
         link_target="subdir",
         link_target_type=MemberType.DIR,
+    ),
+]
+
+SYMLINK_LOOP_FILES = [
+    FileInfo(
+        name="file1.txt",
+        mtime=_fake_mtime(1),
+        type=MemberType.SYMLINK,
+        link_target="file2.txt",
+        contents=b"loop to file2",
+    ),
+    FileInfo(
+        name="file2.txt",
+        mtime=_fake_mtime(2),
+        type=MemberType.SYMLINK,
+        link_target="file3.txt",
+        contents=b"loop to file3",
+    ),
+    FileInfo(
+        name="file3.txt",
+        mtime=_fake_mtime(3),
+        type=MemberType.SYMLINK,
+        link_target="file1.txt",
+        contents=b"loop back to file1",
+    ),
+    FileInfo(
+        name="file4.txt",
+        mtime=_fake_mtime(4),
+        type=MemberType.SYMLINK,
+        link_target="file5.txt",
+        contents=b"points to file5",
+    ),
+    FileInfo(
+        name="file5.txt",
+        mtime=_fake_mtime(5),
+        contents=b"this is file 5",
     ),
 ]
 
@@ -1138,6 +1176,13 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             solid=True,
         ),
         [TAR_PLAIN_TARFILE],
+    ),
+    (
+        ArchiveContents(
+            file_basename="symlink_loop",
+            files=SYMLINK_LOOP_FILES,
+        ),
+        [ZIP_INFOZIP, TAR_PLAIN_TARFILE],
     ),
     # (
     #     ArchiveContents(

@@ -69,9 +69,16 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
                 MemberType.SYMLINK: 0o777,
                 MemberType.FILE: 0o644,
             }
-            os.chmod(
-                full_path, file.permissions or default_permissions_by_type[file.type]
-            )
+            perm = file.permissions or default_permissions_by_type[file.type]
+            if file.type == MemberType.SYMLINK:
+                try:
+                    os.chmod(full_path, perm, follow_symlinks=False)
+                except (NotImplementedError, OSError):
+                    # Platforms without lchmod support may not allow setting
+                    # permissions on symlinks. Ignore in that case.
+                    pass
+            else:
+                os.chmod(full_path, perm)
 
     # List the files with ls
     subprocess.run(["ls", "-alF", "-R", "--time-style=full-iso", dir], check=True)
