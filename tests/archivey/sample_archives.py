@@ -399,12 +399,10 @@ ISO_FORMATS = [
 ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
 
 # Skip test filenames
-SKIP_TEST_FILENAMES = {
+SKIP_TEST_FILENAMES = set(
     # "basic_nonsolid__genisoimage.iso",
     # "basic_nonsolid__pycdlib.iso",
-    "symlink_loop__infozip.zip",
-    "symlink_loop__tarfile.tar",
-}
+)
 
 
 def _create_random_data(size: int, seed: int, chars: bytes = b"0123456789 ") -> bytes:
