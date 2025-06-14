@@ -183,7 +183,7 @@ def open_pyzstd_stream(path: str) -> BinaryIO:
     if pyzstd is None:
         raise PackageNotInstalledError(
             "pyzstd package is not installed, required for Zstandard archives"
-        ) from None  # pragma: no cover -- lz4 is installed for main tests
+        ) from None  # pragma: no cover -- pyzstd is installed for main tests
     return ExceptionTranslatingIO(pyzstd.open(path), _translate_pyzstd_exception)
 
 

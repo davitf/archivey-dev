@@ -179,6 +179,13 @@ class ArchiveReader(abc.ABC):
                 self._resolve_link_target(
                     target_member, visited_members | {member.member_id}
                 )
+                if target_member.link_target_member is None:
+                    logger.warning(
+                        f"Link target {target_member.filename} {target_member.member_id} does not have a valid target (when resolving {member.filename} {member.member_id})"
+                    )
+                    return
+
+                target_member = target_member.link_target_member
 
             member.link_target_member = target_member
             member.link_target_type = target_member.type
@@ -418,15 +425,28 @@ class ArchiveReader(abc.ABC):
         )
         final_member = member = self.get_member(member_or_filename)
 
+        logger.info(
+            f"Resolving link target for {member.filename} {member.type} {member.member_id}"
+        )
+
         if member.is_link:
             # If the user is opening a link, open the target member instead.
             self._resolve_link_target(member)
+            logger.info(
+                f"Resolved link target for {member.filename} {member.type} {member.member_id}: {member.link_target}"
+            )
             if member.link_target_member is None:
                 raise ArchiveMemberCannotBeOpenedError(
                     f"Link target not found: {member.filename} (when opening {filename})"
                 )
+            logger.info(
+                f"  target_member={member.link_target_member.member_id} {member.link_target_member.filename} {member.link_target_member.type}"
+            )
             final_member = member.link_target_member
 
+        logger.info(
+            f"Final member: orig {filename} {member.member_id} {final_member.filename} {final_member.type}"
+        )
         if not final_member.is_file:
             if final_member is not member:
                 raise ArchiveMemberCannotBeOpenedError(

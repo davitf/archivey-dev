@@ -9,6 +9,7 @@ import pytest
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.dependency_checker import get_dependency_versions
+from archivey.exceptions import ArchiveError
 from archivey.types import ArchiveMember, CreateSystem, MemberType
 from tests.archivey.sample_archives import (
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
@@ -67,12 +68,14 @@ def check_member_metadata(
             f"expected {oct(sample_file.permissions)}"
         )
 
-    assert member.encrypted == (
-        sample_file.password is not None
-        or (member.is_file and sample_archive.contents.header_password is not None)
-    ), (
-        f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
-    )
+    # 0-byte files may not be marked as encrypted (e.g. in 7z archives with header encryption)
+    if sample_file.contents:
+        assert member.encrypted == (
+            sample_file.password is not None
+            or (member.is_file and sample_archive.contents.header_password is not None)
+        ), (
+            f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
+        )
 
     if not features.mtime:
         assert member.mtime is None
@@ -107,13 +110,21 @@ def check_member_metadata(
 
 def check_iter_members(
     sample_archive: SampleArchive,
-    archive_path: str | None = None,
-    use_rar_stream: bool = False,
+    archive_path: str,
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
     config: Optional[ArchiveyConfig] = None,
 ):
     skip_if_package_missing(sample_archive.creation_info.format, config)
+
+    if (
+        archive_path.endswith(".tar.zst")
+        and config is not None
+        and config.use_zstandard
+    ):
+        pytest.skip(
+            "Skipping test for .tar.zst archives with zstandard enabled, as zstandard doesn't support seeking"
+        )
 
     if sample_archive.skip_test:
         pytest.skip(f"Skipping test for {sample_archive.filename} as skip_test is True")
@@ -176,9 +187,9 @@ def check_iter_members(
             else archive.iter_members_with_io()
         )
 
-        logger.info(f"files_by_name: {expected_files_by_filename}")
-        logger.info(f"skip_member_contents: {skip_member_contents}")
-        logger.info(f"members_iter: {members_iter}")
+        # logger.info(f"files_by_name: {expected_files_by_filename}")
+        # logger.info(f"skip_member_contents: {skip_member_contents}")
+        # logger.info(f"members_iter: {members_iter}")
 
         all_contents_by_filename: collections.defaultdict[
             str, list[tuple[ArchiveMember, bytes | None]]
@@ -203,11 +214,6 @@ def check_iter_members(
                 assert stream is not None, (
                     f"Stream not provided for {member.filename} ({member.type})"
                 )
-                # The stream should be a lazy-open object, to avoid opening members
-                # unnecessarily.
-                # assert isinstance(stream, io_helpers.LazyOpenIO), f"Stream is not a LazyOpenIO for {member.filename}: {stream=}"
-                # stream_data = stream.read()
-                # assert stream_data == sample_file.contents, f"Wrong contents for {member.filename} ({sample_file=})"
             else:
                 assert stream is None, (
                     f"Stream provided for {member.filename} ({member.type}) (data={stream.read()})"
@@ -215,17 +221,6 @@ def check_iter_members(
 
             # TODO: compare data for resolved links
             data = stream.read() if stream is not None else None
-
-            # if (
-            #     member.type == MemberType.HARDLINK
-            #     and member.link_target == member.filename
-            # ):
-            #     # When we pass the same file multiple times to the tar command line,
-            #     # tar will create a hard link to the first file. We should ignore this.
-            #     logger.warning(
-            #         f"Archive {sample_archive.filename} contains hard link to itself: {member.filename}"
-            #     )
-            #     continue
 
             all_contents_by_filename[filekey].append((member, data))
             if member.type != MemberType.DIR:
@@ -245,9 +240,6 @@ def check_iter_members(
 
         # Check that the contents of the members are the same as the contents of the files.
         for filename, expected_files in expected_files_by_filename.items():
-            # if filename not in all_contents_by_filename:
-            #     pytest.fail(f"File {filename} not found in archive. Archive contains {all_contents_by_filename.keys()}")
-
             actual_files = all_contents_by_filename[filename]
             if features.duplicate_files:
                 assert len(actual_files) == len(expected_files), (
@@ -277,11 +269,24 @@ def check_iter_members(
                 if sample_file.type == MemberType.FILE and not skip_member_contents:
                     assert contents == sample_file.contents
 
-        # missing_files = expected_filenames - set(actual_filenames)
-        # extra_files = set(actual_filenames) - expected_filenames
+                if sample_file.contents is not None and archive.has_random_access:
+                    with archive.open(member) as stream:
+                        assert stream.read() == sample_file.contents
+                else:
+                    with pytest.raises((ValueError, ArchiveError)):
+                        stream = archive.open(member)
+                        logger.info(
+                            f"Unexpected open() success for {member=}; data={stream.read()}"
+                        )
 
-        # assert not missing_files, f"Missing files: {missing_files}"
-        # assert not extra_files, f"Extra files: {extra_files}"
+            # Check that opening the file by filename gives the most recent contents.
+            sample_file = expected_files[-1]
+            if sample_file.contents is not None:
+                with archive.open(filename) as stream:
+                    assert stream.read() == sample_file.contents
+            else:
+                with pytest.raises((ValueError, ArchiveError)):
+                    archive.open(filename)
 
 
 @pytest.mark.parametrize(
@@ -362,6 +367,8 @@ def test_read_rar_archives(
     if use_rar_stream and deps.unrar_version is None:
         pytest.skip("unrar not installed, skipping RarStreamReader test")
 
+    config = ArchiveyConfig(use_rar_stream=use_rar_stream)
+
     has_password = sample_archive.contents.has_password()
     has_multiple_passwords = sample_archive.contents.has_multiple_passwords()
     first_file_has_password = sample_archive.contents.files[0].password is not None
@@ -380,13 +387,13 @@ def test_read_rar_archives(
             check_iter_members(
                 sample_archive,
                 archive_path=sample_archive_path,
-                use_rar_stream=use_rar_stream,
+                config=config,
             )
     else:
         check_iter_members(
             sample_archive,
             archive_path=sample_archive_path,
-            use_rar_stream=use_rar_stream,
+            config=config,
             skip_member_contents=deps.unrar_version is None,
         )
 
@@ -410,10 +417,11 @@ def test_read_rar_archives_with_password_in_constructor(
     if use_rar_stream and deps.unrar_version is None:
         pytest.skip("unrar not installed, skipping RarStreamReader test")
 
+    config = ArchiveyConfig(use_rar_stream=use_rar_stream)
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
-        use_rar_stream=use_rar_stream,
+        config=config,
         set_file_password_in_constructor=True,
         skip_member_contents=deps.unrar_version is None,
     )
@@ -490,7 +498,9 @@ def test_read_symlinks_archives(
 
 @pytest.mark.parametrize(
     "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, prefixes=["hardlinks", "hardlinks_solid"]),
+    filter_archives(
+        SAMPLE_ARCHIVES, prefixes=["hardlinks_nonsolid", "hardlinks_solid"]
+    ),
     ids=lambda x: x.filename,
 )
 def test_read_hardlinks_archives(

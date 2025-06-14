@@ -6,13 +6,13 @@ import pytest
 
 from archivey.core import open_archive
 from archivey.types import ArchiveFormat, MemberType
-from tests.archivey.sample_archives import BASIC_FILES, ENCODING_FILES, SYMLINK_FILES
+from tests.archivey.sample_archives import BASIC_FILES, ENCODING_FILES, SYMLINKS_FILES
 from tests.archivey.testing_utils import write_files_to_dir
 
 
 @pytest.mark.parametrize(
     "files",
-    [BASIC_FILES, SYMLINK_FILES, ENCODING_FILES],
+    [BASIC_FILES, SYMLINKS_FILES, ENCODING_FILES],
     ids=["basic", "symlinks", "encodings"],
 )
 def test_folder_reader(tmp_path: Path, files: list):

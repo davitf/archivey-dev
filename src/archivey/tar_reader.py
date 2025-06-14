@@ -76,12 +76,17 @@ class TarReader(ArchiveReader):
             logger.info(
                 f"Compressed tar opened: {self._fileobj} seekable={self._fileobj.seekable()}"
             )
-            if self._fileobj.seekable():
-                logger.info(
-                    f"Compressed tar seeked: initial tell={self._fileobj.tell()}"
+            # if self._fileobj.seekable():
+            #     logger.info(
+            #         f"Compressed tar seeked: initial tell={self._fileobj.tell()}"
+            #     )
+            #     self._fileobj.seek(0)
+            #     logger.info(f"Compressed tar seeked: after seek={self._fileobj.tell()}")
+
+            if not streaming_only and not self._fileobj.seekable():
+                raise ArchiveError(
+                    f"Tried to open a random-access {format.value} file, but inner stream is not seekable ({self._fileobj})"
                 )
-                self._fileobj.seek(0)
-                logger.info(f"Compressed tar seeked: after seek={self._fileobj.tell()}")
 
         elif format == ArchiveFormat.TAR:
             self.compression_method = "store"

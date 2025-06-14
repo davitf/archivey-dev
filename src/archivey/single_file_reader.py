@@ -263,11 +263,13 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
             extra=None,
         )
 
-    def open(self, member: ArchiveMember, *, pwd: bytes | None = None) -> BinaryIO:
+    def open(
+        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | None = None
+    ) -> BinaryIO:
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
-        if member != self.member:
-            raise ValueError("Requested member is not part of this archive")
+
+        member, filename = self._resolve_member_to_open(member_or_filename)
 
         if self.fileobj is None:
             return open_stream(self.format, self.archive_path, self.config)

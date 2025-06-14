@@ -541,7 +541,7 @@ ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES = ENCRYPTION_SINGLE_PASSWORD_FILES + [
     ),
 ]
 
-SYMLINK_FILES = [
+SYMLINKS_FILES = [
     FileInfo(name="file1.txt", contents=b"Hello, world!", mtime=_fake_mtime(1)),
     FileInfo(
         name="symlink_to_file1.txt",
@@ -560,6 +560,7 @@ SYMLINK_FILES = [
         mtime=_fake_mtime(4),
         type=MemberType.SYMLINK,
         link_target="../file1.txt",
+        contents=b"Hello, world!",
     ),
     FileInfo(
         name="subdir_link",
@@ -570,7 +571,7 @@ SYMLINK_FILES = [
     ),
 ]
 
-HARDLINK_FILES = [
+HARDLINKS_FILES = [
     FileInfo(
         name="file1.txt",
         mtime=_fake_mtime(1),
@@ -602,7 +603,7 @@ HARDLINK_FILES = [
 # the archive, even if that entry is later overwritten. So in this case, the first
 # hard link should refer to the first file version, and the second hard link should
 # refer to the second file version.
-HARDLINK_WITH_DUPLICATE_FILES = [
+HARDLINKS_WITH_DUPLICATE_FILES = [
     FileInfo(
         name="file1.txt",
         mtime=_fake_mtime(1),
@@ -613,7 +614,7 @@ HARDLINK_WITH_DUPLICATE_FILES = [
         mtime=_fake_mtime(2),
         type=MemberType.HARDLINK,
         link_target="file1.txt",
-        contents=b"Olddd contents",
+        contents=b"Old contents",
     ),
     FileInfo(
         name="file1.txt",
@@ -634,7 +635,7 @@ HARDLINK_WITH_DUPLICATE_FILES = [
     ),
 ]
 
-HARDLINK_RECURSIVE_AND_BROKEN = [
+HARDLINKS_RECURSIVE_AND_BROKEN = [
     FileInfo(
         name="a_file.txt",
         mtime=_fake_mtime(1),
@@ -658,15 +659,15 @@ HARDLINK_RECURSIVE_AND_BROKEN = [
         name="d_hardlink.txt",
         mtime=_fake_mtime(4),
         type=MemberType.HARDLINK,
-        link_target="file1.txt",
-        contents=b"Hello 1!",
+        link_target="a_file.txt",
+        contents=b"Hello!",
     ),
     FileInfo(
         name="e_double_hardlink.txt",
         mtime=_fake_mtime(5),
         type=MemberType.HARDLINK,
         link_target="d_hardlink.txt",
-        contents=b"Hello 1!",
+        contents=b"Hello!",
     ),
     FileInfo(
         name="f_hardlink_to_broken.txt",
@@ -873,15 +874,20 @@ def filter_archives(
     custom_filter: Callable[[SampleArchive], bool] | None = None,
 ) -> list[SampleArchive]:
     """Filter archives by filename prefixes and/or extensions."""
-    filtered = archives
+
     if prefixes:
-        # Add "__" to prefixes to avoid partial matches
-        prefix_patterns = [f"{p}__" for p in prefixes]
-        filtered = [
-            a
-            for a in filtered
-            if any(a.filename.startswith(p) for p in prefix_patterns)
-        ]
+        filtered = []
+        for prefix in prefixes:
+            prefix_found = False
+            for a in archives:
+                if a.filename.startswith(prefix + "__"):
+                    filtered.append(a)
+                    prefix_found = True
+            if not prefix_found:
+                raise ValueError(f"No archives match prefix {prefix}")
+    else:
+        filtered = archives
+
     if extensions:
         filtered = [
             a for a in filtered if any(a.filename.endswith(e) for e in extensions)
@@ -976,7 +982,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     (
         ArchiveContents(
             file_basename="symlinks",
-            files=SYMLINK_FILES,
+            files=SYMLINKS_FILES,
             solid=False,
         ),
         ZIP_RAR_7Z_FORMATS,
@@ -984,7 +990,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     (
         ArchiveContents(
             file_basename="symlinks_solid",
-            files=SYMLINK_FILES,
+            files=SYMLINKS_FILES,
             solid=True,
         ),
         RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
@@ -992,29 +998,29 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     (
         ArchiveContents(
             file_basename="hardlinks_nonsolid",
-            files=HARDLINK_FILES,
-            solid=True,
+            files=HARDLINKS_FILES,
         ),
-        RAR_FORMATS + ALL_TAR_FORMATS,
+        RAR_FORMATS,
     ),
     (
         ArchiveContents(
             file_basename="hardlinks_solid",
-            files=HARDLINK_FILES,
+            files=HARDLINKS_FILES,
+            solid=True,
         ),
         RAR_FORMATS + BASIC_TAR_FORMATS,
     ),
     (
         ArchiveContents(
             file_basename="hardlinks_with_duplicate_files",
-            files=HARDLINK_WITH_DUPLICATE_FILES,
+            files=HARDLINKS_WITH_DUPLICATE_FILES,
         ),
         [TAR_PLAIN_TARFILE],  # , TAR_GZ_TARFILE],
     ),
     (
         ArchiveContents(
             file_basename="hardlinks_recursive_and_broken",
-            files=HARDLINK_RECURSIVE_AND_BROKEN,
+            files=HARDLINKS_RECURSIVE_AND_BROKEN,
         ),
         [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
     ),

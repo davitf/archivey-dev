@@ -29,6 +29,12 @@ def _first_regular_file(sample: SampleArchive):
 
 logger = logging.getLogger(__name__)
 
+#  "duplicate_files",
+#                   "hardlinks_nonsolid", "hardlinks_solid",
+#                   "hardlinks_with_duplicate_files",
+#                   "hardlinks_recursive_and_broken",
+#                   "symlinks", "symlinks_solid"
+
 
 @pytest.mark.parametrize(
     "sample_archive",
@@ -59,7 +65,7 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
             # Open file with context manager
             with archive.open(sample_file.name) as f:
                 data = f.read(100)
-                assert len(data) == 100
+                assert len(data) == min(100, len(sample_file.contents or b""))
                 data += (
                     f.read()
                 )  # Read the rest of the file, which should be the whole file
@@ -74,6 +80,7 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
         first_line = [f.readline() for f in files]
         rest_of_files = [f.read() for f in files[::-1]]
         rest_of_files.reverse()
+
         for i in range(len(files)):
             assert first_line[i] == f"Large file #{i + 1}\n".encode()
             assert (
@@ -179,7 +186,11 @@ def test_iter_members_partial_reads(
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        prefixes=["basic_nonsolid", "basic_solid", "duplicate_files"],
+        prefixes=[
+            "basic_nonsolid",
+            "basic_solid",
+            "duplicate_files",
+        ],
     ),
     ids=lambda a: a.filename,
 )
