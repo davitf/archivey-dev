@@ -291,7 +291,11 @@ def check_iter_members(
 
 @pytest.mark.parametrize(
     "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, extensions=["zip"]),
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        extensions=["zip"],
+        custom_filter=lambda a: not a.filename.startswith("symlink_loop__"),
+    ),
     ids=lambda x: x.filename,
 )
 def test_read_zip_archives(sample_archive: SampleArchive, sample_archive_path: str):
@@ -306,6 +310,7 @@ logger = logging.getLogger(__name__)
     filter_archives(
         SAMPLE_ARCHIVES,
         extensions=["tar", "tar.gz", "tar.bz2", "tar.xz", "tar.zst", "tar.lz4"],
+        custom_filter=lambda a: not a.filename.startswith("symlink_loop__"),
     ),
     ids=lambda x: x.filename,
 )
@@ -503,8 +508,6 @@ def test_read_symlinks_archives(
 )
 def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_path: str):
     """Ensure that archives with symlink loops do not cause infinite loops."""
-    if not os.path.exists(sample_archive_path):
-        pytest.skip(f"Archive not present: {sample_archive_path}")
     with open_archive(sample_archive_path) as archive:
         for member in archive.get_members():
             if member.type == MemberType.SYMLINK:
