@@ -487,12 +487,18 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             raise ValueError("Archive is closed")
 
         # Don't apply the filter now, as the link members may not have the extracted path.
+        logger.info(f"iter members arg: {members}")
         member_filter_func = _build_iterator_filter(members, None)
+        # logger.info(f"members: {self.get_members()}")
         filtered_members = [m for m in self.get_members() if member_filter_func(m)]
+
+        logger.info(f"filtered_members: {filtered_members}")  # TODO: remove
 
         extract_filename_to_member = {
             member.extra["extract_filename"]: member for member in filtered_members
         }
+        logger.info(f"extract_filename_to_member: {extract_filename_to_member}")
+
         member_included = _build_member_included_func(members)
 
         # members_to_extract = [] #m for m in self.get_members() if member_included(m)]
@@ -569,6 +575,12 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                     thread.join()
                     raise item
                 fname, stream = item
+
+                if fname not in extract_filename_to_member:
+                    logger.warning(
+                        f"fname not in extract_filename_to_member: {fname} (names: {extract_filename_to_member.keys()})"
+                    )
+                    continue
 
                 member_info = extract_filename_to_member[fname]
                 if member_info.is_link:
