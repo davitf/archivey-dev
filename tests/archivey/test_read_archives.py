@@ -294,7 +294,6 @@ def check_iter_members(
     filter_archives(
         SAMPLE_ARCHIVES,
         extensions=["zip"],
-        custom_filter=lambda a: not a.filename.startswith("symlink_loop__"),
     ),
     ids=lambda x: x.filename,
 )
@@ -310,7 +309,6 @@ logger = logging.getLogger(__name__)
     filter_archives(
         SAMPLE_ARCHIVES,
         extensions=["tar", "tar.gz", "tar.bz2", "tar.xz", "tar.zst", "tar.lz4"],
-        custom_filter=lambda a: not a.filename.startswith("symlink_loop__"),
     ),
     ids=lambda x: x.filename,
 )
