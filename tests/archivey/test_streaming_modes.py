@@ -3,6 +3,10 @@ import pathlib
 
 import pytest
 
+import itertools
+
+from archivey.exceptions import ArchiveMemberCannotBeOpenedError
+
 from archivey.core import open_archive
 from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
@@ -194,3 +198,62 @@ def test_iter_members_partial_reads(
             else:
                 # Do not read the third file at all
                 pass
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["large_files_nonsolid", "large_files_solid"],
+    ),
+    ids=lambda a: a.filename,
+)
+@pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
+def test_iter_members_multiple_calls(
+    sample_archive: SampleArchive, sample_archive_path: str, streaming_only: bool
+):
+    """iter_members_with_io can be called multiple times."""
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    expected_members = [
+        f
+        for f in sample_archive.contents.files
+        if sample_archive.creation_info.features.dir_entries or f.type != MemberType.DIR
+    ]
+
+    with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
+        first_two = list(itertools.islice(archive.iter_members_with_io(), 2))
+        assert len(first_two) == 2
+
+        if streaming_only:
+            with pytest.raises(ValueError):
+                list(archive.iter_members_with_io())
+        else:
+            all_members = list(archive.iter_members_with_io())
+            assert len(all_members) >= len(expected_members)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["basic_nonsolid", "hardlinks_recursive_and_broken"],
+        custom_filter=lambda a: a.creation_info.format != ArchiveFormat.ISO,
+    ),
+    ids=lambda a: a.filename,
+)
+def test_open_behaviour(sample_archive: SampleArchive, sample_archive_path: str):
+    """open() should return a stream for files and raise for dirs or invalid links."""
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    with open_archive(sample_archive_path) as archive:
+        for info in sample_archive.contents.files:
+            if info.type == MemberType.DIR and not sample_archive.creation_info.features.dir_entries:
+                continue
+
+            if info.contents is None:
+                with pytest.raises(ArchiveMemberCannotBeOpenedError):
+                    archive.open(info.name)
+            else:
+                with archive.open(info.name) as f:
+                    assert f.read() == info.contents
