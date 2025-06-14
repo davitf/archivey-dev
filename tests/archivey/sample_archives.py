@@ -439,18 +439,23 @@ BASIC_FILES = [
         type=MemberType.DIR,
     ),
     FileInfo(
-        name="empty_subdir/",
+        name="empty_file.txt",
         mtime=_fake_mtime(3),
+        contents=b"",
+    ),
+    FileInfo(
+        name="empty_subdir/",
+        mtime=_fake_mtime(4),
         type=MemberType.DIR,
     ),
     FileInfo(
         name="subdir/file2.txt",
-        mtime=_fake_mtime(4),
+        mtime=_fake_mtime(5),
         contents=b"Hello, universe!",
     ),
     FileInfo(
         name="implicit_subdir/file3.txt",
-        mtime=_fake_mtime(5),
+        mtime=_fake_mtime(6),
         contents=b"Hello there!",
     ),
 ]
@@ -1162,7 +1167,6 @@ DUPLICATE_FILES_ARCHIVES = filter_archives(
 
 # TODO: add tests and fixes for:
 #   - rar4 archives
-#   - empty files
 #   - hard links (tar and rar)
 #      - open() hard links should open the referenced file
 #   - duplicate files:
@@ -1170,3 +1174,13 @@ DUPLICATE_FILES_ARCHIVES = filter_archives(
 #      - open(filename) should open the last file with that name
 #   - filter function
 #      - open() with filtered members should work
+#   - encrypted files:
+#      passing password in constructor should work
+#      passing password in iter_members_with_io() should work
+#      passing password in open() should work
+#      passing wrong password in open() should raise an exception
+#      passing wrong password in iter_members_with_io() should raise an exception only if trying to read the stream
+
+
+# Currently failing with uncaught exception:
+#  archivey tests/test_archives/encryption_several_passwords__7zcmd.7z  --password password --hide-progress

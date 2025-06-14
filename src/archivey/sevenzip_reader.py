@@ -363,6 +363,22 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             filename = file.filename
             if file.is_directory and not filename.endswith("/"):
                 filename += "/"
+            file_type = (
+                MemberType.DIR
+                if file.is_directory
+                else MemberType.SYMLINK
+                if file.is_symlink
+                else MemberType.OTHER
+                if file.is_junction or file.is_socket
+                else MemberType.FILE
+            )
+            crc32 = (
+                file.crc32
+                if file.crc32 is not None
+                else 0
+                if (file_type == MemberType.FILE and file.uncompressed == 0)
+                else None
+            )
 
             member = ArchiveMember(
                 filename=filename,
@@ -375,18 +391,10 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 )
                 if file.lastwritetime
                 else None,
-                type=(
-                    MemberType.DIR
-                    if file.is_directory
-                    else MemberType.SYMLINK
-                    if file.is_symlink
-                    else MemberType.OTHER
-                    if file.is_junction or file.is_socket
-                    else MemberType.FILE
-                ),
+                type=file_type,
                 # link_target_type=
                 mode=file.posix_mode,
-                crc32=file.crc32,
+                crc32=crc32,
                 compression_method=None,  # Not exposed by py7zr
                 encrypted=self._is_member_encrypted(file),
                 raw_info=file,
@@ -475,11 +483,6 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
         close_streams: bool = True,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
-        # print()
-        # logger.info(f"iter_members_with_io {members} {pwd} {filter} {close_streams}")
-
-        # TODO: set pwd in the folders
-
         if self._archive is None:
             raise ValueError("Archive is closed")
 
@@ -494,36 +497,30 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         # members_to_extract = [] #m for m in self.get_members() if member_included(m)]
         filenames_to_extract = []
-        logger.info(f"members: {[f.filename for f in self.get_members()]}")
         for member in self.get_members():
-            logger.info(f"iter_members_with_io: {member.filename}")
             if not member_included(member):
-                logger.info(f"iter_members_with_io: {member.filename} not included")
                 continue
 
             if member.is_link and member.link_target is None:
                 # We'll need to resolve the link target later.
                 filenames_to_extract.append(member.filename)
-                logger.info(f"iter_members_with_io: {member.filename} added to extract")
                 continue
 
             filtered_member = filter(member) if filter is not None else member
             if filtered_member is None:
-                logger.info(f"iter_members_with_io: {member.filename} filtered out")
                 continue
 
             if member.is_dir or member.is_link:
-                logger.info(f"iter_members_with_io: {member.filename} is dir or link")
                 yield filtered_member, None
 
             elif member.is_file and member.file_size == 0:
                 # Yield any empty files immediately, as py7zr doesn't actually call any
                 # methods on the PyZ7IO object for them, and so they're not added to the
                 # queue.
-                logger.info(f"iter_members_with_io: {member.filename} is empty file")
                 stream = io.BytesIO(b"")
                 yield filtered_member, stream
-                stream.close()
+                if close_streams:
+                    stream.close()
 
             elif member.is_file:
                 filenames_to_extract.append(member.filename)

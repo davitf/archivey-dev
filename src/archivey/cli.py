@@ -61,6 +61,9 @@ def build_pattern_filter(patterns: list[str]) -> Callable[[ArchiveMember], bool]
     return _match
 
 
+logger = logging.getLogger(__name__)
+
+
 def process_member(
     member: ArchiveMember,
     archive: ArchiveReader,
