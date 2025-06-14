@@ -269,7 +269,7 @@ def check_iter_members(
                 if sample_file.type == MemberType.FILE and not skip_member_contents:
                     assert contents == sample_file.contents
 
-                if sample_file.contents is not None and archive.has_random_access:
+                if sample_file.contents is not None and archive.has_random_access():
                     with archive.open(member) as stream:
                         assert stream.read() == sample_file.contents
                 else:
@@ -281,7 +281,7 @@ def check_iter_members(
 
             # Check that opening the file by filename gives the most recent contents.
             sample_file = expected_files[-1]
-            if sample_file.contents is not None:
+            if sample_file.contents is not None and archive.has_random_access():
                 with archive.open(filename) as stream:
                     assert stream.read() == sample_file.contents
             else:

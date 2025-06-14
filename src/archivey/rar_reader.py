@@ -670,6 +670,4 @@ class RarStreamReader(BaseRarReader):
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
     ) -> BinaryIO:
-        raise NotImplementedError(
-            "RarStreamReader does not support opening specific members"
-        )
+        raise ValueError("RarStreamReader does not support opening specific members")
