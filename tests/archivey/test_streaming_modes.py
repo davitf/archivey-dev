@@ -225,8 +225,12 @@ def test_iter_members_multiple_calls(
         first_two = list(itertools.islice(archive.iter_members_with_io(), 2))
         assert len(first_two) == 2
 
-        all_members = list(archive.iter_members_with_io())
-        assert len(all_members) >= len(expected_members)
+        if streaming_only:
+            with pytest.raises(ValueError):
+                list(archive.iter_members_with_io())
+        else:
+            all_members = list(archive.iter_members_with_io())
+            assert len(all_members) >= len(expected_members)
 
 
 @pytest.mark.parametrize(
