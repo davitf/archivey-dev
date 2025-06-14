@@ -9,7 +9,7 @@ import pytest
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.dependency_checker import get_dependency_versions
-from archivey.exceptions import ArchiveError
+from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
 from archivey.types import ArchiveMember, CreateSystem, MemberType
 from tests.archivey.sample_archives import (
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
@@ -494,6 +494,29 @@ def test_read_symlinks_archives(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
     check_iter_members(sample_archive, archive_path=sample_archive_path)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["symlink_loop"]),
+    ids=lambda x: x.filename,
+)
+def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_path: str):
+    """Ensure that archives with symlink loops do not cause infinite loops."""
+    if not os.path.exists(sample_archive_path):
+        pytest.skip(f"Archive not present: {sample_archive_path}")
+    with open_archive(sample_archive_path) as archive:
+        for member in archive.get_members():
+            if member.type == MemberType.SYMLINK:
+                if member.link_target == "file5.txt":
+                    with archive.open(member) as fh:
+                        fh.read()
+                else:
+                    with pytest.raises(ArchiveMemberCannotBeOpenedError):
+                        archive.open(member)
+            else:
+                with archive.open(member) as fh:
+                    fh.read()
 
 
 @pytest.mark.parametrize(
