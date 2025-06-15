@@ -112,7 +112,10 @@ def test_wrong_password_iter_members_read(
         for m, stream in archive.iter_members_with_io(pwd=wrong):
             assert stream is not None
             if m.is_file:
-                with pytest.raises((ArchiveEncryptedError, ArchiveError)):
+                if m.encrypted:
+                    with pytest.raises((ArchiveEncryptedError, ArchiveError)):
+                        stream.read()
+                else:
                     stream.read()
 
 
