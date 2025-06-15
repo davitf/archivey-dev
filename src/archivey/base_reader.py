@@ -239,9 +239,9 @@ class ArchiveReader(abc.ABC):
 
     def iter_members_with_io(
         self,
-        members: Union[
-            Collection[Union[ArchiveMember, str]], Callable[[ArchiveMember], bool], None
-        ] = None,
+        members: Collection[ArchiveMember | str]
+        | Callable[[ArchiveMember], bool]
+        | None = None,
         *,
         pwd: bytes | str | None = None,
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
@@ -358,9 +358,9 @@ class ArchiveReader(abc.ABC):
     def extractall(
         self,
         path: str | os.PathLike | None = None,
-        members: Union[
-            List[Union[ArchiveMember, str]], Callable[[ArchiveMember], bool], None
-        ] = None,
+        members: Collection[ArchiveMember | str]
+        | Callable[[ArchiveMember], bool]
+        | None = None,
         *,
         pwd: bytes | str | None = None,
         filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,

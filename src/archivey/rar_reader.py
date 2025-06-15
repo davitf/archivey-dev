@@ -16,6 +16,7 @@ from typing import (
     Any,
     BinaryIO,
     Callable,
+    Collection,
     Iterable,
     Iterator,
     List,
@@ -35,7 +36,7 @@ else:
         Rar5Info = object  # type: ignore[assignment]
         RarInfo = object  # type: ignore[assignment]
 
-from archivey.base_reader import BaseArchiveReaderRandomAccess
+from archivey.base_reader import BaseArchiveReaderRandomAccess, _build_iterator_filter
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -210,7 +211,205 @@ def check_rarinfo_crc(
     return converted == rarinfo.CRC
 
 
-class BaseRarReader(BaseArchiveReaderRandomAccess):
+class RarStreamMemberFile(io.RawIOBase, BinaryIO):
+    def __init__(
+        self,
+        member: ArchiveMember,
+        shared_stream: BinaryIO,
+        lock: threading.Lock,
+        *,
+        pwd: bytes | None = None,
+    ):
+        super().__init__()
+        self._stream = shared_stream
+        assert member.file_size is not None
+        self._remaining: int = member.file_size
+        self._expected_crc = (
+            member.crc32 & 0xFFFFFFFF if member.crc32 is not None else None
+        )
+        self._expected_encrypted_crc: int | None = (
+            member.extra.get("encrypted_crc", None) if member.extra else None
+        )
+        self._actual_crc = 0
+        self._lock = lock
+        self._closed = False
+        self._filename = member.filename
+        self._fully_read = False
+        self._member = member
+        self._pwd = pwd
+        self._crc_checked = False
+
+    def read(self, n: int = -1) -> bytes:
+        if self._closed:
+            raise ValueError(f"Cannot read from closed/expired file: {self._filename}")
+
+        with self._lock:
+            if self._remaining == 0:
+                self._fully_read = True
+                self._check_crc()
+                return b""
+
+            to_read = self._remaining if n < 0 else min(self._remaining, n)
+            data = self._stream.read(to_read)
+            if not data:
+                raise EOFError(f"Unexpected EOF while reading {self._filename}")
+            self._remaining -= len(data)
+            self._actual_crc = zlib.crc32(data, self._actual_crc)
+
+            logger.info(
+                f"Read {len(data)} bytes from {self._filename}, {self._remaining} remaining: {data} ; crc={self._actual_crc:08x}"
+            )
+            if self._remaining == 0:
+                self._fully_read = True
+                self._check_crc()
+
+            return data
+
+    def _check_crc(self):
+        if self._crc_checked:
+            return
+        self._crc_checked = True
+
+        matches = check_rarinfo_crc(
+            cast(RarInfo, self._member.raw_info), self._pwd, self._actual_crc
+        )
+        if not matches:
+            raise ArchiveCorruptedError(f"CRC mismatch in {self._filename}")
+
+    def readable(self) -> bool:
+        return True
+
+    def writable(self) -> bool:
+        return False
+
+    def seekable(self) -> bool:
+        return False
+
+    def write(self, b: Any) -> int:
+        raise io.UnsupportedOperation("write")
+
+    def writelines(self, lines: Iterable[Any]) -> None:
+        raise io.UnsupportedOperation("writelines")
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        try:
+            with self._lock:
+                while self._remaining > 0:
+                    chunk = self.read(min(65536, self._remaining))
+                    if not chunk:
+                        raise EOFError(
+                            f"Unexpected EOF while skipping {self._filename}"
+                        )
+
+            self._check_crc()
+        finally:
+            self._closed = True
+            super().close()
+
+
+class RarStreamReader:
+    def __init__(
+        self,
+        archive_path: str,
+        members: list[ArchiveMember],
+        *,
+        pwd: bytes | str | None = None,
+    ):
+        self._pwd = bytes_to_str(pwd)
+        self.archive_path = archive_path
+        self._open_unrar_stream()
+        self._lock = threading.Lock()
+        self._members = members
+
+    def _open_unrar_stream(self):
+        try:
+            unrar_path = shutil.which("unrar")
+            if not unrar_path:
+                raise PackageNotInstalledError(
+                    "unrar command is not installed. It is required to read RAR member contents."
+                )
+
+            # Open an unrar process that outputs the contents of all files in the archive to stdout.
+            password_args = ["-p" + bytes_to_str(self._pwd)] if self._pwd else ["-p-"]
+            cmd = [unrar_path, "p", "-inul", *password_args, self.archive_path]
+            logger.info(
+                f"Opening RAR archive {self.archive_path} with command: {' '.join(cmd)}"
+            )
+            self._proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                bufsize=1024 * 1024,
+            )
+            if self._proc.stdout is None:
+                raise RuntimeError("Could not open unrar output stream")
+            self._stream = cast(BinaryIO, self._proc.stdout)
+
+        except (OSError, subprocess.SubprocessError) as e:
+            raise ArchiveError(
+                f"Error opening RAR archive {self.archive_path}: {e}"
+            ) from e
+
+    def _get_member_file(self, member: ArchiveMember) -> BinaryIO | None:
+        if not member.is_file:
+            return None
+
+        pwd_bytes = str_to_bytes(self._pwd) if self._pwd is not None else None
+        if (
+            member.encrypted
+            and verify_rar5_password(pwd_bytes, cast(RarInfo, member.raw_info))
+            == PasswordCheckResult.INCORRECT
+        ):
+            # unrar silently skips encrypted files with incorrect passwords
+            return ErrorIOStream(
+                ArchiveEncryptedError(f"Wrong password specified for {member.filename}")
+            )
+
+        return RarStreamMemberFile(member, self._stream, self._lock, pwd=pwd_bytes)
+
+    def close(self):
+        self._proc.terminate()
+        self._proc.wait()
+        self._stream.close()
+
+    def rar_stream_iterator(self) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
+        """Reader for RAR archives using the solid stream reader.
+
+        This may fail for non-solid archives where some files are encrypted and others not,
+        or there are multiple passwords. If the password is incorrect for some files,
+        they will be silently skipped, so the successfully output data will be associated
+        with the wrong files. (ideally, use this only for solid archives, which are
+        guaranteed to have the same password for all files)
+        """
+
+        logger.info("Iterating over %s members", len(self._members))
+
+        members = sorted(self._members, key=lambda m: m.member_id)
+        # TODO: apply filter, file type and password check to members before opening
+        # the unrar stream, pass only the filtered members to unrar
+
+        try:
+            for member in members:
+                stream = self._get_member_file(member)
+                yield member, stream
+                if stream is not None:
+                    # If the caller hasn't read the stream, close() will read any
+                    # remaining data.
+                    stream.close()
+        finally:
+            self.close()
+
+    def has_random_access(self) -> bool:
+        return False
+
+    def open(
+        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
+    ) -> BinaryIO:
+        raise ValueError("RarStreamReader does not support opening specific members")
+
+
+class RarReader(BaseArchiveReaderRandomAccess):
     """Base class for RAR archive readers."""
 
     def __init__(
@@ -222,6 +421,7 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
         super().__init__(ArchiveFormat.RAR, archive_path)
         self._members: Optional[list[ArchiveMember]] = None
         self._format_info: Optional[ArchiveInfo] = None
+        self._pwd = pwd
 
         if rarfile is None:
             raise PackageNotInstalledError(
@@ -388,19 +588,6 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
 
         return self._format_info
 
-
-class RarReader(BaseRarReader):
-    """Reader for RAR archives using rarfile."""
-
-    def __init__(
-        self,
-        archive_path: str,
-        *,
-        pwd: bytes | str | None = None,
-    ):
-        super().__init__(archive_path, pwd=pwd)
-        self._pwd = pwd
-
     def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, rarfile.BadRarFile):
             return ArchiveCorruptedError(f"Error reading member {self.archive_path}")
@@ -454,220 +641,25 @@ class RarReader(BaseRarReader):
                 f"Unknown error reading member {member.filename}: {e}"
             ) from e
 
-
-class CRCMismatchError(ArchiveCorruptedError):
-    def __init__(self, filename: str):
-        super().__init__(f"CRC mismatch in {filename}")
-
-
-class RarStreamMemberFile(io.RawIOBase, BinaryIO):
-    def __init__(
-        self,
-        member: ArchiveMember,
-        shared_stream: BinaryIO,
-        lock: threading.Lock,
-        *,
-        pwd: bytes | None = None,
-    ):
-        super().__init__()
-        self._stream = shared_stream
-        assert member.file_size is not None
-        self._remaining: int = member.file_size
-        self._expected_crc = (
-            member.crc32 & 0xFFFFFFFF if member.crc32 is not None else None
-        )
-        self._expected_encrypted_crc: int | None = (
-            member.extra.get("encrypted_crc", None) if member.extra else None
-        )
-        self._actual_crc = 0
-        self._lock = lock
-        self._closed = False
-        self._filename = member.filename
-        self._fully_read = False
-        self._member = member
-        self._pwd = pwd
-        self._crc_checked = False
-
-    def read(self, n: int = -1) -> bytes:
-        if self._closed:
-            raise ValueError(f"Cannot read from closed/expired file: {self._filename}")
-
-        with self._lock:
-            if self._remaining == 0:
-                self._fully_read = True
-                self._check_crc()
-                return b""
-
-            to_read = self._remaining if n < 0 else min(self._remaining, n)
-            data = self._stream.read(to_read)
-            if not data:
-                raise EOFError(f"Unexpected EOF while reading {self._filename}")
-            self._remaining -= len(data)
-            self._actual_crc = zlib.crc32(data, self._actual_crc)
-
-            logger.info(
-                f"Read {len(data)} bytes from {self._filename}, {self._remaining} remaining: {data} ; crc={self._actual_crc:08x}"
-            )
-            if self._remaining == 0:
-                self._fully_read = True
-                self._check_crc()
-
-            return data
-
-    def _check_crc(self):
-        if self._crc_checked:
-            return
-        self._crc_checked = True
-
-        matches = check_rarinfo_crc(
-            cast(RarInfo, self._member.raw_info), self._pwd, self._actual_crc
-        )
-        if not matches:
-            raise CRCMismatchError(self._filename)
-
-    def readable(self) -> bool:
-        return True
-
-    def writable(self) -> bool:
-        return False
-
-    def seekable(self) -> bool:
-        return False
-
-    def write(self, b: Any) -> int:
-        raise io.UnsupportedOperation("write")
-
-    def writelines(self, lines: Iterable[Any]) -> None:
-        raise io.UnsupportedOperation("writelines")
-
-    def close(self) -> None:
-        if self._closed:
-            return
-        try:
-            with self._lock:
-                while self._remaining > 0:
-                    chunk = self.read(min(65536, self._remaining))
-                    if not chunk:
-                        raise EOFError(
-                            f"Unexpected EOF while skipping {self._filename}"
-                        )
-
-            self._check_crc()
-        finally:
-            self._closed = True
-            super().close()
-
-
-class RarStreamReader(BaseRarReader):
-    """Reader for RAR archives using the solid stream reader.
-
-    This may fail for non-solid archives where some files are encrypted and others not,
-    or there are multiple passwords. If the password is incorrect for some files,
-    they will be silently skipped, so the successfully output data will be associated
-    with the wrong files. (ideally, use this only for solid archives, which are
-    guaranteed to have the same password for all files)
-    """
-
-    def __init__(
-        self,
-        archive_path: str,
-        *,
-        pwd: bytes | str | None = None,
-    ):
-        super().__init__(archive_path, pwd=pwd)
-        self._pwd = bytes_to_str(pwd)
-        self.archive_path = archive_path
-
-    def close(self) -> None:
-        pass
-
-    def _open_unrar_stream(
-        self, pwd: bytes | str | None = None
-    ) -> tuple[subprocess.Popen[bytes], BinaryIO]:
-        if pwd is None:
-            pwd = self._pwd
-
-        try:
-            unrar_path = shutil.which("unrar")
-            if not unrar_path:
-                raise PackageNotInstalledError(
-                    "unrar command is not installed. It is required to read RAR member contents."
-                )
-
-            # Open an unrar process that outputs the contents of all files in the archive to stdout.
-            password_args = ["-p" + bytes_to_str(pwd)] if pwd else ["-p-"]
-            cmd = [unrar_path, "p", "-inul", *password_args, self.archive_path]
-            logger.info(
-                f"Opening RAR archive {self.archive_path} with command: {' '.join(cmd)}"
-            )
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                bufsize=1024 * 1024,
-            )
-            if proc.stdout is None:
-                raise RuntimeError("Could not open unrar output stream")
-            stream = cast(BinaryIO, proc.stdout)
-            return proc, stream
-
-        except (OSError, subprocess.SubprocessError) as e:
-            raise ArchiveError(
-                f"Error opening RAR archive {self.archive_path}: {e}"
-            ) from e
-
-    def _get_member_file(
-        self, member: ArchiveMember, stream: BinaryIO, lock: threading.Lock
-    ) -> BinaryIO | None:
-        if not member.is_file:
-            return None
-
-        pwd_bytes = str_to_bytes(self._pwd) if self._pwd is not None else None
-        if (
-            member.encrypted
-            and verify_rar5_password(pwd_bytes, cast(RarInfo, member.raw_info))
-            == PasswordCheckResult.INCORRECT
-        ):
-            # unrar silently skips encrypted files with incorrect passwords
-            return ErrorIOStream(
-                ArchiveEncryptedError(f"Wrong password specified for {member.filename}")
-            )
-
-        return RarStreamMemberFile(member, stream, lock, pwd=pwd_bytes)
-
     def iter_members_with_io(
         self,
-        filter: Callable[[ArchiveMember], bool] | None = None,
+        members: Collection[ArchiveMember | str]
+        | Callable[[ArchiveMember], bool]
+        | None = None,
         *,
         pwd: bytes | str | None = None,
+        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        if self.config.use_rar_stream:
+            stream_reader = RarStreamReader(
+                self.archive_path, self.get_members(), pwd=pwd or self._pwd
+            )
+            filter_func = _build_iterator_filter(members, filter)
+            for member, stream in stream_reader.rar_stream_iterator():
+                filtered_member = filter_func(member)
+                if filtered_member is None:
+                    continue
+                yield filtered_member, stream
 
-        proc, unrar_stream = self._open_unrar_stream(pwd)
-        lock = threading.Lock()
-
-        logger.info("Iterating over %s members", len(self.get_members()))
-
-        # TODO: apply filter, file type and password check to members before opening
-        # the unrar stream, pass only the filtered members to unrar
-
-        try:
-            for member in self.get_members():
-                stream = self._get_member_file(member, unrar_stream, lock)
-                yield member, stream
-                if stream is not None:
-                    # If the caller hasn't read the stream, close() will read any
-                    # remaining data.
-                    stream.close()
-        finally:
-            proc.terminate()
-            proc.wait()
-            unrar_stream.close()
-
-    def has_random_access(self) -> bool:
-        return False
-
-    def open(
-        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
-    ) -> BinaryIO:
-        raise ValueError("RarStreamReader does not support opening specific members")
+        else:
+            return super().iter_members_with_io(members, pwd=pwd, filter=filter)

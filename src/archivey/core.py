@@ -50,7 +50,6 @@ def open_archive(
 
     with default_config(config):
         use_libarchive = config.use_libarchive
-        use_rar_stream = config.use_rar_stream
 
         reader: ArchiveReader
 
@@ -58,14 +57,9 @@ def open_archive(
             raise NotImplementedError("LibArchiveReader is not implemented")
 
         if format == ArchiveFormat.RAR:
-            if use_rar_stream:
-                from archivey.rar_reader import RarStreamReader
+            from archivey.rar_reader import RarReader
 
-                reader = RarStreamReader(archive_path, pwd=pwd)
-            else:
-                from archivey.rar_reader import RarReader
-
-                reader = RarReader(archive_path, pwd=pwd)
+            reader = RarReader(archive_path, pwd=pwd)
 
         elif format == ArchiveFormat.ZIP:
             from archivey.zip_reader import ZipReader
