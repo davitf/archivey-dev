@@ -65,6 +65,7 @@ def test_password_in_iter_members(
         contents = {}
         for m, stream in archive.iter_members_with_io(pwd=pwd):
             if m.is_file:
+                assert stream is not None
                 contents[m.filename] = stream.read()
         for f in sample_archive.contents.files:
             if f.type == MemberType.FILE:
@@ -108,9 +109,10 @@ def test_wrong_password_iter_members_read(
 
     wrong = "wrong_password"
     with open_archive(sample_archive_path) as archive:
-        with pytest.raises((ArchiveEncryptedError, ArchiveError)):
-            for m, stream in archive.iter_members_with_io(pwd=wrong):
-                if m.is_file:
+        for m, stream in archive.iter_members_with_io(pwd=wrong):
+            assert stream is not None
+            if m.is_file:
+                with pytest.raises((ArchiveEncryptedError, ArchiveError)):
                     stream.read()
 
 

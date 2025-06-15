@@ -490,11 +490,13 @@ class ArchiveReader(abc.ABC):
     def extract(
         self,
         member_or_filename: ArchiveMember | str,
-        path: str | None = None,
+        path: str | os.PathLike | None = None,
         pwd: bytes | str | None = None,
     ) -> str | None:
         if path is None:
             path = os.getcwd()
+        else:
+            path = str(path)
 
         if self._random_access_supported:
             member = self.get_member(member_or_filename)
