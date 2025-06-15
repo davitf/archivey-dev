@@ -185,7 +185,7 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
 
     def __init__(
         self,
-        archive_path: str,
+        archive_path: str | os.PathLike | BinaryIO,
         format: ArchiveFormat,
         *,
         pwd: bytes | str | None = None,
@@ -206,8 +206,8 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         if format not in SINGLE_FILE_COMPRESSED_FORMATS:
             raise ValueError(f"Unsupported archive format: {format}")
 
-        self.archive_path = archive_path
-        self.ext = os.path.splitext(archive_path)[1].lower()
+        self.archive_path = self.archive_path  # ensure str path if available
+        self.ext = os.path.splitext(self.archive_path)[1].lower() if isinstance(self.archive_path, str) else ""
         self.use_stored_metadata = self.config.use_single_file_stored_metadata
 
         # Get the base name without compression extension
@@ -215,18 +215,29 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         # maybe we should remove only extensions from known formats, and add an extra
         # extension if it doesn't have one?
         self.member_name = (
-            os.path.splitext(os.path.basename(archive_path))[0] or "unknown"
+            os.path.splitext(os.path.basename(self.archive_path))[0] if isinstance(self.archive_path, str) else "unknown"
         )
 
         # Get file metadata
-        mtime = datetime.fromtimestamp(os.path.getmtime(archive_path))
-        logger.info(f"Compressed file {archive_path} mtime: {mtime}")
+        if isinstance(archive_path, (str, os.PathLike, bytes)):
+            mtime = datetime.fromtimestamp(os.path.getmtime(self.archive_path))
+            compress_size = os.path.getsize(self.archive_path)
+        else:
+            try:
+                pos = archive_path.tell()
+                archive_path.seek(0, os.SEEK_END)
+                compress_size = archive_path.tell()
+                archive_path.seek(pos)
+            except Exception:
+                compress_size = None
+            mtime = None
+        logger.info(f"Compressed file {self.archive_path} mtime: {mtime}")
 
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
             filename=self.member_name,
             file_size=None,  # Not available for all formats
-            compress_size=os.path.getsize(archive_path),
+            compress_size=compress_size,
             mtime=mtime,
             type=MemberType.FILE,
             compression_method=self.format.value,
@@ -243,7 +254,9 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         # Open the file to see if it's supported by the library and valid.
         # To avoid opening the file twice, we'll store the reference and return it
         # on the first open() call.
-        self.fileobj = open_stream(self.format, self.archive_path, self.config)
+        self.fileobj = open_stream(
+            self.format, self.archive_file or self.archive_path, self.config
+        )
 
     def close(self) -> None:
         """Close the archive and release any resources."""
@@ -272,7 +285,7 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         member, filename = self._resolve_member_to_open(member_or_filename)
 
         if self.fileobj is None:
-            return open_stream(self.format, self.archive_path, self.config)
+            return open_stream(self.format, self.archive_file or self.archive_path, self.config)
 
         else:
             # If there's an open file already, return it, but set the class field

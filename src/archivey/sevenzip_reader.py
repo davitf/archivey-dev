@@ -267,7 +267,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
     def __init__(
         self,
-        archive_path: str,
+        archive_path: str | os.PathLike | BinaryIO,
         *,
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
@@ -284,7 +284,7 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         try:
             self._archive = py7zr.SevenZipFile(
-                archive_path, "r", password=bytes_to_str(pwd)
+                self.archive_file or archive_path, "r", password=bytes_to_str(pwd)
             )
 
         except py7zr.Bad7zFile as e:

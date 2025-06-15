@@ -1,11 +1,14 @@
 import os
-from typing import Any
+from typing import Any, BinaryIO, cast
 
 from archivey.base_reader import ArchiveReader, StreamingOnlyArchiveReaderWrapper
 from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.folder_reader import FolderReader
-from archivey.formats import detect_archive_format
+from archivey.formats import (
+    detect_archive_format,
+    detect_archive_format_by_signature,
+)
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
@@ -15,7 +18,12 @@ from archivey.types import (
 # from archivey.iso_reader import IsoReader
 
 
-def _normalize_archive_path(archive_path: str | bytes | os.PathLike) -> str:
+
+def _normalize_archive_path(
+    archive_path: str | bytes | os.PathLike | BinaryIO,
+) -> str | BinaryIO:
+    if hasattr(archive_path, "read"):
+        return cast(BinaryIO, archive_path)
     if isinstance(archive_path, os.PathLike):
         return str(archive_path)
     elif isinstance(archive_path, bytes):
@@ -27,7 +35,7 @@ def _normalize_archive_path(archive_path: str | bytes | os.PathLike) -> str:
 
 
 def open_archive(
-    archive_path: str | bytes | os.PathLike,
+    archive_path: str | bytes | os.PathLike | BinaryIO,
     *,
     config: ArchiveyConfig | None = None,
     streaming_only: bool = False,
@@ -36,10 +44,16 @@ def open_archive(
     """Open an archive and return the appropriate reader."""
     archive_path = _normalize_archive_path(archive_path)
 
-    if not os.path.exists(archive_path):
-        raise FileNotFoundError(f"Archive file not found: {archive_path}")
-
-    format = detect_archive_format(_normalize_archive_path(archive_path))
+    if isinstance(archive_path, str):
+        if not os.path.exists(archive_path):
+            raise FileNotFoundError(f"Archive file not found: {archive_path}")
+        format = detect_archive_format(archive_path)
+    else:
+        format = detect_archive_format_by_signature(archive_path)
+        try:
+            archive_path.seek(0)
+        except Exception:
+            pass
 
     pwd = kwargs.get("pwd")
     if pwd is not None and not isinstance(pwd, (str, bytes)):

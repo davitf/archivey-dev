@@ -215,13 +215,14 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
 
     def __init__(
         self,
-        archive_path: str,
+        archive_path: str | os.PathLike | BinaryIO,
         *,
         pwd: bytes | str | None = None,
     ):
         super().__init__(ArchiveFormat.RAR, archive_path)
         self._members: Optional[list[ArchiveMember]] = None
         self._format_info: Optional[ArchiveInfo] = None
+        self._version: str | None = None
 
         if rarfile is None:
             raise PackageNotInstalledError(
@@ -229,7 +230,22 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
             )
 
         try:
-            self._archive = rarfile.RarFile(archive_path, "r")
+            if hasattr(archive_path, "read"):
+                fileobj = cast(BinaryIO, archive_path)
+                pos = fileobj.tell()
+                fileobj.seek(0)
+                magic = fileobj.read(8)
+                fileobj.seek(pos)
+                self._archive = rarfile.RarFile(fileobj=fileobj, mode="r")
+            else:
+                with open(archive_path, "rb") as f:
+                    magic = f.read(8)
+                self._archive = rarfile.RarFile(archive_path, "r")
+            self._version = (
+                "5"
+                if magic.startswith(b"\x52\x61\x72\x21\x1a\x07\x01\x00")
+                else "4"
+            )
             if pwd:
                 self._archive.setpassword(pwd)
             elif (
@@ -358,14 +374,7 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
             raise ArchiveError("Archive is closed")
 
         if self._format_info is None:
-            # RAR5 archives have a different magic number and structure
-            with open(self.archive_path, "rb") as f:
-                magic = f.read(8)
-                version = (
-                    "5"
-                    if magic.startswith(b"\x52\x61\x72\x21\x1a\x07\x01\x00")
-                    else "4"
-                )
+            version = self._version or "4"
 
             has_header_encryption = (
                 self._archive._file_parser is not None
@@ -570,13 +579,12 @@ class RarStreamReader(BaseRarReader):
 
     def __init__(
         self,
-        archive_path: str,
+        archive_path: str | os.PathLike | BinaryIO,
         *,
         pwd: bytes | str | None = None,
     ):
         super().__init__(archive_path, pwd=pwd)
         self._pwd = bytes_to_str(pwd)
-        self.archive_path = archive_path
 
     def close(self) -> None:
         pass

@@ -40,7 +40,7 @@ class TarReader(ArchiveReader):
 
     def __init__(
         self,
-        archive_path: str,
+        archive_path: str | os.PathLike | BinaryIO,
         format: ArchiveFormat,
         streaming_only: bool = False,
         *,
@@ -68,37 +68,38 @@ class TarReader(ArchiveReader):
 
         logger.info(f"TarReader init: {archive_path} {format} {streaming_only}")
 
-        if format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
-            self.compression_method = TAR_FORMAT_TO_COMPRESSION_FORMAT[format]
-            self._fileobj = open_stream(
-                self.compression_method, archive_path, self.config
+        if hasattr(archive_path, "read"):
+            self._fileobj = cast(BinaryIO, archive_path)
+            self.compression_method = (
+                TAR_FORMAT_TO_COMPRESSION_FORMAT.get(format, "store")
             )
-            logger.info(
-                f"Compressed tar opened: {self._fileobj} seekable={self._fileobj.seekable()}"
-            )
-            # if self._fileobj.seekable():
-            #     logger.info(
-            #         f"Compressed tar seeked: initial tell={self._fileobj.tell()}"
-            #     )
-            #     self._fileobj.seek(0)
-            #     logger.info(f"Compressed tar seeked: after seek={self._fileobj.tell()}")
-
             if not streaming_only and not self._fileobj.seekable():
                 raise ArchiveError(
                     f"Tried to open a random-access {format.value} file, but inner stream is not seekable ({self._fileobj})"
                 )
-
-        elif format == ArchiveFormat.TAR:
-            self.compression_method = "store"
-            self._fileobj = open(archive_path, "rb")
+            open_mode = "r|" if streaming_only else "r:*"
+            name_arg = getattr(self._fileobj, "name", None)
         else:
-            raise ValueError(f"Unsupported archive format: {format}")
+            if format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
+                self.compression_method = TAR_FORMAT_TO_COMPRESSION_FORMAT[format]
+                self._fileobj = open_stream(
+                    self.compression_method, archive_path, self.config
+                )
+                if not streaming_only and not self._fileobj.seekable():
+                    raise ArchiveError(
+                        f"Tried to open a random-access {format.value} file, but inner stream is not seekable ({self._fileobj})"
+                    )
+            elif format == ArchiveFormat.TAR:
+                self.compression_method = "store"
+                self._fileobj = open(archive_path, "rb")
+            else:
+                raise ValueError(f"Unsupported archive format: {format}")
+            open_mode = "r|" if streaming_only else "r:"
+            name_arg = archive_path
 
-        open_mode = "r|" if streaming_only else "r:"
         try:
-            # Fail on any error.
             self._archive = tarfile.open(
-                name=archive_path, fileobj=self._fileobj, mode=open_mode, errorlevel=2
+                name=name_arg, fileobj=self._fileobj, mode=open_mode, errorlevel=2
             )
             logger.info(
                 f"Tar opened: {self._archive} seekable={self._fileobj.seekable()}"
