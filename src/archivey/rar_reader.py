@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import io
 import logging
+import os
 import shutil
 import stat
 import struct
