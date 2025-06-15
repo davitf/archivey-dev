@@ -69,7 +69,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
 
     def __init__(
         self,
-        archive_path: str | bytes | os.PathLike,
+        archive_path: str | bytes | os.PathLike | BinaryIO,
         *,
         pwd: bytes | str | None = None,
     ):
@@ -78,7 +78,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         self._format_info: ArchiveInfo | None = None
         self._pwd = pwd
         try:
-            self._archive = zipfile.ZipFile(self.archive_path, "r")
+            self._archive = zipfile.ZipFile(self.archive_file or self.archive_path, "r")
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Invalid ZIP archive {archive_path}") from e
 

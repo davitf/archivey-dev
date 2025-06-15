@@ -4,7 +4,7 @@ import os
 import posixpath
 import threading
 from collections import defaultdict
-from typing import BinaryIO, Callable, Collection, Iterator, List, Union
+from typing import BinaryIO, Callable, Collection, Iterator, List, Union, cast
 
 from archivey.config import ArchiveyConfig, get_default_config
 from archivey.exceptions import (
@@ -84,7 +84,7 @@ class ArchiveReader(abc.ABC):
     def __init__(
         self,
         format: ArchiveFormat,
-        archive_path: str | bytes | os.PathLike,
+        archive_path: str | bytes | os.PathLike | BinaryIO,
         random_access_available: bool,
         members_list_available: bool,
     ):
@@ -95,11 +95,16 @@ class ArchiveReader(abc.ABC):
             archive_path: The path to the archive file
         """
         self.format = format
-        self.archive_path = (
-            archive_path.decode("utf-8")
-            if isinstance(archive_path, bytes)
-            else str(archive_path)
-        )
+        if hasattr(archive_path, "read"):
+            self.archive_file = cast(BinaryIO, archive_path)
+            self.archive_path = getattr(self.archive_file, "name", "<stream>")
+        else:
+            self.archive_file = None
+            self.archive_path = (
+                archive_path.decode("utf-8")
+                if isinstance(archive_path, bytes)
+                else str(archive_path)
+            )
         self.config: ArchiveyConfig = get_default_config()
         self._member_id_to_member: dict[int, ArchiveMember] = {}
         self._filename_to_members: dict[str, list[ArchiveMember]] = defaultdict(list)
@@ -533,7 +538,7 @@ class BaseArchiveReaderRandomAccess(ArchiveReader):
     def __init__(
         self,
         format: ArchiveFormat,
-        archive_path: str | bytes | os.PathLike,
+        archive_path: str | bytes | os.PathLike | BinaryIO,
     ):
         super().__init__(
             format,
