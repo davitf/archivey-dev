@@ -1,4 +1,5 @@
 import io
+
 from archivey.core import open_archive
 from archivey.types import ArchiveFormat
 
@@ -14,4 +15,3 @@ def test_open_zip_from_stream():
         assert members[0].filename == "file1.txt"
         with archive.open(members[0]) as mf:
             assert mf.read().startswith(b"Hello")
-

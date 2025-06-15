@@ -71,8 +71,8 @@ class TarReader(ArchiveReader):
 
         if hasattr(archive_path, "read"):
             self._fileobj = cast(BinaryIO, archive_path)
-            self.compression_method = (
-                TAR_FORMAT_TO_COMPRESSION_FORMAT.get(format, "store")
+            self.compression_method = TAR_FORMAT_TO_COMPRESSION_FORMAT.get(
+                format, "store"
             )
             if not streaming_only and not self._fileobj.seekable():
                 raise ArchiveError(

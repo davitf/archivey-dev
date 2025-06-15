@@ -18,7 +18,6 @@ from archivey.types import (
 # from archivey.iso_reader import IsoReader
 
 
-
 def _normalize_archive_path(
     archive_path: str | bytes | os.PathLike | BinaryIO,
 ) -> str | BinaryIO:

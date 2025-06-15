@@ -207,7 +207,11 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
             raise ValueError(f"Unsupported archive format: {format}")
 
         self.archive_path = self.archive_path  # ensure str path if available
-        self.ext = os.path.splitext(self.archive_path)[1].lower() if isinstance(self.archive_path, str) else ""
+        self.ext = (
+            os.path.splitext(self.archive_path)[1].lower()
+            if isinstance(self.archive_path, str)
+            else ""
+        )
         self.use_stored_metadata = self.config.use_single_file_stored_metadata
 
         # Get the base name without compression extension
@@ -215,7 +219,9 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         # maybe we should remove only extensions from known formats, and add an extra
         # extension if it doesn't have one?
         self.member_name = (
-            os.path.splitext(os.path.basename(self.archive_path))[0] if isinstance(self.archive_path, str) else "unknown"
+            os.path.splitext(os.path.basename(self.archive_path))[0]
+            if isinstance(self.archive_path, str)
+            else "unknown"
         )
 
         # Get file metadata
@@ -285,7 +291,9 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         member, filename = self._resolve_member_to_open(member_or_filename)
 
         if self.fileobj is None:
-            return open_stream(self.format, self.archive_file or self.archive_path, self.config)
+            return open_stream(
+                self.format, self.archive_file or self.archive_path, self.config
+            )
 
         else:
             # If there's an open file already, return it, but set the class field

@@ -2,7 +2,6 @@ import bz2
 import gzip
 import lzma
 import os
-from os import PathLike
 from typing import TYPE_CHECKING, BinaryIO, Optional, cast
 
 from archivey.config import ArchiveyConfig
@@ -215,28 +214,38 @@ def open_stream(
                 gzip.GzipFile(fileobj=fileobj, mode="rb"), _translate_gzip_exception
             )
         elif format == ArchiveFormat.BZIP2:
-            return ExceptionTranslatingIO(bz2.BZ2File(fileobj), _translate_bz2_exception)
+            return ExceptionTranslatingIO(
+                bz2.BZ2File(fileobj), _translate_bz2_exception
+            )
         elif format == ArchiveFormat.XZ:
-            return ExceptionTranslatingIO(lzma.LZMAFile(fileobj), _translate_lzma_exception)
+            return ExceptionTranslatingIO(
+                lzma.LZMAFile(fileobj), _translate_lzma_exception
+            )
         elif format == ArchiveFormat.LZ4:
             if lz4 is None:
                 raise PackageNotInstalledError(
                     "lz4 package is not installed, required for LZ4 archives"
                 ) from None
-            return ExceptionTranslatingIO(lz4.frame.open(fileobj), _translate_lz4_exception)
+            return ExceptionTranslatingIO(
+                lz4.frame.open(fileobj), _translate_lz4_exception
+            )
         elif format == ArchiveFormat.ZSTD:
             if config.use_zstandard:
                 if zstandard is None:
                     raise PackageNotInstalledError(
                         "zstandard package is not installed, required for Zstandard archives"
                     ) from None
-                return ExceptionTranslatingIO(zstandard.open(fileobj), _translate_zstandard_exception)
+                return ExceptionTranslatingIO(
+                    zstandard.open(fileobj), _translate_zstandard_exception
+                )
             else:
                 if pyzstd is None:
                     raise PackageNotInstalledError(
                         "pyzstd package is not installed, required for Zstandard archives"
                     ) from None
-                return ExceptionTranslatingIO(pyzstd.open(fileobj), _translate_pyzstd_exception)
+                return ExceptionTranslatingIO(
+                    pyzstd.open(fileobj), _translate_pyzstd_exception
+                )
         else:
             raise ValueError(f"Unsupported archive format: {format}")
 

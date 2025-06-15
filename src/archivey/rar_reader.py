@@ -243,9 +243,7 @@ class BaseRarReader(BaseArchiveReaderRandomAccess):
                     magic = f.read(8)
                 self._archive = rarfile.RarFile(archive_path, "r")
             self._version = (
-                "5"
-                if magic.startswith(b"\x52\x61\x72\x21\x1a\x07\x01\x00")
-                else "4"
+                "5" if magic.startswith(b"\x52\x61\x72\x21\x1a\x07\x01\x00") else "4"
             )
             if pwd:
                 self._archive.setpassword(pwd)
