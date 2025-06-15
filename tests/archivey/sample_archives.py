@@ -41,6 +41,91 @@ class FileInfo:
     permissions: Optional[int] = None
 
 
+def File(
+    name: str,
+    mtime: datetime | int,
+    contents: bytes,
+    password: str | None = None,
+    comment: str | None = None,
+    compression_method: str | None = None,
+    permissions: Optional[int] = None,
+) -> FileInfo:
+    if isinstance(mtime, int):
+        mtime = _fake_mtime(mtime)
+    return FileInfo(
+        type=MemberType.FILE,
+        name=name,
+        mtime=mtime,
+        contents=contents,
+        password=password,
+        comment=comment,
+        compression_method=compression_method,
+        permissions=permissions,
+    )
+
+
+def Dir(
+    name: str,
+    mtime: datetime | int,
+    comment: str | None = None,
+    permissions: Optional[int] = None,
+) -> FileInfo:
+    if isinstance(mtime, int):
+        mtime = _fake_mtime(mtime)
+    return FileInfo(
+        type=MemberType.DIR,
+        name=name,
+        mtime=mtime,
+        comment=comment,
+        permissions=permissions,
+    )
+
+
+def Hardlink(
+    name: str,
+    mtime: datetime | int,
+    link_target: str,
+    contents: bytes | None = None,
+    comment: str | None = None,
+    permissions: Optional[int] = None,
+) -> FileInfo:
+    if isinstance(mtime, int):
+        mtime = _fake_mtime(mtime)
+    return FileInfo(
+        type=MemberType.HARDLINK,
+        name=name,
+        mtime=mtime,
+        contents=contents,
+        comment=comment,
+        permissions=permissions,
+        link_target=link_target,
+        link_target_type=MemberType.FILE,
+    )
+
+
+def Symlink(
+    name: str,
+    mtime: datetime | int,
+    link_target: str,
+    contents: bytes | None = None,
+    comment: str | None = None,
+    permissions: Optional[int] = None,
+    link_target_type: MemberType | None = MemberType.FILE,
+) -> FileInfo:
+    if isinstance(mtime, int):
+        mtime = _fake_mtime(mtime)
+    return FileInfo(
+        type=MemberType.SYMLINK,
+        name=name,
+        mtime=mtime,
+        contents=contents,
+        comment=comment,
+        permissions=permissions,
+        link_target=link_target,
+        link_target_type=link_target_type,
+    )
+
+
 @dataclass
 class ArchiveContents:
     file_basename: str  # Base name for the archive (e.g., "basic", "encryption")
@@ -428,207 +513,70 @@ def _fake_mtime(i: int) -> datetime:
 BASIC_FILES = [
     # Use odd seconds to test that the ZIP extended timestamp is being read correctly
     # (as the standard timestamp is rounded to the nearest 2 seconds)
-    FileInfo(
-        name="file1.txt",
-        mtime=_fake_mtime(1),
-        contents=b"Hello, world!",
-    ),
-    FileInfo(
-        name="subdir/",
-        mtime=_fake_mtime(2),
-        type=MemberType.DIR,
-    ),
-    FileInfo(
-        name="empty_file.txt",
-        mtime=_fake_mtime(3),
-        contents=b"",
-    ),
-    FileInfo(
-        name="empty_subdir/",
-        mtime=_fake_mtime(4),
-        type=MemberType.DIR,
-    ),
-    FileInfo(
-        name="subdir/file2.txt",
-        mtime=_fake_mtime(5),
-        contents=b"Hello, universe!",
-    ),
-    FileInfo(
-        name="implicit_subdir/file3.txt",
-        mtime=_fake_mtime(6),
-        contents=b"Hello there!",
-    ),
+    File("file1.txt", 1, b"Hello, world!"),
+    Dir("subdir/", 2),
+    File("empty_file.txt", 3, b""),
+    Dir("empty_subdir/", 4),
+    File("subdir/file2.txt", 5, b"Hello, universe!"),
+    File("implicit_subdir/file3.txt", 6, b"Hello there!"),
 ]
 
 
 COMMENT_FILES = [
-    FileInfo(
-        name="abc.txt",
-        mtime=_fake_mtime(1),
-        contents=b"ABC",
-        comment="Contains some letters",
-    ),
-    FileInfo(
-        name="subdir/",
-        mtime=_fake_mtime(7),
-        type=MemberType.DIR,
-        comment="Contains some files",
-    ),
-    FileInfo(
-        name="subdir/123.txt",
-        mtime=_fake_mtime(8),
-        contents=b"1234567890",
-        comment="Contains some numbers",
-    ),
+    File("abc.txt", 1, b"ABC", comment="Contains some letters"),
+    Dir("subdir/", 7, comment="Contains some files"),
+    File("subdir/123.txt", 8, b"1234567890", comment="Contains some numbers"),
 ]
 
 ENCRYPTION_SEVERAL_PASSWORDS_FILES = [
-    FileInfo(
-        name="plain.txt",
-        mtime=_fake_mtime(1),
-        contents=b"This is plain",
-    ),
+    File("plain.txt", 1, b"This is plain"),
     # For 7zip archives to be considered solid, they need to have at least two files
     # in the same folder. To make that possible, we need two consecutive files with the
     # same password.
-    FileInfo(
-        name="secret.txt",
-        mtime=_fake_mtime(2),
-        contents=b"This is secret",
-        password="password",
+    File("secret.txt", 2, b"This is secret", password="password"),
+    File("also_secret.txt", 3, b"This is also secret", password="password"),
+    File(
+        "not_secret.txt", 4, b"This is not secret", comment="Contains some information"
     ),
-    FileInfo(
-        name="also_secret.txt",
-        mtime=_fake_mtime(3),
-        contents=b"This is also secret",
-        password="password",
-    ),
-    FileInfo(
-        name="not_secret.txt",
-        mtime=_fake_mtime(4),
-        contents=b"This is not secret",
-        comment="Contains some information",
-    ),
-    FileInfo(
-        name="very_secret.txt",
-        contents=b"This is very secret",
-        mtime=_fake_mtime(5),
+    File(
+        "very_secret.txt",
+        5,
+        b"This is very secret",
         password="very_secret_password",
         comment="Contains some very secret information",
     ),
 ]
 
 ENCRYPTION_SINGLE_PASSWORD_FILES = [
-    FileInfo(
-        name="secret.txt",
-        mtime=_fake_mtime(1),
-        contents=b"This is secret",
-        password="password",
-    ),
-    FileInfo(
-        name="also_secret.txt",
-        mtime=_fake_mtime(2),
-        contents=b"This is also secret",
-        password="password",
-    ),
+    File("secret.txt", 1, b"This is secret", password="password"),
+    File("also_secret.txt", 2, b"This is also secret", password="password"),
 ]
 
 ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES = ENCRYPTION_SINGLE_PASSWORD_FILES + [
-    FileInfo(
-        name="not_secret.txt",
-        mtime=_fake_mtime(3),
-        contents=b"This is not secret",
-    ),
+    File("not_secret.txt", 3, b"This is not secret"),
 ]
 
 SYMLINKS_FILES = [
-    FileInfo(name="file1.txt", contents=b"Hello, world!", mtime=_fake_mtime(1)),
-    FileInfo(
-        name="symlink_to_file1.txt",
-        mtime=_fake_mtime(2),
-        type=MemberType.SYMLINK,
-        link_target="file1.txt",
-        contents=b"Hello, world!",
-    ),
-    FileInfo(
-        name="subdir/",
-        mtime=_fake_mtime(3),
-        type=MemberType.DIR,
-    ),
-    FileInfo(
-        name="subdir/link_to_file1.txt",
-        mtime=_fake_mtime(4),
-        type=MemberType.SYMLINK,
-        link_target="../file1.txt",
-        contents=b"Hello, world!",
-    ),
-    FileInfo(
-        name="subdir_link",
-        mtime=_fake_mtime(5),
-        type=MemberType.SYMLINK,
-        link_target="subdir",
-        link_target_type=MemberType.DIR,
-    ),
+    File("file1.txt", 1, b"Hello, world!"),
+    Symlink("symlink_to_file1.txt", 2, "file1.txt", contents=b"Hello, world!"),
+    Dir("subdir/", 3),
+    Symlink("subdir/link_to_file1.txt", 4, "../file1.txt", contents=b"Hello, world!"),
+    Symlink("subdir_link", 5, "subdir", link_target_type=MemberType.DIR),
 ]
 
 SYMLINK_LOOP_FILES = [
-    FileInfo(
-        name="file1.txt",
-        mtime=_fake_mtime(1),
-        type=MemberType.SYMLINK,
-        link_target="file2.txt",
-    ),
-    FileInfo(
-        name="file2.txt",
-        mtime=_fake_mtime(2),
-        type=MemberType.SYMLINK,
-        link_target="file3.txt",
-    ),
-    FileInfo(
-        name="file3.txt",
-        mtime=_fake_mtime(3),
-        type=MemberType.SYMLINK,
-        link_target="file1.txt",
-    ),
-    FileInfo(
-        name="file4.txt",
-        mtime=_fake_mtime(4),
-        type=MemberType.SYMLINK,
-        link_target="file5.txt",
-        contents=b"this is file 5",
-    ),
-    FileInfo(
-        name="file5.txt",
-        mtime=_fake_mtime(5),
-        contents=b"this is file 5",
-    ),
+    Symlink("file1.txt", 1, "file2.txt"),
+    Symlink("file2.txt", 2, "file3.txt"),
+    Symlink("file3.txt", 3, "file1.txt"),
+    Symlink("file4.txt", 4, "file5.txt", contents=b"this is file 5"),
+    File("file5.txt", 5, b"this is file 5"),
 ]
 
 HARDLINKS_FILES = [
-    FileInfo(
-        name="file1.txt",
-        mtime=_fake_mtime(1),
-        contents=b"Hello 1!",
-    ),
-    FileInfo(
-        name="subdir/file2.txt",
-        mtime=_fake_mtime(2),
-        contents=b"Hello 2!",
-    ),
-    FileInfo(
-        name="subdir/hardlink_to_file1.txt",
-        mtime=_fake_mtime(3),
-        type=MemberType.HARDLINK,
-        link_target="file1.txt",
-        contents=b"Hello 1!",
-    ),
-    FileInfo(
-        name="hardlink_to_file2.txt",
-        mtime=_fake_mtime(4),
-        type=MemberType.HARDLINK,
-        link_target="subdir/file2.txt",
-        contents=b"Hello 2!",
-    ),
+    File("file1.txt", 1, b"Hello 1!"),
+    File("subdir/file2.txt", 2, b"Hello 2!"),
+    Hardlink("subdir/hardlink_to_file1.txt", 3, "file1.txt", contents=b"Hello 1!"),
+    Hardlink("hardlink_to_file2.txt", 4, "subdir/file2.txt", contents=b"Hello 2!"),
 ]
 
 
@@ -637,146 +585,42 @@ HARDLINKS_FILES = [
 # hard link should refer to the first file version, and the second hard link should
 # refer to the second file version.
 HARDLINKS_WITH_DUPLICATE_FILES = [
-    FileInfo(
-        name="file1.txt",
-        mtime=_fake_mtime(1),
-        contents=b"Old contents",
-    ),
-    FileInfo(
-        name="hardlink_to_file1_old.txt",
-        mtime=_fake_mtime(2),
-        type=MemberType.HARDLINK,
-        link_target="file1.txt",
-        contents=b"Old contents",
-    ),
-    FileInfo(
-        name="file1.txt",
-        mtime=_fake_mtime(3),
-        contents=b"New contents!",
-    ),
-    FileInfo(
-        name="hardlink_to_file1_new.txt",
-        mtime=_fake_mtime(4),
-        type=MemberType.HARDLINK,
-        link_target="file1.txt",
-        contents=b"New contents!",
-    ),
-    FileInfo(
-        name="file1.txt",
-        mtime=_fake_mtime(5),
-        contents=b"Newer contents!!",
-    ),
+    File("file1.txt", 1, b"Old contents"),
+    Hardlink("hardlink_to_file1_old.txt", 2, "file1.txt", contents=b"Old contents"),
+    File("file1.txt", 3, b"New contents!"),
+    Hardlink("hardlink_to_file1_new.txt", 4, "file1.txt", contents=b"New contents!"),
+    File("file1.txt", 5, b"Newer contents!!"),
 ]
 
 HARDLINKS_RECURSIVE_AND_BROKEN = [
-    FileInfo(
-        name="a_file.txt",
-        mtime=_fake_mtime(1),
-        contents=b"Hello!",
-    ),
-    FileInfo(
-        name="b_broken_forward_hardlink.txt",
-        mtime=_fake_mtime(2),
-        type=MemberType.HARDLINK,
-        link_target="d_hardlink.txt",
-        # This is a broken hardlink, as the target is not earlier in the archive.
-    ),
-    FileInfo(
-        name="c_forward_symlink.txt",
-        mtime=_fake_mtime(3),
-        type=MemberType.SYMLINK,
-        link_target="d_hardlink.txt",
-        contents=b"Hello!",
-    ),
-    FileInfo(
-        name="d_hardlink.txt",
-        mtime=_fake_mtime(4),
-        type=MemberType.HARDLINK,
-        link_target="a_file.txt",
-        contents=b"Hello!",
-    ),
-    FileInfo(
-        name="e_double_hardlink.txt",
-        mtime=_fake_mtime(5),
-        type=MemberType.HARDLINK,
-        link_target="d_hardlink.txt",
-        contents=b"Hello!",
-    ),
-    FileInfo(
-        name="f_hardlink_to_broken.txt",
-        mtime=_fake_mtime(6),
-        type=MemberType.HARDLINK,
-        link_target="b_broken_forward_hardlink.txt",
-    ),
-    FileInfo(
-        name="g_symlink_to_broken.txt",
-        mtime=_fake_mtime(7),
-        type=MemberType.SYMLINK,
-        link_target="b_broken_forward_hardlink.txt",
-    ),
+    File("a_file.txt", 1, b"Hello!"),
+    Hardlink("b_broken_forward_hardlink.txt", 2, "d_hardlink.txt"),
+    Symlink("c_forward_symlink.txt", 3, "d_hardlink.txt", contents=b"Hello!"),
+    Hardlink("d_hardlink.txt", 4, "a_file.txt", contents=b"Hello!"),
+    Hardlink("e_double_hardlink.txt", 5, "d_hardlink.txt", contents=b"Hello!"),
+    Hardlink("f_hardlink_to_broken.txt", 6, "b_broken_forward_hardlink.txt"),
+    Symlink("g_symlink_to_broken.txt", 7, "b_broken_forward_hardlink.txt"),
     # Sometimes tar files can contain hardlinks to the same file (particularly if we
     # call tar with the filename twice in the command line)
-    FileInfo(
-        name="a_file.txt",
-        mtime=_fake_mtime(8),
-        type=MemberType.HARDLINK,
-        link_target="a_file.txt",
-        contents=b"Hello!",
-    ),
+    Hardlink("a_file.txt", 8, "a_file.txt", contents=b"Hello!"),
 ]
 
 
 ENCODING_FILES = [
-    FileInfo(
-        name="Español.txt",
-        contents=b"Hola, mundo!",
-        mtime=_fake_mtime(1),
-    ),
-    FileInfo(
-        name="Català.txt",
-        contents="Hola, món!".encode("utf-8"),
-        mtime=_fake_mtime(1),
-    ),
-    FileInfo(
-        name="Português.txt",
-        contents="Olá, mundo!".encode("utf-8"),
-        mtime=_fake_mtime(1),
-    ),
-    FileInfo(
-        name="emoji_😀.txt",
-        contents=b"I'm happy",
-        mtime=_fake_mtime(1),
-    ),
+    File("Español.txt", 1, b"Hola, mundo!"),
+    File("Català.txt", 1, "Hola, món!".encode("utf-8")),
+    File("Português.txt", 1, "Olá, mundo!".encode("utf-8")),
+    File("emoji_😀.txt", 1, b"I'm happy"),
 ]
 
 COMPRESSION_METHODS_FILES = [
-    FileInfo(
-        name="store.txt",
-        contents=b"I am stored\n" * 1000,
-        mtime=_fake_mtime(1),
-        compression_method="store",
-    ),
-    FileInfo(
-        name="deflate.txt",
-        contents=b"I am deflated\n" * 1000,
-        mtime=_fake_mtime(2),
-        compression_method="deflate",
-    ),
-    FileInfo(
-        name="bzip2.txt",
-        contents=b"I am bzip'd\n" * 1000,
-        mtime=_fake_mtime(3),
-        compression_method="bzip2",
-    ),
+    File("store.txt", 1, b"I am stored\n" * 1000, compression_method="store"),
+    File("deflate.txt", 2, b"I am deflated\n" * 1000, compression_method="deflate"),
+    File("bzip2.txt", 3, b"I am bzip'd\n" * 1000, compression_method="bzip2"),
 ]
 
 COMPRESSION_METHOD_FILES_LZMA = COMPRESSION_METHODS_FILES + [
-    FileInfo(
-        name="lzma.txt",
-        contents=b"I am lzma'd\n" * 1000,
-        mtime=_fake_mtime(4),
-        compression_method="lzma",
-    ),
+    File("lzma.txt", 4, b"I am lzma'd\n" * 1000, compression_method="lzma"),
 ]
 
 MARKER_FILENAME_BASED_ON_ARCHIVE_NAME = "SINGLE_FILE_MARKER"
@@ -784,81 +628,48 @@ MARKER_MTIME_BASED_ON_ARCHIVE_NAME = datetime(3141, 5, 9, 2, 6, 53)
 
 # Single compressed files (e.g. .gz, .bz2, .xz)
 SINGLE_FILE_TXT_CONTENT = b"This is a single test file for compression.\n"
-SINGLE_FILE_INFO_FIXED_FILENAME_AND_MTIME = FileInfo(
-    name="single_file_fixed.txt",
-    mtime=_fake_mtime(1),
-    contents=SINGLE_FILE_TXT_CONTENT,
+SINGLE_FILE_INFO_FIXED_FILENAME_AND_MTIME = File(
+    "single_file_fixed.txt", 1, SINGLE_FILE_TXT_CONTENT
 )
-SINGLE_FILE_INFO_NO_METADATA = FileInfo(
-    name=MARKER_FILENAME_BASED_ON_ARCHIVE_NAME,
-    mtime=MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
-    contents=SINGLE_FILE_TXT_CONTENT,
+SINGLE_FILE_INFO_NO_METADATA = File(
+    MARKER_FILENAME_BASED_ON_ARCHIVE_NAME,
+    MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
+    SINGLE_FILE_TXT_CONTENT,
 )
 
 TEST_PERMISSIONS_FILES = [
-    FileInfo(
-        name="standard.txt",
-        mtime=_fake_mtime(1),
-        contents=b"Standard permissions.",
-        permissions=0o644,
-    ),
-    FileInfo(
-        name="readonly.txt",
-        mtime=_fake_mtime(2),
-        contents=b"Read-only permissions.",
-        permissions=0o444,
-    ),
-    FileInfo(
-        name="executable.sh",
-        mtime=_fake_mtime(3),
-        contents=b"#!/bin/sh\necho 'Executable permissions.'",
+    File("standard.txt", 1, b"Standard permissions.", permissions=0o644),
+    File("readonly.txt", 2, b"Read-only permissions.", permissions=0o444),
+    File(
+        "executable.sh",
+        3,
+        b"#!/bin/sh\necho 'Executable permissions.'",
         permissions=0o755,
     ),
-    FileInfo(
-        name="world_readable.txt",
-        mtime=_fake_mtime(4),
-        contents=b"World readable permissions.",
-        permissions=0o666,
-    ),
+    File("world_readable.txt", 4, b"World readable permissions.", permissions=0o666),
 ]
 
 LARGE_FILES = [
-    FileInfo(
-        name=f"large{i}.txt",
-        contents=f"Large file #{i}\n".encode() + _create_random_data(200000, i),
-        mtime=_fake_mtime(i),
+    File(
+        f"large{i}.txt",
+        i,
+        f"Large file #{i}\n".encode() + _create_random_data(200000, i),
     )
     for i in range(1, 6)
 ]
 
-SINGLE_LARGE_FILE = FileInfo(
-    name=MARKER_FILENAME_BASED_ON_ARCHIVE_NAME,
-    contents=_create_random_data(1000000, 1),
-    mtime=MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
+SINGLE_LARGE_FILE = File(
+    MARKER_FILENAME_BASED_ON_ARCHIVE_NAME,
+    MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
+    _create_random_data(1000000, 1),
 )
 
 DUPLICATE_FILES = [
-    FileInfo(
-        name="file1.txt",
-        mtime=_fake_mtime(1),
-        contents=b"Old contents",  # len: 12, CRC: e8c902a6
-    ),
-    FileInfo(
-        name="file2.txt",
-        mtime=_fake_mtime(2),
-        contents=b"Duplicate contents",
-    ),
-    FileInfo(
-        name="file1.txt",
-        mtime=_fake_mtime(3),
-        contents=b"New contents!",  # len: 13, CRC: d61d71d2
-    ),
+    File("file1.txt", 1, b"Old contents"),  # len: 12, CRC: e8c902a6
+    File("file2.txt", 2, b"Duplicate contents"),
+    File("file1.txt", 3, b"New contents!"),  # len: 13, CRC: d61d71d2
     # Might get turned into a link or reference
-    FileInfo(
-        name="file2_dupe.txt",
-        mtime=_fake_mtime(4),
-        contents=b"Duplicate contents",
-    ),
+    File("file2_dupe.txt", 4, b"Duplicate contents"),
 ]
 
 
