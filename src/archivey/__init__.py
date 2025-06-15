@@ -28,6 +28,8 @@ from archivey.types import (
     CreateSystem,
     MemberType,
 )
+from .base_writer import open_archive_writer
+
 
 # from archivey.iso_reader import IsoReader
 
@@ -55,4 +57,5 @@ __all__ = [
     "get_default_config",
     "set_default_config",
     "default_config",
+    "open_archive_writer",
 ]
