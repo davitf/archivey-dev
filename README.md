@@ -47,3 +47,13 @@ with open_archive("example.zip") as archive:
         data = stream.read()
 ```
 
+
+## Documentation
+
+Full API documentation can be generated with [pdoc](https://pdoc.dev):
+
+```bash
+pdoc archivey --output-directory docs/api
+```
+
+Additional usage information can be found in the [docs](docs/) directory.
