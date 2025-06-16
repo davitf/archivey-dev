@@ -1,3 +1,4 @@
+"""Defines the abstract base classes and common functionality for archive readers."""
 import abc
 import logging
 import os
@@ -79,6 +80,14 @@ def _build_iterator_filter(
 
 
 class ArchiveReader(abc.ABC):
+    """
+    Abstract base class defining the interface for an archive reader.
+
+    This class provides a consistent way to interact with different archive
+    formats. Subclasses must implement the abstract methods to provide
+    format-specific functionality.
+    """
+
     def __init__(self, archive_path: str | bytes | os.PathLike, format: ArchiveFormat):
         self.archive_path = (
             archive_path.decode("utf-8")
@@ -90,19 +99,48 @@ class ArchiveReader(abc.ABC):
 
     @abc.abstractmethod
     def close(self) -> None:
-        """Close the archive stream and release any resources."""
+        """
+        Close the archive and release any underlying resources.
+
+        This method should be idempotent (callable multiple times without error).
+        It is automatically called when the reader is used as a context manager.
+        """
         pass
 
     @abc.abstractmethod
     def get_members_if_available(self) -> List[ArchiveMember] | None:
-        """Get a list of all members in the archive, or None if not available. May not be available for stream archives."""
+        """
+        Return a list of all ArchiveMember objects if readily available.
+
+        For some archive formats (e.g., ZIP with a central directory), the full
+        list of members can be obtained quickly without reading the entire archive.
+        For others, especially stream-based formats, this might not be possible
+        or efficient.
+
+        Returns:
+            A list of ArchiveMember objects, or None if the list is not readily
+            available without significant processing. Implementations should prefer
+            returning None over performing a costly operation here.
+        """
         pass
 
     @abc.abstractmethod
     def get_members(self) -> List[ArchiveMember]:
-        """Get a list of all members in the archive.
+        """
+        Return a list of all ArchiveMember objects in the archive.
 
-        Raises an error if the library or opening mode doesn't allow listing members.
+        This method guarantees returning the full list of members. However, for
+        some archive types or streaming modes, this might involve processing a
+        significant portion of the archive if the member list isn't available
+        upfront (e.g., iterating through a tar stream).
+
+        Returns:
+            A list of all ArchiveMember objects.
+
+        Raises:
+            ArchiveError: If there's an issue reading member information.
+            NotImplementedError: If the reader explicitly does not support
+                                 obtaining a full member list in the current mode.
         """
         pass
 
@@ -116,30 +154,115 @@ class ArchiveReader(abc.ABC):
         pwd: bytes | str | None = None,
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
+        """
+        Iterate over members in the archive, yielding a tuple of (ArchiveMember, BinaryIO_stream).
+
+        The returned stream is for reading the content of the member. The stream
+        will be None for non-file members (e.g., directories, symlinks if not
+        dereferenced to content).
+
+        Args:
+            members: Optional. A collection of specific member names (str) or
+                ArchiveMember objects to iterate over. If None, iterates over all
+                members. Can also be a callable that takes an ArchiveMember and
+                returns True if it should be included.
+            pwd: Optional password (str or bytes) for decrypting members, if the
+                archive or specific members are encrypted.
+            filter: Optional callable that takes an ArchiveMember and returns
+                either the same ArchiveMember (or a modified one, though typically
+                the same) if it should be included, or None if it should be skipped.
+                This allows for more complex filtering logic.
+
+        Yields:
+            Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]: An iterator where each
+            item is a tuple containing the ArchiveMember object and a binary I/O
+            stream for reading its content. The stream is None for non-file entries.
+            The caller is responsible for closing the stream if it's not fully read.
+
+        Raises:
+            ArchiveEncryptedError: If a member is encrypted and `pwd` is incorrect
+                                   or not provided.
+            ArchiveCorruptedError: If member data is found to be corrupt during iteration.
+            ArchiveIOError: For other I/O related issues during member access.
+        """
         pass
 
     @abc.abstractmethod
     def get_archive_info(self) -> ArchiveInfo:
+        """
+        Return an ArchiveInfo object containing metadata about the archive itself.
+
+        This includes information like the archive format, whether it's solid,
+        any archive-level comments, etc.
+
+        Returns:
+            An ArchiveInfo object.
+        """
         pass
 
     @abc.abstractmethod
     def has_random_access(self) -> bool:
+        """
+        Return True if the archive supports random access to its members.
+
+        Random access means methods like `open()`, `extract()` can be used to
+        access individual members directly without iterating through the entire
+        archive from the beginning. Returns False for streaming-only access
+        (e.g., reading from a non-seekable stream or some tar variants).
+
+        Returns:
+            bool: True if random access is supported, False otherwise.
+        """
         pass
 
     @abc.abstractmethod
     def get_member(self, member_or_filename: ArchiveMember | str) -> ArchiveMember:
+        """
+        Retrieve a specific ArchiveMember object by its name or by an existing ArchiveMember.
+
+        If `member_or_filename` is an ArchiveMember instance, this method might
+        be used to refresh its state or confirm its presence in the archive.
+        If it's a string, it's treated as the filename of the member to find.
+
+        Args:
+            member_or_filename: The filename (str) of the member to retrieve, or
+                an ArchiveMember object.
+
+        Returns:
+            The ArchiveMember object for the specified entry.
+
+        Raises:
+            ArchiveMemberNotFoundError: If no member with the given name is found.
+        """
         pass
 
     @abc.abstractmethod
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
     ) -> BinaryIO:
-        """Open a member for reading.
+        """
+        Open a specific member of the archive for reading and return a binary I/O stream.
+
+        This method is typically available if `has_random_access()` returns True.
+        For symlinks, this should open the target file's content.
 
         Args:
-            member: The member to open
-            pwd: Password to use for decryption, if needed and different from the one
-            used when opening the archive.
+            member_or_filename: The ArchiveMember object or the filename (str) of
+                the member to open.
+            pwd: Optional password (str or bytes) for decrypting the member if it's
+                encrypted.
+
+        Returns:
+            A binary I/O stream (BinaryIO) for reading the member's content.
+
+        Raises:
+            ArchiveMemberNotFoundError: If the specified member is not found.
+            ArchiveMemberCannotBeOpenedError: If the member is a type that cannot be
+                                            opened (e.g., a directory).
+            ArchiveEncryptedError: If the member is encrypted and `pwd` is incorrect
+                                   or not provided.
+            ArchiveCorruptedError: If the member data is found to be corrupt.
+            NotImplementedError: If random access `open()` is not supported by this reader.
         """
         pass
 
@@ -171,6 +294,35 @@ class ArchiveReader(abc.ABC):
         pwd: bytes | str | None = None,
         filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
     ) -> dict[str, ArchiveMember]:
+        """
+        Extract all (or a specified subset of) members to the given path.
+
+        Args:
+            path: Target directory for extraction. Defaults to the current working
+                directory if None. The directory will be created if it doesn't exist.
+            members: Optional. A collection of member names (str) or ArchiveMember
+                objects to extract. If None, all members are extracted. Can also be
+                a callable that takes an ArchiveMember and returns True if it should
+                be extracted.
+            pwd: Optional password (str or bytes) for decrypting members if the
+                archive or specific members are encrypted.
+            filter: Optional callable that takes an ArchiveMember and returns
+                either the same ArchiveMember (or a modified one) if it should be
+                extracted, or None if it should be skipped. This is applied after
+                the `members` selection.
+
+        Returns:
+            A dictionary mapping extracted file paths (absolute) to their
+            corresponding ArchiveMember objects.
+
+        Raises:
+            ArchiveEncryptedError: If a member is encrypted and `pwd` is incorrect
+                                   or not provided.
+            ArchiveCorruptedError: If member data is found to be corrupt during extraction.
+            ArchiveIOError: For other I/O related issues during extraction.
+            SameFileError: If an extraction would overwrite a file that is part of
+                           the archive itself (not yet implemented).
+        """
         pass
 
     # Context manager support
@@ -182,7 +334,14 @@ class ArchiveReader(abc.ABC):
 
 
 class BaseArchiveReader(ArchiveReader):
-    """Abstract base class for archive streams."""
+    """
+    A base implementation of ArchiveReader providing common logic.
+
+    This class handles member registration, link resolution, and default
+    implementations for some methods based on others. Developers creating
+    new readers will typically inherit from this class and implement the
+    abstract methods like `iter_members_for_registration`, `open`, and `close`.
+    """
 
     def __init__(
         self,
@@ -191,11 +350,18 @@ class BaseArchiveReader(ArchiveReader):
         random_access_supported: bool,
         members_list_supported: bool,
     ):
-        """Initialize the archive reader.
+        """
+        Initialize the BaseArchiveReader.
 
         Args:
-            format: The format of the archive
-            archive_path: The path to the archive file
+            format: The ArchiveFormat enum value for this archive type.
+            archive_path: Path to the archive file.
+            random_access_supported: bool indicating if `open()` by member name is
+                supported. If False, `iter_members_with_io` is likely the primary
+                way to access content.
+            members_list_supported: bool indicating if `get_members()` can provide
+                a full list upfront (e.g., from a central directory). If False,
+                `get_members()` might have to iterate through the archive.
         """
         super().__init__(archive_path, format)
 
@@ -320,6 +486,18 @@ class BaseArchiveReader(ArchiveReader):
 
     @abc.abstractmethod
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
+        """
+        Yield ArchiveMember objects one by one from the archive.
+
+        This is a **crucial abstract method** that subclasses must implement.
+        It's the primary way `BaseArchiveReader` discovers archive contents.
+        The yielded `ArchiveMember` objects should have their metadata fields
+        populated (filename, size, type, mtime, etc.). `BaseArchiveReader`
+        will handle internal registration and link resolution.
+
+        Yields:
+            Iterator[ArchiveMember]: ArchiveMember instances from the archive.
+        """
         pass
 
     def _register_next_member(self) -> None:
@@ -349,6 +527,7 @@ class BaseArchiveReader(ArchiveReader):
         return self.get_members()
 
     def iter_members(self) -> Iterator[ArchiveMember]:
+        """Iterate over all members, registering them as they are discovered."""
         i: int = 0
         # While the _iter_members_for_registration() iterator is still not exhausted,
         # yield all the members that have been registered so far, and register the next
@@ -370,6 +549,22 @@ class BaseArchiveReader(ArchiveReader):
             i += 1
 
     def open_for_iteration(self, member, pwd: bytes | str | None = None) -> BinaryIO:
+        """
+        Open a member for reading during iteration via `iter_members_with_io`.
+
+        Defaults to calling `self.open(member, pwd=pwd)`.
+        Subclasses can override this if opening a file during iteration requires
+        different logic or optimizations than a direct `open()` call (e.g., if
+        the underlying library provides a specific way to get a stream during
+        its own iteration process).
+
+        Args:
+            member: The ArchiveMember to open.
+            pwd: Optional password for decryption.
+
+        Returns:
+            A binary I/O stream for the member's content.
+        """
         return self.open(member, pwd=pwd)
 
     def iter_members_with_io(
@@ -434,15 +629,25 @@ class BaseArchiveReader(ArchiveReader):
     def _extract_pending_files(
         self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None
     ):
-        """Extract pending files from the archive. Intended to be overridden by subclasses.
+        """
+        Extract files that have been identified by the ExtractionHelper.
 
-        For some libraries, extraction using extractall() or similar is faster than
-        opening each member individually, so subclasses should override this method
-        if it's beneficial.
+        This method is called by `extractall()` when `has_random_access()` is True.
+        The default implementation iterates through `extraction_helper.get_pending_extractions()`
+        and calls `self.open()` for each file member, then streams its content.
 
-        All directories needed are guaranteed to exist. The pending files are either
-        regular files, or links if the archive does not store link targets in the header.
-        Metadata attributes for the extracted files will be applied afterwards.
+        Subclasses should override this if their underlying archive library offers a
+        more efficient way to extract multiple files at once (e.g., a native
+        `extractall`-like function in the third-party library).
+
+        Args:
+            path: The base extraction path (unused by default, but available).
+            extraction_helper: The ExtractionHelper instance managing the process.
+                               Use `extraction_helper.get_pending_extractions()` to
+                               get the list of `ArchiveMember` objects to extract.
+                               Use `extraction_helper.extract_member(member, stream)`
+                               to perform the actual file writing.
+            pwd: Optional password for decryption.
         """
         members_to_extract = extraction_helper.get_pending_extractions()
         for member in members_to_extract:
@@ -648,7 +853,14 @@ class BaseArchiveReader(ArchiveReader):
 
 
 class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
-    """Wrapper for archive readers that only support streaming access."""
+    """
+    A wrapper that restricts an ArchiveReader to streaming-only access.
+
+    This class takes an existing ArchiveReader and makes it behave as if it
+    does not support random access, by disabling methods like `open()`,
+    `extract()`, and `get_members()` (if it implies random access).
+    This is useful when `open_archive` is called with `streaming_only=True`.
+    """
 
     def __init__(self, reader: ArchiveReader):
         super().__init__(reader.archive_path, reader.format)

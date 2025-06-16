@@ -1,3 +1,4 @@
+"""Provides I/O helper classes, including exception translation and lazy opening."""
 import io
 import logging
 from dataclasses import dataclass, field
@@ -9,7 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 class ErrorIOStream(io.RawIOBase, BinaryIO):
-    """A stream that raises an exception on read operations."""
+    """
+    An I/O stream that always raises a predefined exception on any I/O operation.
+
+    This is useful for testing error handling paths or for representing
+    unreadable members within an archive without returning None.
+    """
 
     def __init__(self, exc: Exception):
         """Initialize the error stream."""
@@ -34,12 +40,13 @@ class ErrorIOStream(io.RawIOBase, BinaryIO):
 
 
 class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
-    """A wrapper around an IO object that translates exceptions during operations.
+    """
+    Wraps an I/O stream to translate specific exceptions from an underlying library
+    into ArchiveError subclasses.
 
-    Args:
-        inner: The inner IO object to wrap
-        exception_translator: A function that takes an exception and returns either
-            a translated exception or None (in which case the original exception is raised)
+    This class is crucial for providing a consistent exception hierarchy to the
+    users of `archivey`, regardless of the third-party library used for a
+    specific archive format.
     """
 
     def __init__(
@@ -48,6 +55,22 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         inner: io.IOBase | IO[bytes] | Callable[[], io.IOBase | IO[bytes]],
         exception_translator: Callable[[Exception], Optional[ArchiveError]],
     ):
+        """
+        Initialize the ExceptionTranslatingIO wrapper.
+
+        Args:
+            inner: The underlying binary I/O stream (e.g., a file object opened by
+                a third-party library) or a callable that returns such a stream.
+                If a callable is provided, it will be called to obtain the stream.
+                This can be useful for deferring the actual opening of the stream.
+            exception_translator: A callable that takes an Exception instance
+                (raised by the `inner` stream) and returns an Optional[ArchiveError].
+                - If it returns an ArchiveError instance, that error is raised,
+                  chaining the original exception.
+                - If it returns None, the original exception is re-raised.
+                The translator should be specific in the exceptions it handles and
+                avoid catching generic `Exception`.
+        """
         super().__init__()
         self._translate = exception_translator
         self._inner: io.IOBase | IO[bytes] | None = None
@@ -144,13 +167,13 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
 
 
 class LazyOpenIO(io.RawIOBase, BinaryIO):
-    """A wrapper that defers opening of the underlying stream until needed.
+    """
+    An I/O stream wrapper that defers the actual opening of an underlying stream
+    until the first I/O operation (e.g., read, seek) is attempted.
 
-    Args:
-        open_fn: Function used to open the underlying stream.
-        seekable: Optional hint whether the underlying stream is seekable.
-            If provided, ``seekable()`` will return this value without opening
-            the stream.
+    This is useful to avoid opening many file handles if only a few of them
+    might actually be used, for instance, when iterating over archive members
+    but only reading from some.
     """
 
     def __init__(
@@ -160,6 +183,18 @@ class LazyOpenIO(io.RawIOBase, BinaryIO):
         seekable: bool,
         **kwargs: Any,
     ) -> None:
+        """
+        Initialize the LazyOpenIO wrapper.
+
+        Args:
+            open_fn: A callable (function or method) that, when called, returns
+                the actual binary I/O stream to be used.
+            *args: Positional arguments to be passed to `open_fn` when it's called.
+            seekable: A boolean hint indicating whether the underlying stream is
+                expected to be seekable. `seekable()` will return this value
+                without actually opening the stream.
+            **kwargs: Keyword arguments to be passed to `open_fn` when it's called.
+        """
         super().__init__()
         self._open_fn = open_fn
         self._args = args
@@ -211,7 +246,13 @@ class IOStats:
 
 
 class StatsIO(io.RawIOBase, BinaryIO):
-    """Wraps another IO object and tracks read/seek statistics."""
+    """
+    An I/O stream wrapper that tracks statistics about read and seek operations
+    performed on an underlying stream.
+
+    This can be useful for debugging, performance analysis, or understanding
+    access patterns.
+    """
 
     def __init__(self, inner: BinaryIO, stats: IOStats) -> None:
         super().__init__()

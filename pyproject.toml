@@ -42,6 +42,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.11.11",
     "tox>=4.0.0",
+    "pdoc>=14.0.0", # I'm assuming ^ is not supported by Hatch, so I'm using >=
 ]
 
 [tool.pytest.ini_options]
