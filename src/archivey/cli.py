@@ -333,6 +333,8 @@ def main(argv: list[str] | None = None) -> None:
                         )
         except ArchiveError as e:
             print(f"Error processing {archive_path}: {e}")
+            logger.error(f"Error processing {archive_path}", exc_info=True)
+            print()
         if args.track_io:
             abs_path = os.path.abspath(archive_path)
             stats = stats_per_file.get(abs_path)

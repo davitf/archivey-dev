@@ -111,6 +111,7 @@ def Symlink(
     comment: str | None = None,
     permissions: Optional[int] = None,
     link_target_type: MemberType | None = MemberType.FILE,
+    password: str | None = None,
 ) -> FileInfo:
     if isinstance(mtime, int):
         mtime = _fake_mtime(mtime)
@@ -123,6 +124,7 @@ def Symlink(
         permissions=permissions,
         link_target=link_target,
         link_target_type=link_target_type,
+        password=password,
     )
 
 
@@ -547,6 +549,39 @@ ENCRYPTION_SEVERAL_PASSWORDS_FILES = [
     ),
 ]
 
+ENCRYPTION_SEVERAL_PASSWORDS_AND_SYMLINKS_FILES = [
+    File("plain.txt", 1, b"This is plain"),
+    # For 7zip archives to be considered solid, they need to have at least two files
+    # in the same folder. To make that possible, we need two consecutive files with the
+    # same password.
+    File("secret.txt", 2, b"Secret", password="pwd"),
+    File("also_secret.txt", 3, b"Also secret", password="pwd"),
+    Symlink(
+        "encrypted_link_to_secret.txt",
+        4,
+        "secret.txt",
+        contents=b"Secret",
+        password="pwd",
+    ),
+    Symlink(
+        "encrypted_link_to_very_secret.txt",
+        5,
+        "very_secret.txt",
+        contents=b"Very secret",
+        password="pwd",
+    ),
+    Symlink(
+        "encrypted_link_to_not_secret.txt",
+        6,
+        "not_secret.txt",
+        contents=b"Not secret",
+        password="longpwd",
+    ),
+    Symlink("plain_link_to_secret.txt", 7, "secret.txt", contents=b"Secret"),
+    File("not_secret.txt", 6, b"Not secret"),
+    File("very_secret.txt", 7, b"Very secret", password="longpwd"),
+]
+
 ENCRYPTION_SINGLE_PASSWORD_FILES = [
     File("secret.txt", 1, b"This is secret", password="password"),
     File("also_secret.txt", 2, b"This is also secret", password="password"),
@@ -822,6 +857,14 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             header_password="header_password",
         ),
         RAR_FORMATS + SEVENZIP_FORMATS,
+    ),
+    (
+        ArchiveContents(
+            file_basename="encryption_with_symlinks",
+            files=ENCRYPTION_SEVERAL_PASSWORDS_AND_SYMLINKS_FILES,
+            solid=False,
+        ),
+        RAR_FORMATS + [SEVENZIP_7ZCMD],
     ),
     (
         ArchiveContents(

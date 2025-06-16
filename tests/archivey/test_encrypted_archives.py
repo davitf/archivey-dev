@@ -16,7 +16,12 @@ from tests.archivey.testing_utils import skip_if_package_missing
 # Select encrypted sample archives that use a single password and no header password
 ENCRYPTED_ARCHIVES = filter_archives(
     SAMPLE_ARCHIVES,
-    prefixes=["encryption", "encryption_with_plain", "encryption_solid"],
+    prefixes=[
+        "encryption",
+        "encryption_with_plain",
+        "encryption_solid",
+        "encryption_with_symlinks",
+    ],
     extensions=["zip", "rar", "7z"],
     custom_filter=lambda a: not a.contents.has_multiple_passwords()
     and a.contents.header_password is None,
@@ -161,8 +166,8 @@ def test_extractall_with_password(
 ):
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
-    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
-        pytest.skip("py7zr extractall password support incomplete")
+    # if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
+    #     pytest.skip("py7zr extractall password support incomplete")
 
     pwd = _archive_password(sample_archive)
     dest = tmp_path / "all"
@@ -202,8 +207,8 @@ def test_extractall_wrong_password(
 ):
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
-    if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
-        pytest.skip("py7zr extractall password support incomplete")
+    # if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
+    #     pytest.skip("py7zr extractall password support incomplete")
 
     wrong = "wrong_password"
     dest = tmp_path / "all"
@@ -211,3 +216,67 @@ def test_extractall_wrong_password(
     with open_archive(sample_archive_path) as archive:
         with pytest.raises((ArchiveEncryptedError, ArchiveError)):
             archive.extractall(dest, pwd=wrong)
+
+
+# @pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["encryption_with_symlinks"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_iterator_encryption_with_symlinks_no_password(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    members_by_name = {}
+    with open_archive(sample_archive_path) as archive:
+        for member, stream in archive.iter_members_with_io():
+            members_by_name[member.filename] = stream
+
+    assert members_by_name.keys() == {f.name for f in sample_archive.contents.files}
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["encryption_with_symlinks"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_iterator_encryption_with_symlinks_password_in_open_archive(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    members_by_name = {}
+    with open_archive(sample_archive_path, pwd="pwd") as archive:
+        for member, stream in archive.iter_members_with_io():
+            members_by_name[member.filename] = stream
+
+    assert members_by_name.keys() == {f.name for f in sample_archive.contents.files}
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["encryption_with_symlinks"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_iterator_encryption_with_symlinks_password_in_iterator(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    members_by_name = {}
+    with open_archive(sample_archive_path) as archive:
+        for member, stream in archive.iter_members_with_io(pwd="pwd"):
+            members_by_name[member.filename] = stream
+
+    assert members_by_name.keys() == {f.name for f in sample_archive.contents.files}

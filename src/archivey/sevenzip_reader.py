@@ -22,6 +22,7 @@ from archivey.base_reader import (
     BaseArchiveReader,
     _build_iterator_filter,
 )
+from archivey.io_helpers import ErrorIOStream
 
 if TYPE_CHECKING:
     import py7zr
@@ -404,10 +405,15 @@ class SevenZipReader(BaseArchiveReader):
             yield member
 
         if links_to_resolve and not self._streaming_only:
-            for member, stream in self._extract_members_iterator(
-                members=list(links_to_resolve.values())
-            ):
-                member.link_target = stream.read().decode("utf-8")
+            try:
+                for member, stream in self._extract_members_iterator(
+                    members=list(links_to_resolve.values())
+                ):
+                    member.link_target = stream.read().decode("utf-8")
+            except ArchiveError as e:
+                logger.error(f"Error resolving links: {e}")
+                # Skip the links that failed to resolve, they'll just have an empty
+                # link target.
 
             for member in links_to_resolve.values():
                 self._resolve_link_target(member)
@@ -507,9 +513,11 @@ class SevenZipReader(BaseArchiveReader):
         thread = Thread(target=extractor)
         thread.start()
 
+        logger.info(f"iter_members_iterator: starting -- targets: {extract_targets}")
         try:
             while True:
                 item = q.get()
+                logger.info(f"  item: {item}")
                 if item is None:
                     break
                 if isinstance(item, Exception):
@@ -524,12 +532,16 @@ class SevenZipReader(BaseArchiveReader):
                     continue
 
                 member_info = extract_filename_to_member[fname]
-                logger.info(f"fname: {fname}, member_info: {member_info}")
+                # logger.info(f"fname: {fname}, member_info: {member_info}")
                 yield member_info, stream
 
             # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)
         except (py7zr.exceptions.ArchiveError, lzma.LZMAError) as e:
             raise ArchiveCorruptedError(f"Error reading archive: {e}") from e
+        except py7zr.exceptions.PasswordRequired as e:
+            raise ArchiveEncryptedError(
+                f"Password required to read archive: {e}"
+            ) from e
 
         finally:
             thread.join()
@@ -548,7 +560,7 @@ class SevenZipReader(BaseArchiveReader):
             raise ValueError("Archive is closed")
 
         # Don't apply the filter now, as the link members may not have the extracted path.
-        logger.info(f"iter members arg: {members}")
+        # logger.info(f"iter members arg: {members}")
         member_filter_func = _build_iterator_filter(members, None)
         # logger.info(f"members: {self.get_members()}")
         # filtered_members = [m for m in self.get_members() if member_filter_func(m)]
@@ -606,25 +618,34 @@ class SevenZipReader(BaseArchiveReader):
                 )
                 continue
 
-        logger.info("iter_members_with_io: first pass done")
-        # logger.info(f"extract_filename_to_member: {extract_filename_to_member}")
-        logger.info(f"pending_filtered_members_by_id: {pending_filtered_members_by_id}")
+        # logger.info("iter_members_with_io: first pass done")
+        # # logger.info(f"extract_filename_to_member: {extract_filename_to_member}")
+        # logger.info(f"pending_filtered_members_by_id: {pending_filtered_members_by_id}")
 
-        for member, stream in self._extract_members_iterator(
-            members=list(pending_filtered_members_by_id.values())
-            + list(pending_links_by_id.values()),
-            pwd=pwd,
-            filter=filter,
-        ):
-            if member.is_link:
-                # The links we extracted are the ones with the link target not yet set.
-                member.link_target = stream.read().decode("utf-8")
+        try:
+            for member, stream in self._extract_members_iterator(
+                members=list(pending_filtered_members_by_id.values())
+                + list(pending_links_by_id.values()),
+                pwd=pwd,
+                filter=filter,
+            ):
+                if member.is_link:
+                    # The links we extracted are the ones with the link target not yet set.
+                    member.link_target = stream.read().decode("utf-8")
 
-            else:
-                filtered_member = pending_filtered_members_by_id.pop(member.member_id)
-                yield filtered_member, stream
-                if close_streams:
-                    stream.close()
+                else:
+                    filtered_member = pending_filtered_members_by_id.pop(
+                        member.member_id
+                    )
+                    yield filtered_member, stream
+                    if close_streams:
+                        stream.close()
+        except ArchiveError as e:
+            logger.error(f"Error in iter_members_with_io: {e}")
+            # Yield any remaining members that were not extracted, with the error.
+            for member in pending_filtered_members_by_id.values():
+                yield member, ErrorIOStream(e)
+            # raise e
 
         for member in pending_links_by_id.values():
             self._resolve_link_target(member)

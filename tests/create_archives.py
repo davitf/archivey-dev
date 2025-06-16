@@ -643,24 +643,28 @@ def create_7z_archive_with_command_line(
         os.remove(abs_archive_path)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        write_files_to_dir(tempdir, contents.files)
-
         file_groups = list(
             group_files_by_password_and_compression_method(contents.files)
         )
         logger.info("File groups: %s", file_groups)
-        if len(file_groups) > 1 and any(
-            file.type == MemberType.SYMLINK for file in contents.files
-        ):
-            # There are some issues passing symlinks (specifically to directories) to 7z
-            # command line, so we can't use the approach of passing the individual
-            # filenames.
-            raise ValueError(
-                "Can't create 7z archive with symlinks to directories and multiple passwords."
-            )
+        # if len(file_groups) > 1 and any(
+        #     file.type == MemberType.SYMLINK and file.link_target_type == MemberType.DIR
+        #     for file in contents.files
+        # ):
+        #     # There are some issues passing symlinks to directories to 7z command line,
+        #     # so we can't use the approach of passing the individual filenames.
+        #     raise ValueError(
+        #         "Can't create 7z archive with symlinks to directories and multiple passwords."
+        #     )
 
         for i, (password, compression_method, group_files) in enumerate(file_groups):
-            command = ["7z", "a"]
+            # Clean any previous files in the temp dir
+            for file in os.listdir(tempdir):
+                os.remove(os.path.join(tempdir, file))
+
+            write_files_to_dir(tempdir, group_files)
+
+            command = ["7z", "a", "-snl", "-snh"]
 
             # Handle solid mode
             command.append(f"-ms={'on' if contents.solid else 'off'}")
@@ -673,16 +677,17 @@ def create_7z_archive_with_command_line(
 
             command.append(abs_archive_path)
 
-            if len(file_groups) > 1:
-                # Add only the files in this group, so that they get added with the
-                # provided password.
-                # With this approach, 7z may follow symlinks to directories and add
-                # their contents instead of a symlink, so it doesn't work for all cases.
-                for file in group_files:
-                    command.append(file.name)
-            else:
-                # Just add the current dir, and 7z will add all the contents.
-                command.append(".")
+            command.append(".")
+
+            # if len(file_groups) > 1:
+            #     # Add only the files in this group, so that they get added with the
+            #     # provided password.
+            #     # With this approach, 7z may follow symlinks to directories and add
+            #     # their contents instead of a symlink, so it doesn't work for all cases.
+            #     for file in group_files:
+            #         command.append(file.name)
+            # else:
+            #     # Just add the current dir, and 7z will add all the contents.
 
             logger.info("Running command: %s", " ".join(command))
             subprocess.run(command, check=True, cwd=tempdir)

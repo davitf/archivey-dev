@@ -558,11 +558,11 @@ class BaseArchiveReader(ArchiveReader):
         )
         final_member = member = self.get_member(member_or_filename)
 
-        logger.info(
-            f"Resolving link target for {member.filename} {member.type} {member.member_id}"
-        )
-
         if member.is_link:
+            logger.info(
+                f"Resolving link target for {member.filename} {member.type} {member.member_id}"
+            )
+
             # If the user is opening a link, open the target member instead.
             self._resolve_link_target(member)
             logger.info(
