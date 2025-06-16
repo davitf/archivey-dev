@@ -33,56 +33,6 @@ class ErrorIOStream(io.RawIOBase, BinaryIO):
         return False  # pragma: no cover - trivial
 
 
-# class StreamCheckingIO(io.RawIOBase, IO[bytes]):
-#     """A wrapper around an IO object that checks the CRC32 of the data read."""
-
-#     def __init__(self, inner: IO[bytes], crc32: int | None, size: int | None):
-#         super().__init__()
-#         self._inner = inner
-#         self._expected_crc32 = crc32
-#         self._current_crc32 = 0
-#         self._expected_size = size
-#         self._current_size = 0
-#         self._checked = False
-
-#     def read(self, size: int = -1) -> bytes: # type: ignore
-#         data = self._inner.read(size)
-#         logger.info(f"Reading {size} bytes from stream, got {len(data)} bytes")
-#         if len(data) > 0:
-#             self._current_crc32 = zlib.crc32(data, self._current_crc32)
-#             self._current_size += len(data)
-#             return data
-#         else:
-#             if not self._checked:
-#                 # Check the CRC32
-#                 if self._expected_size is not None and self._current_size != self._expected_size:
-#                     raise ArchiveCorruptedError(f"Size mismatch: expected {self._expected_size}, got {self._current_size}")
-#                 if self._expected_crc32 is not None and self._current_crc32 != self._expected_crc32:
-#                     raise ArchiveCorruptedError(f"CRC32 mismatch: expected {self._expected_crc32}, got {self._current_crc32}")
-#                 self._checked = True
-
-#             return b""
-
-
-#     def readable(self) -> bool: return self._inner.readable()  # pragma: no cover - trivial
-
-#     def writable(self) -> bool: return self._inner.writable()  # pragma: no cover - trivial
-
-#     def seekable(self) -> bool: return self._inner.seekable()  # pragma: no cover - trivial
-
-#     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
-#         # After seeking, it's no longer possible to compute the actual checksum, so skip checking it.
-#         self._expected_crc32 = None
-#         self._current_size = self.tell()
-#         return self._inner.seek(offset, whence)
-
-#     def tell(self) -> int: return self._inner.tell()  # pragma: no cover - trivial
-
-#     def close(self) -> None:
-#         self._inner.close()
-#         super().close()
-
-
 class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     """A wrapper around an IO object that translates exceptions during operations.
 
@@ -95,12 +45,12 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     def __init__(
         self,
         # TODO: can we reduce the number of types here?
-        inner: BinaryIO | io.IOBase | Callable[..., BinaryIO | io.IOBase] | IO[bytes],
+        inner: io.IOBase | IO[bytes] | Callable[[], io.IOBase | IO[bytes]],
         exception_translator: Callable[[Exception], Optional[ArchiveError]],
     ):
         super().__init__()
         self._translate = exception_translator
-        self._inner: BinaryIO | io.IOBase | IO[bytes] | None = None
+        self._inner: io.IOBase | IO[bytes] | None = None
 
         if isinstance(inner, Callable):
             try:

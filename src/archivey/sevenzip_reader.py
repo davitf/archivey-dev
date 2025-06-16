@@ -13,16 +13,14 @@ from typing import (
     BinaryIO,
     Callable,
     Iterator,
-    List,
     Optional,
     Union,
     cast,
 )
 
 from archivey.base_reader import (
-    BaseArchiveReaderRandomAccess,
+    BaseArchiveReader,
     _build_iterator_filter,
-    _build_member_included_func,
 )
 
 if TYPE_CHECKING:
@@ -262,7 +260,7 @@ class ExtractWriterFactory(WriterFactory):
         return ExtractFileWriter(full_path)
 
 
-class SevenZipReader(BaseArchiveReaderRandomAccess):
+class SevenZipReader(BaseArchiveReader):
     """Reader for 7-Zip archives."""
 
     def __init__(
@@ -272,8 +270,12 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
     ):
-        super().__init__(ArchiveFormat.SEVENZIP, archive_path)
-        self._members: list[ArchiveMember] | None = None
+        super().__init__(
+            ArchiveFormat.SEVENZIP,
+            archive_path,
+            random_access_supported=not streaming_only,
+            members_list_supported=True,
+        )
         self._format_info: ArchiveInfo | None = None
         self._streaming_only = streaming_only
 
@@ -321,7 +323,6 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
         if self._archive:
             self._archive.close()
             self._archive = None
-            self._members = None
 
     def _is_member_encrypted(self, file: ArchiveFile) -> bool:
         # This information is not directly exposed by py7zr, so we need to use an
@@ -331,14 +332,9 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         return py7zr.compressor.SupportedMethods.needs_password(file.folder.coders)
 
-    def get_members(self) -> List[ArchiveMember]:
+    def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         if self._archive is None:
             raise ValueError("Archive is closed")
-
-        if self._members is not None:
-            return self._members
-
-        self._members = []
 
         name_counters: collections.defaultdict[str, int] = collections.defaultdict(int)
         links_to_resolve = {}
@@ -405,19 +401,18 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
             if member.is_link:
                 links_to_resolve[member.filename] = member
-            self._members.append(member)
-            self.register_member(member)
+            yield member
 
         if links_to_resolve and not self._streaming_only:
-            # iter_members_with_io() automatically populates the link_target field.
-            for filename, file_io in self.iter_members_with_io(
-                members=list(links_to_resolve.keys())
+            for member, stream in self._extract_members_iterator(
+                members=list(links_to_resolve.values())
             ):
-                pass
+                member.link_target = stream.read().decode("utf-8")
 
-        self.set_all_members_registered()
+            for member in links_to_resolve.values():
+                self._resolve_link_target(member)
 
-        return self._members
+        self._all_members_registered = True
 
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: str | None = None
@@ -473,68 +468,19 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
             if pwd is not None and file_info.folder is not None:
                 file_info.folder.password = previous_password
 
-    def iter_members_with_io(
+    def _extract_members_iterator(
         self,
-        members: list[str | ArchiveMember]
-        | Callable[[ArchiveMember], bool]
-        | None = None,
-        *,
+        members: list[ArchiveMember],
         pwd: bytes | str | None = None,
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
-        close_streams: bool = True,
-    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
-
-        # Don't apply the filter now, as the link members may not have the extracted path.
-        logger.info(f"iter members arg: {members}")
-        member_filter_func = _build_iterator_filter(members, None)
-        # logger.info(f"members: {self.get_members()}")
-        filtered_members = [m for m in self.get_members() if member_filter_func(m)]
-
-        logger.info(f"filtered_members: {filtered_members}")  # TODO: remove
-
+    ) -> Iterator[tuple[ArchiveMember, BinaryIO]]:
         extract_filename_to_member = {
-            member.extra["extract_filename"]: member for member in filtered_members
+            member.extra["extract_filename"]: member for member in members
         }
-        logger.info(f"extract_filename_to_member: {extract_filename_to_member}")
-
-        member_included = _build_member_included_func(members)
-
-        # members_to_extract = [] #m for m in self.get_members() if member_included(m)]
-        filenames_to_extract = []
-        for member in self.get_members():
-            if not member_included(member):
-                continue
-
-            if member.is_link and member.link_target is None:
-                # We'll need to resolve the link target later.
-                filenames_to_extract.append(member.filename)
-                continue
-
-            filtered_member = filter(member) if filter is not None else member
-            if filtered_member is None:
-                continue
-
-            if member.is_dir or member.is_link:
-                yield filtered_member, None
-
-            elif member.is_file and member.file_size == 0:
-                # Yield any empty files immediately, as py7zr doesn't actually call any
-                # methods on the PyZ7IO object for them, and so they're not added to the
-                # queue.
-                stream = io.BytesIO(b"")
-                yield filtered_member, stream
-                if close_streams:
-                    stream.close()
-
-            elif member.is_file:
-                filenames_to_extract.append(member.filename)
-            else:
-                logger.error(
-                    f"Unknown member type: {member.type} for {member.filename}"
-                )
-                continue
+        # The original filenames in the raw infos.
+        extract_targets = [
+            cast(ArchiveFile, member.raw_info).filename for member in members
+        ]
 
         # Allow the queue to carry tuples, exceptions, or None
         q = Queue[tuple[str, BinaryIO] | Exception | None]()
@@ -546,19 +492,14 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                 assert self._archive is not None
                 self._archive.reset()
                 factory = StreamingFactory(q)
-                # print()
-                # print()
-                # logger.info(f"extracting {filenames_to_extract}")
 
-                self._archive.extract(targets=filenames_to_extract, factory=factory)
-                # logger.info(f"extracting {filenames_to_extract} done")
-                # print()
+                self._archive.extract(targets=extract_targets, factory=factory)
                 factory.finish()
             except Exception as e:
-                logger.error(
-                    f"Error in extractor thread for archive {self.archive_path}",
-                    exc_info=True,
-                )
+                # logger.error(
+                #     f"Error in extractor thread for archive {self.archive_path}",
+                #     exc_info=True,
+                # )
                 q.put(e)
                 # Catch all exceptions to avoid the main thread waiting forever.
                 # Any exception will be re-raised in the main thread.
@@ -583,20 +524,8 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
                     continue
 
                 member_info = extract_filename_to_member[fname]
-                if member_info.is_link:
-                    # The filtering was delayed until the link target was resolved.
-                    assert member_info.link_target is None
-
-                    # TODO: also fill link_target_member for hard links
-                    member_info.link_target = stream.read().decode("utf-8")
-
-                filtered_member = (
-                    filter(member_info) if filter is not None else member_info
-                )
-                if filtered_member is not None:
-                    yield filtered_member, stream if filtered_member.is_file else None
-                if close_streams:
-                    stream.close()
+                logger.info(f"fname: {fname}, member_info: {member_info}")
+                yield member_info, stream
 
             # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)
         except (py7zr.exceptions.ArchiveError, lzma.LZMAError) as e:
@@ -604,6 +533,102 @@ class SevenZipReader(BaseArchiveReaderRandomAccess):
 
         finally:
             thread.join()
+
+    def iter_members_with_io(
+        self,
+        members: list[str | ArchiveMember]
+        | Callable[[ArchiveMember], bool]
+        | None = None,
+        *,
+        pwd: bytes | str | None = None,
+        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
+        close_streams: bool = True,
+    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
+        # Don't apply the filter now, as the link members may not have the extracted path.
+        logger.info(f"iter members arg: {members}")
+        member_filter_func = _build_iterator_filter(members, None)
+        # logger.info(f"members: {self.get_members()}")
+        # filtered_members = [m for m in self.get_members() if member_filter_func(m)]
+
+        # logger.info(f"filtered_members: {filtered_members}")  # TODO: remove
+
+        # logger.info(f"extract_filename_to_member: {extract_filename_to_member}")
+
+        # member_included = _build_member_included_func(members)
+
+        # members_to_extract = [] #m for m in self.get_members() if member_included(m)]
+        # extract_filename_to_member = {}
+        # filenames_to_extract = []
+
+        pending_filtered_members_by_id: dict[int, ArchiveMember] = {}
+        pending_links_by_id: dict[int, ArchiveMember] = {}
+
+        logger.info("iter_members_with_io: starting first pass")
+        for member in self.iter_members():
+            if not member_filter_func(member):
+                continue
+
+            if member.is_link and member.link_target is None:
+                # We'll need to resolve the link target later.
+                # filenames_to_extract.append(member.filename)
+                # extract_filename_to_member[member.extra["extract_filename"]] = member
+                pending_links_by_id[member.member_id] = member
+                continue
+
+            filtered_member = filter(member) if filter is not None else member
+            if filtered_member is None:
+                continue
+
+            if member.is_dir or member.is_link:
+                # TODO: accumulate all links to yield at the end, after resolving any
+                # pending target members.
+                yield filtered_member, None
+
+            elif member.is_file and member.file_size == 0:
+                # Yield any empty files immediately, as py7zr doesn't actually call any
+                # methods on the PyZ7IO object for them, and so they're not added to the
+                # queue.
+                stream = io.BytesIO(b"")
+                yield filtered_member, stream
+                if close_streams:
+                    stream.close()
+
+            elif member.is_file:
+                # filenames_to_extract.append(member.filename)
+                # extract_filename_to_member[member.extra["extract_filename"]] = member
+                pending_filtered_members_by_id[member.member_id] = filtered_member
+            else:
+                logger.error(
+                    f"Unknown member type: {member.type} for {member.filename}"
+                )
+                continue
+
+        logger.info("iter_members_with_io: first pass done")
+        # logger.info(f"extract_filename_to_member: {extract_filename_to_member}")
+        logger.info(f"pending_filtered_members_by_id: {pending_filtered_members_by_id}")
+
+        for member, stream in self._extract_members_iterator(
+            members=list(pending_filtered_members_by_id.values())
+            + list(pending_links_by_id.values()),
+            pwd=pwd,
+            filter=filter,
+        ):
+            if member.is_link:
+                # The links we extracted are the ones with the link target not yet set.
+                member.link_target = stream.read().decode("utf-8")
+
+            else:
+                filtered_member = pending_filtered_members_by_id.pop(member.member_id)
+                yield filtered_member, stream
+                if close_streams:
+                    stream.close()
+
+        for member in pending_links_by_id.values():
+            self._resolve_link_target(member)
+            yield member, None
 
     def extract(
         self,

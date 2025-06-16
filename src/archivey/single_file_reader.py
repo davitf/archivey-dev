@@ -3,9 +3,9 @@ import logging
 import os
 import struct
 from datetime import datetime, timezone
-from typing import BinaryIO, List
+from typing import BinaryIO, Iterator, List
 
-from archivey.base_reader import BaseArchiveReaderRandomAccess
+from archivey.base_reader import BaseArchiveReader
 from archivey.compressed_streams import open_stream
 from archivey.exceptions import (
     ArchiveFormatError,
@@ -180,7 +180,7 @@ def read_xz_metadata(path: str, member: ArchiveMember):
         )
 
 
-class SingleFileReader(BaseArchiveReaderRandomAccess):
+class SingleFileReader(BaseArchiveReader):
     """Reader for raw compressed files (gz, bz2, xz, zstd, lz4)."""
 
     def __init__(
@@ -199,7 +199,12 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
             format: The format of the archive. If None, will be detected from the file extension.
             **kwargs: Additional options (ignored)
         """
-        super().__init__(format, archive_path)
+        super().__init__(
+            format,
+            archive_path,
+            random_access_supported=True,
+            members_list_supported=True,
+        )
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
 
@@ -238,12 +243,15 @@ class SingleFileReader(BaseArchiveReaderRandomAccess):
         elif self.format == ArchiveFormat.XZ:
             read_xz_metadata(archive_path, self.member)
 
-        self.register_member(self.member)
+        # self.register_member(self.member)
 
         # Open the file to see if it's supported by the library and valid.
         # To avoid opening the file twice, we'll store the reference and return it
         # on the first open() call.
         self.fileobj = open_stream(self.format, self.archive_path, self.config)
+
+    def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
+        yield self.member
 
     def close(self) -> None:
         """Close the archive and release any resources."""

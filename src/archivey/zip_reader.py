@@ -4,10 +4,10 @@ import stat
 import struct
 import zipfile
 from datetime import datetime, timezone
-from typing import BinaryIO, List, Optional, cast
+from typing import BinaryIO, Iterator, Optional, cast
 
 from archivey.base_reader import (
-    BaseArchiveReaderRandomAccess,
+    BaseArchiveReader,
 )
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -64,7 +64,7 @@ def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
     return main_modtime
 
 
-class ZipReader(BaseArchiveReaderRandomAccess):
+class ZipReader(BaseArchiveReader):
     """Reader for ZIP archives."""
 
     def __init__(
@@ -73,8 +73,12 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         *,
         pwd: bytes | str | None = None,
     ):
-        super().__init__(ArchiveFormat.ZIP, archive_path)
-        self._members: list[ArchiveMember] | None = None
+        super().__init__(
+            ArchiveFormat.ZIP,
+            archive_path,
+            random_access_supported=True,
+            members_list_supported=True,
+        )
         self._format_info: ArchiveInfo | None = None
         self._pwd = pwd
         try:
@@ -87,7 +91,6 @@ class ZipReader(BaseArchiveReaderRandomAccess):
         if self._archive:
             self._archive.close()
             self._archive = None
-            self._members = None
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -116,7 +119,7 @@ class ZipReader(BaseArchiveReaderRandomAccess):
             )
         return self._format_info
 
-    def _get_link_target(self, info: zipfile.ZipInfo) -> Optional[str]:
+    def _read_link_target(self, info: zipfile.ZipInfo) -> str | None:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
@@ -127,14 +130,9 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                 return f.read().decode("utf-8")
         return None
 
-    def get_members(self) -> List[ArchiveMember]:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+    def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
+        assert self._archive is not None
 
-        if self._members is not None:
-            return self._members
-
-        self._members = []
         for info in self._archive.infolist():
             is_dir = info.is_dir()
             compression_method = (
@@ -183,13 +181,9 @@ class ZipReader(BaseArchiveReaderRandomAccess):
                     "volume": info.volume,
                 },
                 raw_info=info,
-                link_target=self._get_link_target(info),
+                link_target=self._read_link_target(info),
             )
-            self._members.append(member)
-            self.register_member(member)
-
-        self.set_all_members_registered()
-        return self._members
+            yield member
 
     def open(
         self,

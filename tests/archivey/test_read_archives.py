@@ -196,6 +196,7 @@ def check_iter_members(
         ] = collections.defaultdict(list)
         all_non_dirs_in_archive = set()
 
+        logger.info(f"members_iter: {members_iter}")
         for member, stream in members_iter:
             logger.info(
                 f"member: {member.filename} [{member.type}] [{member.member_id}] {stream=}"
@@ -225,6 +226,8 @@ def check_iter_members(
             all_contents_by_filename[filekey].append((member, data))
             if member.type != MemberType.DIR:
                 all_non_dirs_in_archive.add(filekey)
+
+        logger.info(f"all_contents_by_filename: {all_contents_by_filename}")
 
         # Check that all expected filenames are present in the archive.
         assert not set(expected_files_by_filename.keys()) - set(

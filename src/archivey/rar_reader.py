@@ -19,7 +19,6 @@ from typing import (
     Collection,
     Iterable,
     Iterator,
-    List,
     Optional,
     cast,
 )
@@ -36,7 +35,7 @@ else:
         Rar5Info = object  # type: ignore[assignment]
         RarInfo = object  # type: ignore[assignment]
 
-from archivey.base_reader import BaseArchiveReaderRandomAccess, _build_iterator_filter
+from archivey.base_reader import BaseArchiveReader, _build_iterator_filter
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -409,7 +408,7 @@ class RarStreamReader:
         raise ValueError("RarStreamReader does not support opening specific members")
 
 
-class RarReader(BaseArchiveReaderRandomAccess):
+class RarReader(BaseArchiveReader):
     """Base class for RAR archive readers."""
 
     def __init__(
@@ -418,8 +417,12 @@ class RarReader(BaseArchiveReaderRandomAccess):
         *,
         pwd: bytes | str | None = None,
     ):
-        super().__init__(ArchiveFormat.RAR, archive_path)
-        self._members: Optional[list[ArchiveMember]] = None
+        super().__init__(
+            ArchiveFormat.RAR,
+            archive_path,
+            random_access_supported=True,
+            members_list_supported=True,
+        )
         self._format_info: Optional[ArchiveInfo] = None
         self._pwd = pwd
 
@@ -460,7 +463,6 @@ class RarReader(BaseArchiveReaderRandomAccess):
         if self._archive:
             self._archive.close()
             self._archive = None
-            self._members = None
 
     def _get_link_target(self, info: RarInfo) -> Optional[str]:
         # TODO: in RAR4 format, link targets are stored as the file contents. is it
@@ -477,76 +479,71 @@ class RarReader(BaseArchiveReaderRandomAccess):
         # If the link target is encrypted, we can't read it.
         return None
 
-    def get_members(self) -> List[ArchiveMember]:
-        if self._archive is None:
-            raise ArchiveError("Archive is closed")
+    def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
+        assert self._archive is not None
 
-        # According to https://documentation.help/WinRAR/HELPArcEncryption.htm :
-        # If "Encrypt file names" [i.e. header encryption] option is off,
-        # file checksums for encrypted RAR 5.0 files are modified using a
-        # special password dependent algorithm. [...] So do not expect checksums
-        # for encrypted RAR 5.0 files to match actual CRC32 or BLAKE2 values.
-        # If "Encrypt file names" option is on, checksums are stored without modification,
-        # because they can be accessed only after providing a valid password.
+        logger.info(f"iter_members_for_registration: {self._archive}")
+        rarinfos: list[RarInfo] = self._archive.infolist()
+        for info in rarinfos:
+            logger.info(f"got rarinfo: {info}")
 
-        if self._members is None:
-            self._members = []
-            rarinfos: list[RarInfo] = self._archive.infolist()
-            for info in rarinfos:
-                compression_method = (
-                    _RAR_COMPRESSION_METHODS.get(info.compress_type, "unknown")
-                    if info.compress_type is not None
-                    else None
+            compression_method = (
+                _RAR_COMPRESSION_METHODS.get(info.compress_type, "unknown")
+                if info.compress_type is not None
+                else None
+            )
+
+            # According to https://documentation.help/WinRAR/HELPArcEncryption.htm :
+            # If "Encrypt file names" [i.e. header encryption] option is off,
+            # file checksums for encrypted RAR 5.0 files are modified using a
+            # special password dependent algorithm. [...] So do not expect checksums
+            # for encrypted RAR 5.0 files to match actual CRC32 or BLAKE2 values.
+            # If "Encrypt file names" option is on, checksums are stored without modification,
+            # because they can be accessed only after providing a valid password.
+
+            encryption_info = get_encryption_info(info)
+            if encryption_info:
+                has_encrypted_crc = bool(
+                    encryption_info.flags & RAR_ENCDATA_FLAG_TWEAKED_CHECKSUMS
                 )
+            else:
+                has_encrypted_crc = False
 
-                has_encrypted_crc: bool
-                encryption_info = get_encryption_info(info)
-                if encryption_info:
-                    has_encrypted_crc = bool(
-                        encryption_info.flags & RAR_ENCDATA_FLAG_TWEAKED_CHECKSUMS
-                    )
-                else:
-                    has_encrypted_crc = False
-
-                logger.info(f"{info.filename=} {info.file_redir=}")
-                member = ArchiveMember(
-                    filename=info.filename or "",  # Will never actually be None
-                    file_size=info.file_size,
-                    compress_size=info.compress_size,
-                    mtime=info.mtime.replace(tzinfo=None) if info.mtime else None,
-                    type=(
-                        MemberType.HARDLINK
-                        if is_rar_info_hardlink(info)
-                        else MemberType.DIR
-                        if info.is_dir()
-                        else MemberType.FILE
-                        if info.is_file()
-                        else MemberType.SYMLINK
-                        if info.is_symlink()
-                        else MemberType.OTHER
-                    ),
-                    mode=stat.S_IMODE(info.mode)
-                    if hasattr(info, "mode") and isinstance(info.mode, int)
-                    else None,
-                    crc32=info.CRC if not has_encrypted_crc else None,
-                    compression_method=compression_method,
-                    comment=info.comment,
-                    encrypted=info.needs_password(),
-                    create_system=_RAR_HOST_OS_TO_CREATE_SYSTEM.get(
-                        info.host_os, CreateSystem.UNKNOWN
-                    )
-                    if info.host_os is not None
-                    else None,
-                    raw_info=info,
-                    link_target=self._get_link_target(info),
-                    extra={"host_os": getattr(info, "host_os", None)},
+            member = ArchiveMember(
+                filename=info.filename or "",  # Will never actually be None
+                file_size=info.file_size,
+                compress_size=info.compress_size,
+                mtime=info.mtime.replace(tzinfo=None) if info.mtime else None,
+                type=(
+                    MemberType.HARDLINK
+                    if is_rar_info_hardlink(info)
+                    else MemberType.DIR
+                    if info.is_dir()
+                    else MemberType.FILE
+                    if info.is_file()
+                    else MemberType.SYMLINK
+                    if info.is_symlink()
+                    else MemberType.OTHER
+                ),
+                mode=stat.S_IMODE(info.mode)
+                if hasattr(info, "mode") and isinstance(info.mode, int)
+                else None,
+                crc32=info.CRC if not has_encrypted_crc else None,
+                compression_method=compression_method,
+                comment=info.comment,
+                encrypted=info.needs_password(),
+                create_system=_RAR_HOST_OS_TO_CREATE_SYSTEM.get(
+                    info.host_os, CreateSystem.UNKNOWN
                 )
-                self._members.append(member)
-                self.register_member(member)
+                if info.host_os is not None
+                else None,
+                raw_info=info,
+                link_target=self._get_link_target(info),
+                extra={"host_os": getattr(info, "host_os", None)},
+            )
+            yield member
 
-            self.set_all_members_registered()
-
-        return self._members
+        logger.info("iter_members_for_registration: done")
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -590,7 +587,9 @@ class RarReader(BaseArchiveReaderRandomAccess):
 
     def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, rarfile.BadRarFile):
-            return ArchiveCorruptedError(f"Error reading member {self.archive_path}")
+            return ArchiveCorruptedError(
+                f"Error reading RAR archive {self.archive_path}"
+            )
         return None
 
     def open(
@@ -651,6 +650,7 @@ class RarReader(BaseArchiveReaderRandomAccess):
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self.config.use_rar_stream:
+            logger.info("iter_members_with_io: using rar_stream_reader")
             stream_reader = RarStreamReader(
                 self.archive_path, self.get_members(), pwd=pwd or self._pwd
             )
@@ -662,4 +662,5 @@ class RarReader(BaseArchiveReaderRandomAccess):
                 yield filtered_member, stream
 
         else:
-            return super().iter_members_with_io(members, pwd=pwd, filter=filter)
+            logger.info("iter_members_with_io: not using rar_stream_reader")
+            yield from super().iter_members_with_io(members, pwd=pwd, filter=filter)

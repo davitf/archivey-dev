@@ -3,17 +3,16 @@ import os
 import stat
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import BinaryIO, Iterator, List, Optional
+from typing import BinaryIO, Iterator, Optional
 
-from archivey.base_reader import BaseArchiveReaderRandomAccess
-from archivey.exceptions import ArchiveError, ArchiveIOError, ArchiveMemberNotFoundError
-from archivey.io_helpers import ErrorIOStream, LazyOpenIO
+from archivey.base_reader import BaseArchiveReader
+from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 logger = logging.getLogger(__name__)
 
 
-class FolderReader(BaseArchiveReaderRandomAccess):
+class FolderReader(BaseArchiveReader):
     """
     Reads a folder on the filesystem as an archive.
     """
@@ -26,7 +25,12 @@ class FolderReader(BaseArchiveReaderRandomAccess):
         self,
         archive_path: str | bytes | os.PathLike,
     ):
-        super().__init__(ArchiveFormat.FOLDER, archive_path)
+        super().__init__(
+            ArchiveFormat.FOLDER,
+            archive_path,
+            random_access_supported=False,
+            members_list_supported=True,
+        )
         self.path = Path(self.archive_path).resolve()  # Store absolute path
 
         if not self.path.is_dir():
@@ -84,7 +88,7 @@ class FolderReader(BaseArchiveReaderRandomAccess):
             link_target=link_target,
         )
 
-    def _iter_member_infos(self) -> Iterator[ArchiveMember]:
+    def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         for root, dirnames, filenames in os.walk(
             self.path, topdown=True, followlinks=False
         ):
@@ -94,37 +98,40 @@ class FolderReader(BaseArchiveReaderRandomAccess):
             for filename in filenames:
                 yield self._convert_entry_to_member(dirpath / filename)
 
-    def iter_members_with_io(
-        self, *, pwd: bytes | str | None = None
-    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
-        if pwd is not None:
-            raise ArchiveError("Password is not supported for FolderReader")
+    # def iter_members_with_io(
+    #     self, *, pwd: bytes | str | None = None
+    # ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
+    #     if pwd is not None:
+    #         raise ArchiveError("Password is not supported for FolderReader")
 
-        for member in self._iter_member_infos():
-            if member.is_file:
-                try:
-                    stream = LazyOpenIO(self.open, member, seekable=True)
-                except (IOError, OSError) as e:
-                    logger.info(f"Error opening member {member.filename}: {e}")
-                    archive_error = ArchiveIOError(
-                        f"Error opening member {member.filename}: {e}",
-                    )
-                    archive_error.__cause__ = e
-                    stream = ErrorIOStream(archive_error)
-            else:
-                stream = None
+    #     for member in self._iter_member_infos():
+    #         if member.is_file:
+    #             try:
+    #                 stream = LazyOpenIO(self.open, member, seekable=True)
+    #             except (IOError, OSError) as e:
+    #                 logger.info(f"Error opening member {member.filename}: {e}")
+    #                 archive_error = ArchiveIOError(
+    #                     f"Error opening member {member.filename}: {e}",
+    #                 )
+    #                 archive_error.__cause__ = e
+    #                 stream = ErrorIOStream(archive_error)
+    #         else:
+    #             stream = None
 
-            yield member, stream
-            if stream is not None:
-                try:
-                    stream.close()
-                except OSError:
-                    logger.warning(
-                        "Error closing member %s", member.filename, exc_info=True
-                    )
+    #         yield member, stream
+    #         if stream is not None:
+    #             try:
+    #                 stream.close()
+    #             except OSError:
+    #                 logger.warning(
+    #                     "Error closing member %s", member.filename, exc_info=True
+    #                 )
 
-    def get_members(self) -> List[ArchiveMember]:
-        return list(self._iter_member_infos())
+    # def _read_members_list(self) -> bool:
+    #     for info in self._iter_member_infos():
+    #         self.register_member(info)
+    #     self.set_all_members_registered()
+    #     return True
 
     def open(
         self,

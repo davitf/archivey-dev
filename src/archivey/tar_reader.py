@@ -2,13 +2,12 @@ import logging
 import stat
 import tarfile
 from datetime import datetime, timezone
-from typing import IO, BinaryIO, Callable, Iterator, List, Optional, Union, cast
+from typing import IO, BinaryIO, Iterator, List, Optional, Union, cast
 
 from archivey.base_reader import (
     ArchiveInfo,
     ArchiveMember,
-    ArchiveReader,
-    _build_iterator_filter,
+    BaseArchiveReader,
 )
 from archivey.compressed_streams import open_stream
 from archivey.exceptions import (
@@ -17,7 +16,7 @@ from archivey.exceptions import (
     ArchiveError,
     ArchiveMemberCannotBeOpenedError,
 )
-from archivey.io_helpers import ExceptionTranslatingIO, LazyOpenIO
+from archivey.io_helpers import ExceptionTranslatingIO
 from archivey.types import TAR_FORMAT_TO_COMPRESSION_FORMAT, ArchiveFormat, MemberType
 
 logger = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ def _translate_tar_exception(e: Exception) -> Optional[ArchiveError]:
     return None
 
 
-class TarReader(ArchiveReader):
+class TarReader(BaseArchiveReader):
     """Reader for TAR archives and compressed TAR archives."""
 
     def __init__(
@@ -59,8 +58,8 @@ class TarReader(ArchiveReader):
         super().__init__(
             format,
             archive_path,
-            random_access_available=not streaming_only,
-            members_list_available=not streaming_only,
+            random_access_supported=not streaming_only,
+            members_list_supported=not streaming_only,
         )
         self._streaming_only = streaming_only
         self._format_info: ArchiveInfo | None = None
@@ -76,12 +75,6 @@ class TarReader(ArchiveReader):
             logger.info(
                 f"Compressed tar opened: {self._fileobj} seekable={self._fileobj.seekable()}"
             )
-            # if self._fileobj.seekable():
-            #     logger.info(
-            #         f"Compressed tar seeked: initial tell={self._fileobj.tell()}"
-            #     )
-            #     self._fileobj.seek(0)
-            #     logger.info(f"Compressed tar seeked: after seek={self._fileobj.tell()}")
 
             if not streaming_only and not self._fileobj.seekable():
                 raise ArchiveError(
@@ -114,7 +107,6 @@ class TarReader(ArchiveReader):
         if self._archive:
             self._archive.close()
             self._archive = None
-            self._members = None
         if self._fileobj is not None:
             self._fileobj.close()
             self._fileobj = None
@@ -197,10 +189,11 @@ class TarReader(ArchiveReader):
         member_or_filename: Union[str, ArchiveMember],
         *,
         pwd: bytes | str | None = None,
+        is_streaming_mode: bool = False,
     ) -> BinaryIO:
         if self._archive is None:
             raise ValueError("Archive is closed")
-        if self._streaming_only:
+        if self._streaming_only and not is_streaming_mode:
             raise ValueError(
                 "Archive opened in streaming mode does not support opening specific members."
             )
@@ -211,21 +204,28 @@ class TarReader(ArchiveReader):
         member, filename = self._resolve_member_to_open(member_or_filename)
         tarinfo = cast(tarfile.TarInfo, member.raw_info)
 
-        try:
+        def _open_stream() -> IO[bytes]:
+            assert self._archive is not None
             stream = self._archive.extractfile(tarinfo)
             if stream is None:
                 raise ArchiveMemberCannotBeOpenedError(
                     f"Member {filename} cannot be opened"
                 )
-            return ExceptionTranslatingIO(
-                cast(BinaryIO, stream), _translate_tar_exception
-            )
+            return stream
+
+        try:
+            return ExceptionTranslatingIO(_open_stream, _translate_tar_exception)
 
         except tarfile.ReadError as e:
             translated = _translate_tar_exception(e)
             if translated is not None:
                 raise translated from e
             raise
+
+    def open_for_iteration(
+        self, member: ArchiveMember, *, pwd: bytes | str | None = None
+    ) -> BinaryIO:
+        return self.open(member, is_streaming_mode=True, pwd=pwd)
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -252,137 +252,117 @@ class TarReader(ArchiveReader):
             )
         return self._format_info
 
-    def iter_members_with_io(
-        self,
-        members: Union[
-            List[ArchiveMember | str], Callable[[ArchiveMember], bool], None
-        ] = None,
-        *,
-        pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
-    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
+    def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         if self._archive is None:
             raise ValueError("Archive is closed")
 
-        if pwd is not None:
-            raise ValueError("TAR format does not support password protection.")
-
-        filter_func = _build_iterator_filter(members, filter)
-
-        def _open(member: ArchiveMember) -> IO[bytes]:
-            assert self._archive is not None
-            assert member.is_file
-            tarinfo = cast(tarfile.TarInfo, member.raw_info)
-            stream = self._archive.extractfile(tarinfo)
-            if stream is None:
-                raise ArchiveMemberCannotBeOpenedError(
-                    f"Member {member.filename} cannot be opened"
-                )
-            return ExceptionTranslatingIO(stream, _translate_tar_exception)
-
-        def _get_stream_for_member(member: ArchiveMember) -> BinaryIO | None:
-            logger.info(
-                f"Getting stream for member {member.filename} {member.type} {member.is_file}"
-            )
-            if not member.is_file:
-                return None
-            logger.info(f"Opening member {member.filename} as stream")
-
-            # TODO: tarinfo streams in uncompressed files are actually seekable.
-            # Should we set seekable=True in that case?
-            return LazyOpenIO(_open, member, seekable=False)
-
-        # The iterator on a tarfile can only run once, so first output all members
-        # that have already been read.
-        if len(self._member_id_to_member) > 0:
-            if not self._random_access_supported:
-                # In streaming mode, each member can only be opened before the next
-                # one is read, so we can't iterate multiple times.
-                raise ValueError(
-                    "TarReader in streaming mode can only iterate over members once"
-                )
-
-            for member in self._member_id_to_member.values():
-                filtered_member = filter_func(member)
-                if filtered_member is None:
-                    continue
-                stream = _get_stream_for_member(member)
-                yield filtered_member, stream
-                if stream is not None:
-                    stream.close()
-
         try:
             tarinfo: tarfile.TarInfo | None = None
-
             for tarinfo in self._archive:
-                member = self._tarinfo_to_archive_member(tarinfo)
-                self.register_member(member)
-
-                filtered_member = filter_func(member)
-                if filtered_member is None:
-                    continue
-
-                stream = _get_stream_for_member(member)
-                yield filtered_member, stream
-                if stream is not None:
-                    stream.close()
-
-                # try:
-                #     if self._streaming_only:
-                #         info = (
-                #             tarinfo
-                #             if self._members is None
-                #             else cast(tarfile.TarInfo, member.raw_info)
-                #         )
-                #         assert info is not None
-                #         stream_obj = self._archive.extractfile(info)
-                #         if stream_obj is None:
-                #             raise ArchiveMemberCannotBeOpenedError(
-                #                 f"Member {member.filename} cannot be opened"
-                #             )
-                #         stream = ExceptionTranslatingIO(
-                #             cast(BinaryIO, stream_obj), _translate_tar_exception
-                #         )
-                #         yield filtered_member, stream
-                #         stream.close()
-                #     else:
-                #         stream = LazyOpenIO(self.open, member, seekable=True)
-                #         yield filtered_member, stream
-                #         stream.close()
-
-                # except tarfile.ReadError as e:
-                #     logger.warning("Error opening member %s: %s", member.filename, e)
-                #     translated = _translate_tar_exception(e)
-                #     yield (
-                #         member,
-                #         ErrorIOStream(translated or ArchiveCorruptedError(str(e))),
-                #     )
-
-            self.set_all_members_registered()
+                yield self._tarinfo_to_archive_member(tarinfo)
 
             if self.config.tar_check_integrity and tarinfo is not None:
                 self._check_tar_integrity(tarinfo)
-
-        except tarfile.ReadError as e:
-            translated = _translate_tar_exception(e)
-            if translated:
-                raise translated from e
-            raise
-
-        # Try reading a bit further, so that any checksum in the compressed data is
-        # checked and corruption is detected.
-        try:
-            if self._fileobj is not None:
-                logger.info(
-                    f"Tar closing: Will read a few bytes from {self.archive_path}"
-                )
-                data = self._fileobj.read(65536)
-                logger.info(
-                    f"Tar closing: Read {len(data)} bytes from {self.archive_path}"
-                )
-
         except tarfile.ReadError as e:
             translated = _translate_tar_exception(e)
             if translated is not None:
                 raise translated from e
             raise
+
+    # def iter_members_with_io(
+    #     self,
+    #     members: Union[
+    #         List[ArchiveMember | str], Callable[[ArchiveMember], bool], None
+    #     ] = None,
+    #     *,
+    #     pwd: bytes | str | None = None,
+    #     filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
+    # ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
+    #     if self._archive is None:
+    #         raise ValueError("Archive is closed")
+
+    #     if pwd is not None:
+    #         raise ValueError("TAR format does not support password protection.")
+
+    #     filter_func = _build_iterator_filter(members, filter)
+
+    #     def _open(member: ArchiveMember) -> IO[bytes]:
+    #         assert self._archive is not None
+    #         assert member.is_file
+    #         return self.open(member, is_streaming_mode=True)
+
+    #     def _get_stream_for_member(member: ArchiveMember) -> BinaryIO | None:
+    #         logger.info(
+    #             f"Getting stream for member {member.filename} {member.type} {member.is_file}"
+    #         )
+    #         if not member.is_file:
+    #             return None
+    #         logger.info(f"Opening member {member.filename} as stream")
+
+    #         # TODO: tarinfo streams in uncompressed files are actually seekable.
+    #         # Should we set seekable=True in that case?
+    #         return LazyOpenIO(self.open, member, is_streaming_mode=True, seekable=False)
+
+    #     # The iterator on a tarfile can only run once, so first output all members
+    #     # that have already been read.
+    #     if len(self._member_id_to_member) > 0:
+    #         if not self._random_access_supported:
+    #             # In streaming mode, each member can only be opened before the next
+    #             # one is read, so we can't iterate multiple times.
+    #             raise ValueError(
+    #                 "TarReader in streaming mode can only iterate over members once"
+    #             )
+
+    #         for member in self._member_id_to_member.values():
+    #             filtered_member = filter_func(member)
+    #             if filtered_member is None:
+    #                 continue
+    #             stream = _get_stream_for_member(member)
+    #             yield filtered_member, stream
+    #             if stream is not None:
+    #                 stream.close()
+
+    #     try:
+    #         tarinfo: tarfile.TarInfo | None = None
+
+    #         for tarinfo in self._archive:
+    #             member = self._tarinfo_to_archive_member(tarinfo)
+    #             self._register_member(member)
+
+    #             filtered_member = filter_func(member)
+    #             if filtered_member is None:
+    #                 continue
+
+    #             stream = _get_stream_for_member(member)
+    #             yield filtered_member, stream
+    #             if stream is not None:
+    #                 stream.close()
+
+    #         self.set_all_members_registered()
+
+    #         if self.config.tar_check_integrity and tarinfo is not None:
+    #             self._check_tar_integrity(tarinfo)
+
+    #     except tarfile.ReadError as e:
+    #         translated = _translate_tar_exception(e)
+    #         if translated:
+    #             raise translated from e
+    #         raise
+
+    #     # Try reading a bit further, so that any checksum in the compressed data is
+    #     # checked and corruption is detected.
+    #     try:
+    #         if self._fileobj is not None:
+    #             logger.info(
+    #                 f"Tar closing: Will read a few bytes from {self.archive_path}"
+    #             )
+    #             data = self._fileobj.read(65536)
+    #             logger.info(
+    #                 f"Tar closing: Read {len(data)} bytes from {self.archive_path}"
+    #             )
+
+    #     except tarfile.ReadError as e:
+    #         translated = _translate_tar_exception(e)
+    #         if translated is not None:
+    #             raise translated from e
+    #         raise
