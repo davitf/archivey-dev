@@ -33,7 +33,27 @@ def open_archive(
     streaming_only: bool = False,
     **kwargs: Any,
 ) -> ArchiveReader:
-    """Open an archive and return the appropriate reader."""
+    """Open an archive and return the appropriate reader.
+
+    Parameters
+    ----------
+    archive_path:
+        Path to the archive file.
+    config:
+        Optional :class:`ArchiveyConfig` to use while opening.  If omitted the
+        current default configuration is used.
+    streaming_only:
+        When ``True`` the returned reader only supports streaming access even if
+        the underlying format would allow random access.
+    **kwargs:
+        Additional format specific options.  The most common is ``pwd`` which
+        supplies a password for encrypted archives.
+
+    Returns
+    -------
+    ArchiveReader
+        A reader instance for the detected archive type.
+    """
     archive_path = _normalize_archive_path(archive_path)
 
     if not os.path.exists(archive_path):

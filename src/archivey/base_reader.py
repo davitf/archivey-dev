@@ -79,6 +79,14 @@ def _build_iterator_filter(
 
 
 class ArchiveReader(abc.ABC):
+    """Common interface implemented by all archive readers.
+
+    Instances are normally created via :func:`archivey.open_archive`.
+    An ``ArchiveReader`` acts as a context manager and exposes helper
+    methods for iterating over members, random access and extraction.
+    Concrete subclasses must implement the abstract methods below.
+    """
+
     def __init__(self, archive_path: str | bytes | os.PathLike, format: ArchiveFormat):
         self.archive_path = (
             archive_path.decode("utf-8")
@@ -182,7 +190,19 @@ class ArchiveReader(abc.ABC):
 
 
 class BaseArchiveReader(ArchiveReader):
-    """Abstract base class for archive streams."""
+    """Convenience base class for implementing new archive formats.
+
+    Subclasses only need to provide a handful of methods while reusing the
+    iteration and extraction logic from :class:`ArchiveReader`:
+
+    * ``iter_members_for_registration()`` – yield :class:`ArchiveMember`
+      objects found in the archive.
+    * ``open()`` – return a binary stream for a specific member.
+    * ``close()`` and ``get_archive_info()`` – clean-up and format metadata.
+
+    Other methods such as ``get_members()`` and ``extractall()`` are implemented
+    by the base class.
+    """
 
     def __init__(
         self,
