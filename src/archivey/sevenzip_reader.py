@@ -7,7 +7,7 @@ import pathlib
 import struct
 from abc import abstractmethod
 from queue import Empty, Queue
-from threading import Thread
+from threading import Thread, Lock
 from typing import (
     TYPE_CHECKING,
     BinaryIO,
@@ -63,6 +63,7 @@ from archivey.types import (
     MemberType,
 )
 from archivey.utils import bytes_to_str
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +265,41 @@ class ExtractWriterFactory(WriterFactory):
 class SevenZipReader(BaseArchiveReader):
     """Reader for 7-Zip archives."""
 
+    _password_lock: Lock = Lock()
+
+    @contextmanager
+    def _temporary_password(self, pwd: bytes | str | None):
+        """Temporarily set the password for all folders in the archive."""
+        if pwd is None or self._archive is None:
+            yield
+            return
+
+        SevenZipReader._password_lock.acquire()
+        try:
+            folders = []
+            try:
+                folders = (
+                    self._archive.header.main_streams.unpackinfo.folders
+                    if self._archive.header is not None
+                    and self._archive.header.main_streams is not None
+                    else []
+                )
+            except AttributeError:
+                folders = []
+
+            previous = [f.password for f in folders]
+            for f in folders:
+                f.password = bytes_to_str(pwd)
+
+            try:
+                yield
+            finally:
+                for f, p in zip(folders, previous):
+                    f.password = p
+        finally:
+            if pwd is not None:
+                SevenZipReader._password_lock.release()
+
     def __init__(
         self,
         archive_path: str,
@@ -443,16 +479,11 @@ class SevenZipReader(BaseArchiveReader):
         member, filename = self._resolve_member_to_open(member_or_filename)
 
         try:
-            # Hack: py7zr only supports setting a password when creating the
-            # SevenZipFile object, not when reaading a specific file. When uncompressing
-            # a file, the password is read from the file's folder, so we can set it
-            # there directly.
-            file_info = cast(ArchiveFile, member.raw_info)
-            if pwd is not None and file_info.folder is not None:
-                previous_password = file_info.folder.password
-                file_info.folder.password = bytes_to_str(pwd)
-
-            it = list(self.iter_members_with_io(members=[member], close_streams=False))
+            it = list(
+                self.iter_members_with_io(
+                    members=[member], pwd=pwd, close_streams=False
+                )
+            )
             assert len(it) == 1, (
                 f"Expected exactly one member, got {len(it)}. {member.filename}"
             )
@@ -470,9 +501,7 @@ class SevenZipReader(BaseArchiveReader):
                 f"Error reading member {member.filename}: {e}"
             ) from e
         finally:
-            # Restore the folder to its previous state, to avoid side effects.
-            if pwd is not None and file_info.folder is not None:
-                file_info.folder.password = previous_password
+            pass
 
     def _extract_members_iterator(
         self,
@@ -498,9 +527,9 @@ class SevenZipReader(BaseArchiveReader):
                 assert self._archive is not None
                 self._archive.reset()
                 factory = StreamingFactory(q)
-
-                self._archive.extract(targets=extract_targets, factory=factory)
-                factory.finish()
+                with self._temporary_password(pwd):
+                    self._archive.extract(targets=extract_targets, factory=factory)
+                    factory.finish()
             except Exception as e:
                 # logger.error(
                 #     f"Error in extractor thread for archive {self.archive_path}",
@@ -655,6 +684,8 @@ class SevenZipReader(BaseArchiveReader):
         self,
         member: ArchiveMember | str,
         path: str | None = None,
+        *,
+        pwd: bytes | str | None = None,
     ) -> str:
         if self._archive is None:
             raise ValueError("Archive is closed")
@@ -662,7 +693,8 @@ class SevenZipReader(BaseArchiveReader):
         member_obj = self.get_member(member)
 
         try:
-            self._archive.extract(path=path, targets=[member_obj.filename])
+            with self._temporary_password(pwd):
+                self._archive.extract(path=path, targets=[member_obj.filename])
         except py7zr.PasswordRequired as e:
             raise ArchiveEncryptedError(
                 f"Password required to extract member {member_obj.filename}"
@@ -700,9 +732,10 @@ class SevenZipReader(BaseArchiveReader):
         factory = ExtractWriterFactory(path, pending_extractions_to_member)
 
         logger.info(f"Extracting {paths_to_extract} to {path}")
-        self._archive.extract(
-            path, targets=paths_to_extract, recursive=False, factory=factory
-        )
+        with self._temporary_password(pwd):
+            self._archive.extract(
+                path, targets=paths_to_extract, recursive=False, factory=factory
+            )
         logger.info("Extraction done")
 
         for member in pending_extractions:
