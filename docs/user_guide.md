@@ -1,0 +1,126 @@
+# archivey User Guide
+
+This guide explains how to use the `archivey` library to work with various archive formats.
+
+## Opening an Archive
+
+The main entry point to the library is the `open_archive` function:
+
+```python
+from archivey import open_archive
+
+try:
+    with open_archive("my_archive.zip") as archive:
+        # Work with the archive
+        print("Successfully opened archive")
+except FileNotFoundError:
+    print("Archive not found at the specified path.")
+except ArchiveNotSupportedError:
+    print("The archive format is not supported.")
+except ArchiveError as e:
+    print(f"An archive-related error occurred: {e}")
+
+```
+
+The `open_archive` function takes the path to the archive file as its primary argument. It can also accept an optional `config` object and `streaming_only` flag.
+
+## The ArchiveReader Object
+
+When an archive is successfully opened, `open_archive` returns an `ArchiveReader` object. This object provides methods to interact with the archive's contents. It's recommended to use the `ArchiveReader` as a context manager (as shown above) to ensure resources are properly released.
+
+Key methods of the `ArchiveReader` object:
+
+*   **`close()`**: Closes the archive. Automatically called if using a context manager.
+*   **`get_members_if_available() -> List[ArchiveMember] | None`**: Returns a list of all members in the archive if readily available (e.g., from a central directory). May return `None` for stream-based archives where the full list isn't known without reading through the archive.
+*   **`get_members() -> List[ArchiveMember]`**: Returns a list of all members in the archive. For some archive types or streaming modes, this might involve processing a significant portion of the archive if the member list isn't available upfront.
+*   **`iter_members_with_io(members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember], Optional[ArchiveMember]]] = None) -> Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]`**: Iterates over members in the archive, yielding a tuple of `(ArchiveMember, BinaryIO_stream)` for each. The stream is `None` for non-file members like directories.
+    *   `members`: Optionally specify a collection of member names or `ArchiveMember` objects to iterate over.
+    *   `pwd`: Password for encrypted archives.
+    *   `filter`: A callable to filter members during iteration.
+*   **`get_archive_info() -> ArchiveInfo`**: Returns an `ArchiveInfo` object containing metadata about the archive itself (e.g., format, comments, solid status).
+*   **`has_random_access() -> bool`**: Returns `True` if the archive supports random access to its members (i.e., `open()` and `extract()` can be used directly without iterating). Returns `False` for streaming-only access.
+*   **`get_member(member_or_filename: Union[ArchiveMember, str]) -> ArchiveMember`**: Retrieves a specific `ArchiveMember` object by its name or by passing an existing `ArchiveMember` object (useful for identity checks).
+*   **`open(member_or_filename: Union[ArchiveMember, str], *, pwd: Optional[Union[bytes, str]] = None) -> BinaryIO`**: Opens a specific member of the archive for reading and returns a binary I/O stream. This is typically available if `has_random_access()` is `True`.
+*   **`extract(member_or_filename: Union[ArchiveMember, str], path: Optional[Union[str, os.PathLike]] = None, pwd: Optional[Union[bytes, str]] = None) -> Optional[str]`**: Extracts a single member to the specified `path` (defaults to the current directory). Returns the path to the extracted file. This is typically available if `has_random_access()` is `True`.
+*   **`extractall(path: Optional[Union[str, os.PathLike]] = None, members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember], Optional[ArchiveMember]]] = None) -> dict[str, ArchiveMember]`**: Extracts all (or a specified subset of) members to the given `path`.
+    *   `path`: Target directory for extraction (defaults to current directory).
+    *   `members`: A collection of member names or `ArchiveMember` objects to extract.
+    *   `pwd`: Password for encrypted archives.
+    *   `filter`: A callable to filter which members get extracted.
+    *   Returns a dictionary mapping extracted file paths to their `ArchiveMember` objects.
+
+## Working with Archive Members
+
+The `ArchiveMember` object contains metadata about an individual entry within the archive, such as its name, size, modification time, type (file, directory, link), etc.
+
+### Example: Listing Archive Contents
+
+```python
+from archivey import open_archive, ArchiveError
+
+try:
+    with open_archive("my_archive.tar.gz") as archive:
+        print(f"Archive Format: {archive.get_archive_info().format.value}")
+        if archive.has_random_access():
+            print("Archive supports random access.")
+            members = archive.get_members()
+            for member in members:
+                print(f"- {member.filename} (Size: {member.file_size}, Type: {member.type.value})")
+        else:
+            print("Archive is streaming-only. Iterating to get members:")
+            for member, stream in archive.iter_members_with_io():
+                print(f"- {member.filename} (Size: {member.file_size}, Type: {member.type.value})")
+                if stream:
+                    stream.close() # Important to close the stream if not reading from it
+except ArchiveError as e:
+    print(f"Error: {e}")
+```
+
+### Example: Reading a File from an Archive
+
+```python
+from archivey import open_archive, ArchiveMemberNotFoundError, ArchiveError
+
+try:
+    with open_archive("my_archive.zip") as archive:
+        if not archive.has_random_access():
+            print("Cannot directly open members in this archive type for reading without iteration.")
+        else:
+            try:
+                member_to_read = "path/to/file_in_archive.txt"
+                with archive.open(member_to_read) as f_stream:
+                    content = f_stream.read()
+                print(f"Content of {member_to_read}:\n{content.decode()}")
+            except ArchiveMemberNotFoundError:
+                print(f"File '{member_to_read}' not found in archive.")
+            except ArchiveError as e: # Other archive errors like decryption
+                print(f"Error reading file: {e}")
+except ArchiveError as e:
+    print(f"Error opening archive: {e}")
+
+```
+
+### Example: Extracting an Archive
+
+```python
+from archivey import open_archive, ArchiveError
+import os
+
+DESTINATION_DIR = "extracted_files"
+
+try:
+    with open_archive("my_archive.rar") as archive:
+        print(f"Extracting all files from {archive.archive_path} to {DESTINATION_DIR}...")
+        if not os.path.exists(DESTINATION_DIR):
+            os.makedirs(DESTINATION_DIR)
+
+        extracted_files = archive.extractall(path=DESTINATION_DIR)
+        print(f"Successfully extracted {len(extracted_files)} files:")
+        for path, member in extracted_files.items():
+            print(f"  - {path} (Original: {member.filename})")
+
+except ArchiveError as e:
+    print(f"Error: {e}")
+```
+
+This guide provides a basic overview. For more detailed information on specific classes and methods, please refer to the API documentation.

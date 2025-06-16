@@ -1,3 +1,4 @@
+"""Core functionality for opening and interacting with archives."""
 import os
 from typing import Any
 
@@ -33,7 +34,52 @@ def open_archive(
     streaming_only: bool = False,
     **kwargs: Any,
 ) -> ArchiveReader:
-    """Open an archive and return the appropriate reader."""
+    """
+    Open an archive file and return an appropriate ArchiveReader instance.
+
+    This function auto-detects the archive format and selects the correct reader.
+    It is the main entry point for users of the archivey library.
+
+    Args:
+        archive_path: Path to the archive file (e.g., "my_archive.zip", "data.tar.gz").
+            Can be a string, bytes, or an os.PathLike object.
+        config: Optional ArchiveyConfig object to customize behavior. If None,
+            default configuration is used.
+        streaming_only: If True, forces the archive to be opened in a streaming-only
+            mode, even if it supports random access. This can be useful for
+            very large archives or when only sequential access is needed.
+            Not all archive formats support this flag effectively.
+        **kwargs: Additional keyword arguments, primarily `pwd` for password-protected
+            archives.
+            pwd (Optional[Union[str, bytes]]): Password to use for decrypting
+                the archive.
+
+    Returns:
+        An ArchiveReader instance suitable for the detected archive format.
+
+    Raises:
+        FileNotFoundError: If the `archive_path` does not exist.
+        ArchiveNotSupportedError: If the archive format is not supported or cannot
+            be determined.
+        ArchiveCorruptedError: If the archive is detected as corrupted during opening
+            (some checks are format-specific).
+        ArchiveEncryptedError: If the archive is encrypted and no password is provided,
+            or if the provided password is incorrect.
+        TypeError: If `archive_path` or `pwd` have an invalid type.
+
+    Example:
+        >>> from archivey import open_archive, ArchiveError
+        >>>
+        >>> try:
+        ...     with open_archive("my_data.zip", pwd="secret") as archive:
+        ...         for member in archive.get_members():
+        ...             print(f"Found member: {member.filename}")
+        ...         # Further operations with the archive
+        ... except FileNotFoundError:
+        ...     print("Error: Archive file not found.")
+        ... except ArchiveError as e:
+        ...     print(f"An archive error occurred: {e}")
+    """
     archive_path = _normalize_archive_path(archive_path)
 
     if not os.path.exists(archive_path):
