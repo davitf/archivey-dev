@@ -7,7 +7,7 @@ import pathlib
 import struct
 from abc import abstractmethod
 from queue import Empty, Queue
-from threading import Thread, Lock
+from threading import Lock, Thread
 from typing import (
     TYPE_CHECKING,
     BinaryIO,
@@ -48,6 +48,8 @@ else:
         WriterFactory = object  # type: ignore[misc,assignment]
 
 
+from contextlib import contextmanager
+
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -63,7 +65,6 @@ from archivey.types import (
     MemberType,
 )
 from archivey.utils import bytes_to_str
-from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -488,6 +489,12 @@ class SevenZipReader(BaseArchiveReader):
                 f"Expected exactly one member, got {len(it)}. {member.filename}"
             )
             stream = cast(StreamingFile.Reader, it[0][1])
+            if isinstance(stream, ErrorIOStream):
+                # When a wrong password is provided, iter_members_with_io
+                # returns an ErrorIOStream instead of raising. In the context of
+                # `open`, propagate the error to match the behaviour of other
+                # readers.
+                stream.read()
             return stream  # BufferedReaderContextManager(stream)
 
         except py7zr.exceptions.ArchiveError as e:
@@ -732,10 +739,27 @@ class SevenZipReader(BaseArchiveReader):
         factory = ExtractWriterFactory(path, pending_extractions_to_member)
 
         logger.info(f"Extracting {paths_to_extract} to {path}")
-        with self._temporary_password(pwd):
-            self._archive.extract(
-                path, targets=paths_to_extract, recursive=False, factory=factory
-            )
+        try:
+            with self._temporary_password(pwd):
+                self._archive.extract(
+                    path, targets=paths_to_extract, recursive=False, factory=factory
+                )
+        except py7zr.PasswordRequired as e:
+            raise ArchiveEncryptedError(
+                f"Password required to extract archive {self.archive_path}"
+            ) from e
+        except py7zr.Bad7zFile as e:
+            raise ArchiveCorruptedError(
+                f"Invalid 7-Zip archive {self.archive_path}"
+            ) from e
+        except py7zr.exceptions.ArchiveError as e:
+            raise ArchiveError(
+                f"Error extracting archive {self.archive_path}: {e}"
+            ) from e
+        except lzma.LZMAError as e:
+            raise ArchiveCorruptedError(
+                f"Error extracting archive {self.archive_path}: {e}"
+            ) from e
         logger.info("Extraction done")
 
         for member in pending_extractions:
