@@ -78,9 +78,9 @@ class ZipReader(BaseArchiveReader):
             archive_path,
             random_access_supported=True,
             members_list_supported=True,
+            pwd=pwd,
         )
         self._format_info: ArchiveInfo | None = None
-        self._pwd = pwd
         try:
             self._archive = zipfile.ZipFile(self.archive_path, "r")
         except zipfile.BadZipFile as e:
@@ -199,7 +199,9 @@ class ZipReader(BaseArchiveReader):
         try:
             stream = self._archive.open(
                 cast(zipfile.ZipInfo, member.raw_info),
-                pwd=str_to_bytes(pwd or self._pwd),
+                pwd=str_to_bytes(
+                    pwd if pwd is not None else self.get_archive_password()
+                ),
             )
 
             return ExceptionTranslatingIO(

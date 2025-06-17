@@ -56,6 +56,17 @@ log_date_format = "%Y-%m-%d %H:%M:%S"
 
 [tool.hatch.envs.default]
 python = "3.13"
+dependencies = [
+    "devtools>=0.12.2",
+    "hatch>=1.14.1", # Hatch itself as a dep for the env, usually fine
+    "pytest>=8.3.5",
+    "pytest-timeout>=2.3.1",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.11.11",
+    "tox>=4.0.0",
+    "pdoc>=14.0.0",
+]
+features = ["optional"]
 
 [tool.hatch.envs.default.scripts]
 lint = "ruff check --fix . && ruff format . && npx pyright ."

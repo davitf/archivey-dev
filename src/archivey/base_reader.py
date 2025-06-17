@@ -1,4 +1,5 @@
 """Defines the abstract base classes and common functionality for archive readers."""
+
 import abc
 import logging
 import os
@@ -349,6 +350,7 @@ class BaseArchiveReader(ArchiveReader):
         archive_path: str | bytes | os.PathLike,
         random_access_supported: bool,
         members_list_supported: bool,
+        pwd: bytes | str | None = None,
     ):
         """
         Initialize the BaseArchiveReader.
@@ -362,8 +364,13 @@ class BaseArchiveReader(ArchiveReader):
             members_list_supported: bool indicating if `get_members()` can provide
                 a full list upfront (e.g., from a central directory). If False,
                 `get_members()` might have to iterate through the archive.
+            pwd: Optional default password for the archive.
         """
         super().__init__(archive_path, format)
+        if pwd is not None and isinstance(pwd, str):
+            self._archive_password: bytes | None = pwd.encode("utf-8")
+        else:
+            self._archive_password: bytes | None = pwd
 
         # self._member_id_to_member: dict[int, ArchiveMember] = {}
         self._members: list[ArchiveMember] = []
@@ -378,6 +385,10 @@ class BaseArchiveReader(ArchiveReader):
         self._early_members_list_supported = members_list_supported
 
         self._iterator_for_registration: Iterator[ArchiveMember] | None = None
+
+    def get_archive_password(self) -> bytes | None:
+        """Return the default password for the archive, if one was provided."""
+        return self._archive_password
 
     def _resolve_link_target(
         self, member: ArchiveMember, visited_members: set[int] = set()
@@ -519,7 +530,7 @@ class BaseArchiveReader(ArchiveReader):
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         """Get a list of all members in the archive, or None if not available. May not be available for stream archives."""
         if self._all_members_registered:
-            return self._members
+            return list(self._members)
 
         if not self._early_members_list_supported:
             return None
@@ -751,7 +762,7 @@ class BaseArchiveReader(ArchiveReader):
         while not self._all_members_registered:
             self._register_next_member()
 
-        return self._members
+        return list(self._members)
 
     def _resolve_member_to_open(
         self, member_or_filename: ArchiveMember | str

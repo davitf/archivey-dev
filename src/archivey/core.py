@@ -1,4 +1,5 @@
 """Core functionality for opening and interacting with archives."""
+
 import os
 from typing import Any
 
@@ -105,34 +106,35 @@ def open_archive(
         if format == ArchiveFormat.RAR:
             from archivey.rar_reader import RarReader
 
-            reader = RarReader(archive_path, pwd=pwd)
+            reader = RarReader(archive_path, pwd=kwargs.get("pwd"))
 
         elif format == ArchiveFormat.ZIP:
             from archivey.zip_reader import ZipReader
 
-            reader = ZipReader(archive_path, pwd=pwd)
+            reader = ZipReader(archive_path, pwd=kwargs.get("pwd"))
 
         elif format == ArchiveFormat.SEVENZIP:
             from archivey.sevenzip_reader import SevenZipReader
 
             reader = SevenZipReader(
-                archive_path, pwd=pwd, streaming_only=streaming_only
+                archive_path, pwd=kwargs.get("pwd"), streaming_only=streaming_only
             )
 
         elif format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
             from archivey.tar_reader import TarReader
 
             reader = TarReader(
-                archive_path, pwd=pwd, format=format, streaming_only=streaming_only
+                archive_path,
+                pwd=kwargs.get("pwd"),
+                format=format,
+                streaming_only=streaming_only,
             )
 
         elif format in SINGLE_FILE_COMPRESSED_FORMATS:
             from archivey.single_file_reader import SingleFileReader
 
             reader = SingleFileReader(
-                archive_path,
-                pwd=pwd,
-                format=format,
+                archive_path, pwd=kwargs.get("pwd"), format=format
             )
 
         elif format == ArchiveFormat.ISO:

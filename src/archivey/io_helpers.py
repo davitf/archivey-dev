@@ -1,4 +1,5 @@
 """Provides I/O helper classes, including exception translation and lazy opening."""
+
 import io
 import logging
 from dataclasses import dataclass, field
