@@ -255,9 +255,6 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
             self._remaining -= len(data)
             self._actual_crc = zlib.crc32(data, self._actual_crc)
 
-            logger.debug(
-                f"Read {len(data)} bytes from {self._filename}, {self._remaining} remaining: {data} ; crc={self._actual_crc:08x}"
-            )
             if self._remaining == 0:
                 self._fully_read = True
                 self._check_crc()
@@ -482,10 +479,8 @@ class RarReader(BaseArchiveReader):
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         assert self._archive is not None
 
-        logger.debug(f"iter_members_for_registration: {self._archive}")
         rarinfos: list[RarInfo] = self._archive.infolist()
         for info in rarinfos:
-            logger.debug(f"got rarinfo: {info}")
 
             compression_method = (
                 _RAR_COMPRESSION_METHODS.get(info.compress_type, "unknown")

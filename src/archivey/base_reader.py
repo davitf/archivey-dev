@@ -651,7 +651,6 @@ class BaseArchiveReader(ArchiveReader):
 
         filter_func = _build_iterator_filter(members, filter)
 
-        logger.debug(f"iter_members_with_io: {self.iter_members()}")
         for member in self.iter_members():
             logger.debug(f"iter_members_with_io member: {member}")
             filtered = filter_func(member)

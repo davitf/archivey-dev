@@ -97,9 +97,6 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     def read(self, n: int = -1) -> bytes:
         assert self._inner is not None
         try:
-            logger.debug(
-                f"Reading {self._inner} {n} bytes, current tell(): {self._inner.tell()}"
-            )
             return self._inner.read(n)
         except Exception as e:
             self._translate_exception(e)
@@ -108,9 +105,6 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
         assert self._inner is not None
         try:
-            logger.debug(
-                f"Seeking {self._inner} to {offset} whence={whence}, current tell(): {self._inner.tell()}"
-            )
             return self._inner.seek(offset, whence)
         except Exception as e:
             logger.error(f"Exception when seeking {self._inner}: {e}", exc_info=e)
