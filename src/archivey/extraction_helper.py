@@ -1,13 +1,18 @@
+from __future__ import annotations
+
 import collections
 import logging
 import os
 import shutil
 import threading
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
 
 from archivey.config import OverwriteMode
 from archivey.exceptions import ArchiveFileExistsError, ArchiveLinkTargetNotFoundError
 from archivey.types import ArchiveMember, MemberType
+
+if TYPE_CHECKING:
+    from archivey.base_reader import ArchiveReader
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +28,13 @@ def apply_member_metadata(member: ArchiveMember, target_path: str) -> None:
 class ExtractionHelper:
     def __init__(
         self,
-        archive_name: str,
+        archive_reader: "ArchiveReader",
         root_path: str,
         overwrite_mode: OverwriteMode,
         can_process_pending_extractions: bool = True,
     ):
         assert isinstance(overwrite_mode, OverwriteMode)
-
-        self.archive_name = archive_name
+        self.archive_reader = archive_reader
         self.root_path = root_path
         self.overwrite_mode = overwrite_mode
         self.can_process_pending_extractions = can_process_pending_extractions
@@ -253,7 +257,7 @@ class ExtractionHelper:
         if member.type == MemberType.HARDLINK:
             # Hard links can only point to files in the same archive.
             # If that file was already extracted, take the target path from the extracted path
-            target_member = member.link_target_member
+            target_member = self.archive_reader.resolve_link(member)
             if target_member is None:
                 self.failed_extractions.append(member)
                 raise ArchiveLinkTargetNotFoundError(
@@ -305,10 +309,12 @@ class ExtractionHelper:
         if member.type == MemberType.HARDLINK:
             os.link(target_path, member_path)
         else:
+            target_member = self.archive_reader.resolve_link(member)
             os.symlink(
                 member.link_target,
                 member_path,
-                target_is_directory=member.link_target_type == MemberType.DIR,
+                target_is_directory=target_member is not None
+                and target_member.type == MemberType.DIR,
             )
         self.extracted_members_by_path[member_path] = member
         return True

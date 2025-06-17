@@ -43,6 +43,7 @@ dev = [
     "ruff>=0.11.11",
     "tox>=4.0.0",
     "pdoc>=14.0.0", # I'm assuming ^ is not supported by Hatch, so I'm using >=
+    "pytest-parallel>=0.1.1",
 ]
 
 [tool.pytest.ini_options]

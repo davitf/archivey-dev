@@ -413,7 +413,7 @@ class BaseArchiveReader(ArchiveReader):
 
     def resolve_link(self, member: ArchiveMember) -> ArchiveMember | None:
         if not member.is_link or member.link_target is None:
-            return member # Not a link or no target path specified
+            return member  # Not a link or no target path specified
 
         # Ensure all members are registered so lookups are complete
         # This is crucial for _normalized_path_to_last_member and _filename_to_members
@@ -424,14 +424,20 @@ class BaseArchiveReader(ArchiveReader):
 
         return self._resolve_link_recursive(member, set())
 
-    def _resolve_link_recursive(self, member: ArchiveMember, visited_ids: set[int]) -> ArchiveMember | None:
+    def _resolve_link_recursive(
+        self, member: ArchiveMember, visited_ids: set[int]
+    ) -> ArchiveMember | None:
         # member_id should be set if it came from self.get_members() or iteration
         if member.member_id is None:
-            logger.error(f"Attempted to resolve link for member {member.filename} with no member_id.")
+            logger.error(
+                f"Attempted to resolve link for member {member.filename} with no member_id."
+            )
             return None
 
         if member.member_id in visited_ids:
-            logger.error(f"Link loop detected involving {member.filename} (ID: {member.member_id}).")
+            logger.error(
+                f"Link loop detected involving {member.filename} (ID: {member.member_id})."
+            )
             return None
         visited_ids.add(member.member_id)
 
@@ -441,42 +447,57 @@ class BaseArchiveReader(ArchiveReader):
             link_target_str = member.link_target
             # This check is defensive, should be caught by the public resolve_link method
             if link_target_str is None:
-                logger.warning(f"Hardlink target string is None for {member.filename} (ID: {member.member_id})")
+                logger.warning(
+                    f"Hardlink target string is None for {member.filename} (ID: {member.member_id})"
+                )
                 return None
 
             potential_targets = self._filename_to_members.get(link_target_str, [])
             # Find the most recent member with the same filename and a *lower* member_id
             # Ensure member_id is not None for potential targets as well
-            valid_targets = [m for m in potential_targets if m.member_id is not None and m.member_id < member.member_id]
+            valid_targets = [
+                m
+                for m in potential_targets
+                if m.member_id is not None and m.member_id < member.member_id
+            ]
             if not valid_targets:
-                logger.warning(f"Hardlink target {link_target_str} not found for {member.filename} (ID: {member.member_id}) or no earlier version exists.")
+                logger.warning(
+                    f"Hardlink target {link_target_str} not found for {member.filename} (ID: {member.member_id}) or no earlier version exists."
+                )
                 return None
 
             target_member = max(valid_targets, key=lambda m: m.member_id)
 
         elif member.type == MemberType.SYMLINK:
             link_target_str = member.link_target
-            if link_target_str is None: # Defensive check
-                logger.warning(f"Symlink target string is None for {member.filename} (ID: {member.member_id})")
+            if link_target_str is None:  # Defensive check
+                logger.warning(
+                    f"Symlink target string is None for {member.filename} (ID: {member.member_id})"
+                )
                 return None
 
             # Symlink targets are relative to the symlink's own directory
             normalized_link_target = posixpath.normpath(
                 posixpath.join(posixpath.dirname(member.filename), link_target_str)
             )
-            target_member = self._normalized_path_to_last_member.get(normalized_link_target)
+            target_member = self._normalized_path_to_last_member.get(
+                normalized_link_target
+            )
             if target_member is None:
-                logger.warning(f"Symlink target '{normalized_link_target}' (from '{link_target_str}') not found for {member.filename} (ID: {member.member_id}).")
+                logger.warning(
+                    f"Symlink target '{normalized_link_target}' (from '{link_target_str}') not found for {member.filename} (ID: {member.member_id})."
+                )
                 return None
         else:
             # Not a link type that this method resolves, or already resolved.
             return member
 
-
         if target_member is None:
             # This case should ideally be covered by the specific checks above,
             # but acts as a fallback.
-            logger.warning(f"Could not find target for {member.type.value} link '{member.filename}' pointing to '{member.link_target}'.")
+            logger.warning(
+                f"Could not find target for {member.type.value} link '{member.filename}' pointing to '{member.link_target}'."
+            )
             return None
 
         # If the direct target is itself a link, resolve it further
@@ -739,7 +760,7 @@ class BaseArchiveReader(ArchiveReader):
         filter_func = _build_iterator_filter(members, filter)
 
         extraction_helper = ExtractionHelper(
-            self.archive_path,
+            self,
             path,
             self.config.overwrite_mode,
             can_process_pending_extractions=self.has_random_access(),
@@ -855,7 +876,7 @@ class BaseArchiveReader(ArchiveReader):
         if self._random_access_supported:
             member = self.get_member(member_or_filename)
             extraction_helper = ExtractionHelper(
-                self.archive_path,
+                self,
                 path,
                 self.config.overwrite_mode,
                 can_process_pending_extractions=False,
@@ -938,3 +959,6 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
         preserve_links: bool = True,
     ) -> str | None:
         raise ValueError("Streaming-only archive reader does not support extract().")
+
+    def resolve_link(self, member: ArchiveMember) -> ArchiveMember | None:
+        return self.reader.resolve_link(member)

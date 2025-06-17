@@ -460,9 +460,6 @@ class SevenZipReader(BaseArchiveReader):
                 # Skip the links that failed to resolve, they'll just have an empty
                 # link target.
 
-            for member in links_to_resolve.values():
-                self._resolve_link_target(member)
-
         self._all_members_registered = True
 
     def open(
@@ -692,7 +689,6 @@ class SevenZipReader(BaseArchiveReader):
             # raise e
 
         for member in pending_links_by_id.values():
-            self._resolve_link_target(member)
             yield member, None
 
     def extract(
