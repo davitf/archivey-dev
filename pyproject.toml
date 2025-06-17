@@ -59,7 +59,7 @@ log_format = "%(asctime)s %(levelname)s %(threadName)s %(name)s:%(filename)s:%(l
 log_date_format = "%Y-%m-%d %H:%M:%S"
 
 [tool.hatch.envs.default]
-python = "3.13"
+python = "3.11"
 dependencies = [
     "devtools>=0.12.2",
     "hatch>=1.14.1", # Hatch itself as a dep for the env, usually fine
