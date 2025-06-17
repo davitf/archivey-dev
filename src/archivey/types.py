@@ -125,8 +125,6 @@ class ArchiveMember:
     encrypted: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
     link_target: Optional[str] = None
-    link_target_type: Optional[MemberType] = None
-    link_target_member: Optional["ArchiveMember"] = None
 
     # The raw info from the archive reader
     raw_info: Optional[Any] = None
