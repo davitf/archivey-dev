@@ -326,6 +326,27 @@ class ArchiveReader(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def resolve_link(self, member: ArchiveMember) -> ArchiveMember | None:
+        """
+        Resolve a link member to its ultimate target ArchiveMember.
+
+        If the given member is not a link, it should typically return the member itself
+        (or None if strict link-only resolution is desired, though returning self is safer).
+        If the member is a link (symlink or hardlink), this method will attempt
+        to find the final, non-link target it points to.
+
+        Args:
+            member: The ArchiveMember to resolve. This member should belong to this archive.
+
+        Returns:
+            The resolved ArchiveMember if the target exists and is found,
+            or None if the link target cannot be resolved (e.g., broken link,
+            target not found, or if the input member is not a link and strict
+            resolution is applied).
+        """
+        pass
+
     # Context manager support
     def __enter__(self) -> "ArchiveReader":
         return self
@@ -390,82 +411,80 @@ class BaseArchiveReader(ArchiveReader):
         """Return the default password for the archive, if one was provided."""
         return self._archive_password
 
-    def _resolve_link_target(
-        self, member: ArchiveMember, visited_members: set[int] = set()
-    ) -> None:
-        if member.link_target is None:
-            return
+    def resolve_link(self, member: ArchiveMember) -> ArchiveMember | None:
+        if not member.is_link or member.link_target is None:
+            return member # Not a link or no target path specified
 
-        # Run the search even if we had previously resolved the link target, as it
-        # may have been overwritten by a later member with the same filename.
+        # Ensure all members are registered so lookups are complete
+        # This is crucial for _normalized_path_to_last_member and _filename_to_members
+        if not self._all_members_registered:
+            # This call populates self._members and related lookup dicts
+            # by exhausting self.iter_members_for_registration()
+            self.get_members()
+
+        return self._resolve_link_recursive(member, set())
+
+    def _resolve_link_recursive(self, member: ArchiveMember, visited_ids: set[int]) -> ArchiveMember | None:
+        # member_id should be set if it came from self.get_members() or iteration
+        if member.member_id is None:
+            logger.error(f"Attempted to resolve link for member {member.filename} with no member_id.")
+            return None
+
+        if member.member_id in visited_ids:
+            logger.error(f"Link loop detected involving {member.filename} (ID: {member.member_id}).")
+            return None
+        visited_ids.add(member.member_id)
+
+        target_member: ArchiveMember | None = None
 
         if member.type == MemberType.HARDLINK:
-            # Look for the last member with the same filename and a lower member_id.
-            link_target = member.link_target
-            if link_target is None:
-                logger.warning(f"Hardlink target is None for {member.filename}")
-                return
+            link_target_str = member.link_target
+            # This check is defensive, should be caught by the public resolve_link method
+            if link_target_str is None:
+                logger.warning(f"Hardlink target string is None for {member.filename} (ID: {member.member_id})")
+                return None
 
-            members = self._filename_to_members.get(link_target, [])
-            target_member = max(
-                (m for m in members if m.member_id < member.member_id),
-                key=lambda m: m.member_id,
-                default=None,
-            )
-            if target_member is None:
-                logger.warning(
-                    f"Hardlink target {link_target} not found for {member.filename}"
-                )
-                return
+            potential_targets = self._filename_to_members.get(link_target_str, [])
+            # Find the most recent member with the same filename and a *lower* member_id
+            # Ensure member_id is not None for potential targets as well
+            valid_targets = [m for m in potential_targets if m.member_id is not None and m.member_id < member.member_id]
+            if not valid_targets:
+                logger.warning(f"Hardlink target {link_target_str} not found for {member.filename} (ID: {member.member_id}) or no earlier version exists.")
+                return None
 
-            # If the target is another hardlink, recursively resolve it.
-            # As we always look for members with a lower member_id, this will not
-            # loop forever.
-            if target_member.type == MemberType.HARDLINK:
-                self._resolve_link_target(target_member)
-                # This is guaranteed to point to the final non-hardlink in the chain.
-                target_member = target_member.link_target_member
-                if target_member is None:
-                    logger.warning(
-                        f"Hardlink target {link_target} not found for {member.filename} (when following hardlink)"
-                    )
-                    return
-
-            member.link_target_member = target_member
-            member.link_target_type = target_member.type
+            target_member = max(valid_targets, key=lambda m: m.member_id)
 
         elif member.type == MemberType.SYMLINK:
+            link_target_str = member.link_target
+            if link_target_str is None: # Defensive check
+                logger.warning(f"Symlink target string is None for {member.filename} (ID: {member.member_id})")
+                return None
+
+            # Symlink targets are relative to the symlink's own directory
             normalized_link_target = posixpath.normpath(
-                posixpath.join(posixpath.dirname(member.filename), member.link_target)
+                posixpath.join(posixpath.dirname(member.filename), link_target_str)
             )
-            target_member = self._normalized_path_to_last_member.get(
-                normalized_link_target
-            )
+            target_member = self._normalized_path_to_last_member.get(normalized_link_target)
             if target_member is None:
-                logger.warning(
-                    f"Symlink target {normalized_link_target} not found for {member.filename}"
-                )
-                return
+                logger.warning(f"Symlink target '{normalized_link_target}' (from '{link_target_str}') not found for {member.filename} (ID: {member.member_id}).")
+                return None
+        else:
+            # Not a link type that this method resolves, or already resolved.
+            return member
 
-            if target_member.is_link:
-                if target_member.member_id in visited_members:
-                    logger.error(
-                        f"Symlink loop detected: {member.filename} -> {target_member.filename}"
-                    )
-                    return
-                self._resolve_link_target(
-                    target_member, visited_members | {member.member_id}
-                )
-                if target_member.link_target_member is None:
-                    logger.warning(
-                        f"Link target {target_member.filename} {target_member.member_id} does not have a valid target (when resolving {member.filename} {member.member_id})"
-                    )
-                    return
 
-                target_member = target_member.link_target_member
+        if target_member is None:
+            # This case should ideally be covered by the specific checks above,
+            # but acts as a fallback.
+            logger.warning(f"Could not find target for {member.type.value} link '{member.filename}' pointing to '{member.link_target}'.")
+            return None
 
-            member.link_target_member = target_member
-            member.link_target_type = target_member.type
+        # If the direct target is itself a link, resolve it further
+        if target_member.is_link and target_member.link_target is not None:
+            # Pass a copy of visited_members for the new recursion branch to handle complex cases correctly
+            return self._resolve_link_recursive(target_member, visited_ids.copy())
+
+        return target_member
 
     def _register_member(self, member: ArchiveMember) -> None:
         assert self._registration_lock.locked(), "Not in registration lock"
@@ -493,7 +512,9 @@ class BaseArchiveReader(ArchiveReader):
         ):
             self._normalized_path_to_last_member[normalized_path] = member
 
-        self._resolve_link_target(member)
+        # Link resolution is now handled by the public resolve_link method when needed,
+        # not automatically during registration.
+        # self._resolve_link_target(member) # Old call removed
 
     @abc.abstractmethod
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
@@ -780,18 +801,15 @@ class BaseArchiveReader(ArchiveReader):
             )
 
             # If the user is opening a link, open the target member instead.
-            self._resolve_link_target(member)
-            logger.info(
-                f"Resolved link target for {member.filename} {member.type} {member.member_id}: {member.link_target}"
-            )
-            if member.link_target_member is None:
+            resolved_target = self.resolve_link(member)
+            if resolved_target is None:
                 raise ArchiveMemberCannotBeOpenedError(
-                    f"Link target not found: {member.filename} (when opening {filename})"
+                    f"Link target not found or resolution failed for {member.filename} (when opening {filename})"
                 )
+            final_member = resolved_target
             logger.info(
-                f"  target_member={member.link_target_member.member_id} {member.link_target_member.filename} {member.link_target_member.type}"
+                f"Resolved link {member.filename} to {final_member.filename} (ID: {final_member.member_id})"
             )
-            final_member = member.link_target_member
 
         logger.info(
             f"Final member: orig {filename} {member.member_id} {final_member.filename} {final_member.type}"
