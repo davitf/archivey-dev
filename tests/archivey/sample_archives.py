@@ -277,6 +277,13 @@ RAR_CMD = ArchiveCreationInfo(
     generation_method=GenerationMethod.RAR_COMMAND_LINE,
     features=ArchiveFormatFeatures(dir_entries=True, archive_comment=True),
 )
+RAR4_CMD = ArchiveCreationInfo(
+    file_suffix="rar4.rar",
+    format=ArchiveFormat.RAR,
+    generation_method=GenerationMethod.RAR_COMMAND_LINE,
+    generation_method_options={"rar4_format": True},
+    features=ArchiveFormatFeatures(dir_entries=True, archive_comment=True),
+)
 
 _TAR_FORMAT_FEATURES_TARCMD = ArchiveFormatFeatures()
 _TAR_FORMAT_FEATURES_TARFILE = ArchiveFormatFeatures(
@@ -471,6 +478,8 @@ ZIP_FORMATS = [
 
 RAR_FORMATS = [
     RAR_CMD,
+    # Causing several test failures, will need to investigate
+    # RAR4_CMD,
 ]
 
 SEVENZIP_FORMATS = [

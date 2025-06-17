@@ -498,7 +498,8 @@ def create_single_file_compressed_archive_with_command_line(
 
 
 def create_rar_archive_with_command_line(
-    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat,
+    rar4_format: bool = False,
 ):
     assert compression_format == ArchiveFormat.RAR, (
         f"Only RAR format is supported, got {compression_format}"
@@ -522,6 +523,8 @@ def create_rar_archive_with_command_line(
             group_files_by_password_and_compression_method(contents.files)
         ):
             command = ["rar", "a", "-oh", "-ol"]
+            if rar4_format:
+                command.append("-ma4")
 
             if contents.solid:
                 command.append("-s")
