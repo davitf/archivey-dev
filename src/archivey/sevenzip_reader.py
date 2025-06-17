@@ -101,7 +101,7 @@ class BasePy7zIOWriter(Py7zIO):
 
 class StreamingFile(BasePy7zIOWriter):
     class Reader(io.RawIOBase, BinaryIO):
-        def __init__(self, parent: "StreamingFile"):
+        def __init__(self, parent: "StreamingFile", pwd: bytes | str | None = None):
             self._parent = parent
             self._buffer = bytearray()
             self._eof = False
@@ -153,7 +153,13 @@ class StreamingFile(BasePy7zIOWriter):
 
         # TODO: do we need to implement readall / readinto?
 
-    def __init__(self, fname: str, files_queue: Queue, max_chunks=64):
+    def __init__(
+        self,
+        fname: str,
+        files_queue: Queue,
+        max_chunks=64,
+        pwd: bytes | str | None = None,
+    ):
         self._fname = fname
         self._data_queue = Queue(maxsize=max_chunks)
         self._reader_alive = True
@@ -180,7 +186,7 @@ class StreamingFile(BasePy7zIOWriter):
 
 
 class StreamingFactory(WriterFactory):
-    def __init__(self, q: Queue):
+    def __init__(self, q: Queue, pwd: bytes | str | None = None):
         self._queue = q
 
     def create(self, fname: str) -> Py7zIO:
@@ -200,7 +206,7 @@ class StreamingFactory(WriterFactory):
 
 
 class ExtractFileWriter(BasePy7zIOWriter):
-    def __init__(self, full_path: str):
+    def __init__(self, full_path: str, pwd: bytes | str | None = None):
         self.full_path = full_path
         os.makedirs(os.path.dirname(self.full_path), exist_ok=True)
 
@@ -216,7 +222,7 @@ class ExtractFileWriter(BasePy7zIOWriter):
 
 
 class ExtractLinkWriter(BasePy7zIOWriter):
-    def __init__(self, member: ArchiveMember):
+    def __init__(self, member: ArchiveMember, pwd: bytes | str | None = None):
         self.data = bytearray()
         self.member = member
 
@@ -279,12 +285,13 @@ class SevenZipReader(BaseArchiveReader):
         try:
             folders = []
             try:
-                folders = (
-                    self._archive.header.main_streams.unpackinfo.folders
-                    if self._archive.header is not None
-                    and self._archive.header.main_streams is not None
-                    else []
-                )
+                folders = []
+                if (
+                    self._archive.header
+                    and self._archive.header.main_streams
+                    and self._archive.header.main_streams.unpackinfo
+                ):
+                    folders = self._archive.header.main_streams.unpackinfo.folders
             except AttributeError:
                 folders = []
 
@@ -313,6 +320,7 @@ class SevenZipReader(BaseArchiveReader):
             archive_path,
             random_access_supported=not streaming_only,
             members_list_supported=True,
+            pwd=pwd,
         )
         self._format_info: ArchiveInfo | None = None
         self._streaming_only = streaming_only

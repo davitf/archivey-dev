@@ -60,6 +60,7 @@ class TarReader(BaseArchiveReader):
             archive_path,
             random_access_supported=not streaming_only,
             members_list_supported=not streaming_only,
+            pwd=pwd,
         )
         self._streaming_only = streaming_only
         self._format_info: ArchiveInfo | None = None

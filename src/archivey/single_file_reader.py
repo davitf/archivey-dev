@@ -204,6 +204,7 @@ class SingleFileReader(BaseArchiveReader):
             archive_path,
             random_access_supported=True,
             members_list_supported=True,
+            pwd=pwd,
         )
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")

@@ -220,6 +220,7 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         pwd: bytes | None = None,
     ):
         super().__init__()
+        self._member_pwd = pwd  # Store the password
         self._stream = shared_stream
         assert member.file_size is not None
         self._remaining: int = member.file_size
@@ -235,7 +236,6 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         self._filename = member.filename
         self._fully_read = False
         self._member = member
-        self._pwd = pwd
         self._crc_checked = False
 
     def read(self, n: int = -1) -> bytes:
@@ -270,7 +270,7 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         self._crc_checked = True
 
         matches = check_rarinfo_crc(
-            cast(RarInfo, self._member.raw_info), self._pwd, self._actual_crc
+            cast(RarInfo, self._member.raw_info), self._member_pwd, self._actual_crc
         )
         if not matches:
             raise ArchiveCorruptedError(f"CRC mismatch in {self._filename}")
@@ -422,9 +422,9 @@ class RarReader(BaseArchiveReader):
             archive_path,
             random_access_supported=True,
             members_list_supported=True,
+            pwd=pwd,
         )
         self._format_info: Optional[ArchiveInfo] = None
-        self._pwd = pwd
 
         if rarfile is None:
             raise PackageNotInstalledError(
@@ -604,7 +604,8 @@ class RarReader(BaseArchiveReader):
 
         if member.encrypted:
             pwd_check = verify_rar5_password(
-                str_to_bytes(pwd or self._pwd), cast(RarInfo, member.raw_info)
+                str_to_bytes(pwd if pwd is not None else self.get_archive_password()),
+                cast(RarInfo, member.raw_info),
             )
             if pwd_check == PasswordCheckResult.INCORRECT:
                 raise ArchiveEncryptedError(
@@ -651,8 +652,9 @@ class RarReader(BaseArchiveReader):
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self.config.use_rar_stream:
             logger.info("iter_members_with_io: using rar_stream_reader")
+            pwd_to_use = pwd if pwd is not None else self.get_archive_password()
             stream_reader = RarStreamReader(
-                self.archive_path, self.get_members(), pwd=pwd or self._pwd
+                self.archive_path, self.get_members(), pwd=pwd_to_use
             )
             filter_func = _build_iterator_filter(members, filter)
             for member, stream in stream_reader.rar_stream_iterator():
