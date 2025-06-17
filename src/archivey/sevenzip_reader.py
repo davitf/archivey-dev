@@ -553,7 +553,6 @@ class SevenZipReader(BaseArchiveReader):
         try:
             while True:
                 item = q.get()
-                logger.debug(f"  item: {item}")
                 if item is None:
                     break
                 if isinstance(item, Exception):
