@@ -29,11 +29,8 @@ from archivey.types import (
     MemberType,
 )
 
-# from archivey.iso_reader import IsoReader
-
 __all__ = [
     "open_archive",
-    # "IsoReader",
     "FolderReader",
     "ArchiveError",
     "ArchiveFormatError",

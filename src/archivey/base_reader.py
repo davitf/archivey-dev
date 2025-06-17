@@ -518,7 +518,7 @@ class BaseArchiveReader(ArchiveReader):
         member._member_id = len(self._members)
         self._members.append(member)
 
-        logger.info(f"Registering member {member.filename} ({member.member_id})")
+        logger.debug(f"Registering member {member.filename} ({member.member_id})")
 
         members_with_filename = self._filename_to_members[member.filename]
         if member not in members_with_filename:
@@ -535,7 +535,6 @@ class BaseArchiveReader(ArchiveReader):
 
         # Link resolution is now handled by the public resolve_link method when needed,
         # not automatically during registration.
-        # self._resolve_link_target(member) # Old call removed
 
     @abc.abstractmethod
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
@@ -652,12 +651,12 @@ class BaseArchiveReader(ArchiveReader):
 
         filter_func = _build_iterator_filter(members, filter)
 
-        logger.info(f"iter_members_with_io: {self.iter_members()}")
+        logger.debug(f"iter_members_with_io: {self.iter_members()}")
         for member in self.iter_members():
-            logger.info(f"iter_members_with_io member: {member}")
+            logger.debug(f"iter_members_with_io member: {member}")
             filtered = filter_func(member)
             if filtered is None:
-                logger.info(f"skipping {member.filename}")
+                logger.debug(f"skipping {member.filename}")
                 continue
 
             try:
@@ -779,20 +778,6 @@ class BaseArchiveReader(ArchiveReader):
 
         return extraction_helper.extracted_members_by_path
 
-    # @abc.abstractmethod
-    # def _read_members_list(self) -> bool:
-    #     """Read the members list from the archive.
-
-    #     This method is called by get_members() if the members list has not yet been
-    #     read. If available for the format, it should read the members list from the
-    #     archive without reading the whole archive, register the members and return True.
-    #     If not available, return False.
-
-    #     Returns:
-    #         True if the members list was read successfully, False otherwise.
-    #     """
-    #     pass
-
     def get_members(self) -> List[ArchiveMember]:
         if not self._early_members_list_supported:
             raise ValueError("Archive reader does not support get_members().")
@@ -817,7 +802,7 @@ class BaseArchiveReader(ArchiveReader):
         final_member = member = self.get_member(member_or_filename)
 
         if member.is_link:
-            logger.info(
+            logger.debug(
                 f"Resolving link target for {member.filename} {member.type} {member.member_id}"
             )
 
@@ -828,11 +813,11 @@ class BaseArchiveReader(ArchiveReader):
                     f"Link target not found or resolution failed for {member.filename} (when opening {filename})"
                 )
             final_member = resolved_target
-            logger.info(
+            logger.debug(
                 f"Resolved link {member.filename} to {final_member.filename} (ID: {final_member.member_id})"
             )
 
-        logger.info(
+        logger.debug(
             f"Final member: orig {filename} {member.member_id} {final_member.filename} {final_member.type}"
         )
         if not final_member.is_file:

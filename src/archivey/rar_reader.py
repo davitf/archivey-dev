@@ -180,7 +180,7 @@ def convert_crc_to_encrypted(
     # Compute HMAC-SHA256 of the CRC using the hash key
     digest = hmac.new(hash_key, raw_crc, hashlib.sha256).digest()
 
-    # logger.info(f"Digest: {password=} {salt=} crc={crc:08x} {raw_crc=} {digest.hex()}")
+    # logger.debug(f"Digest: {password=} {salt=} crc={crc:08x} {raw_crc=} {digest.hex()}")
 
     # XOR the digest bytes into the CRC
     result = 0
@@ -255,7 +255,7 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
             self._remaining -= len(data)
             self._actual_crc = zlib.crc32(data, self._actual_crc)
 
-            logger.info(
+            logger.debug(
                 f"Read {len(data)} bytes from {self._filename}, {self._remaining} remaining: {data} ; crc={self._actual_crc:08x}"
             )
             if self._remaining == 0:
@@ -333,7 +333,7 @@ class RarStreamReader:
             # Open an unrar process that outputs the contents of all files in the archive to stdout.
             password_args = ["-p" + bytes_to_str(self._pwd)] if self._pwd else ["-p-"]
             cmd = [unrar_path, "p", "-inul", *password_args, self.archive_path]
-            logger.info(
+            logger.debug(
                 f"Opening RAR archive {self.archive_path} with command: {' '.join(cmd)}"
             )
             self._proc = subprocess.Popen(
@@ -382,7 +382,7 @@ class RarStreamReader:
         guaranteed to have the same password for all files)
         """
 
-        logger.info("Iterating over %s members", len(self._members))
+        logger.debug("Iterating over %s members", len(self._members))
 
         members = sorted(self._members, key=lambda m: m.member_id)
         # TODO: apply filter, file type and password check to members before opening
@@ -482,10 +482,10 @@ class RarReader(BaseArchiveReader):
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         assert self._archive is not None
 
-        logger.info(f"iter_members_for_registration: {self._archive}")
+        logger.debug(f"iter_members_for_registration: {self._archive}")
         rarinfos: list[RarInfo] = self._archive.infolist()
         for info in rarinfos:
-            logger.info(f"got rarinfo: {info}")
+            logger.debug(f"got rarinfo: {info}")
 
             compression_method = (
                 _RAR_COMPRESSION_METHODS.get(info.compress_type, "unknown")
@@ -543,7 +543,7 @@ class RarReader(BaseArchiveReader):
             )
             yield member
 
-        logger.info("iter_members_for_registration: done")
+        logger.debug("iter_members_for_registration: done")
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -651,7 +651,7 @@ class RarReader(BaseArchiveReader):
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self.config.use_rar_stream:
-            logger.info("iter_members_with_io: using rar_stream_reader")
+            logger.debug("iter_members_with_io: using rar_stream_reader")
             pwd_to_use = pwd if pwd is not None else self.get_archive_password()
             stream_reader = RarStreamReader(
                 self.archive_path, self.get_members(), pwd=pwd_to_use
@@ -664,5 +664,5 @@ class RarReader(BaseArchiveReader):
                 yield filtered_member, stream
 
         else:
-            logger.info("iter_members_with_io: not using rar_stream_reader")
+            logger.debug("iter_members_with_io: not using rar_stream_reader")
             yield from super().iter_members_with_io(members, pwd=pwd, filter=filter)
