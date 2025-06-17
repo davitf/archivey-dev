@@ -44,6 +44,9 @@ dev = [
     "tox>=4.0.0",
     "pdoc>=14.0.0", # I'm assuming ^ is not supported by Hatch, so I'm using >=
     "pytest-parallel>=0.1.1",
+    # Required to make pytest-parallel work with current pytest version, see
+    # https://github.com/kevlened/pytest-parallel/issues/118
+    "py>=1.11.0",  
 ]
 
 [tool.pytest.ini_options]
