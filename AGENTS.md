@@ -73,3 +73,4 @@ along with the file hashes (computed by reading the archive members).
 - All exceptions raised by libraries should be wrapped in an exception defined in
 `src/archivey/exceptions.py`. NEVER catch `Exception` as it may hide code bugs; catch
 only the base exception of each library, or specific builtin exceptions that they raise.
+

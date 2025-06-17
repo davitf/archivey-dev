@@ -74,7 +74,7 @@ features = ["optional"]
 
 [tool.hatch.envs.default.scripts]
 lint = "ruff check --fix . && ruff format . && npx pyright ."
-test = "pytest"
+test = "uv run --extra optional pytest --workers auto"
 
 [tool.ruff]
 target-version = "py310"
