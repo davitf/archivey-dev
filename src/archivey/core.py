@@ -14,8 +14,6 @@ from archivey.types import (
     ArchiveFormat,
 )
 
-# from archivey.iso_reader import IsoReader
-
 
 def _normalize_archive_path(archive_path: str | bytes | os.PathLike) -> str:
     if isinstance(archive_path, os.PathLike):
@@ -139,7 +137,6 @@ def open_archive(
 
         elif format == ArchiveFormat.ISO:
             raise NotImplementedError("ISO reader is not yet implemented")
-            # reader = IsoReader(archive_path, password=pwd)
 
         elif format == ArchiveFormat.FOLDER:
             reader = FolderReader(archive_path)

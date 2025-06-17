@@ -217,7 +217,7 @@ class ExtractFileWriter(BasePy7zIOWriter):
         return len(b)
 
     def close(self):
-        logger.error(f"Closing file writer for {self.full_path}")
+        logger.debug(f"Closing file writer for {self.full_path}")
         self.file.close()
 
 
@@ -252,10 +252,10 @@ class ExtractWriterFactory(WriterFactory):
             logger.error(f"Member {fname} not found")
             return py7zr.io.NullIO()
         elif member.is_link:
-            logger.error(f"Extracting link {fname}")
+            logger.debug(f"Extracting link {fname}")
             return ExtractLinkWriter(member)
         elif not member.is_file:
-            logger.error(f"Ignoring non-file member {fname}")
+            logger.debug(f"Ignoring non-file member {fname}")
             return py7zr.io.NullIO()
 
         full_path = os.path.join(self._path, fname)
@@ -265,7 +265,7 @@ class ExtractWriterFactory(WriterFactory):
         self.member_id_to_outfile[member.member_id] = full_path
         self.outfiles.add(full_path)
 
-        logger.error(f"Creating writer for {fname}, path={full_path}")
+        logger.debug(f"Creating writer for {fname}, path={full_path}")
         return ExtractFileWriter(full_path)
 
 
@@ -478,7 +478,6 @@ class SevenZipReader(BaseArchiveReader):
             An IO object for the member.
         """
 
-        # logger.info(f"Opening member {member_or_filename} with password {pwd}")
         if self._archive is None:
             raise ValueError("Archive is closed")
 
@@ -543,10 +542,6 @@ class SevenZipReader(BaseArchiveReader):
                     self._archive.extract(targets=extract_targets, factory=factory)
                     factory.finish()
             except Exception as e:
-                # logger.error(
-                #     f"Error in extractor thread for archive {self.archive_path}",
-                #     exc_info=True,
-                # )
                 q.put(e)
                 # Catch all exceptions to avoid the main thread waiting forever.
                 # Any exception will be re-raised in the main thread.
@@ -554,11 +549,11 @@ class SevenZipReader(BaseArchiveReader):
         thread = Thread(target=extractor)
         thread.start()
 
-        logger.info(f"iter_members_iterator: starting -- targets: {extract_targets}")
+        logger.debug(f"iter_members_iterator: starting -- targets: {extract_targets}")
         try:
             while True:
                 item = q.get()
-                logger.info(f"  item: {item}")
+                logger.debug(f"  item: {item}")
                 if item is None:
                     break
                 if isinstance(item, Exception):
@@ -608,7 +603,7 @@ class SevenZipReader(BaseArchiveReader):
 
         # logger.info(f"filtered_members: {filtered_members}")  # TODO: remove
 
-        # logger.info(f"extract_filename_to_member: {extract_filename_to_member}")
+        # logger.debug(f"extract_filename_to_member: {extract_filename_to_member}")
 
         # member_included = _build_member_included_func(members)
 
@@ -619,7 +614,7 @@ class SevenZipReader(BaseArchiveReader):
         pending_filtered_members_by_id: dict[int, ArchiveMember] = {}
         pending_links_by_id: dict[int, ArchiveMember] = {}
 
-        logger.info("iter_members_with_io: starting first pass")
+        logger.debug("iter_members_with_io: starting first pass")
         for member in self.iter_members():
             if not member_filter_func(member):
                 continue
@@ -659,9 +654,9 @@ class SevenZipReader(BaseArchiveReader):
                 )
                 continue
 
-        # logger.info("iter_members_with_io: first pass done")
-        # # logger.info(f"extract_filename_to_member: {extract_filename_to_member}")
-        # logger.info(f"pending_filtered_members_by_id: {pending_filtered_members_by_id}")
+        # logger.debug("iter_members_with_io: first pass done")
+        # # logger.debug(f"extract_filename_to_member: {extract_filename_to_member}")
+        # logger.debug(f"pending_filtered_members_by_id: {pending_filtered_members_by_id}")
 
         try:
             for member, stream in self._extract_members_iterator(

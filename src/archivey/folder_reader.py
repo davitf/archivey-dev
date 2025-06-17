@@ -98,41 +98,6 @@ class FolderReader(BaseArchiveReader):
             for filename in filenames:
                 yield self._convert_entry_to_member(dirpath / filename)
 
-    # def iter_members_with_io(
-    #     self, *, pwd: bytes | str | None = None
-    # ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
-    #     if pwd is not None:
-    #         raise ArchiveError("Password is not supported for FolderReader")
-
-    #     for member in self._iter_member_infos():
-    #         if member.is_file:
-    #             try:
-    #                 stream = LazyOpenIO(self.open, member, seekable=True)
-    #             except (IOError, OSError) as e:
-    #                 logger.info(f"Error opening member {member.filename}: {e}")
-    #                 archive_error = ArchiveIOError(
-    #                     f"Error opening member {member.filename}: {e}",
-    #                 )
-    #                 archive_error.__cause__ = e
-    #                 stream = ErrorIOStream(archive_error)
-    #         else:
-    #             stream = None
-
-    #         yield member, stream
-    #         if stream is not None:
-    #             try:
-    #                 stream.close()
-    #             except OSError:
-    #                 logger.warning(
-    #                     "Error closing member %s", member.filename, exc_info=True
-    #                 )
-
-    # def _read_members_list(self) -> bool:
-    #     for info in self._iter_member_infos():
-    #         self.register_member(info)
-    #     self.set_all_members_registered()
-    #     return True
-
     def open(
         self,
         member_or_filename: ArchiveMember | str,

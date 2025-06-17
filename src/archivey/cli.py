@@ -101,14 +101,14 @@ def process_member(
                     f"{member.crc32:08x}" if member.crc32 is not None else "?" * 8
                 )
                 sha = " " * 16
-            print(
+            logger.info(
                 f"{encrypted_str}  {size_str}  {format_str}  {crc_display}  {sha}  {member.mtime}  {member.filename}"
             )
         except ArchiveError as e:
             formatted_crc = (
                 f"{member.crc32:08x}" if member.crc32 is not None else "?" * 8
             )
-            print(
+            logger.error(
                 f"{encrypted_str}  {size_str}  {format_str}  {formatted_crc}  {' ' * 16}  {member.mtime}  {member.filename} -- ERROR: {repr(e)}"
             )
         finally:
@@ -116,15 +116,15 @@ def process_member(
                 stream_to_close.close()
     elif member.is_link:
         assert isinstance(member.link_target, str) or member.link_target is None
-        print(
+        logger.info(
             f"{encrypted_str}  {size_str}  {format_str}  {' ' * 8}  {' ' * 16}  {member.mtime}  {member.filename} -> {member.link_target}"
         )
     else:
-        print(
+        logger.info(
             f"{encrypted_str}  {size_str}  {format_str}  {' ' * 8}  {' ' * 16}  {member.mtime}  {member.filename} {member.type.upper()}"
         )
     if member.comment:
-        print(f"    Comment: {member.comment}")
+        logger.info(f"    Comment: {member.comment}")
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -239,9 +239,9 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     if args.version:
-        print(f"archivey {package_version('archivey')}")
+        logger.info(f"archivey {package_version('archivey')}")
         versions = get_dependency_versions()
-        print(format_dependency_versions(versions))
+        logger.info(format_dependency_versions(versions))
         return
 
     member_filter = build_pattern_filter(pattern_args)
@@ -270,7 +270,7 @@ def main(argv: list[str] | None = None) -> None:
 
     for archive_path in args.files:
         try:
-            print(f"\nProcessing {archive_path}:")
+            logger.info(f"\nProcessing {archive_path}:")
             config = ArchiveyConfig(
                 use_libarchive=args.use_libarchive,
                 use_rar_stream=args.use_rar_stream,
@@ -286,7 +286,7 @@ def main(argv: list[str] | None = None) -> None:
                 config=config,
                 streaming_only=args.stream,
             ) as archive:
-                print(f"Archive format: {archive.format} {archive.get_archive_info()}")
+                logger.info(f"Archive format: {archive.format} {archive.get_archive_info()}")
                 if args.info:
                     continue
 
@@ -332,18 +332,16 @@ def main(argv: list[str] | None = None) -> None:
                             member, archive, verify=verify, pwd=args.password
                         )
         except ArchiveError as e:
-            print(f"Error processing {archive_path}: {e}")
+            logger.error(f"Error processing {archive_path}: {e}")
             logger.error(f"Error processing {archive_path}", exc_info=True)
-            print()
         if args.track_io:
             abs_path = os.path.abspath(archive_path)
             stats = stats_per_file.get(abs_path)
             if stats is not None:
-                print(
+                logger.debug(
                     f"IO stats for {archive_path}: {stats.bytes_read} bytes read, {stats.seek_calls} seeks"
                 )
-                print(stats.read_ranges)
-        print()
+                logger.debug(stats.read_ranges)
 
     if args.track_io:
         builtins.open = original_open  # type: ignore[has-type]
