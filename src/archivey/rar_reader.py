@@ -510,6 +510,10 @@ class RarReader(BaseArchiveReader):
                 has_encrypted_crc = False
 
             member = ArchiveMember(
+                # NOTE: For certain encrypted symlinks, the 'rarfile' library may provide
+                # a filename that differs from the original name stored in the archive
+                # (e.g., missing a prefix like 'encrypted_'). Archivey currently uses
+                # the filename as provided by rarfile.RarInfo.filename directly.
                 filename=info.filename or "",  # Will never actually be None
                 file_size=info.file_size,
                 compress_size=info.compress_size,

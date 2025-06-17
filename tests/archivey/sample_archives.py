@@ -557,21 +557,21 @@ ENCRYPTION_SEVERAL_PASSWORDS_AND_SYMLINKS_FILES = [
     File("secret.txt", 2, b"Secret", password="pwd"),
     File("also_secret.txt", 3, b"Also secret", password="pwd"),
     Symlink(
-        "link_to_secret.txt",
+        "encrypted_link_to_secret.txt",
         4,
         "secret.txt",
         contents=b"Secret",
         password="pwd",
     ),
     Symlink(
-        "link_to_very_secret.txt",
+        "encrypted_link_to_very_secret.txt",
         5,
         "very_secret.txt",
         contents=b"Very secret",
         password="pwd",
     ),
     Symlink(
-        "link_to_not_secret.txt",
+        "encrypted_link_to_not_secret.txt",
         6,
         "not_secret.txt",
         contents=b"Not secret",
@@ -713,10 +713,31 @@ def build_archive_infos() -> list[SampleArchive]:
     archives = []
     for contents, format_infos in ARCHIVE_DEFINITIONS:
         for format_info in format_infos:
+            # If this is the RAR format for 'encryption_with_symlinks', adjust symlink names
+            if contents.file_basename == 'encryption_with_symlinks' and format_info.format == ArchiveFormat.RAR:
+                # Deepcopy contents and its files list to avoid modifying the original
+                # which might be used by other archive formats (like 7zip).
+                temp_contents = copy.deepcopy(contents)
+                new_files_list = []
+                for f_info in temp_contents.files:
+                    if f_info.type == MemberType.SYMLINK:
+                        if f_info.name == 'encrypted_link_to_secret.txt':
+                            f_info.name = 'link_to_secret.txt'
+                        elif f_info.name == 'encrypted_link_to_very_secret.txt':
+                            f_info.name = 'link_to_very_secret.txt'
+                        elif f_info.name == 'encrypted_link_to_not_secret.txt':
+                            f_info.name = 'link_to_not_secret.txt'
+                    new_files_list.append(f_info)
+                temp_contents.files = new_files_list
+                # Use these modified contents for this specific SampleArchive instance
+                current_contents_obj = temp_contents
+            else:
+                current_contents_obj = contents
+
             filename = f"{contents.file_basename}__{format_info.file_suffix}"
             archive_info = SampleArchive(
                 filename=filename,
-                contents=contents,
+                contents=current_contents_obj,
                 creation_info=format_info,
                 skip_test=filename in SKIP_TEST_FILENAMES,
             )
