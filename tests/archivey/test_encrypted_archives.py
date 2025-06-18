@@ -237,7 +237,9 @@ def test_iterator_encryption_with_symlinks_no_password(
         for member, stream in archive.iter_members_with_io():
             members_by_name[member.filename] = stream
 
-    assert set(members_by_name.keys()) == {f.name for f in sample_archive.contents.files}
+    assert set(members_by_name.keys()) == {
+        f.name for f in sample_archive.contents.files
+    }
 
 
 @pytest.mark.parametrize(
@@ -258,7 +260,9 @@ def test_iterator_encryption_with_symlinks_password_in_open_archive(
         for member, stream in archive.iter_members_with_io():
             members_by_name[member.filename] = stream
 
-    assert set(members_by_name.keys()) == {f.name for f in sample_archive.contents.files}
+    assert set(members_by_name.keys()) == {
+        f.name for f in sample_archive.contents.files
+    }
 
 
 @pytest.mark.parametrize(
@@ -279,4 +283,6 @@ def test_iterator_encryption_with_symlinks_password_in_iterator(
         for member, stream in archive.iter_members_with_io(pwd="pwd"):
             members_by_name[member.filename] = stream
 
-    assert set(members_by_name.keys()) == {f.name for f in sample_archive.contents.files}
+    assert set(members_by_name.keys()) == {
+        f.name for f in sample_archive.contents.files
+    }

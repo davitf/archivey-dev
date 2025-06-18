@@ -20,7 +20,7 @@ from .exceptions import ArchiveError
 from .io_helpers import IOStats, StatsIO
 from .types import ArchiveMember, MemberType
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 
 
 def format_mode(member_type: MemberType, mode: int) -> str:

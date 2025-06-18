@@ -498,7 +498,9 @@ def create_single_file_compressed_archive_with_command_line(
 
 
 def create_rar_archive_with_command_line(
-    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat,
+    archive_path: str,
+    contents: ArchiveContents,
+    compression_format: ArchiveFormat,
     rar4_format: bool = False,
 ):
     assert compression_format == ArchiveFormat.RAR, (

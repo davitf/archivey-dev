@@ -1,4 +1,5 @@
 import collections
+import datetime
 import enum
 import functools
 import hashlib
@@ -476,12 +477,28 @@ class RarReader(BaseArchiveReader):
         # If the link target is encrypted, we can't read it.
         return None
 
+    def _get_timestamp_and_is_utc(
+        self, info: RarInfo
+    ) -> tuple[datetime.datetime | None, bool]:
+        if info.mtime is not None:
+            mtime = info.mtime
+        elif info.date_time is not None:
+            # For some reason (bug in rarfile?), directories in RAR4 archives have no mtime,
+            # but they do have a date_time.
+            mtime = rarfile.to_datetime(info.date_time)
+        else:
+            return None, False
+
+        # RAR5 stores timestamps in UTC, and the corresponding mtimes in rarfile
+        # have the timezone set, but RAR4 does not.
+        has_tz = mtime.tzinfo is not None
+        return mtime.replace(tzinfo=None), has_tz
+
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         assert self._archive is not None
 
         rarinfos: list[RarInfo] = self._archive.infolist()
         for info in rarinfos:
-
             compression_method = (
                 _RAR_COMPRESSION_METHODS.get(info.compress_type, "unknown")
                 if info.compress_type is not None
@@ -504,11 +521,14 @@ class RarReader(BaseArchiveReader):
             else:
                 has_encrypted_crc = False
 
+            # TODO: set is_utc in ArchiveMember
+            timestamp, is_utc = self._get_timestamp_and_is_utc(info)
+
             member = ArchiveMember(
                 filename=info.filename or "",  # Will never actually be None
                 file_size=info.file_size,
                 compress_size=info.compress_size,
-                mtime=info.mtime.replace(tzinfo=None) if info.mtime else None,
+                mtime=timestamp,
                 type=(
                     MemberType.HARDLINK
                     if is_rar_info_hardlink(info)

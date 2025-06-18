@@ -74,7 +74,7 @@ features = ["optional"]
 
 [tool.hatch.envs.default.scripts]
 lint = "ruff check --fix . && ruff format . && npx pyright ."
-test = "uv run --extra optional pytest --workers auto"
+test = "uv run --extra optional pytest --workers auto {args}"
 docs = "sh docs/generate_api_docs.sh"
 
 [tool.ruff]

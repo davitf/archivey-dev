@@ -896,7 +896,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="hardlinks_nonsolid",
             files=HARDLINKS_FILES,
         ),
-        RAR_FORMATS,
+        [RAR_CMD],  # RAR4 does not support hardlinks
     ),
     (
         ArchiveContents(
@@ -904,7 +904,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             files=HARDLINKS_FILES,
             solid=True,
         ),
-        RAR_FORMATS + BASIC_TAR_FORMATS,
+        [RAR_CMD] + BASIC_TAR_FORMATS,
     ),
     (
         ArchiveContents(
