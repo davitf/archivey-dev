@@ -85,3 +85,7 @@ exclude_also = [
     "if TYPE_CHECKING:",
     "except ImportError",
 ]
+
+[tool.pdoc]
+output_directory = "docs"
+modules = ["archivey"]
