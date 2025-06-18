@@ -310,7 +310,7 @@ class SevenZipReader(BaseArchiveReader):
 
     def __init__(
         self,
-        archive_path: str,
+        archive_path: BinaryIO | str,
         *,
         pwd: bytes | str | None = None,
         streaming_only: bool = False,

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import BinaryIO, Iterator, List
 
 from archivey.base_reader import BaseArchiveReader
-from archivey.compressed_streams import open_stream
+from archivey.compressed_streams import open_stream, open_stream_fileobj
 from archivey.exceptions import (
     ArchiveFormatError,
 )
@@ -186,7 +186,7 @@ class SingleFileReader(BaseArchiveReader):
 
     def __init__(
         self,
-        archive_path: str,
+        archive_path: BinaryIO | str,
         format: ArchiveFormat,
         *,
         pwd: bytes | str | None = None,
@@ -214,43 +214,53 @@ class SingleFileReader(BaseArchiveReader):
             raise ValueError(f"Unsupported archive format: {format}")
 
         self.archive_path = archive_path
-        self.ext = os.path.splitext(archive_path)[1].lower()
+        if isinstance(archive_path, str):
+            self.ext = os.path.splitext(archive_path)[1].lower()
+            name_for_member = os.path.splitext(os.path.basename(archive_path))[0] or "unknown"
+            mtime = datetime.fromtimestamp(os.path.getmtime(archive_path), tz=timezone.utc)
+            compress_size = os.path.getsize(archive_path)
+        else:
+            self.ext = f".{format.value}"
+            name_for_member = getattr(archive_path, "name", "unknown")
+            mtime = None
+            compress_size = None
         self.use_stored_metadata = self.config.use_single_file_stored_metadata
 
         # Get the base name without compression extension
         # TODO: what if the file has no extension, or a wrong extension?
         # maybe we should remove only extensions from known formats, and add an extra
         # extension if it doesn't have one?
-        self.member_name = (
-            os.path.splitext(os.path.basename(archive_path))[0] or "unknown"
-        )
+        self.member_name = name_for_member
 
         # Get file metadata
-        mtime = datetime.fromtimestamp(os.path.getmtime(archive_path), tz=timezone.utc)
         logger.info(f"Compressed file {archive_path} mtime: {mtime}")
 
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
             filename=self.member_name,
             file_size=None,  # Not available for all formats
-            compress_size=os.path.getsize(archive_path),
+            compress_size=compress_size,
             mtime_with_tz=mtime,
             type=MemberType.FILE,
             compression_method=self.format.value,
             crc32=None,
         )
 
-        if self.format == ArchiveFormat.GZIP:
-            read_gzip_metadata(archive_path, self.member, self.use_stored_metadata)
-        elif self.format == ArchiveFormat.XZ:
-            read_xz_metadata(archive_path, self.member)
+        if isinstance(archive_path, str):
+            if self.format == ArchiveFormat.GZIP:
+                read_gzip_metadata(archive_path, self.member, self.use_stored_metadata)
+            elif self.format == ArchiveFormat.XZ:
+                read_xz_metadata(archive_path, self.member)
 
         # self.register_member(self.member)
 
         # Open the file to see if it's supported by the library and valid.
         # To avoid opening the file twice, we'll store the reference and return it
         # on the first open() call.
-        self.fileobj = open_stream(self.format, self.archive_path, self.config)
+        if isinstance(archive_path, str):
+            self.fileobj = open_stream(self.format, archive_path, self.config)
+        else:
+            self.fileobj = open_stream_fileobj(self.format, archive_path, self.config)
 
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         yield self.member

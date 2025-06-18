@@ -1,21 +1,30 @@
 """Core functionality for opening and interacting with archives."""
 
 import os
-from typing import Any
+from typing import Any, BinaryIO
 
 from archivey.base_reader import ArchiveReader, StreamingOnlyArchiveReaderWrapper
 from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.folder_reader import FolderReader
-from archivey.formats import detect_archive_format
+from archivey.formats import (
+    detect_archive_format,
+    detect_archive_format_by_signature,
+)
+from archivey.compressed_streams import open_stream_fileobj
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
+    COMPRESSION_FORMAT_TO_TAR_FORMAT,
     ArchiveFormat,
 )
 
 
-def _normalize_archive_path(archive_path: str | bytes | os.PathLike) -> str:
+def _normalize_archive_path(
+    archive_path: BinaryIO | str | bytes | os.PathLike,
+) -> BinaryIO | str:
+    if hasattr(archive_path, "read"):
+        return archive_path  # type: ignore[return-value]
     if isinstance(archive_path, os.PathLike):
         return str(archive_path)
     elif isinstance(archive_path, bytes):
@@ -23,11 +32,13 @@ def _normalize_archive_path(archive_path: str | bytes | os.PathLike) -> str:
     elif isinstance(archive_path, str):
         return archive_path
 
-    raise TypeError(f"Invalid archive path type: {type(archive_path)} {archive_path}")
+    raise TypeError(
+        f"Invalid archive path type: {type(archive_path)} {archive_path}"
+    )
 
 
 def open_archive(
-    archive_path: str | bytes | os.PathLike,
+    archive_path: BinaryIO | str | bytes | os.PathLike,
     *,
     config: ArchiveyConfig | None = None,
     streaming_only: bool = False,
@@ -40,8 +51,8 @@ def open_archive(
     It is the main entry point for users of the archivey library.
 
     Args:
-        archive_path: Path to the archive file (e.g., "my_archive.zip", "data.tar.gz").
-            Can be a string, bytes, or an os.PathLike object.
+        archive_path: Path to the archive file (e.g., "my_archive.zip", "data.tar.gz")
+            or a binary file object containing the archive data.
         config: Optional ArchiveyConfig object to customize behavior. If None,
             default configuration is used.
         streaming_only: If True, forces the archive to be opened in a streaming-only
@@ -79,12 +90,38 @@ def open_archive(
         ... except ArchiveError as e:
         ...     print(f"An archive error occurred: {e}")
     """
-    archive_path = _normalize_archive_path(archive_path)
+    archive_path_normalized = _normalize_archive_path(archive_path)
 
-    if not os.path.exists(archive_path):
-        raise FileNotFoundError(f"Archive file not found: {archive_path}")
-
-    format = detect_archive_format(_normalize_archive_path(archive_path))
+    if isinstance(archive_path_normalized, str):
+        if not os.path.exists(archive_path_normalized):
+            raise FileNotFoundError(
+                f"Archive file not found: {archive_path_normalized}"
+            )
+        format = detect_archive_format(archive_path_normalized)
+    else:
+        try:
+            archive_path_normalized.seek(0)
+        except Exception:
+            pass
+        format = detect_archive_format_by_signature(archive_path_normalized)
+        if format in COMPRESSION_FORMAT_TO_TAR_FORMAT:
+            try:
+                archive_path_normalized.seek(0)
+                stream = open_stream_fileobj(
+                    format, archive_path_normalized, get_default_config()
+                )
+                head = stream.read(262)
+                if len(head) >= 262 and head[257:262].startswith(b"ustar"):
+                    format = COMPRESSION_FORMAT_TO_TAR_FORMAT[format]
+            finally:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+        try:
+            archive_path_normalized.seek(0)
+        except Exception:
+            pass
 
     pwd = kwargs.get("pwd")
     if pwd is not None and not isinstance(pwd, (str, bytes)):
@@ -104,25 +141,27 @@ def open_archive(
         if format == ArchiveFormat.RAR:
             from archivey.rar_reader import RarReader
 
-            reader = RarReader(archive_path, pwd=kwargs.get("pwd"))
+            reader = RarReader(archive_path_normalized, pwd=kwargs.get("pwd"))
 
         elif format == ArchiveFormat.ZIP:
             from archivey.zip_reader import ZipReader
 
-            reader = ZipReader(archive_path, pwd=kwargs.get("pwd"))
+            reader = ZipReader(archive_path_normalized, pwd=kwargs.get("pwd"))
 
         elif format == ArchiveFormat.SEVENZIP:
             from archivey.sevenzip_reader import SevenZipReader
 
             reader = SevenZipReader(
-                archive_path, pwd=kwargs.get("pwd"), streaming_only=streaming_only
+                archive_path_normalized,
+                pwd=kwargs.get("pwd"),
+                streaming_only=streaming_only,
             )
 
         elif format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
             from archivey.tar_reader import TarReader
 
             reader = TarReader(
-                archive_path,
+                archive_path_normalized,
                 pwd=kwargs.get("pwd"),
                 format=format,
                 streaming_only=streaming_only,
@@ -132,14 +171,16 @@ def open_archive(
             from archivey.single_file_reader import SingleFileReader
 
             reader = SingleFileReader(
-                archive_path, pwd=kwargs.get("pwd"), format=format
+                archive_path_normalized,
+                pwd=kwargs.get("pwd"),
+                format=format,
             )
 
         elif format == ArchiveFormat.ISO:
             raise NotImplementedError("ISO reader is not yet implemented")
 
         elif format == ArchiveFormat.FOLDER:
-            reader = FolderReader(archive_path)
+            reader = FolderReader(archive_path_normalized)
 
         else:
             raise ArchiveNotSupportedError(f"Unsupported archive format: {format}")

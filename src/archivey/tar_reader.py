@@ -9,7 +9,7 @@ from archivey.base_reader import (
     ArchiveMember,
     BaseArchiveReader,
 )
-from archivey.compressed_streams import open_stream
+from archivey.compressed_streams import open_stream, open_stream_fileobj
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
@@ -39,7 +39,7 @@ class TarReader(BaseArchiveReader):
 
     def __init__(
         self,
-        archive_path: str,
+        archive_path: BinaryIO | str,
         format: ArchiveFormat,
         streaming_only: bool = False,
         *,
@@ -70,9 +70,14 @@ class TarReader(BaseArchiveReader):
 
         if format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
             self.compression_method = TAR_FORMAT_TO_COMPRESSION_FORMAT[format]
-            self._fileobj = open_stream(
-                self.compression_method, archive_path, self.config
-            )
+            if isinstance(archive_path, str):
+                self._fileobj = open_stream(
+                    self.compression_method, archive_path, self.config
+                )
+            else:
+                self._fileobj = open_stream_fileobj(
+                    self.compression_method, archive_path, self.config
+                )
             logger.debug(
                 f"Compressed tar opened: {self._fileobj} seekable={self._fileobj.seekable()}"
             )
@@ -84,7 +89,10 @@ class TarReader(BaseArchiveReader):
 
         elif format == ArchiveFormat.TAR:
             self.compression_method = "store"
-            self._fileobj = open(archive_path, "rb")
+            if isinstance(archive_path, str):
+                self._fileobj = open(archive_path, "rb")
+            else:
+                self._fileobj = archive_path
         else:
             raise ValueError(f"Unsupported archive format: {format}")
 
@@ -92,7 +100,10 @@ class TarReader(BaseArchiveReader):
         try:
             # Fail on any error.
             self._archive = tarfile.open(
-                name=archive_path, fileobj=self._fileobj, mode=open_mode, errorlevel=2
+                name=archive_path if isinstance(archive_path, str) else None,
+                fileobj=self._fileobj,
+                mode=open_mode,
+                errorlevel=2,
             )
             logger.debug(
                 f"Tar opened: {self._archive} seekable={self._fileobj.seekable()}"

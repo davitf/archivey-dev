@@ -89,12 +89,16 @@ class ArchiveReader(abc.ABC):
     format-specific functionality.
     """
 
-    def __init__(self, archive_path: str | bytes | os.PathLike, format: ArchiveFormat):
-        self.archive_path = (
-            archive_path.decode("utf-8")
-            if isinstance(archive_path, bytes)
-            else str(archive_path)
-        )
+    def __init__(
+        self, archive_path: BinaryIO | str | bytes | os.PathLike, format: ArchiveFormat
+    ):
+        self._input = archive_path
+        if isinstance(archive_path, (str, os.PathLike)):
+            self.archive_path = str(archive_path)
+        elif isinstance(archive_path, bytes):
+            self.archive_path = archive_path.decode("utf-8")
+        else:
+            self.archive_path = "<stream>"
         self.format = format
         self.config: ArchiveyConfig = get_default_config()
 
@@ -368,7 +372,7 @@ class BaseArchiveReader(ArchiveReader):
     def __init__(
         self,
         format: ArchiveFormat,
-        archive_path: str | bytes | os.PathLike,
+        archive_path: BinaryIO | str | bytes | os.PathLike,
         random_access_supported: bool,
         members_list_supported: bool,
         pwd: bytes | str | None = None,
