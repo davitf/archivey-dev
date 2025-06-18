@@ -114,7 +114,7 @@ class ArchiveMember:
     filename: str
     file_size: Optional[int]
     compress_size: Optional[int]
-    mtime: Optional[datetime]
+    mtime_storage: Optional[datetime] # Renamed from mtime
     type: MemberType
 
     # Fields with default values
@@ -139,6 +139,13 @@ class ArchiveMember:
     _archive_id: Optional[int] = None
 
     @property
+    def mtime(self) -> Optional[datetime]:
+        if self.mtime_storage is None:
+            return None
+        # Always return a naive datetime for external consumers
+        return self.mtime_storage.replace(tzinfo=None)
+
+    @property
     def member_id(self) -> int:
         if self._member_id is None:
             raise ValueError("Member index not yet set")
@@ -154,15 +161,17 @@ class ArchiveMember:
     @property
     def date_time(self) -> Optional[Tuple[int, int, int, int, int, int]]:
         """Returns the date and time as a tuple."""
-        if self.mtime is None:
+        # This now correctly uses the self.mtime property, which returns a naive datetime
+        mtime_to_convert = self.mtime
+        if mtime_to_convert is None:
             return None
         return (
-            self.mtime.year,
-            self.mtime.month,
-            self.mtime.day,
-            self.mtime.hour,
-            self.mtime.minute,
-            self.mtime.second,
+            mtime_to_convert.year,
+            mtime_to_convert.month,
+            mtime_to_convert.day,
+            mtime_to_convert.hour,
+            mtime_to_convert.minute,
+            mtime_to_convert.second,
         )
 
     @property

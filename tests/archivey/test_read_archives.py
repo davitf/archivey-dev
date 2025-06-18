@@ -121,13 +121,23 @@ def check_member_metadata(
             CreateSystem.UNKNOWN,
         }
 
-    # Check mtime.tzinfo
-    if member.mtime is not None and expected_mtime_tzinfo != 'check_omitted':
-        assert member.mtime.tzinfo == expected_mtime_tzinfo, (
-            f"mtime.tzinfo mismatch for {member.filename} in {sample_archive.filename} "
-            f"(format {sample_archive.creation_info.format}): "
-            f"got {member.mtime.tzinfo}, expected {expected_mtime_tzinfo}"
-        )
+    # Check mtime_storage.tzinfo and mtime property behavior
+    if expected_mtime_tzinfo != 'check_omitted':
+        if member.mtime_storage is not None:
+            assert member.mtime_storage.tzinfo == expected_mtime_tzinfo, (
+                f"mtime_storage.tzinfo mismatch for {member.filename} in {sample_archive.filename} "
+                f"(format {sample_archive.creation_info.format}): "
+                f"got {member.mtime_storage.tzinfo}, expected {expected_mtime_tzinfo}"
+            )
+            # Also check the mtime property
+            assert member.mtime is not None, "mtime property should not be None if mtime_storage is not None"
+            assert member.mtime.tzinfo is None, "mtime property should always return a naive datetime"
+        elif member.mtime is not None: # mtime property should be None if mtime_storage is None
+             assert False, f"mtime property was not None ({member.mtime}), but mtime_storage was None for {member.filename}"
+        # If mtime_storage is None, and mtime property is also None, this is fine and covered by earlier mtime value checks.
+    elif member.mtime_storage is not None: # If check is omitted, still verify property is naive
+        assert member.mtime is not None
+        assert member.mtime.tzinfo is None, "mtime property should always be naive even if tzinfo check is omitted"
 
 
 def check_iter_members(
