@@ -126,12 +126,11 @@ class TarReader(BaseArchiveReader):
             filename=filename,
             file_size=info.size,
             compress_size=None,
-            mtime=datetime.fromtimestamp(info.mtime, tz=timezone.utc).replace(
-                tzinfo=None
-            )
-            if info.mtime
-            else None,
-            mtime_is_utc=True,
+            mtime=(
+                datetime.fromtimestamp(info.mtime, tz=timezone.utc)
+                if info.mtime
+                else None
+            ),
             type=(
                 MemberType.FILE
                 if info.isfile()

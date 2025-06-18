@@ -59,15 +59,14 @@ def read_gzip_metadata(
         id1, id2, cm, flg, mtime_timestamp, xfl, os = struct.unpack("<4BIBB", header)
 
         if mtime_timestamp != 0:
-            extra_fields["mtime"] = datetime.fromtimestamp(
-                mtime_timestamp, tz=timezone.utc
-            ).replace(tzinfo=None)
+            # GZIP stores mtime as UTC. Create an aware datetime object.
+            aware_utc_mtime = datetime.fromtimestamp(mtime_timestamp, tz=timezone.utc)
+            extra_fields["mtime"] = aware_utc_mtime # Store aware time in extra_fields as well
             logger.info(
-                f"GZIP metadata: mtime_timestamp={mtime_timestamp}, mtime={extra_fields['mtime']}"
+                f"GZIP metadata: mtime_timestamp={mtime_timestamp}, mtime={aware_utc_mtime}"
             )
             if use_stored_metadata:
-                member.mtime = extra_fields["mtime"]
-                member.mtime_is_utc = True # GZIP mtime is UTC
+                member.mtime = aware_utc_mtime # Set member.mtime to the aware UTC time
 
         # Add compression method and level
         extra_fields["compress_type"] = cm  # 8 = deflate, consistent with ZIP
@@ -234,8 +233,7 @@ class SingleFileReader(BaseArchiveReader):
             filename=self.member_name,
             file_size=None,  # Not available for all formats
             compress_size=os.path.getsize(archive_path),
-            mtime=mtime,
-            mtime_is_utc=False, # Default to False, may be updated by read_gzip_metadata
+            mtime=mtime, # This is initially naive local time
             type=MemberType.FILE,
             compression_method=self.format.value,
             crc32=None,

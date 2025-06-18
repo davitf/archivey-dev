@@ -1,7 +1,7 @@
 import collections
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone # Ensure timezone is imported
 from typing import Optional
 
 import pytest
@@ -34,7 +34,7 @@ def check_member_metadata(
     sample_file: FileInfo | None,
     sample_archive: SampleArchive,
     archive_path: str | None = None,
-    expected_mtime_is_utc_override: Optional[bool] = None,
+    expected_mtime_tzinfo: Optional[timezone | str] = 'check_omitted', # New parameter
 ):
     if sample_file is None:
         return
@@ -121,12 +121,12 @@ def check_member_metadata(
             CreateSystem.UNKNOWN,
         }
 
-    # Check mtime_is_utc
-    if member.mtime is not None and expected_mtime_is_utc_override is not None:
-        assert member.mtime_is_utc == expected_mtime_is_utc_override, (
-            f"mtime_is_utc mismatch for {member.filename} in {sample_archive.filename} "
+    # Check mtime.tzinfo
+    if member.mtime is not None and expected_mtime_tzinfo != 'check_omitted':
+        assert member.mtime.tzinfo == expected_mtime_tzinfo, (
+            f"mtime.tzinfo mismatch for {member.filename} in {sample_archive.filename} "
             f"(format {sample_archive.creation_info.format}): "
-            f"got {member.mtime_is_utc}, expected {expected_mtime_is_utc_override}"
+            f"got {member.mtime.tzinfo}, expected {expected_mtime_tzinfo}"
         )
 
 
@@ -136,7 +136,7 @@ def check_iter_members(
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
     config: Optional[ArchiveyConfig] = None,
-    expected_mtime_is_utc_override: Optional[bool] = None,
+    expected_mtime_tzinfo: Optional[timezone | str] = 'check_omitted', # New parameter
 ):
     skip_if_package_missing(sample_archive.creation_info.format, config, sample_archive.filename)
 
@@ -301,7 +301,7 @@ def check_iter_members(
                     sample_file,
                     sample_archive,
                     archive_path=archive_path_resolved,
-                    expected_mtime_is_utc_override=expected_mtime_is_utc_override,
+                    expected_mtime_tzinfo=expected_mtime_tzinfo, # Pass new parameter
                 )
 
                 if sample_file.type == MemberType.FILE and not skip_member_contents:
@@ -336,16 +336,16 @@ def check_iter_members(
     ids=lambda x: x.filename,
 )
 def test_read_zip_archives(sample_archive: SampleArchive, sample_archive_path: str):
-    expected_mtime_is_utc: Optional[bool] = None
+    expected_tzinfo: Optional[timezone | str] = 'check_omitted'
     if "infozip" in sample_archive.filename:
-        expected_mtime_is_utc = True
+        expected_tzinfo = timezone.utc
     elif "zipfile_deflate" in sample_archive.filename or "zipfile_store" in sample_archive.filename:
-        expected_mtime_is_utc = False
+        expected_tzinfo = None # Naive
 
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
-        expected_mtime_is_utc_override=expected_mtime_is_utc,
+        expected_mtime_tzinfo=expected_tzinfo,
     )
 
 
@@ -385,7 +385,7 @@ def test_read_tar_archives(
         archive_path=sample_archive_path,
         skip_member_contents=True,
         config=config,
-        expected_mtime_is_utc_override=True,  # TAR mtime is UTC
+        expected_mtime_tzinfo=timezone.utc,  # TAR mtime is UTC
     )
 
 
@@ -425,7 +425,7 @@ def test_read_rar_archives(
     has_multiple_passwords = sample_archive.contents.has_multiple_passwords()
     first_file_has_password = sample_archive.contents.files[0].password is not None
 
-    expected_mtime_is_utc = "rar4" not in sample_archive.filename
+    expected_tzinfo = timezone.utc if "rar4" not in sample_archive.filename else None
 
     expect_failure = use_rar_stream and (
         has_multiple_passwords
@@ -442,7 +442,7 @@ def test_read_rar_archives(
                 sample_archive,
                 archive_path=sample_archive_path,
                 config=config,
-                expected_mtime_is_utc_override=expected_mtime_is_utc,
+                expected_mtime_tzinfo=expected_tzinfo,
             )
     else:
         check_iter_members(
@@ -450,7 +450,7 @@ def test_read_rar_archives(
             archive_path=sample_archive_path,
             config=config,
             skip_member_contents=deps.unrar_version is None,
-            expected_mtime_is_utc_override=expected_mtime_is_utc,
+            expected_mtime_tzinfo=expected_tzinfo,
         )
 
 
@@ -474,14 +474,14 @@ def test_read_rar_archives_with_password_in_constructor(
         pytest.skip("unrar not installed, skipping RarStreamReader test")
 
     config = ArchiveyConfig(use_rar_stream=use_rar_stream)
-    expected_mtime_is_utc = "rar4" not in sample_archive.filename
+    expected_tzinfo = timezone.utc if "rar4" not in sample_archive.filename else None
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
         config=config,
         set_file_password_in_constructor=True,
         skip_member_contents=deps.unrar_version is None,
-        expected_mtime_is_utc_override=expected_mtime_is_utc,
+        expected_mtime_tzinfo=expected_tzinfo,
     )
 
 
@@ -500,20 +500,20 @@ def test_read_zip_and_7z_archives_with_password_in_constructor(
     sample_archive: SampleArchive,
     sample_archive_path: str,
 ):
-    expected_mtime_is_utc: Optional[bool] = None
+    expected_tzinfo: Optional[timezone | str] = 'check_omitted'
     if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
-        expected_mtime_is_utc = True
+        expected_tzinfo = timezone.utc
     elif sample_archive.creation_info.format == ArchiveFormat.ZIP:
         if "infozip" in sample_archive.filename:
-            expected_mtime_is_utc = True
+            expected_tzinfo = timezone.utc
         elif "zipfile_deflate" in sample_archive.filename or "zipfile_store" in sample_archive.filename:
-            expected_mtime_is_utc = False
+            expected_tzinfo = None # Naive
 
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
         set_file_password_in_constructor=True,
-        expected_mtime_is_utc_override=expected_mtime_is_utc,
+        expected_mtime_tzinfo=expected_tzinfo,
     )
 
 
@@ -528,7 +528,7 @@ def test_read_sevenzip_py7zr_archives(  # TODO: merge with above?
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
-        expected_mtime_is_utc_override=True,  # 7z mtime is UTC
+        expected_mtime_tzinfo=timezone.utc,  # 7z mtime is UTC
     )
 
 
@@ -557,28 +557,28 @@ def test_read_single_file_compressed_archives(
         config = ArchiveyConfig(use_single_file_stored_metadata=True) # First case: True
         # We will call check_iter_members twice for the 'else' case if GZIP
 
-    expected_mtime_is_utc: Optional[bool] = False # Default for most single files
+    expected_tzinfo: Optional[timezone] = None # Default for most single files (naive)
     is_gzip = sample_archive.creation_info.format == ArchiveFormat.GZIP
 
     if is_gzip and "single_file_with_metadata_filename_mtime" in sample_archive.filename and config.use_single_file_stored_metadata:
-        expected_mtime_is_utc = True
+        expected_tzinfo = timezone.utc
 
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
         config=config,
-        expected_mtime_is_utc_override=expected_mtime_is_utc,
+        expected_mtime_tzinfo=expected_tzinfo,
     )
 
-    if not alternative_packages and is_gzip:
-        # Second case for non-alternative: use_single_file_stored_metadata=False
+    if not alternative_packages and is_gzip: # Test the GZIP case with use_single_file_stored_metadata=False
         config_no_stored_meta = ArchiveyConfig(use_single_file_stored_metadata=False)
-        expected_mtime_is_utc_no_meta = False # Should always be False if not using stored meta
+        # When not using stored metadata, or if GZIP file has no internal mtime, it should be naive.
+        expected_tzinfo_no_meta = None
         check_iter_members(
             sample_archive,
             archive_path=sample_archive_path,
             config=config_no_stored_meta,
-            expected_mtime_is_utc_override=expected_mtime_is_utc_no_meta,
+            expected_mtime_tzinfo=expected_tzinfo_no_meta,
         )
 
 
@@ -627,15 +627,23 @@ def test_read_hardlinks_archives(
     # mtime_is_utc for hardlinks depends on the archive type (e.g. True for TAR)
     # This will be inherited from the main test for that archive type.
     # No specific override needed here unless hardlinks behave differently within a format.
-    expected_mtime_is_utc: Optional[bool] = None
+    expected_tzinfo: Optional[timezone | str] = 'check_omitted'
     if sample_archive.creation_info.format == ArchiveFormat.TAR: # tar, tar.gz etc.
-        expected_mtime_is_utc = True
-    # Add other format specific expectations for hardlinks if necessary
+        expected_tzinfo = timezone.utc
+    # Potentially add other format specific expectations for hardlinks if necessary:
+    # elif sample_archive.creation_info.format == ArchiveFormat.ZIP:
+    #     if "infozip" in sample_archive.filename: # Assuming infozip specific behavior
+    #         expected_tzinfo = timezone.utc
+    #     else: # Default for other zip hardlinks
+    #         expected_tzinfo = None
+    # elif sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
+    # expected_tzinfo = timezone.utc
+
 
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
-        expected_mtime_is_utc_override=expected_mtime_is_utc
+        expected_mtime_tzinfo=expected_tzinfo,
     )
 
 
@@ -649,5 +657,5 @@ def test_read_folder_archives(sample_archive: SampleArchive, sample_archive_path
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
-        expected_mtime_is_utc_override=False,  # Filesystem mtime is local
+        expected_mtime_tzinfo=None,  # Filesystem mtime is local (naive)
     )

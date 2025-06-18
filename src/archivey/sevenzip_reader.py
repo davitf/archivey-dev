@@ -17,6 +17,7 @@ from typing import (
     Union,
     cast,
 )
+from datetime import timezone # Ensure timezone is imported
 
 from archivey.base_reader import (
     BaseArchiveReader,
@@ -428,12 +429,11 @@ class SevenZipReader(BaseArchiveReader):
                 # It's actually an int.
                 file_size=file.uncompressed,  # type: ignore
                 compress_size=file.compressed,
-                mtime=py7zr.helpers.filetime_to_dt(file.lastwritetime).replace(
-                    tzinfo=None
-                )
-                if file.lastwritetime
-                else None,
-                mtime_is_utc=True,
+                mtime=(
+                    py7zr.helpers.filetime_to_dt(file.lastwritetime).replace(tzinfo=timezone.utc)
+                    if file.lastwritetime
+                    else None
+                ),
                 type=file_type,
                 # link_target_type=
                 mode=file.posix_mode,

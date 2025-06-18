@@ -118,7 +118,6 @@ class ArchiveMember:
     type: MemberType
 
     # Fields with default values
-    mtime_is_utc: bool = False
     mode: Optional[int] = None
     crc32: Optional[int] = None
     compression_method: Optional[str] = None  # e.g. "deflate", "lzma", etc.

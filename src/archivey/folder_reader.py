@@ -1,7 +1,7 @@
 import logging
 import os
 import stat
-from datetime import datetime, timezone
+from datetime import datetime # timezone is no longer needed here
 from pathlib import Path
 from typing import BinaryIO, Iterator, Optional
 
@@ -80,10 +80,7 @@ class FolderReader(BaseArchiveReader):
             filename=filename,
             file_size=stat_result.st_size,
             compress_size=stat_result.st_size,  # No compression for folders
-            mtime=datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc).replace(
-                tzinfo=None
-            ),
-            mtime_is_utc=False,
+            mtime=datetime.fromtimestamp(stat_result.st_mtime), # Creates naive local datetime
             type=member_type,
             mode=stat_result.st_mode,
             link_target=link_target,

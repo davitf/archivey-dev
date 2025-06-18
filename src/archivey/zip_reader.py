@@ -25,23 +25,23 @@ _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]
 logger = logging.getLogger(__name__)
 
 
-def get_zipinfo_timestamp(
-    zip_info: zipfile.ZipInfo,
-) -> tuple[datetime | None, bool]:
+def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> Optional[datetime]:
     """Get the timestamp from a ZipInfo object, handling extended timestamp fields.
 
     Returns:
-        A tuple containing the datetime object and a boolean indicating if it's UTC
-        (from extended timestamp field). Returns (None, False) if no valid timestamp.
+        A datetime object (UTC-aware if from extended field, naive if from main field)
+        or None if no valid timestamp.
     """
-    if not zip_info.date_time or len(zip_info.date_time) != 6:
-        main_modtime = None
-    else:
-        main_modtime = datetime(*zip_info.date_time)
+    main_modtime: Optional[datetime] = None
+    if zip_info.date_time and len(zip_info.date_time) == 6:
+        try:
+            main_modtime = datetime(*zip_info.date_time)
+        except ValueError: # Handles cases like date_time=(0,0,0,0,0,0) which is invalid
+            logger.warning(f"Invalid main date_time for {zip_info.filename}: {zip_info.date_time}")
+            main_modtime = None
 
-    is_utc = False
     if not zip_info.extra:
-        return main_modtime, is_utc
+        return main_modtime
 
     # Parse extended timestamp extra field (0x5455)
     pos = 0
@@ -78,21 +78,22 @@ def get_zipinfo_timestamp(
                 # Convert to datetime
                 if mod_time_unix > 0:
                     try:
-                        extra_modtime = datetime.fromtimestamp(
+                        # This will be a UTC-aware datetime object
+                        extra_modtime_utc = datetime.fromtimestamp(
                             mod_time_unix, tz=timezone.utc
-                        ).replace(tzinfo=None)
+                        )
                         logger.debug(
                             f"Modtime from UT extra field for {zip_info.filename}: "
-                            f"main={main_modtime}, extra={extra_modtime} (raw_unix={mod_time_unix})"
+                            f"{extra_modtime_utc} (raw_unix={mod_time_unix})"
                         )
-                        return extra_modtime, True  # Timestamp is UTC
+                        return extra_modtime_utc  # Return UTC-aware datetime
                     except (OSError, ValueError) as e:
                         logger.warning(
                             f"Invalid Unix timestamp {mod_time_unix} in UT extra field for {zip_info.filename}: {e}"
                         )
             # No need to parse other times (access, create) for now
-            # Fall through to return main_modtime if mtime not in UT field
-            break # Only parse the first UT field if multiple exist (should not happen)
+            # Fall through to return main_modtime if mtime not in UT field or invalid
+            break  # Only parse the first UT field if multiple exist (should not happen)
 
         # Skip this field: data_size
         pos += ln
@@ -100,7 +101,7 @@ def get_zipinfo_timestamp(
     logger.debug(
         f"Modtime from main date_time for {zip_info.filename}: {main_modtime}"
     )
-    return main_modtime, False
+    return main_modtime  # Return naive main_modtime
 
 
 class ZipReader(BaseArchiveReader):
@@ -188,13 +189,12 @@ class ZipReader(BaseArchiveReader):
             mode = info.external_attr >> 16
             is_link = stat.S_ISLNK(mode)
 
-            timestamp, is_utc = get_zipinfo_timestamp(info)
+            timestamp = get_zipinfo_timestamp(info)
             member = ArchiveMember(
                 filename=info.filename,
                 file_size=info.file_size,
                 compress_size=info.compress_size,
                 mtime=timestamp,
-                mtime_is_utc=is_utc,
                 type=MemberType.DIR
                 if is_dir
                 else MemberType.SYMLINK
