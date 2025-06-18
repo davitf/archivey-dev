@@ -59,14 +59,15 @@ def read_gzip_metadata(
         id1, id2, cm, flg, mtime_timestamp, xfl, os = struct.unpack("<4BIBB", header)
 
         if mtime_timestamp != 0:
+            # gzip timestamps are in UTC.
             extra_fields["mtime"] = datetime.fromtimestamp(
                 mtime_timestamp, tz=timezone.utc
-            ).replace(tzinfo=None)
+            )
             logger.info(
                 f"GZIP metadata: mtime_timestamp={mtime_timestamp}, mtime={extra_fields['mtime']}"
             )
             if use_stored_metadata:
-                member.mtime = extra_fields["mtime"]
+                member.mtime_with_tz = extra_fields["mtime"]
 
         # Add compression method and level
         extra_fields["compress_type"] = cm  # 8 = deflate, consistent with ZIP
@@ -225,7 +226,7 @@ class SingleFileReader(BaseArchiveReader):
         )
 
         # Get file metadata
-        mtime = datetime.fromtimestamp(os.path.getmtime(archive_path))
+        mtime = datetime.fromtimestamp(os.path.getmtime(archive_path), tz=timezone.utc)
         logger.info(f"Compressed file {archive_path} mtime: {mtime}")
 
         # Create a single member representing the decompressed file
@@ -233,7 +234,7 @@ class SingleFileReader(BaseArchiveReader):
             filename=self.member_name,
             file_size=None,  # Not available for all formats
             compress_size=os.path.getsize(archive_path),
-            mtime=mtime,
+            mtime_with_tz=mtime,
             type=MemberType.FILE,
             compression_method=self.format.value,
             crc32=None,

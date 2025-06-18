@@ -114,7 +114,7 @@ class ArchiveMember:
     filename: str
     file_size: Optional[int]
     compress_size: Optional[int]
-    mtime: Optional[datetime]
+    mtime_with_tz: Optional[datetime]
     type: MemberType
 
     mode: Optional[int] = None
@@ -132,6 +132,13 @@ class ArchiveMember:
     # A unique identifier for this member within the archive. Used to distinguish members
     # and preserve ordering, but not for direct indexing. Assigned by register_member().
     _member_id: Optional[int] = None
+
+    @property
+    def mtime(self) -> Optional[datetime]:
+        """Returns the mtime as a datetime object without timezone information."""
+        if self.mtime_with_tz is None:
+            return None
+        return self.mtime_with_tz.replace(tzinfo=None)
 
     @property
     def member_id(self) -> int:

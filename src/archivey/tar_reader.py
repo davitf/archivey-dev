@@ -126,9 +126,8 @@ class TarReader(BaseArchiveReader):
             filename=filename,
             file_size=info.size,
             compress_size=None,
-            mtime=datetime.fromtimestamp(info.mtime, tz=timezone.utc).replace(
-                tzinfo=None
-            )
+            # TAR files store times in UTC.
+            mtime_with_tz=datetime.fromtimestamp(info.mtime, tz=timezone.utc)
             if info.mtime
             else None,
             type=(

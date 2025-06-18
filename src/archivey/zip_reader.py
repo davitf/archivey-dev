@@ -49,9 +49,7 @@ def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
 
                 # Convert to datetime
                 if mod_time > 0:
-                    extra_modtime = datetime.fromtimestamp(
-                        mod_time, tz=timezone.utc
-                    ).replace(tzinfo=None)
+                    extra_modtime = datetime.fromtimestamp(mod_time, tz=timezone.utc)
                     logger.debug(
                         f"Modtime: main={main_modtime}, extra={extra_modtime} timestamp={mod_time}"
                     )
@@ -153,7 +151,7 @@ class ZipReader(BaseArchiveReader):
                 filename=info.filename,
                 file_size=info.file_size,
                 compress_size=info.compress_size,
-                mtime=get_zipinfo_timestamp(info),
+                mtime_with_tz=get_zipinfo_timestamp(info),
                 type=MemberType.DIR
                 if is_dir
                 else MemberType.SYMLINK

@@ -2,7 +2,7 @@ import copy
 import os
 import random
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
@@ -165,6 +165,7 @@ class ArchiveFormatFeatures:
     # A limitation / bug in the RAR4 format: Unicode characters above 0x10000 are not
     # correctly encoded in comment fields.
     comment_corrupts_unicode_non_bmp_chars: bool = False
+    mtime_with_tz: bool = False
 
 
 DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
@@ -230,6 +231,7 @@ ZIP_ZIPFILE_STORE = ArchiveCreationInfo(
         archive_comment=True,
         rounded_mtime=True,
         duplicate_files=True,
+        mtime_with_tz=False,
     ),
     generation_method_options={"compression_method": "store"},
 )
@@ -242,6 +244,7 @@ ZIP_ZIPFILE_DEFLATE = ArchiveCreationInfo(
         archive_comment=True,
         rounded_mtime=True,
         duplicate_files=True,
+        mtime_with_tz=False,
     ),
     generation_method_options={"compression_method": "deflate"},
 )
@@ -251,7 +254,12 @@ ZIP_INFOZIP = ArchiveCreationInfo(
     generation_method=GenerationMethod.INFOZIP,
     # Times are not rounded, as infozip adds the timestamps extra field
     features=ArchiveFormatFeatures(
-        file_comments=True, archive_comment=True, rounded_mtime=False
+        file_comments=True,
+        archive_comment=True,
+        rounded_mtime=False,
+        # Info-zip files include the extended timestamp extra field, which store
+        # times in UTC.
+        mtime_with_tz=True,
     ),
 )
 
@@ -264,13 +272,16 @@ SEVENZIP_PY7ZR = ArchiveCreationInfo(
         dir_entries=False,
         archive_comment=True,
         duplicate_files=True,
+        mtime_with_tz=True,
     ),
 )
 SEVENZIP_7ZCMD = ArchiveCreationInfo(
     file_suffix="7zcmd.7z",
     format=ArchiveFormat.SEVENZIP,
     generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
-    features=ArchiveFormatFeatures(dir_entries=False, archive_comment=True),
+    features=ArchiveFormatFeatures(
+        dir_entries=False, archive_comment=True, mtime_with_tz=True
+    ),
 )
 
 # RAR format
@@ -278,7 +289,9 @@ RAR_CMD = ArchiveCreationInfo(
     file_suffix=".rar",
     format=ArchiveFormat.RAR,
     generation_method=GenerationMethod.RAR_COMMAND_LINE,
-    features=ArchiveFormatFeatures(dir_entries=True, archive_comment=True),
+    features=ArchiveFormatFeatures(
+        dir_entries=True, archive_comment=True, mtime_with_tz=True
+    ),
 )
 RAR4_CMD = ArchiveCreationInfo(
     file_suffix="rar4.rar",
@@ -289,12 +302,13 @@ RAR4_CMD = ArchiveCreationInfo(
         dir_entries=True,
         archive_comment=True,
         comment_corrupts_unicode_non_bmp_chars=True,
+        mtime_with_tz=False,
     ),
 )
 
-_TAR_FORMAT_FEATURES_TARCMD = ArchiveFormatFeatures()
+_TAR_FORMAT_FEATURES_TARCMD = ArchiveFormatFeatures(mtime_with_tz=True)
 _TAR_FORMAT_FEATURES_TARFILE = ArchiveFormatFeatures(
-    duplicate_files=True, hardlink_mtime=True
+    duplicate_files=True, hardlink_mtime=True, mtime_with_tz=True
 )
 
 # TAR formats
@@ -366,14 +380,14 @@ GZIP_CMD = ArchiveCreationInfo(
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     # Dp not preserve filename and timestamp
     generation_method_options={"compression_cmd": "gzip", "cmd_args": ["-n"]},
-    features=ArchiveFormatFeatures(file_size=True),
+    features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 GZIP_CMD_PRESERVE_METADATA = ArchiveCreationInfo(
     file_suffix="cmd.gz",
     format=ArchiveFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "gzip", "cmd_args": ["-N"]},
-    features=ArchiveFormatFeatures(file_size=True),
+    features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 
 BZIP2_CMD = ArchiveCreationInfo(
@@ -381,28 +395,28 @@ BZIP2_CMD = ArchiveCreationInfo(
     format=ArchiveFormat.BZIP2,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "bzip2"},
-    features=ArchiveFormatFeatures(file_size=False),
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 XZ_CMD = ArchiveCreationInfo(
     file_suffix="cmd.xz",
     format=ArchiveFormat.XZ,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "xz"},
-    features=ArchiveFormatFeatures(file_size=True),
+    features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 ZSTD_CMD = ArchiveCreationInfo(
     file_suffix="cmd.zst",
     format=ArchiveFormat.ZSTD,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "zstd"},
-    features=ArchiveFormatFeatures(file_size=False),
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 LZ4_CMD = ArchiveCreationInfo(
     file_suffix="cmd.lz4",
     format=ArchiveFormat.LZ4,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "lz4"},
-    features=ArchiveFormatFeatures(file_size=False),
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 
 GZIP_LIBRARY = ArchiveCreationInfo(
@@ -410,31 +424,31 @@ GZIP_LIBRARY = ArchiveCreationInfo(
     format=ArchiveFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     generation_method_options={"opener_kwargs": {"mtime": 0}},
-    features=ArchiveFormatFeatures(file_size=True),
+    features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 BZIP2_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.bz2",
     format=ArchiveFormat.BZIP2,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    features=ArchiveFormatFeatures(file_size=False),
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 XZ_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.xz",
     format=ArchiveFormat.XZ,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    features=ArchiveFormatFeatures(file_size=True),
+    features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 ZSTD_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.zst",
     format=ArchiveFormat.ZSTD,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    features=ArchiveFormatFeatures(file_size=False),
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 LZ4_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.lz4",
     format=ArchiveFormat.LZ4,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    features=ArchiveFormatFeatures(file_size=False),
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 
 # ISO format
@@ -675,7 +689,7 @@ COMPRESSION_METHOD_FILES_LZMA = COMPRESSION_METHODS_FILES + [
 ]
 
 MARKER_FILENAME_BASED_ON_ARCHIVE_NAME = "SINGLE_FILE_MARKER"
-MARKER_MTIME_BASED_ON_ARCHIVE_NAME = datetime(3141, 5, 9, 2, 6, 53)
+MARKER_MTIME_BASED_ON_ARCHIVE_NAME = datetime(3141, 5, 9, 2, 6, 53, tzinfo=timezone.utc)
 
 # Single compressed files (e.g. .gz, .bz2, .xz)
 SINGLE_FILE_TXT_CONTENT = b"This is a single test file for compression.\n"

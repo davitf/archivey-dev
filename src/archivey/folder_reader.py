@@ -61,7 +61,7 @@ class FolderReader(BaseArchiveReader):
                 filename=filename,
                 file_size=0,
                 compress_size=0,
-                mtime=None,
+                mtime_with_tz=None,
                 type=MemberType.OTHER,  # Or be more specific if possible from error
                 comment=f"Error reading entry: {e}",
                 raw_info=e,
@@ -80,9 +80,8 @@ class FolderReader(BaseArchiveReader):
             filename=filename,
             file_size=stat_result.st_size,
             compress_size=stat_result.st_size,  # No compression for folders
-            mtime=datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc).replace(
-                tzinfo=None
-            ),
+            # st_mtime is in seconds since the epoch, so UTC.
+            mtime_with_tz=datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc),
             type=member_type,
             mode=stat_result.st_mode,
             link_target=link_target,

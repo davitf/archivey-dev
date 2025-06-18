@@ -428,9 +428,7 @@ class SevenZipReader(BaseArchiveReader):
                 # It's actually an int.
                 file_size=file.uncompressed,  # type: ignore
                 compress_size=file.compressed,
-                mtime=py7zr.helpers.filetime_to_dt(file.lastwritetime).replace(
-                    tzinfo=None
-                )
+                mtime_with_tz=py7zr.helpers.filetime_to_dt(file.lastwritetime)
                 if file.lastwritetime
                 else None,
                 type=file_type,

@@ -1,7 +1,7 @@
 import collections
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import pytest
@@ -97,8 +97,9 @@ def check_member_metadata(
         pass
     elif sample_file.mtime == MARKER_MTIME_BASED_ON_ARCHIVE_NAME:
         archive_file_mtime = datetime.fromtimestamp(
-            os.path.getmtime(archive_path or sample_archive.get_archive_path())
-        )
+            os.path.getmtime(archive_path or sample_archive.get_archive_path()),
+            tz=timezone.utc,
+        ).replace(tzinfo=None)
         assert member.mtime == archive_file_mtime, (
             f"Timestamp mismatch for {member.filename} (special check): "
             f"member mtime {member.mtime} vs archive mtime {archive_file_mtime}"
@@ -112,6 +113,15 @@ def check_member_metadata(
         assert member.mtime == sample_file.mtime, (
             f"Timestamp mismatch for {member.filename}: {member.mtime} != {sample_file.mtime}"
         )
+
+    if features.mtime:
+        assert member.mtime_with_tz is not None
+        assert member.mtime_with_tz.replace(tzinfo=None) == member.mtime
+        if features.mtime_with_tz:
+            assert member.mtime_with_tz.tzinfo is not None
+            assert member.mtime_with_tz.tzinfo == timezone.utc
+        else:
+            assert member.mtime_with_tz.tzinfo is None
 
     # TODO: set feature
     if member.create_system is not None:
