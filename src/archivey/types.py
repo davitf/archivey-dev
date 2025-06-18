@@ -115,9 +115,10 @@ class ArchiveMember:
     file_size: Optional[int]
     compress_size: Optional[int]
     mtime: Optional[datetime]
-    mtime_is_utc: bool = False
     type: MemberType
 
+    # Fields with default values
+    mtime_is_utc: bool = False
     mode: Optional[int] = None
     crc32: Optional[int] = None
     compression_method: Optional[str] = None  # e.g. "deflate", "lzma", etc.
@@ -134,15 +135,15 @@ class ArchiveMember:
     # and preserve ordering, but not for direct indexing. Assigned by register_member().
     _member_id: Optional[int] = None
 
+    # A unique identifier for the archive. Used to distinguish between archives.
+    # Filled by register_member().
+    _archive_id: Optional[int] = None
+
     @property
     def member_id(self) -> int:
         if self._member_id is None:
             raise ValueError("Member index not yet set")
         return self._member_id
-
-    # A unique identifier for the archive. Used to distinguish between archives.
-    # Filled by register_member().
-    _archive_id: Optional[int] = None
 
     @property
     def archive_id(self) -> int:
