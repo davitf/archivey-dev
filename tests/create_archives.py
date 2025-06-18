@@ -796,6 +796,15 @@ def create_iso_archive_with_genisoimage(
         )
 
 
+def create_folder_archive(
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
+):
+    assert compression_format == ArchiveFormat.FOLDER, (
+        f"Only FOLDER format is supported, got {compression_format}"
+    )
+    write_files_to_dir(archive_path, contents.files)
+
+
 GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.ZIPFILE: create_zip_archive_with_zipfile,
     GenerationMethod.INFOZIP: create_zip_archive_with_infozip_command_line,
@@ -808,6 +817,7 @@ GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.SINGLE_FILE_LIBRARY: create_single_file_compressed_archive_with_library,
     GenerationMethod.ISO_PYCDLIB: create_iso_archive_with_pycdlib,
     GenerationMethod.ISO_GENISOIMAGE: create_iso_archive_with_genisoimage,
+    GenerationMethod.TEMP_DIR_POPULATION: create_folder_archive,
 }
 
 
