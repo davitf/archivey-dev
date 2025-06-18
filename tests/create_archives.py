@@ -560,7 +560,9 @@ def create_rar_archive_with_command_line(
                 # RAR handles adding existing files/dirs.
                 command.append(file_info.name.removesuffix("/"))
 
-            subprocess.run(command, check=True, cwd=tempdir)
+            env = os.environ.copy()
+            env["TZ"] = "UTC"
+            subprocess.run(command, check=True, cwd=tempdir, env=env)
 
             if comment_file_path:
                 os.remove(comment_file_path)

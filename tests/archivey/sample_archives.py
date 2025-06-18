@@ -479,7 +479,7 @@ ZIP_FORMATS = [
 RAR_FORMATS = [
     RAR_CMD,
     # Causing several test failures, will need to investigate
-    # RAR4_CMD,
+    RAR4_CMD,
 ]
 
 SEVENZIP_FORMATS = [
