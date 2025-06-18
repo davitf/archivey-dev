@@ -97,8 +97,8 @@ def test_wrong_password_open(sample_archive: SampleArchive, sample_archive_path:
     encrypted = _first_encrypted_file(sample_archive)
     with open_archive(sample_archive_path) as archive:
         with pytest.raises((ArchiveEncryptedError, ArchiveError)):
-            with archive.open(encrypted.name, pwd=wrong):
-                pass
+            with archive.open(encrypted.name, pwd=wrong) as f:
+                f.read()
 
 
 @pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
