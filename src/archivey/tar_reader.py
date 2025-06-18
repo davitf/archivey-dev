@@ -1,3 +1,10 @@
+"""This module provides a reader for TAR archives, including compressed formats.
+
+It extends the base archive reader with functionalities such as:
+- Handling various compression methods like gzip, bzip2, lzma, and zstd using `open_stream`.
+- Performing integrity checks on TAR archives via `_check_tar_integrity`.
+- Translating specific tarfile exceptions to archivey's common exceptions using `_translate_tar_exception`.
+"""
 import logging
 import stat
 import tarfile

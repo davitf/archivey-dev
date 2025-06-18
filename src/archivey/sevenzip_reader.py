@@ -1,3 +1,11 @@
+"""This module provides a reader for 7-Zip archives.
+
+It extends the base archive reader with functionalities such as:
+- Iterating over archive members with I/O streams using `StreamingFile` and `StreamingFactory` for `iter_members_with_io`.
+- Managing passwords temporarily for archive operations via `_temporary_password` context manager.
+- Resolving link targets during member iteration.
+- Handling `py7zr`'s logic for renaming duplicate filenames during extraction.
+"""
 import collections
 import io
 import logging
