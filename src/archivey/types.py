@@ -114,7 +114,7 @@ class ArchiveMember:
     filename: str
     file_size: Optional[int]
     compress_size: Optional[int]
-    mtime_storage: Optional[datetime] # Renamed from mtime
+    mtime_with_tz: Optional[datetime] # Renamed from mtime_storage
     type: MemberType
 
     # Fields with default values
@@ -140,10 +140,10 @@ class ArchiveMember:
 
     @property
     def mtime(self) -> Optional[datetime]:
-        if self.mtime_storage is None:
+        if self.mtime_with_tz is None: # Updated to use mtime_with_tz
             return None
         # Always return a naive datetime for external consumers
-        return self.mtime_storage.replace(tzinfo=None)
+        return self.mtime_with_tz.replace(tzinfo=None) # Updated to use mtime_with_tz
 
     @property
     def member_id(self) -> int:
