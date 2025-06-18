@@ -123,4 +123,4 @@ except ArchiveError as e:
     print(f"Error: {e}")
 ```
 
-This guide provides a basic overview. For more detailed information on specific classes and methods, please refer to the API documentation.
+This guide provides a basic overview. For more detailed information on specific classes and methods, please refer to the [API documentation](./api/archivey.html).
