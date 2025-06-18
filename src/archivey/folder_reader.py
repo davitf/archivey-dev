@@ -83,6 +83,7 @@ class FolderReader(BaseArchiveReader):
             mtime=datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc).replace(
                 tzinfo=None
             ),
+            mtime_is_utc=False,
             type=member_type,
             mode=stat_result.st_mode,
             link_target=link_target,

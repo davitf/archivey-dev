@@ -433,6 +433,7 @@ class SevenZipReader(BaseArchiveReader):
                 )
                 if file.lastwritetime
                 else None,
+                mtime_is_utc=True,
                 type=file_type,
                 # link_target_type=
                 mode=file.posix_mode,

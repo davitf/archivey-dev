@@ -67,6 +67,7 @@ def read_gzip_metadata(
             )
             if use_stored_metadata:
                 member.mtime = extra_fields["mtime"]
+                member.mtime_is_utc = True # GZIP mtime is UTC
 
         # Add compression method and level
         extra_fields["compress_type"] = cm  # 8 = deflate, consistent with ZIP
@@ -234,6 +235,7 @@ class SingleFileReader(BaseArchiveReader):
             file_size=None,  # Not available for all formats
             compress_size=os.path.getsize(archive_path),
             mtime=mtime,
+            mtime_is_utc=False, # Default to False, may be updated by read_gzip_metadata
             type=MemberType.FILE,
             compression_method=self.format.value,
             crc32=None,

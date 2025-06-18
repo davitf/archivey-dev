@@ -131,6 +131,7 @@ class TarReader(BaseArchiveReader):
             )
             if info.mtime
             else None,
+            mtime_is_utc=True,
             type=(
                 MemberType.FILE
                 if info.isfile()
