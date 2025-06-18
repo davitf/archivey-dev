@@ -365,7 +365,7 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
 class RarStreamReader:
     def __init__(
         self,
-        archive_path: str,
+        archive_path: BinaryIO | str,
         members: list[ArchiveMember],
         *,
         pwd: bytes | str | None = None,
