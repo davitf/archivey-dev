@@ -115,6 +115,7 @@ class ArchiveMember:
     file_size: Optional[int]
     compress_size: Optional[int]
     mtime: Optional[datetime]
+    mtime_is_utc: bool = False
     type: MemberType
 
     mode: Optional[int] = None

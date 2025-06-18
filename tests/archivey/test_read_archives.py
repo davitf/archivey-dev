@@ -120,6 +120,32 @@ def check_member_metadata(
             CreateSystem.UNKNOWN,
         }
 
+    # Check mtime_is_utc
+    if member.mtime is not None:
+        is_rar5 = sample_archive.creation_info.format == ArchiveFormat.RAR and "rar4" not in sample_archive.filename
+        is_zip_infozip = sample_archive.creation_info.format == ArchiveFormat.ZIP and "infozip" in sample_archive.filename
+        # basic_nonsolid__zipfile_deflate.zip is known to not have extended timestamps
+        is_zip_zipfile_no_utc = sample_archive.creation_info.format == ArchiveFormat.ZIP and "zipfile_deflate" in sample_archive.filename
+
+        expected_mtime_is_utc: Optional[bool] = None
+        if is_rar5:
+            expected_mtime_is_utc = True
+        elif sample_archive.creation_info.format == ArchiveFormat.RAR: # RAR4
+            expected_mtime_is_utc = False
+        elif is_zip_infozip:
+            # Assuming infozip typically stores UTC in extended fields
+            # This might need actual verification of the test file's structure
+            expected_mtime_is_utc = True
+        elif is_zip_zipfile_no_utc:
+            expected_mtime_is_utc = False
+        # Add more specific cases if other zip files are known to have/not have UTC timestamps
+
+        if expected_mtime_is_utc is not None:
+            assert member.mtime_is_utc == expected_mtime_is_utc, (
+                f"mtime_is_utc mismatch for {member.filename} in {sample_archive.filename}: "
+                f"got {member.mtime_is_utc}, expected {expected_mtime_is_utc}"
+            )
+
 
 def check_iter_members(
     sample_archive: SampleArchive,

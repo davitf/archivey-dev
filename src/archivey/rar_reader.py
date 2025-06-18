@@ -590,6 +590,7 @@ class RarReader(BaseArchiveReader):
                 file_size=info.file_size,
                 compress_size=info.compress_size,
                 mtime=timestamp,
+                mtime_is_utc=is_utc,
                 type=(
                     MemberType.HARDLINK
                     if is_rar_info_hardlink(info)

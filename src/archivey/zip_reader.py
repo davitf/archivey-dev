@@ -25,43 +25,82 @@ _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]
 logger = logging.getLogger(__name__)
 
 
-def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
-    """Get the timestamp from a ZipInfo object, handling extended timestamp fields."""
-    main_modtime = datetime(*zip_info.date_time)
+def get_zipinfo_timestamp(
+    zip_info: zipfile.ZipInfo,
+) -> tuple[datetime | None, bool]:
+    """Get the timestamp from a ZipInfo object, handling extended timestamp fields.
+
+    Returns:
+        A tuple containing the datetime object and a boolean indicating if it's UTC
+        (from extended timestamp field). Returns (None, False) if no valid timestamp.
+    """
+    if not zip_info.date_time or len(zip_info.date_time) != 6:
+        main_modtime = None
+    else:
+        main_modtime = datetime(*zip_info.date_time)
+
+    is_utc = False
     if not zip_info.extra:
-        return main_modtime
+        return main_modtime, is_utc
 
     # Parse extended timestamp extra field (0x5455)
     pos = 0
     while pos < len(zip_info.extra):
-        if len(zip_info.extra) - pos < 4:  # Need at least 4 bytes for header
+        # Need at least 4 bytes for tag and length
+        if len(zip_info.extra) - pos < 4:
             break
 
         tp, ln = struct.unpack("<HH", zip_info.extra[pos : pos + 4])
+        pos += 4
 
-        if tp == 0x5455:  # Extended Timestamp
-            flags = zip_info.extra[pos + 4]
+        if tp == 0x5455:  # Extended Timestamp (UT)
+            if pos + ln > len(zip_info.extra):  # Check if data is complete
+                break
 
-            # Check if modification time is present (bit 0)
+            field_data = zip_info.extra[pos : pos + ln]
+            field_pos = 0
+
+            if field_pos + 1 > len(field_data):  # Need at least 1 byte for flags
+                break
+            flags = field_data[field_pos]
+            field_pos += 1
+
+            # Check if modification time is present (bit 0 of flags)
             if flags & 0x01:
+                if field_pos + 4 > len(field_data):  # Need 4 bytes for mtime
+                    break
                 # Read modification time (4 bytes, Unix timestamp)
-                mod_time = int.from_bytes(zip_info.extra[pos + 5 : pos + 9], "little")
+                mod_time_unix = int.from_bytes(
+                    field_data[field_pos : field_pos + 4], "little"
+                )
+                field_pos += 4
 
                 # Convert to datetime
-                if mod_time > 0:
-                    extra_modtime = datetime.fromtimestamp(
-                        mod_time, tz=timezone.utc
-                    ).replace(tzinfo=None)
-                    logger.debug(
-                        f"Modtime: main={main_modtime}, extra={extra_modtime} timestamp={mod_time}"
-                    )
-                    return extra_modtime
+                if mod_time_unix > 0:
+                    try:
+                        extra_modtime = datetime.fromtimestamp(
+                            mod_time_unix, tz=timezone.utc
+                        ).replace(tzinfo=None)
+                        logger.debug(
+                            f"Modtime from UT extra field for {zip_info.filename}: "
+                            f"main={main_modtime}, extra={extra_modtime} (raw_unix={mod_time_unix})"
+                        )
+                        return extra_modtime, True  # Timestamp is UTC
+                    except (OSError, ValueError) as e:
+                        logger.warning(
+                            f"Invalid Unix timestamp {mod_time_unix} in UT extra field for {zip_info.filename}: {e}"
+                        )
+            # No need to parse other times (access, create) for now
+            # Fall through to return main_modtime if mtime not in UT field
+            break # Only parse the first UT field if multiple exist (should not happen)
 
-        # Skip this field: 4 bytes header + data_size
-        pos += 4 + ln
+        # Skip this field: data_size
+        pos += ln
 
-    logger.info(f"Modtime: main={main_modtime}")
-    return main_modtime
+    logger.debug(
+        f"Modtime from main date_time for {zip_info.filename}: {main_modtime}"
+    )
+    return main_modtime, False
 
 
 class ZipReader(BaseArchiveReader):
@@ -149,11 +188,13 @@ class ZipReader(BaseArchiveReader):
             mode = info.external_attr >> 16
             is_link = stat.S_ISLNK(mode)
 
+            timestamp, is_utc = get_zipinfo_timestamp(info)
             member = ArchiveMember(
                 filename=info.filename,
                 file_size=info.file_size,
                 compress_size=info.compress_size,
-                mtime=get_zipinfo_timestamp(info),
+                mtime=timestamp,
+                mtime_is_utc=is_utc,
                 type=MemberType.DIR
                 if is_dir
                 else MemberType.SYMLINK
