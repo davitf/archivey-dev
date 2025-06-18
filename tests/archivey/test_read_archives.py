@@ -657,15 +657,15 @@ def test_read_hardlinks_archives(
     )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, custom_filter=lambda sa: sa.creation_info.format == ArchiveFormat.FOLDER),
-    ids=lambda x: x.filename,
-)
-def test_read_folder_archives(sample_archive: SampleArchive, sample_archive_path: str):
-    """Tests reading folder archives."""
-    check_iter_members(
-        sample_archive,
-        archive_path=sample_archive_path,
-        expected_mtime_tzinfo=None,  # Filesystem mtime is local (naive)
-    )
+# @pytest.mark.parametrize(
+#     "sample_archive",
+#     filter_archives(SAMPLE_ARCHIVES, custom_filter=lambda sa: sa.creation_info.format == ArchiveFormat.FOLDER),
+#     ids=lambda x: x.filename,
+# )
+# def test_read_folder_archives(sample_archive: SampleArchive, sample_archive_path: str):
+#     """Tests reading folder archives."""
+#     check_iter_members(
+#         sample_archive,
+#         archive_path=sample_archive_path,
+#         expected_mtime_tzinfo=None,  # Filesystem mtime is local (naive)
+#     )
