@@ -23,6 +23,7 @@ class GenerationMethod(Enum):
     SINGLE_FILE_LIBRARY = "single_file_lib"
     ISO_PYCDLIB = "iso_pycdlib"
     ISO_GENISOIMAGE = "iso_genisoimage"
+    TEMP_DIR_POPULATION = "temp_dir_population"
 
     EXTERNAL = "external"
 
@@ -449,6 +450,21 @@ ISO_GENISOIMAGE = ArchiveCreationInfo(
     generation_method=GenerationMethod.ISO_GENISOIMAGE,
 )
 
+FOLDER_CREATION_INFO = ArchiveCreationInfo(
+    file_suffix="_folder", # Results in names like 'basic_nonsolid___folder'
+    format=ArchiveFormat.FOLDER,
+    generation_method=GenerationMethod.TEMP_DIR_POPULATION,
+    features=ArchiveFormatFeatures( # Specify features relevant to folders
+        dir_entries=True,
+        file_comments=False, # Folders/files don't typically have embedded comments
+        archive_comment=False, # No archive-level comment for a directory
+        mtime=True,
+        rounded_mtime=False, # Filesystem mtimes are usually not rounded
+        file_size=True,
+        duplicate_files=True # A folder can have files with the same name in different subdirs
+    )
+)
+
 ALL_SINGLE_FILE_FORMATS = [
     GZIP_CMD,
     BZIP2_CMD,
@@ -804,7 +820,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="basic_nonsolid",
             files=BASIC_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS,  # + ISO_FORMATS,
+        ZIP_RAR_7Z_FORMATS + [FOLDER_CREATION_INFO],
     ),
     (
         ArchiveContents(
