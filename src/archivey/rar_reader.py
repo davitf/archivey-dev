@@ -26,13 +26,14 @@ from typing import (
 
 if TYPE_CHECKING:
     import rarfile
-    from rarfile import Rar5Info, RarInfo
+    from rarfile import Rar3Info, Rar5Info, RarInfo
 else:
     try:
         import rarfile
-        from rarfile import Rar5Info, RarInfo
+        from rarfile import Rar3Info, Rar5Info, RarInfo
     except ImportError:
         rarfile = None  # type: ignore[assignment]
+        Rar3Info = object  # type: ignore[assignment]
         Rar5Info = object  # type: ignore[assignment]
         RarInfo = object  # type: ignore[assignment]
 
@@ -49,6 +50,61 @@ from archivey.types import ArchiveInfo, ArchiveMember, CreateSystem, MemberType
 from archivey.utils import bytes_to_str, str_to_bytes
 
 logger = logging.getLogger(__name__)
+
+
+def get_non_corrupted_filename(rarinfo: RarInfo) -> str | None:
+    """
+    Returns the most accurate filename for a RAR entry, working around a known issue
+    in RAR 2.9–4 where the UTF-16 filename field may truncate characters outside the
+    Basic Multilingual Plane (e.g. emoji) to invalid code units like U+F600 or surrogates.
+
+    This function compares the legacy 8-bit filename (`orig_filename`, often UTF-8) and
+    the decoded UTF-16 version (`filename`) character by character. If it finds that the
+    UTF-16 version contains a suspicious character (PUA or surrogate) in a position where
+    the UTF-8 version contains a valid non-BMP character, it prefers the UTF-8 version.
+
+    Issue found and fixed in collaboration with ChatGPT.
+
+    Returns:
+        The corrected filename string, or None if decoding fails.
+    """
+    if not isinstance(rarinfo, Rar3Info):
+        return rarinfo.filename
+    if not rarinfo.flags & rarfile.RAR_FILE_UNICODE:
+        return rarinfo.filename
+
+    utf16_str = cast(str | None, rarinfo.filename)
+
+    try:
+        utf8_str = cast(bytes, rarinfo.orig_filename).decode("utf-8")
+    except UnicodeDecodeError:
+        return utf16_str
+
+    if utf16_str is None:
+        return utf8_str
+
+    if utf16_str == utf8_str:
+        return utf8_str  # Equal strings, no correction needed
+
+    # Compare character by character to detect corrupted characters
+    for i, (u16c, u8c) in enumerate(zip(utf16_str, utf8_str)):
+        u16_code = ord(u16c)
+        u8_code = ord(u8c)
+
+        # Check for likely corruption:
+        # - UTF-16 char is in the surrogate or PUA range
+        # - UTF-8 char is a valid non-BMP character (requires surrogate pair in UTF-16)
+        if (
+            0xD800 <= u16_code <= 0xDFFF or 0xE000 <= u16_code <= 0xF8FF
+        ) and u8_code == u16_code + 0x10000:
+            logger.warning(
+                f"UTF-16 filename appears truncated at char {i}: "
+                f"{utf16_str!r} vs {utf8_str!r} – preferring UTF-8"
+            )
+            return utf8_str
+
+    # If we got here, no strong evidence of corruption — trust the UTF-16 version
+    return utf16_str
 
 
 _RAR_COMPRESSION_METHODS = {
@@ -499,6 +555,10 @@ class RarReader(BaseArchiveReader):
 
         rarinfos: list[RarInfo] = self._archive.infolist()
         for info in rarinfos:
+            print("=" * 80)
+            for field in info.__dict__:
+                print(f"{field}: {repr(info.__dict__[field])}")
+            print("=" * 80)
             compression_method = (
                 _RAR_COMPRESSION_METHODS.get(info.compress_type, "unknown")
                 if info.compress_type is not None
@@ -525,7 +585,8 @@ class RarReader(BaseArchiveReader):
             timestamp, is_utc = self._get_timestamp_and_is_utc(info)
 
             member = ArchiveMember(
-                filename=info.filename or "",  # Will never actually be None
+                filename=get_non_corrupted_filename(info)
+                or "",  # Will never actually be None
                 file_size=info.file_size,
                 compress_size=info.compress_size,
                 mtime=timestamp,
@@ -637,7 +698,7 @@ class RarReader(BaseArchiveReader):
 
         try:
             # Apparently pwd can be either bytes or str.
-            inner: BinaryIO = self._archive.open(member.filename, pwd=bytes_to_str(pwd))  # type: ignore[arg-type]
+            inner: BinaryIO = self._archive.open(member.raw_info, pwd=bytes_to_str(pwd))  # type: ignore[arg-type]
             return ExceptionTranslatingIO(inner, self._exception_translator)
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(
