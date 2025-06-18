@@ -162,6 +162,7 @@ class ArchiveFormatFeatures:
     file_size: bool = True
     duplicate_files: bool = False
     hardlink_mtime: bool = False
+    rar4_unicode_comment_limitation: bool = False # New field
 
 
 DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
@@ -282,7 +283,7 @@ RAR4_CMD = ArchiveCreationInfo(
     format=ArchiveFormat.RAR,
     generation_method=GenerationMethod.RAR_COMMAND_LINE,
     generation_method_options={"rar4_format": True},
-    features=ArchiveFormatFeatures(dir_entries=True, archive_comment=True),
+    features=ArchiveFormatFeatures(dir_entries=True, archive_comment=True, rar4_unicode_comment_limitation=True),
 )
 
 _TAR_FORMAT_FEATURES_TARCMD = ArchiveFormatFeatures()
