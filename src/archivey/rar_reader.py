@@ -1,3 +1,12 @@
+"""This module provides a reader for RAR archives.
+
+It extends the base archive reader with functionalities such as:
+- Checking passwords for RAR5 archives using `verify_rar5_password`.
+- Supporting streaming extraction for solid RAR archives via `RarStreamReader`, which utilizes the `unrar` command-line tool.
+- Detecting filename corruption in RAR4 archives with `get_non_corrupted_filename`.
+- Handling encrypted CRCs in RAR5 archives through `check_rarinfo_crc` and `convert_crc_to_encrypted`.
+- Identifying hardlinks within RAR archives using `is_rar_info_hardlink`.
+"""
 import collections
 import datetime
 import enum

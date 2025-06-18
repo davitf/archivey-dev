@@ -5,3 +5,7 @@ Welcome to the Archivey documentation. Below you will find links to the guides a
 - [User Guide](user_guide.md)
 - [Developer Guide](developer_guide.md)
 - [API Reference](api/archivey.html)
+
+## Detailed Topics
+
+- [Reader-Specific Functionalities](reader_specifics.md)

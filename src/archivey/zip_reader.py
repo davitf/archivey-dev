@@ -1,3 +1,10 @@
+"""This module provides a reader for ZIP archives.
+
+It extends the base archive reader with functionalities such as:
+- Supporting symbolic links by reading their target paths using `_read_link_target`.
+- Parsing extended timestamps from ZipInfo objects via `get_zipinfo_timestamp`.
+- Detecting and using fallback encodings for filenames and comments through `_ZIP_ENCODINGS`.
+"""
 import logging
 import os
 import stat
