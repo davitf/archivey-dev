@@ -162,7 +162,9 @@ class ArchiveFormatFeatures:
     file_size: bool = True
     duplicate_files: bool = False
     hardlink_mtime: bool = False
-    rar4_unicode_comment_limitation: bool = False # New field
+    # A limitation / bug in the RAR4 format: Unicode characters above 0x10000 are not
+    # correctly encoded in comment fields.
+    comment_corrupts_unicode_non_bmp_chars: bool = False
 
 
 DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
@@ -283,7 +285,11 @@ RAR4_CMD = ArchiveCreationInfo(
     format=ArchiveFormat.RAR,
     generation_method=GenerationMethod.RAR_COMMAND_LINE,
     generation_method_options={"rar4_format": True},
-    features=ArchiveFormatFeatures(dir_entries=True, archive_comment=True, rar4_unicode_comment_limitation=True),
+    features=ArchiveFormatFeatures(
+        dir_entries=True,
+        archive_comment=True,
+        comment_corrupts_unicode_non_bmp_chars=True,
+    ),
 )
 
 _TAR_FORMAT_FEATURES_TARCMD = ArchiveFormatFeatures()
