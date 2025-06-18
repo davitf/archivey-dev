@@ -52,7 +52,16 @@ def check_member_metadata(
         assert member.compression_method == sample_file.compression_method
 
     if features.file_comments:
-        assert member.comment == sample_file.comment
+        if features.rar4_unicode_comment_limitation and sample_file.comment is not None:
+            skip_comment_assertion = False
+            for char_val in sample_file.comment:
+                if ord(char_val) > 0x10000:
+                    skip_comment_assertion = True
+                    break
+            if not skip_comment_assertion:
+                assert member.comment == sample_file.comment
+        else:
+            assert member.comment == sample_file.comment
     else:
         assert member.comment is None
 
@@ -177,9 +186,17 @@ def check_iter_members(
     ) as archive:
         assert archive.format == sample_archive.creation_info.format
         format_info = archive.get_archive_info()
-        assert normalize_newlines(format_info.comment) == normalize_newlines(
-            sample_archive.contents.archive_comment
-        )
+        # Check archive comment
+        skip_archive_comment_assertion = False
+        if features.rar4_unicode_comment_limitation and sample_archive.contents.archive_comment is not None:
+            for char_val in sample_archive.contents.archive_comment:
+                if ord(char_val) > 0x10000:
+                    skip_archive_comment_assertion = True
+                    break
+        if not skip_archive_comment_assertion:
+            assert normalize_newlines(format_info.comment) == normalize_newlines(
+                sample_archive.contents.archive_comment
+            )
 
         members_iter = (
             ((m, None) for m in archive.get_members())
