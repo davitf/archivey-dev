@@ -10,7 +10,7 @@ from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.dependency_checker import get_dependency_versions
 from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
-from archivey.types import ArchiveMember, CreateSystem, MemberType
+from archivey.types import ArchiveFormat, ArchiveMember, CreateSystem, MemberType # Added ArchiveFormat
 from tests.archivey.sample_archives import (
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
