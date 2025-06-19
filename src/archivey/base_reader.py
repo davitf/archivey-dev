@@ -178,7 +178,9 @@ class ArchiveReader(abc.ABC):
             Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]: An iterator where each
             item is a tuple containing the ArchiveMember object and a binary I/O
             stream for reading its content. The stream is None for non-file entries.
-            The caller is responsible for closing the stream if it's not fully read.
+            Streams are closed automatically when iteration advances to the next
+            member or when the generator is closed, so they should be consumed
+            before requesting another member.
 
         Raises:
             ArchiveEncryptedError: If a member is encrypted and `pwd` is incorrect
@@ -639,9 +641,10 @@ class BaseArchiveReader(ArchiveReader):
             used when opening the archive. May not be supported by all archive formats.
 
         Returns:
-            A (ArchiveMember, BinaryIO) iterator over the members. Each stream should
-            be read before the next member is retrieved. The stream may be None if the
-            member is not a file.
+            A (ArchiveMember, BinaryIO) iterator over the members. Each stream
+            should be consumed before advancing to the next member. Streams are
+            closed automatically when iteration continues or the generator is
+            closed. The stream may be None if the member is not a file.
         """
         # This is a default implementation for random-access readers which support
         # open().

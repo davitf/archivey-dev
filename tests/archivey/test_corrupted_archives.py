@@ -107,6 +107,8 @@ def test_read_corrupted_archives(
                     logger.info(f"Read {len(data)} bytes from member {filename}")
 
                     found_member_data[filename] = data
+                elif stream is not None:
+                    stream.close()
 
                 found_member_names.append(filename)
 
@@ -200,6 +202,8 @@ def test_read_truncated_archives(
             for member, stream in archive.iter_members_with_io():
                 if stream is not None and read_streams:
                     stream.read()
+                elif stream is not None:
+                    stream.close()
         logger.warning(f"Archive {output_path} did not raise an error")
     except (ArchiveCorruptedError, ArchiveEOFError):
         # Test passes if one of the expected exceptions is raised

@@ -99,6 +99,27 @@ except ArchiveError as e:
     print(f"Error opening archive: {e}")
 
 ```
+### Example: Using `iter_members_with_io`
+
+The `iter_members_with_io` method allows you to process archive members one by
+one. Each stream is closed automatically when iteration advances to the next
+member or when the generator is closed.
+
+```python
+from archivey import open_archive, ArchiveError
+
+try:
+    with open_archive("my_archive.tar") as archive:
+        for member, stream in archive.iter_members_with_io():
+            print(f"Processing {member.filename}")
+            if stream:
+                data = stream.read()
+                print(f"  size: {len(data)} bytes")
+            # stream is closed automatically on the next iteration
+except ArchiveError as e:
+    print(f"Error: {e}")
+```
+
 
 ### Example: Extracting an Archive
 
