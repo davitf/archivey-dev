@@ -157,7 +157,7 @@ class FolderReader(BaseArchiveReader):
 
     def get_archive_info(self) -> ArchiveInfo:
         return ArchiveInfo(
-            format=self.format.value,
+            format=self.format,
             comment=str(self.archive_path),  # Use folder path as comment
             # is_solid, version, extra are not applicable for folders
         )
