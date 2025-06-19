@@ -216,8 +216,12 @@ class SingleFileReader(BaseArchiveReader):
         self.archive_path = archive_path
         if isinstance(archive_path, str):
             self.ext = os.path.splitext(archive_path)[1].lower()
-            name_for_member = os.path.splitext(os.path.basename(archive_path))[0] or "unknown"
-            mtime = datetime.fromtimestamp(os.path.getmtime(archive_path), tz=timezone.utc)
+            name_for_member = (
+                os.path.splitext(os.path.basename(archive_path))[0] or "unknown"
+            )
+            mtime = datetime.fromtimestamp(
+                os.path.getmtime(archive_path), tz=timezone.utc
+            )
             compress_size = os.path.getsize(archive_path)
         else:
             self.ext = f".{format.value}"

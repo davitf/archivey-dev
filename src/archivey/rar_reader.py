@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import io
 import logging
+import os
 import shutil
 import stat
 import struct
@@ -467,7 +468,7 @@ class RarReader(BaseArchiveReader):
 
     def __init__(
         self,
-        archive_path: str,
+        archive_path: str | BinaryIO | os.PathLike,
         *,
         pwd: bytes | str | None = None,
     ):
