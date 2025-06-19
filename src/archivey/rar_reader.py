@@ -735,3 +735,14 @@ class RarReader(BaseArchiveReader):
         else:
             logger.debug("iter_members_with_io: not using rar_stream_reader")
             yield from super().iter_members_with_io(members, pwd=pwd, filter=filter)
+
+
+from .registry import register_reader
+
+# Register the builtin RAR reader
+register_reader(
+    ArchiveFormat.RAR,
+    lambda archive_path, *, pwd=None, streaming_only=False, format=None: RarReader(
+        archive_path, pwd=pwd
+    ),
+)
