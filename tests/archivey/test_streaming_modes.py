@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        prefixes=["basic_nonsolid", "basic_solid"],
+        prefixes=["large_files_nonsolid", "large_files_solid"],
     ),
     ids=lambda a: a.filename,
 )
@@ -99,7 +99,7 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        prefixes=["basic_nonsolid", "basic_solid"],
+        prefixes=["large_files_nonsolid", "large_files_solid"],
     ),
     ids=lambda a: a.filename,
 )
@@ -148,7 +148,7 @@ def test_streaming_only_mode(
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        prefixes=["basic_nonsolid", "basic_solid"],
+        prefixes=["large_files_nonsolid", "large_files_solid"],
     ),
     ids=lambda a: a.filename,
 )
@@ -228,7 +228,7 @@ def test_iter_members_list_filter(
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        prefixes=["basic_nonsolid", "basic_solid"],
+        prefixes=["large_files_nonsolid", "large_files_solid"],
     ),
     ids=lambda a: a.filename,
 )
@@ -252,7 +252,7 @@ def test_streaming_only_allows_single_iteration(
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        prefixes=["basic_nonsolid", "basic_solid"],
+        prefixes=["large_files_nonsolid", "large_files_solid"],
     ),
     ids=lambda a: a.filename,
 )

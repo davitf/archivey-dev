@@ -629,7 +629,7 @@ class BaseArchiveReader(ArchiveReader):
 
     def _start_streaming_iteration(self) -> None:
         """Ensure only a single streaming iteration is performed for non-random-access readers."""
-        if self._random_access_supported or self._early_members_list_supported:
+        if self._random_access_supported:
             return
         if self._streaming_iteration_started:
             raise ValueError("Streaming-only archive can only be iterated once")
