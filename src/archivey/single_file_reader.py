@@ -282,7 +282,7 @@ class SingleFileReader(BaseArchiveReader):
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format."""
         return ArchiveInfo(
-            format=self.format.value,
+            format=self.format,
             is_solid=False,
             extra=None,
         )
