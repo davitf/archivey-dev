@@ -1,7 +1,7 @@
 [project]
 name = "archivey"
 version = "0.1.0"
-description = "Add your description here"
+description = "Unified interface for reading ZIP, TAR, RAR, 7z, ISO and similar archives"
 readme = "README.md"
 authors = [
     { name = "Davi Figueiredo", email = "gh@davitf.com" }
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-archivey = "archivey.cli:main"
+archivey = "archivey.__main__:main"
 
 [project.optional-dependencies]
 optional = [
