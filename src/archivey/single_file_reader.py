@@ -304,3 +304,16 @@ class SingleFileReader(BaseArchiveReader):
             fileobj = self.fileobj
             self.fileobj = None
             return fileobj
+
+from .registry import register_reader
+
+# Register the builtin single-file compressed readers
+for _fmt in SINGLE_FILE_COMPRESSED_FORMATS:
+    register_reader(
+        _fmt,
+        lambda archive_path, *, pwd=None, streaming_only=False, format=None, _f=_fmt: SingleFileReader(
+            archive_path,
+            format=_f,
+            pwd=pwd,
+        ),
+    )

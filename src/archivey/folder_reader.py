@@ -166,3 +166,11 @@ class FolderReader(BaseArchiveReader):
         # No-op for FolderReader, as there's no main file handle to close.
         # Individual files are opened and closed in the open() method.
         pass
+
+from .registry import register_reader
+
+# Register the builtin folder reader
+register_reader(
+    ArchiveFormat.FOLDER,
+    lambda archive_path, *, pwd=None, streaming_only=False, format=None: FolderReader(archive_path),
+)

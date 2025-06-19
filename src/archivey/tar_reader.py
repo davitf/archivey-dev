@@ -279,3 +279,24 @@ class TarReader(BaseArchiveReader):
             if translated is not None:
                 raise translated from e
             raise
+
+from .registry import register_reader
+
+# Register the builtin TAR readers
+for _fmt in [
+    ArchiveFormat.TAR,
+    ArchiveFormat.TAR_GZ,
+    ArchiveFormat.TAR_BZ2,
+    ArchiveFormat.TAR_XZ,
+    ArchiveFormat.TAR_ZSTD,
+    ArchiveFormat.TAR_LZ4,
+]:
+    register_reader(
+        _fmt,
+        lambda archive_path, *, pwd=None, streaming_only=False, format=None, _f=_fmt: TarReader(
+            archive_path,
+            format=_f,
+            streaming_only=streaming_only,
+            pwd=pwd,
+        ),
+    )

@@ -119,6 +119,25 @@ Refer to the `ArchiveMember` class definition in `archivey.types` for all availa
 
 ## Registering Your Reader
 
-Once your reader is implemented, you'll need to modify `archivey.core.open_archive` to detect the archive format and instantiate your reader. (Details of this registration process might evolve, check the current `open_archive` function).
+`archivey` uses a simple registry to map `ArchiveFormat` values to reader factories.
+Builtin readers register themselves when imported, but you can add or override
+registrations via the functions in `archivey.registry`:
 
-By following these guidelines, you can contribute robust and well-integrated support for new archive formats to `archivey`.
+```python
+from archivey.registry import register_reader
+from archivey.types import ArchiveFormat
+
+register_reader(ArchiveFormat.ZIP, MyZipReader)
+```
+
+The `factory` passed to `register_reader` can be a class or any callable that
+returns an `ArchiveReader` instance.  Use `unregister_reader` and
+`get_reader_factory` to manage existing registrations.
+
+Plugins can expose additional readers by defining entry points in the
+`archivey.readers` group.  Each entry point name should match the string value of
+an `ArchiveFormat` and resolve to a reader factory.  When `archivey` is imported
+it will automatically load and register all such entry points.
+
+By following these guidelines, you can contribute robust and well-integrated
+support for new archive formats to `archivey`.

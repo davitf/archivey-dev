@@ -786,6 +786,19 @@ class SevenZipReader(BaseArchiveReader):
         return self._format_info
 
 
+from .registry import register_reader
+
+# Register the builtin 7-Zip reader
+register_reader(
+    ArchiveFormat.SEVENZIP,
+    lambda archive_path, *, pwd=None, streaming_only=False, format=None: SevenZipReader(
+        archive_path,
+        pwd=pwd,
+        streaming_only=streaming_only,
+    ),
+)
+
+
 if __name__ == "__main__":
     import sys
 

@@ -215,3 +215,14 @@ class ZipReader(BaseArchiveReader):
             raise ArchiveError(f"Error reading member {filename}: {e}") from e
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error reading member {filename}: {e}") from e
+
+
+from .registry import register_reader
+
+# Register the builtin ZIP reader
+register_reader(
+    ArchiveFormat.ZIP,
+    lambda archive_path, *, pwd=None, streaming_only=False, format=None: ZipReader(
+        archive_path, pwd=pwd
+    ),
+)

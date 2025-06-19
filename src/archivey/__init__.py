@@ -43,3 +43,13 @@ __all__ = [
 ]
 
 __version__ = "0.1.0"
+
+# Import builtin readers so they register themselves on package import
+from . import (
+    folder_reader,
+    single_file_reader,
+    sevenzip_reader,
+    tar_reader,
+    rar_reader,
+    zip_reader,
+)
