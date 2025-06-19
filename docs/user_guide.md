@@ -47,7 +47,9 @@ Key methods of the `ArchiveReader` object:
     *   `members`: A collection of member names or `ArchiveMember` objects to extract.
     *   `pwd`: Password for encrypted archives.
     *   `filter`: A callable to filter which members get extracted.
-    *   Returns a dictionary mapping extracted file paths to their `ArchiveMember` objects.
+*   Returns a dictionary mapping extracted file paths to their `ArchiveMember` objects.
+
+Streaming-only archives (where `archive.has_random_access()` returns `False`) can be iterated only **once**. After calling `iter_members_with_io()` or `extractall()`, further attempts to read or extract members will raise a `ValueError`.
 
 ## Working with Archive Members
 

@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        prefixes=["large_files_nonsolid", "large_files_solid"],
+        prefixes=["basic_nonsolid", "basic_solid"],
     ),
     ids=lambda a: a.filename,
 )
@@ -99,7 +99,7 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        prefixes=["large_files_nonsolid", "large_files_solid"],
+        prefixes=["basic_nonsolid", "basic_solid"],
     ),
     ids=lambda a: a.filename,
 )
@@ -148,7 +148,7 @@ def test_streaming_only_mode(
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        prefixes=["large_files_nonsolid", "large_files_solid"],
+        prefixes=["basic_nonsolid", "basic_solid"],
     ),
     ids=lambda a: a.filename,
 )
@@ -222,3 +222,47 @@ def test_iter_members_list_filter(
             )
 
     assert sorted(file_contents) == sorted(read_contents), file_names
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["basic_nonsolid", "basic_solid"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_streaming_only_allows_single_iteration(
+    tmp_path, sample_archive: SampleArchive, sample_archive_path: str
+):
+    """Ensure streaming-only archives can be consumed only once."""
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    with open_archive(sample_archive_path, streaming_only=True) as archive:
+        next(archive.iter_members_with_io())
+
+        with pytest.raises(ValueError):
+            next(archive.iter_members_with_io())
+
+        with pytest.raises(ValueError):
+            archive.extractall(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["basic_nonsolid", "basic_solid"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_random_access_allows_multiple_iterations(
+    tmp_path, sample_archive: SampleArchive, sample_archive_path: str
+):
+    """Random access readers should allow multiple iterations."""
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    with open_archive(sample_archive_path) as archive:
+        next(archive.iter_members_with_io())
+        list(archive.iter_members_with_io())
+        list(archive.iter_members_with_io())

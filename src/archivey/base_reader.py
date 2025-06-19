@@ -413,6 +413,8 @@ class BaseArchiveReader(ArchiveReader):
 
         self._iterator_for_registration: Iterator[ArchiveMember] | None = None
 
+        self._streaming_iteration_started: bool = False
+
     def get_archive_password(self) -> bytes | None:
         """Return the default password for the archive, if one was provided."""
         return self._archive_password
@@ -625,6 +627,14 @@ class BaseArchiveReader(ArchiveReader):
         """
         return self.open(member, pwd=pwd)
 
+    def _start_streaming_iteration(self) -> None:
+        """Ensure only a single streaming iteration is performed for non-random-access readers."""
+        if self._random_access_supported or self._early_members_list_supported:
+            return
+        if self._streaming_iteration_started:
+            raise ValueError("Streaming-only archive can only be iterated once")
+        self._streaming_iteration_started = True
+
     def iter_members_with_io(
         self,
         members: Collection[ArchiveMember | str]
@@ -649,12 +659,20 @@ class BaseArchiveReader(ArchiveReader):
             should be consumed before advancing to the next member. Streams are
             closed automatically when iteration continues or the generator is
             closed. The stream may be None if the member is not a file.
+
+        Notes:
+            If :meth:`has_random_access` returns ``False`` (streaming-only
+            access), this method can be called **only once**. Further attempts
+            to iterate over the archive or to call :meth:`extractall` will raise
+            ``ValueError``.
         """
         # This is a default implementation for random-access readers which support
         # open().
         # assert self._random_access_supported, (
         #     "Non-random access readers must override iter_members_with_io()"
         # )
+
+        self._start_streaming_iteration()
 
         filter_func = _build_iterator_filter(members, filter)
 
@@ -757,6 +775,13 @@ class BaseArchiveReader(ArchiveReader):
         pwd: bytes | str | None = None,
         filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
     ) -> dict[str, ArchiveMember]:
+        """Extract multiple members from the archive.
+
+        Notes:
+            For streaming-only archives (:meth:`has_random_access` returns ``False``)
+            this method may only be called once, as it exhausts the underlying stream.
+        """
+
         if path is None:
             path = os.getcwd()
         else:
@@ -906,6 +931,7 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
     def __init__(self, reader: ArchiveReader):
         super().__init__(reader.archive_path, reader.format)
         self.reader = reader
+        self._streaming_iteration_started = False
 
     def close(self) -> None:
         self.reader.close()
@@ -916,6 +942,9 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
     def iter_members_with_io(
         self, *args, **kwargs
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
+        if self._streaming_iteration_started:
+            raise ValueError("Streaming-only archive can only be iterated once")
+        self._streaming_iteration_started = True
         return self.reader.iter_members_with_io(*args, **kwargs)
 
     def get_archive_info(self) -> ArchiveInfo:
@@ -925,6 +954,9 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
         return False
 
     def extractall(self, *args, **kwargs) -> dict[str, ArchiveMember]:
+        if self._streaming_iteration_started:
+            raise ValueError("Streaming-only archive can only be iterated once")
+        self._streaming_iteration_started = True
         return self.reader.extractall(*args, **kwargs)
 
     def get_member(self, member_or_filename: ArchiveMember | str) -> ArchiveMember:
