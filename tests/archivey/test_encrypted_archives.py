@@ -137,7 +137,8 @@ def test_wrong_password_iter_members_no_read(
                 "py7zr does not support password parameter for iter_members_with_io"
             )
         for _m, _stream in archive.iter_members_with_io(pwd=wrong):
-            pass
+            if _stream:
+                _stream.close()
 
 
 @pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
@@ -232,14 +233,14 @@ def test_iterator_encryption_with_symlinks_no_password(
 ):
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
-    members_by_name = {}
+    member_names = set()
     with open_archive(sample_archive_path) as archive:
         for member, stream in archive.iter_members_with_io():
-            members_by_name[member.filename] = stream
+            if stream:
+                stream.close()
+            member_names.add(member.filename)
 
-    assert set(members_by_name.keys()) == {
-        f.name for f in sample_archive.contents.files
-    }
+    assert member_names == {f.name for f in sample_archive.contents.files}
 
 
 @pytest.mark.parametrize(
@@ -255,14 +256,14 @@ def test_iterator_encryption_with_symlinks_password_in_open_archive(
 ):
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
-    members_by_name = {}
+    member_names = set()
     with open_archive(sample_archive_path, pwd="pwd") as archive:
         for member, stream in archive.iter_members_with_io():
-            members_by_name[member.filename] = stream
+            if stream:
+                stream.close()
+            member_names.add(member.filename)
 
-    assert set(members_by_name.keys()) == {
-        f.name for f in sample_archive.contents.files
-    }
+    assert member_names == {f.name for f in sample_archive.contents.files}
 
 
 @pytest.mark.parametrize(
@@ -278,11 +279,11 @@ def test_iterator_encryption_with_symlinks_password_in_iterator(
 ):
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
-    members_by_name = {}
+    member_names = set()
     with open_archive(sample_archive_path) as archive:
         for member, stream in archive.iter_members_with_io(pwd="pwd"):
-            members_by_name[member.filename] = stream
+            if stream:
+                stream.close()
+            member_names.add(member.filename)
 
-    assert set(members_by_name.keys()) == {
-        f.name for f in sample_archive.contents.files
-    }
+    assert member_names == {f.name for f in sample_archive.contents.files}
