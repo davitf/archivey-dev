@@ -40,7 +40,7 @@ def open_archive(
     *,
     config: ArchiveyConfig | None = None,
     streaming_only: bool = False,
-    **kwargs: Any,
+    pwd: bytes | str | None = None,
 ) -> ArchiveReader:
     """
     Open an archive file and return an appropriate ArchiveReader instance.
@@ -57,10 +57,8 @@ def open_archive(
             mode, even if it supports random access. This can be useful for
             very large archives or when only sequential access is needed.
             Not all archive formats support this flag effectively.
-        **kwargs: Additional keyword arguments, primarily `pwd` for password-protected
-            archives.
-            pwd (Optional[Union[str, bytes]]): Password to use for decrypting
-                the archive.
+        pwd: Optional password (str or bytes) used to decrypt the archive if it
+            is encrypted.
 
     Returns:
         An ArchiveReader instance suitable for the detected archive format.
@@ -121,7 +119,6 @@ def open_archive(
         except Exception:
             pass
 
-    pwd = kwargs.get("pwd")
     if pwd is not None and not isinstance(pwd, (str, bytes)):
         raise TypeError("Password must be a string or bytes")
 
@@ -139,19 +136,19 @@ def open_archive(
         if format == ArchiveFormat.RAR:
             from archivey.rar_reader import RarReader
 
-            reader = RarReader(archive_path_normalized, pwd=kwargs.get("pwd"))
+            reader = RarReader(archive_path_normalized, pwd=pwd)
 
         elif format == ArchiveFormat.ZIP:
             from archivey.zip_reader import ZipReader
 
-            reader = ZipReader(archive_path_normalized, pwd=kwargs.get("pwd"))
+            reader = ZipReader(archive_path_normalized, pwd=pwd)
 
         elif format == ArchiveFormat.SEVENZIP:
             from archivey.sevenzip_reader import SevenZipReader
 
             reader = SevenZipReader(
                 archive_path_normalized,
-                pwd=kwargs.get("pwd"),
+                pwd=pwd,
                 streaming_only=streaming_only,
             )
 
@@ -160,7 +157,7 @@ def open_archive(
 
             reader = TarReader(
                 archive_path_normalized,
-                pwd=kwargs.get("pwd"),
+                pwd=pwd,
                 format=format,
                 streaming_only=streaming_only,
             )
@@ -170,7 +167,7 @@ def open_archive(
 
             reader = SingleFileReader(
                 archive_path_normalized,
-                pwd=kwargs.get("pwd"),
+                pwd=pwd,
                 format=format,
             )
 
