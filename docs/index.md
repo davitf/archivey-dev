@@ -1,6 +1,8 @@
 # Archivey Documentation
 
-Welcome to the Archivey documentation. Below you will find links to the guides and API reference.
+Archivey offers a unified way to read and extract common archive formats such as ZIP, TAR, RAR, 7z and ISO. It works in streaming or random access mode and provides a small command line interface.
+
+See the [README](../README.md) for installation instructions and quick examples.
 
 - [User Guide](user_guide.md)
 - [Developer Guide](developer_guide.md)
