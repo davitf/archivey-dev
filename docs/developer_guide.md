@@ -119,6 +119,25 @@ Refer to the `ArchiveMember` class definition in `archivey.types` for all availa
 
 ## Registering Your Reader
 
-Once your reader is implemented, you'll need to modify `archivey.core.open_archive` to detect the archive format and instantiate your reader. (Details of this registration process might evolve, check the current `open_archive` function).
+Once your reader is implemented you must register it so that `open_archive` can
+instantiate it.  Archivey provides a simple registry mapping
+`ArchiveFormat` values to *reader factory* callables.
+
+````python
+from archivey.reader_registry import register_reader
+from archivey.types import ArchiveFormat
+
+def my_reader_factory(path: str, fmt: ArchiveFormat, streaming_only: bool, **kw):
+    return MyFormatReader(path, **kw)
+
+register_reader(ArchiveFormat.MYFORMAT, my_reader_factory)
+````
+
+Reader factories receive the archive path, the detected format and the value of
+``streaming_only`` along with any extra keyword arguments passed to
+`open_archive`.  Built‑in readers for ZIP, RAR, 7z, TAR and others are
+registered automatically when the package is imported.  Use
+`get_reader_factory()` or `unregister_reader()` if you need to inspect or remove
+registrations.
 
 By following these guidelines, you can contribute robust and well-integrated support for new archive formats to `archivey`.

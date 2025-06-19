@@ -8,11 +8,8 @@ from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.folder_reader import FolderReader
 from archivey.formats import detect_archive_format
-from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
-    TAR_COMPRESSED_FORMATS,
-    ArchiveFormat,
-)
+from archivey.reader_registry import get_reader_factory
+from archivey.types import ArchiveFormat
 
 
 def _normalize_archive_path(archive_path: str | bytes | os.PathLike) -> str:
@@ -96,53 +93,19 @@ def open_archive(
     with default_config(config):
         use_libarchive = config.use_libarchive
 
-        reader: ArchiveReader
-
         if use_libarchive:
             raise NotImplementedError("LibArchiveReader is not implemented")
 
-        if format == ArchiveFormat.RAR:
-            from archivey.rar_reader import RarReader
-
-            reader = RarReader(archive_path, pwd=kwargs.get("pwd"))
-
-        elif format == ArchiveFormat.ZIP:
-            from archivey.zip_reader import ZipReader
-
-            reader = ZipReader(archive_path, pwd=kwargs.get("pwd"))
-
-        elif format == ArchiveFormat.SEVENZIP:
-            from archivey.sevenzip_reader import SevenZipReader
-
-            reader = SevenZipReader(
-                archive_path, pwd=kwargs.get("pwd"), streaming_only=streaming_only
-            )
-
-        elif format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
-            from archivey.tar_reader import TarReader
-
-            reader = TarReader(
-                archive_path,
-                pwd=kwargs.get("pwd"),
-                format=format,
-                streaming_only=streaming_only,
-            )
-
-        elif format in SINGLE_FILE_COMPRESSED_FORMATS:
-            from archivey.single_file_reader import SingleFileReader
-
-            reader = SingleFileReader(
-                archive_path, pwd=kwargs.get("pwd"), format=format
-            )
-
-        elif format == ArchiveFormat.ISO:
-            raise NotImplementedError("ISO reader is not yet implemented")
-
-        elif format == ArchiveFormat.FOLDER:
-            reader = FolderReader(archive_path)
-
-        else:
+        factory = get_reader_factory(format)
+        if factory is None:
             raise ArchiveNotSupportedError(f"Unsupported archive format: {format}")
+
+        reader = factory(
+            archive_path,
+            format,
+            streaming_only,
+            **kwargs,
+        )
 
         if streaming_only:
             return StreamingOnlyArchiveReaderWrapper(reader)
