@@ -4,20 +4,21 @@ import os
 from typing import BinaryIO
 
 from archivey.base_reader import ArchiveReader, StreamingOnlyArchiveReaderWrapper
-from archivey.compressed_streams import open_stream_fileobj
 from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
-from archivey.folder_reader import FolderReader
 from archivey.formats import (
     detect_archive_format,
-    detect_archive_format_by_signature,
 )
+from archivey.rar_reader import RarReader
+from archivey.sevenzip_reader import SevenZipReader
+from archivey.single_file_reader import SingleFileReader
+from archivey.tar_reader import TarReader
 from archivey.types import (
-    COMPRESSION_FORMAT_TO_TAR_FORMAT,
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
     ArchiveFormat,
 )
+from archivey.zip_reader import ZipReader
 
 
 def _normalize_archive_path(
@@ -33,6 +34,25 @@ def _normalize_archive_path(
         return archive_path
 
     raise TypeError(f"Invalid archive path type: {type(archive_path)} {archive_path}")
+
+
+_FORMAT_TO_READER = {
+    ArchiveFormat.RAR: RarReader,
+    ArchiveFormat.ZIP: ZipReader,
+    ArchiveFormat.SEVENZIP: SevenZipReader,
+    ArchiveFormat.TAR: TarReader,
+}
+
+_EXTRA_DETECTORS = {
+    (TarReader.is_tar_file, ArchiveFormat.TAR),
+    (RarReader.is_rar_file, ArchiveFormat.RAR),
+    (ZipReader.is_zip_file, ArchiveFormat.ZIP),
+}
+for format in TAR_COMPRESSED_FORMATS:
+    _FORMAT_TO_READER[format] = TarReader
+
+for format in SINGLE_FILE_COMPRESSED_FORMATS:
+    _FORMAT_TO_READER[format] = SingleFileReader
 
 
 def open_archive(
@@ -86,6 +106,9 @@ def open_archive(
         ... except ArchiveError as e:
         ...     print(f"An archive error occurred: {e}")
     """
+    if pwd is not None and not isinstance(pwd, (str, bytes)):
+        raise TypeError("Password must be a string or bytes")
+
     archive_path_normalized = _normalize_archive_path(archive_path)
 
     if isinstance(archive_path_normalized, str):
@@ -93,97 +116,32 @@ def open_archive(
             raise FileNotFoundError(
                 f"Archive file not found: {archive_path_normalized}"
             )
-        format = detect_archive_format(archive_path_normalized)
-    else:
-        try:
-            archive_path_normalized.seek(0)
-        except Exception:
-            pass
-        format = detect_archive_format_by_signature(archive_path_normalized)
-        if format in COMPRESSION_FORMAT_TO_TAR_FORMAT:
-            try:
-                archive_path_normalized.seek(0)
-                stream = open_stream_fileobj(
-                    format, archive_path_normalized, get_default_config()
-                )
-                head = stream.read(262)
-                if len(head) >= 262 and head[257:262].startswith(b"ustar"):
-                    format = COMPRESSION_FORMAT_TO_TAR_FORMAT[format]
-            finally:
-                try:
-                    stream.close()
-                except Exception:
-                    pass
-        try:
-            archive_path_normalized.seek(0)
-        except Exception:
-            pass
 
-    if pwd is not None and not isinstance(pwd, (str, bytes)):
-        raise TypeError("Password must be a string or bytes")
+    format = detect_archive_format(archive_path_normalized)
+    if format == ArchiveFormat.UNKNOWN:
+        raise ArchiveNotSupportedError(
+            f"Unknown archive format for {archive_path_normalized}"
+        )
+
+    if format not in _FORMAT_TO_READER:
+        raise ArchiveNotSupportedError(
+            f"Unsupported archive format: {format} (for {archive_path_normalized})"
+        )
+
+    reader_class = _FORMAT_TO_READER[format]
 
     if config is None:
         config = get_default_config()
 
     with default_config(config):
-        use_libarchive = config.use_libarchive
-
-        reader: ArchiveReader
-
-        if use_libarchive:
-            raise NotImplementedError("LibArchiveReader is not implemented")
-
-        if format == ArchiveFormat.RAR:
-            from archivey.rar_reader import RarReader
-
-            reader = RarReader(archive_path_normalized, pwd=pwd)
-
-        elif format == ArchiveFormat.ZIP:
-            from archivey.zip_reader import ZipReader
-
-            reader = ZipReader(archive_path_normalized, pwd=pwd)
-
-        elif format == ArchiveFormat.SEVENZIP:
-            from archivey.sevenzip_reader import SevenZipReader
-
-            reader = SevenZipReader(
-                archive_path_normalized,
-                pwd=pwd,
-                streaming_only=streaming_only,
-            )
-
-        elif format == ArchiveFormat.TAR or format in TAR_COMPRESSED_FORMATS:
-            from archivey.tar_reader import TarReader
-
-            reader = TarReader(
-                archive_path_normalized,
-                pwd=pwd,
-                format=format,
-                streaming_only=streaming_only,
-            )
-
-        elif format in SINGLE_FILE_COMPRESSED_FORMATS:
-            from archivey.single_file_reader import SingleFileReader
-
-            reader = SingleFileReader(
-                archive_path_normalized,
-                pwd=pwd,
-                format=format,
-            )
-
-        elif format == ArchiveFormat.ISO:
-            raise NotImplementedError("ISO reader is not yet implemented")
-
-        elif format == ArchiveFormat.FOLDER:
-            assert isinstance(archive_path_normalized, str), (
-                "FolderReader only supports string paths"
-            )
-            reader = FolderReader(archive_path_normalized)
-
-        else:
-            raise ArchiveNotSupportedError(f"Unsupported archive format: {format}")
+        reader = reader_class(
+            archive_path_normalized,
+            format=format,
+            pwd=pwd,
+            streaming_only=streaming_only,
+        )
 
         if streaming_only:
             return StreamingOnlyArchiveReaderWrapper(reader)
-
-        return reader
+        else:
+            return reader

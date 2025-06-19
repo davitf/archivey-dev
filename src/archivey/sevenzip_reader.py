@@ -311,6 +311,7 @@ class SevenZipReader(BaseArchiveReader):
     def __init__(
         self,
         archive_path: BinaryIO | str,
+        format: ArchiveFormat,
         *,
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
@@ -318,8 +319,8 @@ class SevenZipReader(BaseArchiveReader):
         super().__init__(
             ArchiveFormat.SEVENZIP,
             archive_path,
-            random_access_supported=not streaming_only,
             members_list_supported=True,
+            random_access_supported=not streaming_only,
             pwd=pwd,
         )
         self._format_info: ArchiveInfo | None = None
@@ -785,6 +786,12 @@ class SevenZipReader(BaseArchiveReader):
             )
         return self._format_info
 
+    @classmethod
+    def is_7z_file(cls, file: BinaryIO | str) -> bool:
+        if py7zr is not None:
+            return py7zr.is_7zfile(file)
+        return False
+
 
 if __name__ == "__main__":
     import sys
@@ -794,7 +801,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     archive_path = sys.argv[1]
-    with SevenZipReader(archive_path) as archive:
+    with SevenZipReader(archive_path, format=ArchiveFormat.SEVENZIP) as archive:
         for member in archive.get_members():
             print(member)
 

@@ -68,14 +68,16 @@ class ZipReader(BaseArchiveReader):
     def __init__(
         self,
         archive_path: BinaryIO | str | bytes | os.PathLike,
+        format: ArchiveFormat,
         *,
         pwd: bytes | str | None = None,
+        streaming_only: bool = False,
     ):
         super().__init__(
             ArchiveFormat.ZIP,
             archive_path,
-            random_access_supported=True,
             members_list_supported=True,
+            random_access_supported=not streaming_only,
             pwd=pwd,
         )
         self._format_info: ArchiveInfo | None = None
@@ -215,3 +217,7 @@ class ZipReader(BaseArchiveReader):
             raise ArchiveError(f"Error reading member {filename}: {e}") from e
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Error reading member {filename}: {e}") from e
+
+    @classmethod
+    def is_zip_file(cls, file: BinaryIO | str | os.PathLike) -> bool:
+        return zipfile.is_zipfile(file)

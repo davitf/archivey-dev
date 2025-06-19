@@ -1,4 +1,5 @@
 import logging
+import os
 import stat
 import tarfile
 from datetime import datetime, timezone
@@ -41,8 +42,8 @@ class TarReader(BaseArchiveReader):
         self,
         archive_path: BinaryIO | str,
         format: ArchiveFormat,
-        streaming_only: bool = False,
         *,
+        streaming_only: bool = False,
         pwd: bytes | str | None = None,
     ):
         """Initialize the reader.
@@ -279,3 +280,7 @@ class TarReader(BaseArchiveReader):
             if translated is not None:
                 raise translated from e
             raise
+
+    @classmethod
+    def is_tar_file(cls, file: BinaryIO | str | os.PathLike) -> bool:
+        return tarfile.is_tarfile(file)

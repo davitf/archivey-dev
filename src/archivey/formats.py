@@ -1,13 +1,24 @@
 import logging
 import os
-from typing import BinaryIO, cast
+import tarfile
+import zipfile
+from typing import TYPE_CHECKING, BinaryIO, cast
 
+from archivey.compressed_streams import open_stream_fileobj
+from archivey.config import get_default_config
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
-    SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
     ArchiveFormat,
 )
+
+if TYPE_CHECKING:
+    import rarfile
+else:
+    try:
+        import rarfile
+    except ImportError:
+        rarfile = None  # type: ignore[assignment]
 
 # Taken from the pycdlib code
 _ISO_MAGIC_BYTES = (
@@ -19,6 +30,20 @@ _ISO_MAGIC_BYTES = (
     b"TEA01",
     b"BOOT2",
 )
+
+
+def _is_executable(stream: BinaryIO) -> bool:
+    EXECUTABLE_MAGICS = {
+        "pe": b"MZ",
+        "elf": b"\x7fELF",
+        "macho": b"\xcf\xfa\xed\xfe",
+        "macho-fat": b"\xca\xfe\xba\xbe",
+        "script": b"#!",
+    }
+
+    stream.seek(0)
+    header = stream.read(16)
+    return any(header.startswith(magic) for magic in EXECUTABLE_MAGICS.values())
 
 
 def detect_archive_format_by_signature(
@@ -44,40 +69,77 @@ def detect_archive_format_by_signature(
         ([b"ustar"], 257, ArchiveFormat.TAR),  # TAR "ustar" magic
         (_ISO_MAGIC_BYTES, 0x8001, ArchiveFormat.ISO),  # ISO9660
     ]
+    _EXTRA_DETECTORS = [
+        # There may be other tar variants supported by tarfile.
+        (tarfile.is_tarfile, ArchiveFormat.TAR),
+        # zipfiles can have something prepended; is_zipfile checks the end of the file
+        (zipfile.is_zipfile, ArchiveFormat.ZIP),
+    ]
+
+    _SFX_DETECTORS = []
+    if rarfile is not None:
+        _SFX_DETECTORS.append((rarfile.is_rarfile_sfx, ArchiveFormat.RAR))
+
     f: BinaryIO
 
-    if isinstance(path_or_file, (str, bytes)):
+    if isinstance(path_or_file, (str, bytes, os.PathLike)):
         # If it's a path, check if it's a directory first
         if os.path.isdir(path_or_file):
             return ArchiveFormat.FOLDER
-        try:
-            f = open(path_or_file, "rb")
-            close_after = True
-        except FileNotFoundError:
-            return (
-                ArchiveFormat.UNKNOWN
-            )  # Or raise error, depending on desired behavior
+
+        f = open(path_or_file, "rb")
+        close_after = True
+
     elif hasattr(path_or_file, "read") and hasattr(path_or_file, "seek"):
         f = cast(BinaryIO, path_or_file)
         # We can't check is_dir on a stream, assume it's not a folder for streams
         close_after = False
     else:
         # Not a path and not a stream
+        logger.warning(f"{path_or_file}: Not a path or stream")
         return ArchiveFormat.UNKNOWN
 
     try:
+        detected_format = None
         for magics, offset, fmt in SIGNATURES:
             bytes_to_read = max(len(magic) for magic in magics)
             f.seek(offset)
             data = f.read(bytes_to_read)
             if any(data.startswith(magic) for magic in magics):
-                return fmt
+                detected_format = fmt
+                break
+
+        # Check if it is a compressed tar file
+        if detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT:
+            assert detected_format is not None
+            with open_stream_fileobj(
+                detected_format, f, get_default_config()
+            ) as decompressed_stream:
+                if tarfile.is_tarfile(decompressed_stream):
+                    detected_format = COMPRESSION_FORMAT_TO_TAR_FORMAT[detected_format]
+
+        if detected_format is not None:
+            return detected_format
+
+        for detector, format in _EXTRA_DETECTORS:
+            if detector(f):
+                return format
+
+        # Check for SFX files
+        if _is_executable(f):
+            for detector, format in _SFX_DETECTORS:
+                if detector(f):
+                    return format
+
+        return ArchiveFormat.UNKNOWN
 
     finally:
         if close_after:
             f.close()
-
-    return ArchiveFormat.UNKNOWN
+        elif hasattr(f, "seek"):
+            f.seek(0)
+        else:
+            logger.warning(f"{path_or_file}: Not a path or stream")
 
 
 _EXTENSION_TO_FORMAT = {
@@ -126,24 +188,20 @@ def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
 logger = logging.getLogger(__name__)
 
 
-def detect_archive_format(filename: str) -> ArchiveFormat:
+def detect_archive_format(filename: str | BinaryIO | os.PathLike) -> ArchiveFormat:
     # Check if it's a directory first
-    if os.path.isdir(filename):
+    if isinstance(filename, os.PathLike):
+        filename = str(filename)
+
+    if isinstance(filename, str) and os.path.isdir(filename):
         return ArchiveFormat.FOLDER
 
     format_by_signature = detect_archive_format_by_signature(filename)
-    format_by_filename = detect_archive_format_by_filename(filename)
 
-    # The signature detection doesn't know if a .gz/.bz2/.xz file is a tar file,
-    # so we need to check the filename.
-    # To detect cases like a .tar.gz file mistakenly having been renamed to .zip,
-    # assume it's a tar file if the compression format is supported by tar
-    # and the filename matches any multi-file format.
-    if (
-        format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT
-        and format_by_filename not in SINGLE_FILE_COMPRESSED_FORMATS
-    ):
-        format_by_signature = COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]
+    if isinstance(filename, str):
+        format_by_filename = detect_archive_format_by_filename(filename)
+    else:
+        format_by_filename = ArchiveFormat.UNKNOWN
 
     if (
         format_by_filename == ArchiveFormat.UNKNOWN

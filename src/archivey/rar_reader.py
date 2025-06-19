@@ -469,13 +469,15 @@ class RarReader(BaseArchiveReader):
     def __init__(
         self,
         archive_path: str | BinaryIO | os.PathLike,
+        format: ArchiveFormat,
         *,
         pwd: bytes | str | None = None,
+        streaming_only: bool = False,
     ):
         super().__init__(
             ArchiveFormat.RAR,
             archive_path,
-            random_access_supported=True,
+            random_access_supported=not streaming_only,
             members_list_supported=True,
             pwd=pwd,
         )
@@ -735,3 +737,10 @@ class RarReader(BaseArchiveReader):
         else:
             logger.debug("iter_members_with_io: not using rar_stream_reader")
             yield from super().iter_members_with_io(members, pwd=pwd, filter=filter)
+
+    @classmethod
+    def is_rar_file(cls, file: BinaryIO | str | os.PathLike) -> bool:
+        if rarfile is not None:
+            return rarfile.is_rarfile(file) or rarfile.is_rarfile_sfx(file)
+
+        return False
