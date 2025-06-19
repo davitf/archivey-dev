@@ -13,6 +13,7 @@ from archivey.rar_reader import RarReader
 from archivey.sevenzip_reader import SevenZipReader
 from archivey.single_file_reader import SingleFileReader
 from archivey.tar_reader import TarReader
+from archivey.folder_reader import FolderReader
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
@@ -41,6 +42,7 @@ _FORMAT_TO_READER = {
     ArchiveFormat.ZIP: ZipReader,
     ArchiveFormat.SEVENZIP: SevenZipReader,
     ArchiveFormat.TAR: TarReader,
+    ArchiveFormat.FOLDER: FolderReader,
 }
 
 _EXTRA_DETECTORS = {
@@ -128,18 +130,25 @@ def open_archive(
             f"Unsupported archive format: {format} (for {archive_path_normalized})"
         )
 
-    reader_class = _FORMAT_TO_READER[format]
+    reader_class = _FORMAT_TO_READER.get(format)
 
     if config is None:
         config = get_default_config()
 
     with default_config(config):
-        reader = reader_class(
-            archive_path_normalized,
-            format=format,
-            pwd=pwd,
-            streaming_only=streaming_only,
-        )
+        if format == ArchiveFormat.FOLDER:
+            assert isinstance(
+                archive_path_normalized, str
+            ), "FolderReader only supports string paths"
+            reader = FolderReader(archive_path_normalized)
+        else:
+            assert reader_class is not None
+            reader = reader_class(
+                archive_path_normalized,
+                format=format,
+                pwd=pwd,
+                streaming_only=streaming_only,
+            )
 
         if streaming_only:
             return StreamingOnlyArchiveReaderWrapper(reader)

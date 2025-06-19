@@ -8,6 +8,7 @@ from archivey.compressed_streams import open_stream_fileobj
 from archivey.config import get_default_config
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
+    SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
     ArchiveFormat,
 )
@@ -109,6 +110,8 @@ def detect_archive_format_by_signature(
                 detected_format = fmt
                 break
 
+        f.seek(0)
+
         # Check if it is a compressed tar file
         if detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT:
             assert detected_format is not None
@@ -118,18 +121,22 @@ def detect_archive_format_by_signature(
                 if tarfile.is_tarfile(decompressed_stream):
                     detected_format = COMPRESSION_FORMAT_TO_TAR_FORMAT[detected_format]
 
+            f.seek(0)
+
         if detected_format is not None:
             return detected_format
 
         for detector, format in _EXTRA_DETECTORS:
             if detector(f):
                 return format
+            f.seek(0)
 
         # Check for SFX files
         if _is_executable(f):
             for detector, format in _SFX_DETECTORS:
                 if detector(f):
                     return format
+                f.seek(0)
 
         return ArchiveFormat.UNKNOWN
 
@@ -202,6 +209,17 @@ def detect_archive_format(filename: str | BinaryIO | os.PathLike) -> ArchiveForm
         format_by_filename = detect_archive_format_by_filename(filename)
     else:
         format_by_filename = ArchiveFormat.UNKNOWN
+
+    # If the signature indicates a single-file compression format but the
+    # filename suggests a tar archive (e.g. .tar.gz), assume it's a tar file.
+    # This avoids corrupted tar archives being misread as valid single-file
+    # compressed files.
+    if (
+        format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT
+        and format_by_filename not in SINGLE_FILE_COMPRESSED_FORMATS
+        and format_by_filename != ArchiveFormat.UNKNOWN
+    ):
+        format_by_signature = COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]
 
     if (
         format_by_filename == ArchiveFormat.UNKNOWN
