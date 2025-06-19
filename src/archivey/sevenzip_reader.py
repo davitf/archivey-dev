@@ -592,6 +592,8 @@ class SevenZipReader(BaseArchiveReader):
         if self._archive is None:
             raise ValueError("Archive is closed")
 
+        self._start_streaming_iteration()
+
         # Don't apply the filter now, as the link members may not have the extracted path.
         # logger.info(f"iter members arg: {members}")
         member_filter_func = _build_iterator_filter(members, None)
