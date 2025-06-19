@@ -1,4 +1,5 @@
 import io
+
 import pytest
 
 from archivey.core import open_archive
@@ -14,7 +15,10 @@ for a in SAMPLE_ARCHIVES:
         continue
     archives_by_format.setdefault(fmt, a)
 
-@pytest.mark.parametrize("sample_archive", list(archives_by_format.values()), ids=lambda a: a.filename)
+
+@pytest.mark.parametrize(
+    "sample_archive", list(archives_by_format.values()), ids=lambda a: a.filename
+)
 def test_open_from_memory(sample_archive):
     skip_if_package_missing(sample_archive.creation_info.format, None)
     path = sample_archive.get_archive_path()

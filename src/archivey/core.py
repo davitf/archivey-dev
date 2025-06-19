@@ -4,6 +4,7 @@ import os
 from typing import Any, BinaryIO
 
 from archivey.base_reader import ArchiveReader, StreamingOnlyArchiveReaderWrapper
+from archivey.compressed_streams import open_stream_fileobj
 from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.folder_reader import FolderReader
@@ -11,11 +12,10 @@ from archivey.formats import (
     detect_archive_format,
     detect_archive_format_by_signature,
 )
-from archivey.compressed_streams import open_stream_fileobj
 from archivey.types import (
+    COMPRESSION_FORMAT_TO_TAR_FORMAT,
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
-    COMPRESSION_FORMAT_TO_TAR_FORMAT,
     ArchiveFormat,
 )
 
@@ -32,9 +32,7 @@ def _normalize_archive_path(
     elif isinstance(archive_path, str):
         return archive_path
 
-    raise TypeError(
-        f"Invalid archive path type: {type(archive_path)} {archive_path}"
-    )
+    raise TypeError(f"Invalid archive path type: {type(archive_path)} {archive_path}")
 
 
 def open_archive(
@@ -180,6 +178,9 @@ def open_archive(
             raise NotImplementedError("ISO reader is not yet implemented")
 
         elif format == ArchiveFormat.FOLDER:
+            assert isinstance(archive_path_normalized, str), (
+                "FolderReader only supports string paths"
+            )
             reader = FolderReader(archive_path_normalized)
 
         else:

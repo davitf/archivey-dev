@@ -80,7 +80,8 @@ class ZipReader(BaseArchiveReader):
         )
         self._format_info: ArchiveInfo | None = None
         try:
-            self._archive = zipfile.ZipFile(archive_path, "r")
+            # The typeshed definition of ZipFile is incorrect, it should allow byte streams.
+            self._archive = zipfile.ZipFile(archive_path, "r")  # type: ignore
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Invalid ZIP archive {archive_path}") from e
 

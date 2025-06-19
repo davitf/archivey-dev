@@ -63,7 +63,7 @@ def _translate_gzip_exception(e: Exception) -> Optional[ArchiveError]:
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
-def open_gzip_stream(path: str) -> BinaryIO:
+def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
     return ExceptionTranslatingIO(gzip.open(path, mode="rb"), _translate_gzip_exception)
 
 
@@ -88,7 +88,7 @@ def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
-def open_rapidgzip_stream(path: str) -> BinaryIO:
+def open_rapidgzip_stream(path: str | BinaryIO) -> BinaryIO:
     return ExceptionTranslatingIO(
         rapidgzip.open(path, parallelization=0), _translate_rapidgzip_exception
     )
@@ -105,7 +105,7 @@ def _translate_bz2_exception(e: Exception) -> Optional[ArchiveError]:
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
-def open_bzip2_stream(path: str) -> BinaryIO:
+def open_bzip2_stream(path: str | BinaryIO) -> BinaryIO:
     return ExceptionTranslatingIO(bz2.open(path), _translate_bz2_exception)
 
 
@@ -120,7 +120,7 @@ def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
-def open_indexed_bzip2_stream(path: str) -> BinaryIO:
+def open_indexed_bzip2_stream(path: str | BinaryIO) -> BinaryIO:
     return ExceptionTranslatingIO(
         indexed_bzip2.open(path, parallelization=0), _translate_indexed_bzip2_exception
     )
@@ -134,7 +134,7 @@ def _translate_lzma_exception(e: Exception) -> Optional[ArchiveError]:
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
-def open_lzma_stream(path: str) -> BinaryIO:
+def open_lzma_stream(path: str | BinaryIO) -> BinaryIO:
     return ExceptionTranslatingIO(lzma.open(path), _translate_lzma_exception)
 
 
@@ -148,7 +148,7 @@ def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
-def open_python_xz_stream(path: str) -> BinaryIO:
+def open_python_xz_stream(path: str | BinaryIO) -> BinaryIO:
     if xz is None:
         raise PackageNotInstalledError(
             "python-xz package is not installed, required for XZ archives"
@@ -163,7 +163,7 @@ def _translate_zstandard_exception(e: Exception) -> Optional[ArchiveError]:
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
-def open_zstandard_stream(path: str) -> BinaryIO:
+def open_zstandard_stream(path: str | BinaryIO) -> BinaryIO:
     if zstandard is None:
         raise PackageNotInstalledError(
             "zstandard package is not installed, required for Zstandard archives"
@@ -179,7 +179,7 @@ def _translate_pyzstd_exception(e: Exception) -> Optional[ArchiveError]:
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
-def open_pyzstd_stream(path: str) -> BinaryIO:
+def open_pyzstd_stream(path: str | BinaryIO) -> BinaryIO:
     if pyzstd is None:
         raise PackageNotInstalledError(
             "pyzstd package is not installed, required for Zstandard archives"
@@ -195,7 +195,7 @@ def _translate_lz4_exception(e: Exception) -> Optional[ArchiveError]:
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
-def open_lz4_stream(path: str) -> BinaryIO:
+def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
     if lz4 is None:
         raise PackageNotInstalledError(
             "lz4 package is not installed, required for LZ4 archives"
@@ -205,7 +205,7 @@ def open_lz4_stream(path: str) -> BinaryIO:
 
 
 def open_stream(
-    format: ArchiveFormat, path: str | PathLike, config: ArchiveyConfig
+    format: ArchiveFormat, path: str | PathLike | BinaryIO, config: ArchiveyConfig
 ) -> BinaryIO:
     path = str(path)
     if format == ArchiveFormat.GZIP:
