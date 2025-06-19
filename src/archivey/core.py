@@ -1,7 +1,7 @@
 """Core functionality for opening and interacting with archives."""
 
 import os
-from typing import Any, BinaryIO
+from typing import BinaryIO
 
 from archivey.base_reader import ArchiveReader, StreamingOnlyArchiveReaderWrapper
 from archivey.compressed_streams import open_stream_fileobj

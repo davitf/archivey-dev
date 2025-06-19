@@ -5,11 +5,6 @@ from archivey.config import (
     set_default_config,
 )
 from archivey.core import open_archive
-from archivey.dependency_checker import (
-    DependencyVersions,
-    format_dependency_versions,
-    get_dependency_versions,
-)
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -19,8 +14,6 @@ from archivey.exceptions import (
     ArchiveMemberNotFoundError,
     ArchiveNotSupportedError,
 )
-from archivey.folder_reader import FolderReader
-from archivey.formats import detect_archive_format_by_signature
 from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
@@ -31,7 +24,6 @@ from archivey.types import (
 
 __all__ = [
     "open_archive",
-    "FolderReader",
     "ArchiveError",
     "ArchiveFormatError",
     "ArchiveCorruptedError",
@@ -42,14 +34,12 @@ __all__ = [
     "ArchiveMember",
     "ArchiveInfo",
     "ArchiveFormat",
-    "detect_archive_format_by_signature",
     "MemberType",
     "CreateSystem",
-    "DependencyVersions",
-    "get_dependency_versions",
-    "format_dependency_versions",
     "ArchiveyConfig",
+    "default_config",
     "get_default_config",
     "set_default_config",
-    "default_config",
 ]
+
+__version__ = "0.1.0"

@@ -4,9 +4,10 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "davi davi", email = "gh@davitf.com" }
+    { name = "Davi Figueiredo", email = "gh@davitf.com" }
 ]
 requires-python = ">=3.10"
+license = { text = "MIT" }
 dependencies = [
     "backports-strenum>=1.3.1 ; python_full_version < '3.11'",
     "tqdm>=4.67.1",
@@ -86,3 +87,6 @@ exclude_also = [
     "if TYPE_CHECKING:",
     "except ImportError",
 ]
+
+[tool.hatch.version]
+path = "src/archivey/__init__.py"
