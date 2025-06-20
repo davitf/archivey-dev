@@ -286,3 +286,30 @@ def test_iterator_encryption_with_symlinks_password_in_iterator(
     assert set(members_by_name.keys()) == {
         f.name for f in sample_archive.contents.files
     }
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["encryption_with_symlinks"],
+        extensions=["rar", "7z"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_open_encrypted_symlink(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    encrypted_symlink = next(
+        f
+        for f in sample_archive.contents.files
+        if f.type == MemberType.SYMLINK and f.password is not None
+    )
+
+    with open_archive(sample_archive_path) as archive:
+        with archive.open(encrypted_symlink.name, pwd=encrypted_symlink.password) as fh:
+            assert fh.read() == encrypted_symlink.contents
+        member = archive.get_member(encrypted_symlink.name)
+        assert member.link_target == encrypted_symlink.link_target

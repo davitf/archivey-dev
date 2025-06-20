@@ -688,7 +688,21 @@ class RarReader(BaseArchiveReader):
         # Link targets in RAR4 archives may be stored as file data. If that data
         # is encrypted and no password is available we simply return the member
         # contents when opened.
-        member, filename = self._resolve_member_to_open(member_or_filename)
+        member = self.get_member(member_or_filename)
+
+        if (
+            pwd is not None
+            and member.is_link
+            and member.link_target is None
+        ):
+            link_target = self._get_link_target(
+                cast(RarInfo, member.raw_info),
+                pwd=pwd,
+            )
+            if link_target is not None:
+                member.link_target = link_target
+
+        member, filename = self._resolve_member_to_open(member)
 
         if member.is_link and member.link_target is None:
             link_target = self._get_link_target(
