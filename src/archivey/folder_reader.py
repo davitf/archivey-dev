@@ -1,13 +1,31 @@
 import logging
 import os
 import stat
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import BinaryIO, Iterator, Optional
 
 from archivey.base_reader import BaseArchiveReader
 from archivey.exceptions import ArchiveError, ArchiveIOError, ArchiveMemberNotFoundError
-from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
+from archivey.types import (
+    ArchiveFormat,
+    ArchiveInfo,
+    ArchiveMember,
+    CreateSystem,
+    MemberType,
+)
+
+# Attempt to import pwd and grp for Unix-specific user/group name resolution
+try:
+    import pwd
+except ImportError:
+    pwd = None  # type: ignore[assignment]
+
+try:
+    import grp
+except ImportError:
+    grp = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -76,15 +94,52 @@ class FolderReader(BaseArchiveReader):
             except OSError:
                 link_target = "Error reading link target"
 
+        # Determine CreateSystem
+        current_os = sys.platform
+        if current_os == "win32":
+            create_system = CreateSystem.NTFS
+        elif current_os == "darwin":
+            create_system = CreateSystem.MACINTOSH
+        elif current_os.startswith(("linux", "freebsd", "openbsd", "cygwin")): # Added cygwin
+            create_system = CreateSystem.UNIX
+        else:
+            create_system = CreateSystem.UNKNOWN
+
+        user_name = None
+        if pwd:
+            try:
+                user_name = pwd.getpwuid(stat_result.st_uid).pw_name
+            except KeyError:  # UID not found
+                pass
+            except ImportError: # Should be caught by initial import check, but as safety
+                pass
+
+
+        group_name = None
+        if grp:
+            try:
+                group_name = grp.getgrgid(stat_result.st_gid).gr_name
+            except KeyError:  # GID not found
+                pass
+            except ImportError: # Should be caught by initial import check, but as safety
+                pass
+
         return ArchiveMember(
             filename=filename,
             file_size=stat_result.st_size,
             compress_size=stat_result.st_size,  # No compression for folders
-            # st_mtime is in seconds since the epoch, so UTC.
             mtime_with_tz=datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc),
+            atime_with_tz=datetime.fromtimestamp(stat_result.st_atime, tz=timezone.utc),
+            ctime_with_tz=datetime.fromtimestamp(stat_result.st_ctime, tz=timezone.utc),
             type=member_type,
-            mode=stat_result.st_mode,
+            mode=stat_result.st_mode & 0o777,  # Store only permission bits
             link_target=link_target,
+            create_system=create_system,
+            uid=stat_result.st_uid,
+            gid=stat_result.st_gid,
+            user_name=user_name,
+            group_name=group_name,
+            raw_info=stat_result, # Store the original stat_result for reference
         )
 
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:

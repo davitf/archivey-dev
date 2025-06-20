@@ -109,13 +109,20 @@ class ArchiveInfo:
 
 @dataclass
 class ArchiveMember:
-    """Represents a file within an archive."""
+    """Represents a file within an archive, including detailed metadata."""
 
     filename: str
     file_size: Optional[int]
     compress_size: Optional[int]
-    mtime_with_tz: Optional[datetime]
+    mtime_with_tz: Optional[datetime]  # Last modification time
     type: MemberType
+
+    uid: Optional[int] = None  # User ID of the owner
+    gid: Optional[int] = None  # Group ID of the owner
+    user_name: Optional[str] = None  # User name of the owner
+    group_name: Optional[str] = None  # Group name of the owner
+    atime_with_tz: Optional[datetime] = None  # Access time
+    ctime_with_tz: Optional[datetime] = None  # Creation or metadata change time
 
     mode: Optional[int] = None
     crc32: Optional[int] = None
@@ -139,6 +146,20 @@ class ArchiveMember:
         if self.mtime_with_tz is None:
             return None
         return self.mtime_with_tz.replace(tzinfo=None)
+
+    @property
+    def atime(self) -> Optional[datetime]:
+        """Returns the atime as a datetime object without timezone information."""
+        if self.atime_with_tz is None:
+            return None
+        return self.atime_with_tz.replace(tzinfo=None)
+
+    @property
+    def ctime(self) -> Optional[datetime]:
+        """Returns the ctime as a datetime object without timezone information."""
+        if self.ctime_with_tz is None:
+            return None
+        return self.ctime_with_tz.replace(tzinfo=None)
 
     @property
     def member_id(self) -> int:

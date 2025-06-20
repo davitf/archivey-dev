@@ -107,9 +107,15 @@ The `archivey.types.ArchiveMember` class is used to represent individual entries
 *   `filename: str`
 *   `file_size: int` (uncompressed size)
 *   `compress_size: int` (compressed size, if available)
-*   `mtime: datetime` (modification time)
+*   `mtime_with_tz: Optional[datetime]` (modification time with timezone, ideally UTC. The `.mtime` property provides a naive datetime.)
+*   `atime_with_tz: Optional[datetime]` (access time with timezone, ideally UTC.)
+*   `ctime_with_tz: Optional[datetime]` (creation or metadata change time with timezone, ideally UTC.)
 *   `type: MemberType` (e.g., `MemberType.FILE`, `MemberType.DIR`, `MemberType.SYMLINK`)
 *   `mode: Optional[int]` (file permissions)
+*   `uid: Optional[int]` (User ID of owner)
+*   `gid: Optional[int]` (Group ID of owner)
+*   `user_name: Optional[str]` (User name of owner)
+*   `group_name: Optional[str]` (Group name of owner)
 *   `link_target: Optional[str]` (for symlinks/hardlinks, the path they point to)
 *   `encrypted: bool`
 *   `raw_info: Any` (store the original member info object from the underlying library here; it's used by `ZipReader` for `_archive.open()`)
@@ -119,6 +125,8 @@ Refer to the `ArchiveMember` class definition in `archivey.types` for all availa
 
 ## Registering Your Reader
 
-Once your reader is implemented, you'll need to modify `archivey.core.open_archive` to detect the archive format and instantiate your reader. (Details of this registration process might evolve, check the current `open_archive` function).
+To register your reader, you'll typically need to:
+1. Add your reader class to the `_FORMAT_TO_READER` dictionary in `src/archivey/core.py`, mapping your `ArchiveFormat` enum to your reader class.
+2. If your archive format requires specific signature detection beyond common magic numbers or existing file extension logic, update the `SIGNATURES`, `_EXTRA_DETECTORS`, or extension mappings in `src/archivey/formats.py`.
 
 By following these guidelines, you can contribute robust and well-integrated support for new archive formats to `archivey`.

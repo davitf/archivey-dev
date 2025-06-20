@@ -772,3 +772,48 @@ class RarReader(BaseArchiveReader):
             return rarfile.is_rarfile(file) or rarfile.is_rarfile_sfx(file)
 
         return False
+
+    def test_member(self, member_or_filename: Union[ArchiveMember, str], *, pwd: Optional[bytes|str] = None) -> bool:
+        """
+        Test the integrity of a RAR archive member.
+
+        This method leverages the CRC checks performed by `rarfile` (or the
+        custom `RarStreamMemberFile` if `use_rar_stream` is enabled) when a
+        member's stream is opened via `self.open()` and fully read.
+
+        Args:
+            member_or_filename: The ArchiveMember object or the filename (str)
+                of the member to test.
+            pwd: Optional password for decrypting the member if it's encrypted.
+
+        Returns:
+            True if the member is valid (i.e., stream read successfully without
+            CRC error), False if an ArchiveCorruptedError occurs.
+
+        Raises:
+            ArchiveMemberNotFoundError: If the specified member is not found.
+            ArchiveEncryptedError: If the member is encrypted and `pwd` is incorrect
+                                   or not provided.
+            ArchiveError: For other archive-related errors during testing.
+        """
+        if self._archive is None:
+            raise ValueError("Archive is closed")
+
+        member_obj, filename = self._resolve_member_to_open(member_or_filename)
+
+        if not member_obj.is_file:
+            return True # Directories/links assumed valid by this test
+
+        # For RAR files, reading the stream using rarfile.open() performs CRC checks.
+        # The RarStreamMemberFile also does this if use_rar_stream is enabled.
+        # The self.open() method in RarReader already encapsulates this logic.
+        try:
+            # Use the existing open method which handles passwords and CRC checks
+            with self.open(member_obj, pwd=pwd) as stream:
+                while stream.read(65536): # Read in chunks
+                    pass
+            return True
+        except ArchiveCorruptedError: # This will be raised if CRC check fails
+            return False
+        # ArchiveEncryptedError will propagate if password is wrong/missing
+        # Other ArchiveError types will also propagate.

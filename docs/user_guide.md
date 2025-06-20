@@ -48,12 +48,36 @@ Key methods of the `ArchiveReader` object:
     *   `pwd`: Password for encrypted archives.
     *   `filter`: A callable to filter which members get extracted.
 *   Returns a dictionary mapping extracted file paths to their `ArchiveMember` objects.
+*   **`test_member(member_or_filename: Union[ArchiveMember, str], *, pwd: Optional[bytes|str] = None) -> bool`**: Tests the integrity of an archive member, typically by attempting to decompress it and verify checksums. Returns `True` if valid, `False` otherwise.
+*   **`resolve_link(member: ArchiveMember) -> Optional[ArchiveMember]`**: Resolves a symlink or hardlink member to its ultimate target. Returns the target `ArchiveMember` if found, or `None` if the link is broken or the target doesn't exist.
 
 Streaming-only archives (where `archive.has_random_access()` returns `False`) can be iterated only **once**. After calling `iter_members_with_io()` or `extractall()`, further attempts to read or extract members will raise a `ValueError`.
 
 ## Working with Archive Members
 
-The `ArchiveMember` object contains metadata about an individual entry within the archive, such as its name, size, modification time, type (file, directory, link), etc.
+The `ArchiveMember` object contains metadata about an individual entry within the archive. Key fields include:
+
+*   `filename: str`: The full path of the member within the archive, using forward slashes as separators.
+*   `file_size: Optional[int]`: Uncompressed size of the file in bytes. `None` if not applicable (e.g., for directories) or unknown.
+*   `compress_size: Optional[int]`: Compressed size of the file in bytes. `None` if not applicable or unknown.
+*   `mtime_with_tz: Optional[datetime]`: Last modification timestamp with timezone information (typically UTC).
+*   `mtime: Optional[datetime]` (property): Last modification timestamp without timezone information (naive datetime).
+*   `atime_with_tz: Optional[datetime]`: Last access timestamp with timezone information (typically UTC). `None` if not available.
+*   `atime: Optional[datetime]` (property): Last access timestamp without timezone information.
+*   `ctime_with_tz: Optional[datetime]`: Creation or metadata change timestamp with timezone information (typically UTC). `None` if not available. The exact meaning can depend on the archive format and originating OS.
+*   `ctime: Optional[datetime]` (property): Creation or metadata change timestamp without timezone information.
+*   `type: MemberType`: An enum (`MemberType.FILE`, `MemberType.DIR`, `MemberType.SYMLINK`, `MemberType.HARDLINK`, `MemberType.OTHER`) indicating the type of the member.
+*   `mode: Optional[int]`: POSIX permission bits (e.g., `0o755`). `None` if not applicable or not available.
+*   `uid: Optional[int]`: User ID of the owner. `None` if not available.
+*   `gid: Optional[int]`: Group ID of the owner. `None` if not available.
+*   `user_name: Optional[str]`: User name of the owner. `None` if not available or not applicable.
+*   `group_name: Optional[str]`: Group name of the owner. `None` if not available or not applicable.
+*   `link_target: Optional[str]`: For symlinks or hardlinks, the target path. `None` otherwise.
+*   `encrypted: bool`: `True` if the member is encrypted, `False` otherwise.
+*   `comment: Optional[str]`: A comment associated with the member. `None` if no comment.
+*   `crc32: Optional[int]`: CRC32 checksum of the uncompressed file. `None` if not available.
+*   `compression_method: Optional[str]`: String representing the compression method (e.g., "deflate", "bzip2"). `None` if not applicable or unknown.
+*   `create_system: Optional[CreateSystem]`: An enum indicating the operating system on which the member was likely created (e.g., `CreateSystem.UNIX`, `CreateSystem.NTFS`).
 
 ### Example: Listing Archive Contents
 
@@ -166,6 +190,32 @@ try:
         print(f"Successfully extracted {len(extracted_files)} files:")
         for path, member in extracted_files.items():
             print(f"  - {path} (Original: {member.filename})")
+
+except ArchiveError as e:
+    print(f"Error: {e}")
+```
+
+### Example: Resolving a Symbolic Link and Testing Members
+
+```python
+from archivey import open_archive, ArchiveError
+
+try:
+    with open_archive("archive_with_links.zip") as archive: # Ensure you have an archive for testing
+        for member in archive.get_members(): # Assuming random access for get_members()
+            if member.is_link:
+                print(f"Found link: {member.filename} -> {member.link_target}")
+                target_member = archive.resolve_link(member)
+                if target_member:
+                    print(f"  Resolved target: {target_member.filename} (Type: {target_member.type.value})")
+                else:
+                    print(f"  Link is broken or target not found in archive.")
+            elif member.is_file:
+                # Example of testing a file member
+                if archive.test_member(member):
+                    print(f"Member {member.filename} tested OK.")
+                else:
+                    print(f"Member {member.filename} failed integrity test.")
 
 except ArchiveError as e:
     print(f"Error: {e}")

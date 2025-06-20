@@ -6,10 +6,12 @@ import os
 import posixpath
 import threading
 from collections import defaultdict
-from typing import BinaryIO, Callable, Collection, Iterator, List, Union
+from typing import BinaryIO, Callable, Collection, Iterator, List, Union, Optional
 
 from archivey.config import ArchiveyConfig, get_default_config
 from archivey.exceptions import (
+    ArchiveCorruptedError,
+    ArchiveEncryptedError,
     ArchiveMemberCannotBeOpenedError,
     ArchiveMemberNotFoundError,
 )
@@ -231,6 +233,10 @@ class ArchiveReader(abc.ABC):
         be used to refresh its state or confirm its presence in the archive.
         If it's a string, it's treated as the filename of the member to find.
 
+        If multiple members in the archive share the same filename, the behavior
+        of which member is returned can be implementation-specific. Typically,
+        it's the last one encountered or registered.
+
         Args:
             member_or_filename: The filename (str) of the member to retrieve, or
                 an ArchiveMember object.
@@ -359,6 +365,31 @@ class ArchiveReader(abc.ABC):
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
+
+    @abc.abstractmethod
+    def test_member(self, member_or_filename: Union[ArchiveMember, str], *, pwd: Optional[bytes|str] = None) -> bool:
+        """
+        Test the integrity of an archive member.
+
+        This method attempts to verify the member's data, typically by
+        decompressing it and checking any available checksums (like CRC).
+        It does not store the decompressed data beyond what's needed for testing.
+
+        Args:
+            member_or_filename: The ArchiveMember object or the filename (str)
+                of the member to test.
+            pwd: Optional password for decrypting the member if it's encrypted.
+
+        Returns:
+            True if the member is valid, False otherwise.
+
+        Raises:
+            ArchiveMemberNotFoundError: If the specified member is not found.
+            ArchiveEncryptedError: If the member is encrypted and `pwd` is incorrect
+                                   or not provided (and test requires decryption).
+            ArchiveError: For other archive-related errors during testing.
+        """
+        pass
 
 
 class BaseArchiveReader(ArchiveReader):
@@ -920,6 +951,46 @@ class BaseArchiveReader(ArchiveReader):
         )
         return list(d.keys())[0] if len(d) else None
 
+    def test_member(self, member_or_filename: Union[ArchiveMember, str], *, pwd: Optional[bytes|str] = None) -> bool:
+        """
+        Test the integrity of an archive member by attempting to read its full stream.
+
+        This default implementation is suitable for formats where reading the stream
+        implicitly performs necessary integrity checks (like CRC). Subclasses should
+        override this method if more specific tests are available or if this
+        approach is not appropriate for the archive type (e.g., for non-file members
+        or if reading doesn't imply full validation).
+
+        Args:
+            member_or_filename: The ArchiveMember object or the filename (str)
+                of the member to test.
+            pwd: Optional password for decrypting the member if it's encrypted.
+
+        Returns:
+            True if the member's stream is successfully read, False if an
+            ArchiveCorruptedError is encountered. Non-file members are assumed valid.
+
+        Raises:
+            ArchiveMemberNotFoundError: If the specified member is not found.
+            ArchiveEncryptedError: If the member is encrypted and `pwd` is incorrect
+                                   or not provided.
+            ArchiveError: For other archive-related errors during testing.
+        """
+        member, _ = self._resolve_member_to_open(member_or_filename)
+        if not member.is_file:
+            # Cannot "test" a directory or link in this generic way, assume valid.
+            # Specific readers might handle links differently if they test the target.
+            return True
+        try:
+            with self.open(member, pwd=pwd) as stream:
+                while stream.read(65536):  # Read in chunks
+                    pass
+            return True
+        except ArchiveCorruptedError:
+            return False
+        # Other ArchiveErrors (like EncryptedError if pwd was wrong/missing but
+        # open() didn't catch it until read) should propagate.
+
 
 class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
     """
@@ -988,3 +1059,13 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
 
     def resolve_link(self, member: ArchiveMember) -> ArchiveMember | None:
         return self.reader.resolve_link(member)
+
+    def test_member(self, member_or_filename: Union[ArchiveMember, str], *, pwd: Optional[bytes|str] = None) -> bool:
+        # For streaming-only, this might be problematic if it consumes the stream.
+        # Delegate, but be aware of the single-pass nature.
+        if self._streaming_iteration_started and not self.reader.has_random_access():
+             # If we started iterating a true stream, testing another member might not be possible
+             # or might interfere. However, if the underlying reader has random access,
+             # this wrapper is just limiting the interface, so test_member is fine.
+            raise NotImplementedError("test_member may not be reliable on a non-random-access stream after iteration has begun.")
+        return self.reader.test_member(member_or_filename, pwd=pwd)
