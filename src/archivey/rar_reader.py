@@ -521,20 +521,31 @@ class RarReader(BaseArchiveReader):
 
     def _get_link_target(self, info: RarInfo) -> Optional[str]:
         """Return the link target for ``info`` if available."""
-        # In RAR4 archives the target may be stored as the file contents. If the
-        # entry is encrypted, rarfile can't expose the target without a password
-        # so we return ``None``.
         if not info.is_symlink() and not is_rar_info_hardlink(info):
             return None
+
+        if self._archive is None:
+            raise ArchiveError("Archive is closed")
+
         if info.file_redir:
             return info.file_redir[2]
-        elif not info.needs_password():
-            if self._archive is None:
-                raise ArchiveError("Archive is closed")
-            return self._archive.read(info.filename).decode("utf-8")
 
-        # If the link target is encrypted, we can't read it.
-        return None
+        try:
+            data = self._archive.read(info.filename)
+        except rarfile.PasswordRequired as e:
+            raise ArchiveEncryptedError(
+                f"Password required to read link target for {info.filename}"
+            ) from e
+        except rarfile.RarWrongPassword as e:
+            raise ArchiveEncryptedError(
+                f"Wrong password specified for {info.filename}"
+            ) from e
+        except rarfile.Error as e:
+            raise ArchiveError(
+                f"Error reading link target for {info.filename}: {e}"
+            ) from e
+
+        return data.decode("utf-8")
 
     def _get_timestamp(self, info: RarInfo) -> datetime.datetime | None:
         if info.mtime is not None:
@@ -553,10 +564,6 @@ class RarReader(BaseArchiveReader):
 
         rarinfos: list[RarInfo] = self._archive.infolist()
         for info in rarinfos:
-            print("=" * 80)
-            for field in info.__dict__:
-                print(f"{field}: {repr(info.__dict__[field])}")
-            print("=" * 80)
             compression_method = (
                 _RAR_COMPRESSION_METHODS.get(info.compress_type, "unknown")
                 if info.compress_type is not None

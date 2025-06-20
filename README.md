@@ -60,18 +60,20 @@ with open_archive("example.zip") as archive:
 
 ## Command line usage
 
-Archivey also provides a simple CLI for quick inspection or extraction of
-archives.
+Archivey installs a small command line tool simply called `archivey`.
+You can also invoke it via `python -m archivey`.
+The CLI is primarily meant for testing or exploring the library rather than
+being a full-fledged archive management utility.
 
 ```bash
-python -m archivey.cli my_archive.zip
-python -m archivey.cli --extract --dest out_dir my_archive.zip
+archivey my_archive.zip
+archivey --extract --dest out_dir my_archive.zip
 ```
 
 You can filter member names using shell patterns placed after `--`:
 
 ```bash
-python -m archivey.cli --list my_archive.zip -- "*.txt"
+archivey --list my_archive.zip -- "*.txt"
 ```
 
 ---
