@@ -71,7 +71,7 @@ def get_dependency_versions() -> DependencyVersions:
                     if "unrar" in line.lower()
                 ]
                 versions.unrar_version = lines[0].split("   ")[0] if lines else None
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             versions.unrar_version = "available"
     else:
         versions.unrar_version = None

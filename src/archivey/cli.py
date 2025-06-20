@@ -164,11 +164,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.set_defaults(mode="test")
 
     parser.add_argument(
-        "--use-libarchive",
-        action="store_true",
-        help="Use libarchive for processing archives",
-    )
-    parser.add_argument(
         "--use-rar-stream",
         action="store_true",
         help="Use the RAR stream reader for RAR files",
@@ -272,7 +267,6 @@ def main(argv: list[str] | None = None) -> None:
         try:
             print(f"\nProcessing {archive_path}:")
             config = ArchiveyConfig(
-                use_libarchive=args.use_libarchive,
                 use_rar_stream=args.use_rar_stream,
                 use_single_file_stored_metadata=args.use_stored_metadata,
                 use_rapidgzip=args.use_rapidgzip,

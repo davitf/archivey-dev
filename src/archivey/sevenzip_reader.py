@@ -596,18 +596,7 @@ class SevenZipReader(BaseArchiveReader):
         self._start_streaming_iteration()
 
         # Don't apply the filter now, as the link members may not have the extracted path.
-        # logger.info(f"iter members arg: {members}")
         member_filter_func = _build_iterator_filter(members, None)
-        # logger.info(f"members: {self.get_members()}")
-        # filtered_members = [m for m in self.get_members() if member_filter_func(m)]
-
-        # logger.info(f"filtered_members: {filtered_members}")  # TODO: remove
-
-        # logger.debug(f"extract_filename_to_member: {extract_filename_to_member}")
-
-        # member_included = _build_member_included_func(members)
-
-        # members_to_extract = [] #m for m in self.get_members() if member_included(m)]
         # extract_filename_to_member = {}
         # filenames_to_extract = []
 

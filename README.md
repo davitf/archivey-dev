@@ -21,6 +21,17 @@ Or, if you don't want to add all dependencies to your project, add only the ones
 
 RAR support relies on the `unrar` tool, which you'll need to install separately.
 
+| Feature/Format | Python package | System requirement |
+| --- | --- | --- |
+| RAR archives | `rarfile` | `unrar` binary |
+| 7z archives | `py7zr` | |
+| ISO images | `pycdlib` | |
+| Gzip (fast) | `rapidgzip` | |
+| Bzip2 (indexed) | `indexed_bzip2` | |
+| XZ (pure Python) | `python-xz` | |
+| Zstandard | `zstandard` or `pyzstd` | |
+| LZ4 | `lz4` | |
+
 ## Usage
 
 ### Streaming access
@@ -45,6 +56,24 @@ with open_archive("example.zip") as archive:
     if member_to_read.is_file:
         stream = archive.open(member_to_read)
         data = stream.read()
+```
+
+## Command line usage
+
+Archivey installs a small command line tool simply called `archivey`.
+You can also invoke it via `python -m archivey`.
+The CLI is primarily meant for testing or exploring the library rather than
+being a full-fledged archive management utility.
+
+```bash
+archivey my_archive.zip
+archivey --extract --dest out_dir my_archive.zip
+```
+
+You can filter member names using shell patterns placed after `--`:
+
+```bash
+archivey --list my_archive.zip -- "*.txt"
 ```
 
 ---

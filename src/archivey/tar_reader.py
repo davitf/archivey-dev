@@ -179,22 +179,21 @@ class TarReader(BaseArchiveReader):
         data_blocks = (data_size + 511) & ~511
         next_member_offset = last_tarinfo.offset_data + data_blocks
 
-        # TODO: seeking on a compressed stream may lead to rereading the whole data,
-        # or may not be supported. Let's use a pseudo-seekable stream that stores
-        # a certain amount of data read, so we can quickly read this block.
+        if self._fileobj is None:
+            logger.warning("Cannot check tar integrity: file object is missing")
+            return
 
-        if self._fileobj is not None and self._fileobj.seekable():
+        if self._fileobj.seekable():
             self._fileobj.seek(next_member_offset)
-            data = self._fileobj.read(512 * 2)
-            if len(data) < 512 * 2:
-                raise ArchiveCorruptedError("Missing data after last tarinfo")
-            if data != b"\x00" * (512 * 2):
-                # tarfile likely read the block and the checksum failed, so it assumed
-                # it's the end of the file.
-                raise ArchiveCorruptedError("Invalid data after last tarinfo")
-
         else:
-            logger.warning("Cannot check tar integrity: file is not seekable")
+            remaining = next_member_offset - self._fileobj.tell()
+            if remaining > 0:
+                self._fileobj.read(remaining)
+        data = self._fileobj.read(512 * 2)
+        if len(data) < 512 * 2:
+            raise ArchiveCorruptedError("Missing data after last tarinfo")
+        if data != b"\x00" * (512 * 2):
+            raise ArchiveCorruptedError("Invalid data after last tarinfo")
 
     def open(
         self,

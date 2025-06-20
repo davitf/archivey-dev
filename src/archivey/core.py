@@ -137,9 +137,9 @@ def open_archive(
 
     with default_config(config):
         if format == ArchiveFormat.FOLDER:
-            assert isinstance(
-                archive_path_normalized, str
-            ), "FolderReader only supports string paths"
+            assert isinstance(archive_path_normalized, str), (
+                "FolderReader only supports string paths"
+            )
             reader = FolderReader(archive_path_normalized)
         else:
             assert reader_class is not None
