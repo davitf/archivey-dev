@@ -701,6 +701,10 @@ class RarReader(BaseArchiveReader):
             )
             if link_target is not None:
                 member.link_target = link_target
+            else:
+                raise ArchiveEncryptedError(
+                    f"Cannot read link target for {member.filename}"
+                )
 
         member, filename = self._resolve_member_to_open(member)
 

@@ -494,8 +494,18 @@ class SevenZipReader(BaseArchiveReader):
                         members=[member], pwd=pwd, close_streams=False
                     )
                 )
-            except Exception:
+            except (
+                ArchiveError,
+                py7zr.exceptions.ArchiveError,
+                py7zr.PasswordRequired,
+                lzma.LZMAError,
+                OSError,
+            ):
                 pass
+            if member.link_target is None:
+                raise ArchiveEncryptedError(
+                    f"Cannot read link target for {member.filename}"
+                )
 
         member, filename = self._resolve_member_to_open(member)
 

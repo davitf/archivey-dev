@@ -313,3 +313,47 @@ def test_open_encrypted_symlink(
             assert fh.read() == encrypted_symlink.contents
         member = archive.get_member(encrypted_symlink.name)
         assert member.link_target == encrypted_symlink.link_target
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["encryption_with_symlinks"],
+        extensions=["rar", "7z"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_open_encrypted_symlink_wrong_password(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    symlink_name = "encrypted_link_to_secret.txt"
+
+    with open_archive(sample_archive_path) as archive:
+        with pytest.raises((ArchiveEncryptedError, ArchiveError)):
+            with archive.open(symlink_name, pwd="wrong") as fh:
+                fh.read()
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["encryption_with_symlinks"],
+        extensions=["rar", "7z"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_open_encrypted_symlink_target_wrong_password(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    symlink_name = "encrypted_link_to_very_secret.txt"
+
+    with open_archive(sample_archive_path) as archive:
+        with pytest.raises((ArchiveEncryptedError, ArchiveError)):
+            with archive.open(symlink_name, pwd="pwd") as fh:
+                fh.read()
