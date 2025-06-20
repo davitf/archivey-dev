@@ -62,6 +62,7 @@ from archivey.formats import ArchiveFormat
 from archivey.types import (
     ArchiveInfo,
     ArchiveMember,
+    CreateSystem,
     MemberType,
 )
 from archivey.utils import bytes_to_str
@@ -423,6 +424,19 @@ class SevenZipReader(BaseArchiveReader):
                 else None
             )
 
+            create_system = CreateSystem.UNKNOWN
+            if hasattr(file, 'hostos'):
+                if file.hostos == py7zr.defines.HOSTOS_WINDOWS:
+                    create_system = CreateSystem.NTFS # Or FAT, but NTFS is more common for 7z
+                elif file.hostos == py7zr.defines.HOSTOS_POSIX:
+                    create_system = CreateSystem.UNIX
+                elif file.hostos == py7zr.defines.HOSTOS_MACOS:
+                    create_system = CreateSystem.MACINTOSH
+            elif file.posix_mode is not None and file.posix_mode != 0:
+                # If posix_mode is set, it's likely a Unix-like system
+                create_system = CreateSystem.UNIX
+
+
             member = ArchiveMember(
                 filename=filename,
                 # The uncompressed field is wrongly typed in py7zr as list[int].
@@ -433,14 +447,17 @@ class SevenZipReader(BaseArchiveReader):
                 if file.lastwritetime
                 else None,
                 type=file_type,
-                # link_target_type=
                 mode=file.posix_mode,
                 crc32=crc32,
                 compression_method=None,  # Not exposed by py7zr
                 encrypted=self._is_member_encrypted(file),
+                create_system=create_system,
                 raw_info=file,
                 extra={
                     "extract_filename": extract_filename,
+                    "hostos_raw": file.hostos if hasattr(file, 'hostos') else None,
+                    "user_raw": file.user if hasattr(file, 'user') else None, # For reference, not direct use
+                    "group_raw": file.group if hasattr(file, 'group') else None, # For reference
                 },
             )
 

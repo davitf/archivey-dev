@@ -7,6 +7,7 @@ from typing import IO, BinaryIO, Iterator, List, Optional, Union, cast
 
 from archivey.base_reader import (
     ArchiveInfo,
+    ArchiveInfo,
     ArchiveMember,
     BaseArchiveReader,
 )
@@ -18,7 +19,12 @@ from archivey.exceptions import (
     ArchiveMemberCannotBeOpenedError,
 )
 from archivey.io_helpers import ExceptionTranslatingIO
-from archivey.types import TAR_FORMAT_TO_COMPRESSION_FORMAT, ArchiveFormat, MemberType
+from archivey.types import (
+    TAR_FORMAT_TO_COMPRESSION_FORMAT,
+    ArchiveFormat,
+    CreateSystem,
+    MemberType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,14 +140,38 @@ class TarReader(BaseArchiveReader):
         if info.isdir() and not filename.endswith("/"):
             filename += "/"
 
+        atime_with_tz: Optional[datetime] = None
+        ctime_with_tz: Optional[datetime] = None
+
+        if hasattr(info, "pax_headers") and info.pax_headers:
+            pax_atime = info.pax_headers.get("atime")
+            pax_ctime = info.pax_headers.get("ctime")
+            if pax_atime:
+                try:
+                    atime_with_tz = datetime.fromtimestamp(float(pax_atime), tz=timezone.utc)
+                except ValueError:
+                    logger.warning(f"Could not parse pax_header atime: {pax_atime}")
+            if pax_ctime:
+                try:
+                    ctime_with_tz = datetime.fromtimestamp(float(pax_ctime), tz=timezone.utc)
+                except ValueError:
+                    logger.warning(f"Could not parse pax_header ctime: {pax_ctime}")
+
+        create_system = CreateSystem.UNKNOWN
+        # If we have uname, gname, or POSIX-like mode bits, assume UNIX.
+        # Tar files are predominantly from Unix-like systems.
+        if info.uname or info.gname or (hasattr(info, "mode") and info.mode & 0o700): # Check for user permission bits
+            create_system = CreateSystem.UNIX
+
         return ArchiveMember(
             filename=filename,
             file_size=info.size,
-            compress_size=None,
-            # TAR files store times in UTC.
+            compress_size=None, # Tar itself doesn't compress members, the stream might be compressed
             mtime_with_tz=datetime.fromtimestamp(info.mtime, tz=timezone.utc)
             if info.mtime
             else None,
+            atime_with_tz=atime_with_tz,
+            ctime_with_tz=ctime_with_tz,
             type=(
                 MemberType.FILE
                 if info.isfile()
@@ -153,21 +183,23 @@ class TarReader(BaseArchiveReader):
                 if info.islnk()
                 else MemberType.OTHER
             ),
-            mode=stat.S_IMODE(info.mode) if hasattr(info, "mode") else None,
+            mode=stat.S_IMODE(info.mode) if hasattr(info, "mode") else None, # Extracts permission bits
             link_target=info.linkname if info.issym() or info.islnk() else None,
             crc32=None,  # TAR doesn't have CRC
-            compression_method=self.compression_method,
-            extra={
+            compression_method=self.compression_method, # This is the compression of the tar stream itself
+            uid=info.uid if hasattr(info, "uid") else None,
+            gid=info.gid if hasattr(info, "gid") else None,
+            user_name=info.uname if hasattr(info, "uname") else None,
+            group_name=info.gname if hasattr(info, "gname") else None,
+            create_system=create_system,
+            extra={ # Keep other potentially useful tar-specific info
                 "type": info.type,
-                "mode": info.mode,
-                "uid": info.uid,
-                "gid": info.gid,
-                "uname": info.uname,
-                "gname": info.gname,
-                "linkname": info.linkname,
+                "original_mode": info.mode, # Store original mode if needed elsewhere
+                "linkname": info.linkname, # Redundant with link_target but part of tar specifics
                 "linkpath": info.linkpath,
-                "devmajor": info.devmajor,
-                "devminor": info.devminor,
+                "devmajor": info.devmajor if hasattr(info, 'devmajor') else None,
+                "devminor": info.devminor if hasattr(info, 'devminor') else None,
+                "pax_headers": info.pax_headers if hasattr(info, "pax_headers") else None,
             },
             raw_info=info,
         )

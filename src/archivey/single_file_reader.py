@@ -96,15 +96,20 @@ def read_gzip_metadata(
 
         if flg & 0x10:  # FCOMMENT
             comment_bytes = _read_null_terminated_bytes(f)
-            extra_fields["comment"] = comment_bytes.decode("utf-8", errors="replace")
+            member.comment = comment_bytes.decode("utf-8", errors="replace")
+            # If "comment" was somehow in extra_fields from a previous logic path (it shouldn't be with this code), remove it.
+            if "comment" in extra_fields:
+                del extra_fields["comment"]
 
         if flg & 0x02:  # FHCRC
             f.read(2)  # Skip CRC16
 
-        if extra_fields:
+        # Update member.extra with any other fields collected
+        if extra_fields: # Check if extra_fields is not empty
             if member.extra is None:
                 member.extra = {}
             member.extra.update(extra_fields)
+
 
         # Now seek to trailer and read CRC32 and ISIZE
         f.seek(-8, 2)
@@ -228,11 +233,19 @@ class SingleFileReader(BaseArchiveReader):
             mtime = datetime.fromtimestamp(
                 os.path.getmtime(archive_path), tz=timezone.utc
             )
+            atime = datetime.fromtimestamp(
+                os.path.getatime(archive_path), tz=timezone.utc
+            )
+            ctime = datetime.fromtimestamp(
+                os.path.getctime(archive_path), tz=timezone.utc
+            )
             compress_size = os.path.getsize(archive_path)
         else:
             self.ext = f".{format.value}"
             name_for_member = getattr(archive_path, "name", "unknown")
             mtime = None
+            atime = None
+            ctime = None
             compress_size = None
         self.use_stored_metadata = self.config.use_single_file_stored_metadata
 
@@ -245,11 +258,13 @@ class SingleFileReader(BaseArchiveReader):
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
             filename=self.member_name,
-            file_size=None,  # Not available for all formats
+            file_size=None,  # Will be populated by read_gzip_metadata or read_xz_metadata if applicable
             compress_size=compress_size,
             mtime_with_tz=mtime,
+            atime_with_tz=atime,
+            ctime_with_tz=ctime,
             type=MemberType.FILE,
-            compression_method=self.format.value,
+            compression_method=self.format.value, # e.g. "gz", "bz2"
             crc32=None,
         )
 
