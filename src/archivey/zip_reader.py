@@ -70,7 +70,7 @@ class ZipReader(BaseArchiveReader):
         archive_path: BinaryIO | str | bytes | os.PathLike,
         format: ArchiveFormat,
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
         streaming_only: bool = False,
     ):
         super().__init__(
@@ -190,7 +190,7 @@ class ZipReader(BaseArchiveReader):
         self,
         member_or_filename: ArchiveMember | str,
         *,
-        pwd: Optional[bytes | str] = None,
+        pwd: Optional[Union[bytes, str]] = None,
     ) -> BinaryIO:
         if self._archive is None:
             raise ValueError("Archive is closed")
