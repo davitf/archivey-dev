@@ -43,6 +43,7 @@ from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveError,
+    ArchiveMemberCannotBeOpenedError,
     PackageNotInstalledError,
 )
 from archivey.formats import ArchiveFormat
@@ -464,6 +465,8 @@ class RarStreamReader:
 class RarReader(BaseArchiveReader):
     """Base class for RAR archive readers."""
 
+    MAX_SYMLINK_RECURSION = 10
+
     def __init__(
         self,
         archive_path: str | BinaryIO | os.PathLike,
@@ -684,68 +687,94 @@ class RarReader(BaseArchiveReader):
         member_or_filename: ArchiveMember | str,
         *,
         pwd: Optional[str | bytes] = None,
+        _recursion_depth: int = 0,
     ) -> BinaryIO:
-        # Link targets in RAR4 archives may be stored as file data. If that data
-        # is encrypted and no password is available we simply return the member
-        # contents when opened.
+        if self._archive is None:
+            # This check should ideally be done before _resolve_member_to_open,
+            # but _resolve_member_to_open needs the archive to be open.
+            # However, get_member (called by _resolve_member_to_open) also checks this.
+            raise ArchiveError("Archive is closed")
+
+        if _recursion_depth > self.MAX_SYMLINK_RECURSION:
+            raise ArchiveError(
+                f"Too many symlink redirections for {member_or_filename}"
+            )
+
         member, filename = self._resolve_member_to_open(member_or_filename)
 
-        if member.is_link and member.link_target is None:
-            pwd_to_use = pwd if pwd is not None else self.get_archive_password()
-            link_target = self._get_link_target(cast(RarInfo, member.raw_info), pwd=pwd_to_use)
-            if link_target is None:
-                raise ArchiveEncryptedError(f"Cannot read link target for {member.filename} - password may be incorrect or missing.")
-            else:
-                member.link_target = link_target
-
-        if member.is_link and member.link_target is None:
-            link_target = self._get_link_target(
-                cast(RarInfo, member.raw_info),
-                pwd=pwd if pwd is not None else self.get_archive_password(),
-            )
-            if link_target is None:
-                raise ArchiveEncryptedError(
-                    f"Cannot read link target for {member.filename}"
+        if member.is_link:
+            resolved_target_path: Optional[str] = member.link_target
+            if resolved_target_path is None:
+                # Attempt to resolve the link target if not already populated
+                pwd_to_use = pwd if pwd is not None else self.get_archive_password()
+                resolved_target_path = self._get_link_target(
+                    cast(RarInfo, member.raw_info), pwd=pwd_to_use
                 )
-            member.link_target = link_target
+                if resolved_target_path is None:
+                    raise ArchiveEncryptedError(
+                        f"Cannot read link target for {member.filename} - password may be incorrect or missing."
+                    )
+                # Store it back for completeness, though we use resolved_target_path directly
+                member.link_target = resolved_target_path
 
+            # Recursively open the target
+            # Pass the original password and increment recursion depth
+            return self.open(
+                resolved_target_path, pwd=pwd, _recursion_depth=_recursion_depth + 1
+            )
+
+        # Non-link member handling (files and directories)
         if member.encrypted:
+            # Use the password provided to this open call, or the archive's default
+            pwd_for_member = str_to_bytes(
+                pwd if pwd is not None else self.get_archive_password()
+            )
             pwd_check = verify_rar5_password(
-                str_to_bytes(pwd if pwd is not None else self.get_archive_password()),
+                pwd_for_member,
                 cast(RarInfo, member.raw_info),
             )
             if pwd_check == PasswordCheckResult.INCORRECT:
                 raise ArchiveEncryptedError(
                     f"Wrong password specified for {member.filename}"
                 )
+            # If UNKNOWN, we proceed, rarfile.open() will handle it or raise.
 
-        if self._archive is None:
-            raise ValueError("Archive is closed")
-
-        if member.type == MemberType.DIR:  # or member.type == MemberType.SYMLINK:
-            raise ValueError(
+        if member.type == MemberType.DIR:
+            raise ArchiveMemberCannotBeOpenedError(
                 f"Cannot open directories in RAR archives: {member.filename}"
             )
 
+        # At this point, member should be a file.
+        # If it's MemberType.OTHER, rarfile.open might still handle it or raise.
         try:
-            # Apparently pwd can be either bytes or str.
-            inner: BinaryIO = self._archive.open(member.raw_info, pwd=bytes_to_str(pwd))  # type: ignore[arg-type]
+            # Use the password provided to this open() call for opening the member.
+            # If None, rarfile uses its own default if set, or raises PasswordRequired.
+            final_pwd_for_open = bytes_to_str(pwd)
+            inner: BinaryIO = self._archive.open(
+                member.raw_info, pwd=final_pwd_for_open
+            )  # type: ignore[arg-type]
             return ExceptionTranslatingIO(inner, self._exception_translator)
         except rarfile.BadRarFile as e:
+            # This can happen if the file data is corrupted.
             raise ArchiveCorruptedError(
                 f"Error reading member {member.filename}"
             ) from e
         except rarfile.RarWrongPassword as e:
+            # This implies that a password was required and the one provided (or default) was wrong.
             raise ArchiveEncryptedError(
                 f"Wrong password specified for {member.filename}"
             ) from e
         except rarfile.PasswordRequired as e:
+            # This implies no password was provided (neither to open() nor to RarFile constructor)
+            # but one is needed.
             raise ArchiveEncryptedError(
                 f"Password required for {member.filename}"
             ) from e
         except rarfile.Error as e:
+            # Catch-all for other rarfile errors (e.g., file not found if raw_info is stale, etc.)
+            # This could also include issues if trying to open a symlink that rarfile doesn't handle as a file.
             raise ArchiveError(
-                f"Unknown error reading member {member.filename}: {e}"
+                f"Unknown error opening member {member.filename}: {e}"
             ) from e
 
     def iter_members_with_io(

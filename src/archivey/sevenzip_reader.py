@@ -55,6 +55,7 @@ from archivey.exceptions import (
     ArchiveEncryptedError,
     ArchiveEOFError,
     ArchiveError,
+    ArchiveMemberCannotBeOpenedError,
     PackageNotInstalledError,
 )
 from archivey.extraction_helper import ExtractionHelper
@@ -272,6 +273,7 @@ class ExtractWriterFactory(WriterFactory):
 class SevenZipReader(BaseArchiveReader):
     """Reader for 7-Zip archives."""
 
+    MAX_SYMLINK_RECURSION = 10
     _password_lock: Lock = Lock()
 
     @contextmanager
@@ -462,66 +464,96 @@ class SevenZipReader(BaseArchiveReader):
         self._all_members_registered = True
 
     def open(
-        self, member_or_filename: ArchiveMember | str, *, pwd: str | None = None
+        self,
+        member_or_filename: ArchiveMember | str,
+        *,
+        pwd: Optional[str | bytes] = None,
+        _recursion_depth: int = 0,
     ) -> BinaryIO:
-        """Open a member of the archive.
-
-        Warning: this is slow for 7-zip archives. Prefer using iter_members() if you
-        need to read multiple members.
-
-        Args:
-            member: The member to open
-            pwd: The password to use to open the member
-
-        Returns:
-            An IO object for the member.
-        """
-
         if self._archive is None:
-            raise ValueError("Archive is closed")
+            raise ArchiveError("Archive is closed")
+
+        if _recursion_depth > self.MAX_SYMLINK_RECURSION:
+            raise ArchiveError(
+                f"Too many symlink redirections for {member_or_filename}"
+            )
 
         member, filename = self._resolve_member_to_open(member_or_filename)
 
-        if member.is_link and member.link_target is None:
-            pwd_to_use = pwd if pwd is not None else self.get_archive_password()
-            # This is called for its side effect of resolving link targets.
-            # We iterate fully by converting to a list.
-            list(self.iter_members_with_io(members=[member], pwd=pwd_to_use, close_streams=True))
-            # Re-fetch the member to get any updates
-            member = self.get_member(member.filename)
-            if member.link_target is None:
-                raise ArchiveEncryptedError(f"Cannot read link target for {member.filename} - password may be incorrect or missing, or target is not a plain file.")
-
-        try:
-            it = list(
-                self.iter_members_with_io(
-                    members=[member], pwd=pwd, close_streams=False
+        if member.is_link:
+            resolved_target_path = member.link_target
+            if resolved_target_path is None:
+                pwd_to_use = pwd if pwd is not None else self.get_archive_password()
+                # Fully consume iterator to ensure link target is processed
+                list(
+                    self.iter_members_with_io(
+                        members=[member], pwd=pwd_to_use, close_streams=True
+                    )
                 )
+                # Re-fetch to get updated link_target
+                updated_member_info = self.get_member(member.filename)
+                if updated_member_info is None: # Should not happen if _resolve_member_to_open succeeded
+                    raise ArchiveError(f"Failed to re-fetch member info for {member.filename} after symlink resolution attempt.")
+                resolved_target_path = updated_member_info.link_target
+                if resolved_target_path is None:
+                    raise ArchiveEncryptedError(
+                        f"Cannot resolve symlink target for {member.filename} - password may be incorrect or missing, or target is not a plain file."
+                    )
+            # Recursively call open for the target
+            return self.open(
+                resolved_target_path, pwd=pwd, _recursion_depth=_recursion_depth + 1
             )
-            assert len(it) == 1, (
-                f"Expected exactly one member, got {len(it)}. {member.filename}"
-            )
-            stream = cast(StreamingFile.Reader, it[0][1])
-            if isinstance(stream, ErrorIOStream):
-                # When a wrong password is provided, iter_members_with_io
-                # returns an ErrorIOStream instead of raising. In the context of
-                # `open`, propagate the error to match the behaviour of other
-                # readers.
-                stream.read()
-            return stream  # BufferedReaderContextManager(stream)
+        else:  # Not a symlink
+            if member.type == MemberType.DIR:
+                raise ArchiveMemberCannotBeOpenedError(
+                    f"Cannot open directories in 7-Zip archives: {member.filename}"
+                )
 
-        except py7zr.exceptions.ArchiveError as e:
-            raise ArchiveCorruptedError(f"Error reading member {member.filename}: {e}")
-        except py7zr.PasswordRequired as e:
-            raise ArchiveEncryptedError(
-                f"Password required to read member {member.filename}"
-            ) from e
-        except lzma.LZMAError as e:
-            raise ArchiveCorruptedError(
-                f"Error reading member {member.filename}: {e}"
-            ) from e
-        finally:
-            pass
+            if member.is_file and member.file_size == 0:
+                return io.BytesIO(b"")
+
+            # For actual files, use the logic to extract the stream
+            try:
+                # Determine password to use for iter_members_with_io
+                pwd_to_use_for_file = pwd if pwd is not None else self.get_archive_password()
+                items = list(
+                    self.iter_members_with_io(
+                        members=[member], pwd=pwd_to_use_for_file, close_streams=False
+                    )
+                )
+
+                if not items or items[0][1] is None:
+                    # This might indicate an issue with iter_members_with_io not yielding the stream
+                    # or the member not being extractable (e.g. encrypted with wrong/no password and skipped by py7zr)
+                    # Check if the member was supposed to be encrypted.
+                    if member.encrypted:
+                         raise ArchiveEncryptedError(f"Failed to obtain stream for encrypted member {member.filename} - password may be incorrect or missing.")
+                    raise ArchiveError(
+                        f"Failed to obtain stream for member {member.filename}"
+                    )
+
+                stream = items[0][1]
+                if isinstance(stream, ErrorIOStream):
+                    # Propagate the error captured by ErrorIOStream
+                    stream.read() # This will raise the underlying error
+                return stream
+
+            except py7zr.exceptions.PasswordRequired as e:
+                raise ArchiveEncryptedError(
+                    f"Password required for {member.filename}"
+                ) from e
+            # py7zr.exceptions.ArchiveError is a base for many py7zr errors, including Bad7zFile
+            except (py7zr.exceptions.ArchiveError, lzma.LZMAError) as e:
+                raise ArchiveCorruptedError(
+                    f"Error reading member {member.filename}: {e}"
+                ) from e
+            except ArchiveError: # Re-raise ArchiveErrors directly (e.g., from ErrorIOStream.read())
+                raise
+            except Exception as e: # Catch-all for other unexpected errors
+                logger.exception(f"Unexpected error opening member {member.filename}") # Log with stack trace
+                raise ArchiveError(
+                    f"Unknown error opening member {member.filename}: {type(e).__name__} - {e}"
+                ) from e
 
     def _extract_members_iterator(
         self,
