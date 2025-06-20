@@ -691,6 +691,14 @@ class RarReader(BaseArchiveReader):
         member, filename = self._resolve_member_to_open(member_or_filename)
 
         if member.is_link and member.link_target is None:
+            pwd_to_use = pwd if pwd is not None else self.get_archive_password()
+            link_target = self._get_link_target(cast(RarInfo, member.raw_info), pwd=pwd_to_use)
+            if link_target is None:
+                raise ArchiveEncryptedError(f"Cannot read link target for {member.filename} - password may be incorrect or missing.")
+            else:
+                member.link_target = link_target
+
+        if member.is_link and member.link_target is None:
             link_target = self._get_link_target(
                 cast(RarInfo, member.raw_info),
                 pwd=pwd if pwd is not None else self.get_archive_password(),

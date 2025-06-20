@@ -482,6 +482,16 @@ class SevenZipReader(BaseArchiveReader):
 
         member, filename = self._resolve_member_to_open(member_or_filename)
 
+        if member.is_link and member.link_target is None:
+            pwd_to_use = pwd if pwd is not None else self.get_archive_password()
+            # This is called for its side effect of resolving link targets.
+            # We iterate fully by converting to a list.
+            list(self.iter_members_with_io(members=[member], pwd=pwd_to_use, close_streams=True))
+            # Re-fetch the member to get any updates
+            member = self.get_member(member.filename)
+            if member.link_target is None:
+                raise ArchiveEncryptedError(f"Cannot read link target for {member.filename} - password may be incorrect or missing, or target is not a plain file.")
+
         try:
             it = list(
                 self.iter_members_with_io(

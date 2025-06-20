@@ -247,6 +247,97 @@ def test_iterator_encryption_with_symlinks_no_password(
     filter_archives(
         SAMPLE_ARCHIVES,
         prefixes=["encryption_with_symlinks"],
+        extensions=["rar", "7z"]
+    ),
+    ids=lambda a: a.filename,
+)
+def test_open_encrypted_symlink(sample_archive: SampleArchive, sample_archive_path: str):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    # Scenario 1: Correct password for symlink targeting encrypted file.
+    # Symlink: "encrypted_link_to_secret.txt" (links to "secret.txt", pwd="pwd", content="Secret")
+    # The symlink data itself might be encrypted with "pwd" (RAR), or just the target is.
+    with open_archive(sample_archive_path) as archive:
+        with archive.open("encrypted_link_to_secret.txt", pwd="pwd") as f:
+            assert f.read() == b"Secret"
+
+    # Scenario 2: Wrong password for symlink targeting encrypted file.
+    # Symlink: "encrypted_link_to_secret.txt"
+    with open_archive(sample_archive_path) as archive:
+        with pytest.raises((ArchiveEncryptedError, ArchiveError)):
+            # Password "wrong_password" should fail to open the symlink data (RAR)
+            # or fail to open the target "secret.txt" (7z, after successfully reading plain symlink data).
+            with archive.open("encrypted_link_to_secret.txt", pwd="wrong_password") as f:
+                f.read()
+
+    # Scenario 3: Correct password for symlink, but target has different encryption.
+    # Symlink: "encrypted_link_to_very_secret.txt" (links to "very_secret.txt", content="Very secret", target_pwd="longpwd")
+    # The symlink data itself might be protected by "pwd" (RAR).
+    with open_archive(sample_archive_path) as archive:
+        with pytest.raises((ArchiveEncryptedError, ArchiveError)):
+            # Password "pwd" might open the symlink object itself (if it's encrypted, e.g. RAR with pwd="pwd" for link data)
+            # but then opening the target "very_secret.txt" (encrypted with "longpwd") should fail.
+            with archive.open("encrypted_link_to_very_secret.txt", pwd="pwd") as f:
+                f.read()
+
+    # Scenario 4: Symlink (plain) to an encrypted file, password provided for the target.
+    # Symlink: "plain_link_to_secret.txt" (links to "secret.txt", content="Secret", target_pwd="pwd")
+    # The symlink itself is "plain" (not encrypted).
+    with open_archive(sample_archive_path) as archive:
+        # Password "pwd" is for the target "secret.txt".
+        with archive.open("plain_link_to_secret.txt", pwd="pwd") as f:
+            assert f.read() == b"Secret"
+
+    # Scenario 5: Symlink (encrypted) to a plain file, correct password for symlink.
+    # Symlink: "encrypted_link_to_not_secret.txt" (links to "not_secret.txt", content="Not secret", link_pwd="longpwd")
+    # Target "not_secret.txt" is plain.
+    with open_archive(sample_archive_path) as archive:
+        with archive.open("encrypted_link_to_not_secret.txt", pwd="longpwd") as f:
+            assert f.read() == b"Not secret"
+
+    # Scenario 6: Symlink (encrypted) to a plain file, wrong password for symlink.
+    # Symlink: "encrypted_link_to_not_secret.txt" (links to "not_secret.txt", content="Not secret", link_pwd="longpwd")
+    # Target "not_secret.txt" is plain.
+    # This test is more relevant for formats that encrypt symlink data itself (like RAR).
+    # For 7z, if the symlink data is plain, a wrong password here might be ignored for the link
+    # and then it would read the plain target successfully. However, the current 7z implementation
+    # passes the password to iter_members_with_io, which might try to use it.
+    # The current implementation for 7z in open() calls iter_members_with_io,
+    # which would use the password. If the symlink target data is fetched and it's plain,
+    # it should succeed. If the symlink itself (the object containing target path) is plain,
+    # py7zr might not use the password for it.
+    # RAR encrypts the symlink *target path* if a password is set for the symlink member.
+    if sample_archive.creation_info.format == ArchiveFormat.RAR:
+        with open_archive(sample_archive_path) as archive:
+            with pytest.raises((ArchiveEncryptedError, ArchiveError)):
+                # "encrypted_link_to_not_secret.txt" symlink data is encrypted with "longpwd" in RAR.
+                # Using "wrong_password" should fail to decrypt/read this symlink data.
+                with archive.open("encrypted_link_to_not_secret.txt", pwd="wrong_password") as f:
+                    f.read()
+    elif sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
+        # For 7z, symlinks' target paths are typically stored plainly.
+        # If "encrypted_link_to_not_secret.txt" symlink object is plain, and target "not_secret.txt" is plain:
+        # Providing a "wrong_password" to open() -> iter_members_with_io() might still succeed if py7zr
+        # doesn't apply passwords to reading plain symlink definitions or plain targets.
+        # The current archive definition for "encryption_with_symlinks" for 7z has:
+        # Symlink("encrypted_link_to_not_secret.txt", ..., password="longpwd")
+        # This 'password' field in FileInfo for 7z means the *target data* is encrypted *if* the target is a file.
+        # But for symlinks, py7zr stores the target path. If that storage itself is encrypted, this applies.
+        # The `iter_members_with_io` in sevenzip_reader passes pwd.
+        # Let's assume for 7z, if the symlink object itself is not what's encrypted by "longpwd",
+        # but rather the conceptual "reading of the link" if it were data:
+        # If "encrypted_link_to_not_secret.txt" means the symlink *entry* is tied to "longpwd":
+        with open_archive(sample_archive_path) as archive:
+            with pytest.raises((ArchiveEncryptedError, ArchiveError)): # Expecting failure due to "wrong_password"
+                with archive.open("encrypted_link_to_not_secret.txt", pwd="wrong_password") as f:
+                    f.read() # Should fail if "wrong_password" prevents access to the symlink or its target resolution
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["encryption_with_symlinks"],
     ),
     ids=lambda a: a.filename,
 )
