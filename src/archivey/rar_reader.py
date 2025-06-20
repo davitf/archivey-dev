@@ -11,6 +11,7 @@ import shutil
 import stat
 import struct
 import subprocess
+import tempfile
 import threading
 import zlib
 from typing import (
@@ -552,6 +553,35 @@ class RarReader(BaseArchiveReader):
             logger.warning(
                 "Error reading link target for %s: %s", info.filename, e
             )
+            data = b""
+
+        if not data:
+            unrar = shutil.which("unrar")
+            if unrar:
+                try:
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        subprocess.run(
+                            [
+                                unrar,
+                                "x",
+                                "-inul",
+                                f"-p{bytes_to_str(pwd) if pwd is not None else '-'}",
+                                str(self.archive_path),
+                                info.filename,
+                                tmpdir,
+                            ],
+                            check=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                        )
+                        link_path = os.path.join(tmpdir, info.filename)
+                        return os.readlink(link_path)
+                except Exception as e:
+                    logger.warning(
+                        "Error reading link target via unrar for %s: %s",
+                        info.filename,
+                        e,
+                    )
             return None
 
         return data.decode("utf-8")
@@ -688,7 +718,25 @@ class RarReader(BaseArchiveReader):
         # Link targets in RAR4 archives may be stored as file data. If that data
         # is encrypted and no password is available we simply return the member
         # contents when opened.
-        member, filename = self._resolve_member_to_open(member_or_filename)
+        member = self.get_member(member_or_filename)
+
+        if (
+            pwd is not None
+            and member.is_link
+            and member.link_target is None
+        ):
+            link_target = self._get_link_target(
+                cast(RarInfo, member.raw_info),
+                pwd=pwd,
+            )
+            if link_target is not None:
+                member.link_target = link_target
+            else:
+                raise ArchiveEncryptedError(
+                    f"Cannot read link target for {member.filename}"
+                )
+
+        member, filename = self._resolve_member_to_open(member)
 
         if member.is_link and member.link_target is None:
             link_target = self._get_link_target(

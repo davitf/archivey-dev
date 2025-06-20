@@ -477,10 +477,37 @@ class SevenZipReader(BaseArchiveReader):
             An IO object for the member.
         """
 
+
         if self._archive is None:
             raise ValueError("Archive is closed")
 
-        member, filename = self._resolve_member_to_open(member_or_filename)
+        member = self.get_member(member_or_filename)
+
+        if (
+            pwd is not None
+            and member.is_link
+            and member.link_target is None
+        ):
+            try:
+                list(
+                    self.iter_members_with_io(
+                        members=[member], pwd=pwd, close_streams=False
+                    )
+                )
+            except (
+                ArchiveError,
+                py7zr.exceptions.ArchiveError,
+                py7zr.PasswordRequired,
+                lzma.LZMAError,
+                OSError,
+            ):
+                pass
+            if member.link_target is None:
+                raise ArchiveEncryptedError(
+                    f"Cannot read link target for {member.filename}"
+                )
+
+        member, filename = self._resolve_member_to_open(member)
 
         try:
             it = list(
