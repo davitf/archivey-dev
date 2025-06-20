@@ -1,6 +1,4 @@
 import subprocess
-import sys
-from pathlib import Path
 
 from tests.archivey.sample_archives import BASIC_ARCHIVES
 from tests.archivey.testing_utils import skip_if_package_missing
@@ -16,7 +14,7 @@ def test_cli_list(capsys):
     archive = _archive_path(None)
     skip_if_package_missing(SAMPLE.creation_info.format, None)
     result = subprocess.run(
-        [sys.executable, "-m", "archivey.cli", "--list", "--hide-progress", archive],
+        ["archivey", "--list", "--hide-progress", archive],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -31,9 +29,7 @@ def test_cli_extract(tmp_path):
     dest = tmp_path / "out"
     result = subprocess.run(
         [
-            sys.executable,
-            "-m",
-            "archivey.cli",
+            "archivey",
             "--extract",
             "--dest",
             str(dest),

@@ -519,8 +519,14 @@ class RarReader(BaseArchiveReader):
             self._archive.close()
             self._archive = None
 
-    def _get_link_target(self, info: RarInfo) -> Optional[str]:
-        """Return the link target for ``info`` if available."""
+    def _get_link_target(
+        self, info: RarInfo, *, pwd: bytes | str | None = None
+    ) -> Optional[str]:
+        """Return the link target for ``info`` if available.
+
+        If the link target is encrypted and ``pwd`` is not provided or is
+        incorrect, a warning is logged and ``None`` is returned.
+        """
         if not info.is_symlink() and not is_rar_info_hardlink(info):
             return None
 
@@ -531,19 +537,22 @@ class RarReader(BaseArchiveReader):
             return info.file_redir[2]
 
         try:
-            data = self._archive.read(info.filename)
-        except rarfile.PasswordRequired as e:
-            raise ArchiveEncryptedError(
-                f"Password required to read link target for {info.filename}"
-            ) from e
-        except rarfile.RarWrongPassword as e:
-            raise ArchiveEncryptedError(
-                f"Wrong password specified for {info.filename}"
-            ) from e
+            data = self._archive.read(info.filename, pwd=bytes_to_str(pwd))
+        except rarfile.PasswordRequired:
+            logger.warning(
+                "Password required to read link target for %s", info.filename
+            )
+            return None
+        except rarfile.RarWrongPassword:
+            logger.warning(
+                "Wrong password specified for link target %s", info.filename
+            )
+            return None
         except rarfile.Error as e:
-            raise ArchiveError(
-                f"Error reading link target for {info.filename}: {e}"
-            ) from e
+            logger.warning(
+                "Error reading link target for %s: %s", info.filename, e
+            )
+            return None
 
         return data.decode("utf-8")
 
@@ -680,6 +689,17 @@ class RarReader(BaseArchiveReader):
         # is encrypted and no password is available we simply return the member
         # contents when opened.
         member, filename = self._resolve_member_to_open(member_or_filename)
+
+        if member.is_link and member.link_target is None:
+            link_target = self._get_link_target(
+                cast(RarInfo, member.raw_info),
+                pwd=pwd if pwd is not None else self.get_archive_password(),
+            )
+            if link_target is None:
+                raise ArchiveEncryptedError(
+                    f"Cannot read link target for {member.filename}"
+                )
+            member.link_target = link_target
 
         if member.encrypted:
             pwd_check = verify_rar5_password(
