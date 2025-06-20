@@ -11,6 +11,7 @@ import shutil
 import stat
 import struct
 import subprocess
+import tempfile
 import threading
 import zlib
 from typing import (
@@ -552,6 +553,35 @@ class RarReader(BaseArchiveReader):
             logger.warning(
                 "Error reading link target for %s: %s", info.filename, e
             )
+            data = b""
+
+        if not data:
+            unrar = shutil.which("unrar")
+            if unrar:
+                try:
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        subprocess.run(
+                            [
+                                unrar,
+                                "x",
+                                "-inul",
+                                f"-p{bytes_to_str(pwd) if pwd is not None else '-'}",
+                                str(self.archive_path),
+                                info.filename,
+                                tmpdir,
+                            ],
+                            check=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                        )
+                        link_path = os.path.join(tmpdir, info.filename)
+                        return os.readlink(link_path)
+                except Exception as e:
+                    logger.warning(
+                        "Error reading link target via unrar for %s: %s",
+                        info.filename,
+                        e,
+                    )
             return None
 
         return data.decode("utf-8")
