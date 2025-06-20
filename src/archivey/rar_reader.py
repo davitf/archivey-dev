@@ -370,9 +370,9 @@ class RarStreamReader:
         archive_path: BinaryIO | str,
         members: list[ArchiveMember],
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
     ):
-        self._pwd = bytes_to_str(pwd)
+        self._pwd = bytes_to_str(pwd) # Stored as str | None internally
         self.archive_path = archive_path
         self._open_unrar_stream()
         self._lock = threading.Lock()
@@ -457,7 +457,7 @@ class RarStreamReader:
         return False
 
     def open(
-        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
+        self, member_or_filename: ArchiveMember | str, *, pwd: Optional[Union[bytes, str]] = None
     ) -> BinaryIO:
         raise ValueError("RarStreamReader does not support opening specific members")
 
@@ -470,7 +470,7 @@ class RarReader(BaseArchiveReader):
         archive_path: str | BinaryIO | os.PathLike,
         format: ArchiveFormat,
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
         streaming_only: bool = False,
     ):
         super().__init__(
@@ -521,7 +521,7 @@ class RarReader(BaseArchiveReader):
             self._archive = None
 
     def _get_link_target(
-        self, info: RarInfo, *, pwd: bytes | str | None = None
+        self, info: RarInfo, *, pwd: Optional[Union[bytes, str]] = None
     ) -> Optional[str]:
         """Return the link target for ``info`` if available.
 
@@ -713,7 +713,7 @@ class RarReader(BaseArchiveReader):
         self,
         member_or_filename: ArchiveMember | str,
         *,
-        pwd: Optional[str | bytes] = None,
+        pwd: Optional[Union[bytes, str]] = None,
     ) -> BinaryIO:
         # Link targets in RAR4 archives may be stored as file data. If that data
         # is encrypted and no password is available we simply return the member
@@ -794,7 +794,7 @@ class RarReader(BaseArchiveReader):
         | Callable[[ArchiveMember], bool]
         | None = None,
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self.config.use_rar_stream:

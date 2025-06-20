@@ -12,13 +12,15 @@ from typing import BinaryIO, Callable, Tuple, cast
 
 from tqdm import tqdm
 
+import os # Added
+import sys # Added
 from .base_reader import ArchiveReader
-from .config import ArchiveyConfig, OverwriteMode
-from .core import open_archive
+from .config import ArchiveyConfig, OverwriteMode, default_config # Added default_config
+from .core import open_archive, _FORMAT_TO_READER, FolderReader # Added _FORMAT_TO_READER, FolderReader
 from .dependency_checker import format_dependency_versions, get_dependency_versions
-from .exceptions import ArchiveError
+from .exceptions import ArchiveError # Added ArchiveError
 from .io_helpers import IOStats, StatsIO
-from .types import ArchiveMember, MemberType
+from .types import ArchiveMember, MemberType, ArchiveFormat # Added ArchiveFormat
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 
@@ -187,7 +189,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--info", action="store_true", help="Print info about the archive"
     )
-    parser.add_argument("--password", help="Password for encrypted archives")
+    # parser.add_argument("--password", help="Password for encrypted archives") # Will be re-added with default=None
     parser.add_argument(
         "--hide-progress", action="store_true", help="Hide progress bar"
     )
@@ -216,6 +218,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=["overwrite", "skip", "error"],
         default="error",
         help="What to do when extracting files that already exist (default: error)",
+    )
+    parser.add_argument(
+        "--format",
+        type=str,
+        choices=[f.value for f in ArchiveFormat if f != ArchiveFormat.UNKNOWN],
+        help="Explicitly specify the archive format, bypassing auto-detection. "
+             "Useful for testing or ambiguous file types.",
+        default=None,
+    )
+    parser.add_argument(
+        "--password",
+        type=str,
+        help="Password for encrypted archives.",
+        default=None,
     )
     return parser
 
@@ -263,10 +279,15 @@ def main(argv: list[str] | None = None) -> None:
 
         builtins.open = patched_open
 
-    for archive_path in args.files:
+    for archive_path_str in args.files:
         try:
-            print(f"\nProcessing {archive_path}:")
-            config = ArchiveyConfig(
+            print(f"\nProcessing {archive_path_str}:")
+
+            pwd_bytes: Optional[bytes] = None
+            if args.password:
+                pwd_bytes = args.password.encode('utf-8')
+
+            config = ArchiveyConfig( # Use specific args for config later if needed
                 use_rar_stream=args.use_rar_stream,
                 use_single_file_stored_metadata=args.use_stored_metadata,
                 use_rapidgzip=args.use_rapidgzip,
@@ -274,12 +295,49 @@ def main(argv: list[str] | None = None) -> None:
                 use_python_xz=args.use_python_xz,
                 overwrite_mode=OverwriteMode[args.overwrite_mode.upper()],
             )
-            with open_archive(
-                archive_path,
-                pwd=args.password,
-                config=config,
-                streaming_only=args.stream,
-            ) as archive:
+
+            archive: ArchiveReader # Declare type for 'archive'
+
+            if args.format:
+                try:
+                    archive_format_enum = ArchiveFormat(args.format)
+                except ValueError:
+                    print(f"Error: Invalid format specified: {args.format}", file=sys.stderr)
+                    sys.exit(1)
+
+                if archive_format_enum == ArchiveFormat.FOLDER:
+                    if not os.path.isdir(archive_path_str):
+                        print(f"Error: Path must be a directory for format 'folder': {archive_path_str}", file=sys.stderr)
+                        sys.exit(1)
+                    # FolderReader does not take pwd, format, or config in its constructor
+                    archive = FolderReader(archive_path_str)
+                else:
+                    reader_class = _FORMAT_TO_READER.get(archive_format_enum)
+                    if not reader_class:
+                        print(f"Error: No reader available for specified format: {args.format}", file=sys.stderr)
+                        sys.exit(1)
+
+                    try:
+                        # Use default_config context for readers that might rely on global config state
+                        with default_config(config):
+                            archive = reader_class(archive_path_str, format=archive_format_enum, pwd=pwd_bytes)
+                    except ArchiveError as e:
+                        print(f"Error opening archive with specified format {args.format}: {e}", file=sys.stderr)
+                        sys.exit(1)
+                    except Exception as e:
+                        print(f"Unexpected error opening archive with specified format {args.format}: {e}", file=sys.stderr)
+                        sys.exit(1)
+            else:
+                try:
+                    archive = open_archive(archive_path_str, config=config, pwd=pwd_bytes, streaming_only=args.stream)
+                except ArchiveError as e:
+                    print(f"Error opening archive: {e}", file=sys.stderr)
+                    sys.exit(1)
+                except Exception as e:
+                    print(f"Unexpected error opening archive: {e}", file=sys.stderr)
+                    sys.exit(1)
+
+            with archive:
                 print(f"Archive format: {archive.format} {archive.get_archive_info()}")
                 if args.info:
                     continue
@@ -310,7 +368,7 @@ def main(argv: list[str] | None = None) -> None:
                     ):
                         # print(member)
                         process_member(
-                            member, archive, stream, verify=verify, pwd=args.password
+                            member, archive, stream, verify=verify, pwd=args.password # Use args.password for process_member
                         )
                 else:
                     members = archive.get_members()
@@ -323,17 +381,17 @@ def main(argv: list[str] | None = None) -> None:
                         total=len(members) if members is not None else None,
                     ):
                         process_member(
-                            member, archive, verify=verify, pwd=args.password
+                            member, archive, verify=verify, pwd=args.password # Use args.password for process_member
                         )
-        except ArchiveError as e:
-            print(f"Error processing {archive_path}: {e}")
-            logger.error(f"Error processing {archive_path}", exc_info=True)
+        except ArchiveError as e: # This outer try-except might be redundant now if inner ones sys.exit()
+            print(f"Error processing {archive_path_str}: {e}")
+            logger.error(f"Error processing {archive_path_str}", exc_info=True)
         if args.track_io:
-            abs_path = os.path.abspath(archive_path)
+            abs_path = os.path.abspath(archive_path_str)
             stats = stats_per_file.get(abs_path)
             if stats is not None:
                 logger.debug(
-                    f"IO stats for {archive_path}: {stats.bytes_read} bytes read, {stats.seek_calls} seeks"
+                    f"IO stats for {archive_path_str}: {stats.bytes_read} bytes read, {stats.seek_calls} seeks"
                 )
 
     if args.track_io:

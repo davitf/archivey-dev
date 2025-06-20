@@ -101,7 +101,7 @@ class BasePy7zIOWriter(Py7zIO):
 
 class StreamingFile(BasePy7zIOWriter):
     class Reader(io.RawIOBase, BinaryIO):
-        def __init__(self, parent: "StreamingFile", pwd: bytes | str | None = None):
+    def __init__(self, parent: "StreamingFile", pwd: Optional[Union[bytes, str]] = None):
             self._parent = parent
             self._buffer = bytearray()
             self._eof = False
@@ -158,7 +158,7 @@ class StreamingFile(BasePy7zIOWriter):
         fname: str,
         files_queue: Queue,
         max_chunks=64,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
     ):
         self._fname = fname
         self._data_queue = Queue(maxsize=max_chunks)
@@ -186,12 +186,12 @@ class StreamingFile(BasePy7zIOWriter):
 
 
 class StreamingFactory(WriterFactory):
-    def __init__(self, q: Queue, pwd: bytes | str | None = None):
+    def __init__(self, q: Queue, pwd: Optional[Union[bytes, str]] = None):
         self._queue = q
 
-    def create(self, fname: str) -> Py7zIO:
+    def create(self, fname: str, pwd: Optional[Union[bytes, str]] = None) -> Py7zIO:
         # logger.info(f"Creating streaming file {fname}")
-        return StreamingFile(fname, self._queue)
+        return StreamingFile(fname, self._queue, pwd=pwd)
 
     def yield_files(self) -> Iterator[tuple[str, BinaryIO]]:
         while True:
@@ -206,7 +206,7 @@ class StreamingFactory(WriterFactory):
 
 
 class ExtractFileWriter(BasePy7zIOWriter):
-    def __init__(self, full_path: str, pwd: bytes | str | None = None):
+    def __init__(self, full_path: str, pwd: Optional[Union[bytes, str]] = None):
         self.full_path = full_path
         os.makedirs(os.path.dirname(self.full_path), exist_ok=True)
 
@@ -222,7 +222,7 @@ class ExtractFileWriter(BasePy7zIOWriter):
 
 
 class ExtractLinkWriter(BasePy7zIOWriter):
-    def __init__(self, member: ArchiveMember, pwd: bytes | str | None = None):
+    def __init__(self, member: ArchiveMember, pwd: Optional[Union[bytes, str]] = None):
         self.data = bytearray()
         self.member = member
 
@@ -246,14 +246,14 @@ class ExtractWriterFactory(WriterFactory):
         self.member_id_to_outfile: dict[int, str] = {}
         self.outfiles: set[str] = set()
 
-    def create(self, fname: str) -> Py7zIO:
+    def create(self, fname: str, pwd: Optional[Union[bytes, str]] = None) -> Py7zIO:
         member = self._extract_filename_to_member.get(fname)
         if member is None:
             logger.error(f"Member {fname} not found")
             return py7zr.io.NullIO()
         elif member.is_link:
             logger.debug(f"Extracting link {fname}")
-            return ExtractLinkWriter(member)
+            return ExtractLinkWriter(member, pwd=pwd)
         elif not member.is_file:
             logger.debug(f"Ignoring non-file member {fname}")
             return py7zr.io.NullIO()
@@ -266,7 +266,7 @@ class ExtractWriterFactory(WriterFactory):
         self.outfiles.add(full_path)
 
         logger.debug(f"Creating writer for {fname}, path={full_path}")
-        return ExtractFileWriter(full_path)
+        return ExtractFileWriter(full_path, pwd=pwd)
 
 
 class SevenZipReader(BaseArchiveReader):
@@ -275,7 +275,7 @@ class SevenZipReader(BaseArchiveReader):
     _password_lock: Lock = Lock()
 
     @contextmanager
-    def _temporary_password(self, pwd: bytes | str | None):
+    def _temporary_password(self, pwd: Optional[Union[bytes, str]]):
         """Temporarily set the password for all folders in the archive."""
         if pwd is None or self._archive is None:
             yield
@@ -313,7 +313,7 @@ class SevenZipReader(BaseArchiveReader):
         archive_path: BinaryIO | str,
         format: ArchiveFormat,
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
         streaming_only: bool = False,
     ):
         super().__init__(
@@ -462,7 +462,7 @@ class SevenZipReader(BaseArchiveReader):
         self._all_members_registered = True
 
     def open(
-        self, member_or_filename: ArchiveMember | str, *, pwd: str | None = None
+        self, member_or_filename: ArchiveMember | str, *, pwd: Optional[Union[bytes, str]] = None
     ) -> BinaryIO:
         """Open a member of the archive.
 
@@ -543,7 +543,7 @@ class SevenZipReader(BaseArchiveReader):
     def _extract_members_iterator(
         self,
         members: list[ArchiveMember],
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO]]:
         extract_filename_to_member = {
@@ -563,9 +563,9 @@ class SevenZipReader(BaseArchiveReader):
             try:
                 assert self._archive is not None
                 self._archive.reset()
-                factory = StreamingFactory(q)
+                factory = StreamingFactory(q, pwd=pwd)
                 with self._temporary_password(pwd):
-                    self._archive.extract(targets=extract_targets, factory=factory)
+                    self._archive.extract(targets=extract_targets, factory=factory) # type: ignore[arg-type]
                     factory.finish()
             except Exception as e:
                 q.put(e)
@@ -613,7 +613,7 @@ class SevenZipReader(BaseArchiveReader):
         | Callable[[ArchiveMember], bool]
         | None = None,
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
         close_streams: bool = True,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
@@ -707,7 +707,7 @@ class SevenZipReader(BaseArchiveReader):
         member: ArchiveMember | str,
         path: str | None = None,
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
     ) -> str:
         if self._archive is None:
             raise ValueError("Archive is closed")
@@ -733,7 +733,7 @@ class SevenZipReader(BaseArchiveReader):
         return os.path.join(path or os.getcwd(), member_obj.filename)
 
     def _extract_pending_files(
-        self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None
+        self, path: str, extraction_helper: ExtractionHelper, pwd: Optional[Union[bytes, str]]
     ) -> None:
         pending_extractions = extraction_helper.get_pending_extractions()
         paths_to_extract = [member.filename for member in pending_extractions]
@@ -751,13 +751,13 @@ class SevenZipReader(BaseArchiveReader):
         pending_extractions_to_member = {
             _py7zr_full_path(member): member for member in pending_extractions
         }
-        factory = ExtractWriterFactory(path, pending_extractions_to_member)
+        factory = ExtractWriterFactory(path, pending_extractions_to_member) # No pwd here, it's passed to factory.create
 
         logger.info(f"Extracting {paths_to_extract} to {path}")
         try:
             with self._temporary_password(pwd):
                 self._archive.extract(
-                    path, targets=paths_to_extract, recursive=False, factory=factory
+                    path, targets=paths_to_extract, recursive=False, factory=factory # type: ignore[arg-type]
                 )
         except py7zr.PasswordRequired as e:
             raise ArchiveEncryptedError(

@@ -11,6 +11,27 @@ Archivey is a library for reading the contents of many common archive formats. I
 - Consistent exception hierarchy
 - Automatic file format detection
 
+### Supported Formats and Features
+
+| Format Family | Specific Formats                                  | Random Access | Streaming Read | Password Protected | Archive Comment | Solid Archives | Multi-file Archives | Notes                                              |
+|---------------|---------------------------------------------------|---------------|----------------|--------------------|-----------------|----------------|---------------------|----------------------------------------------------|
+| ZIP           | `.zip`                                            | Yes           | Yes            | Yes                | Yes             | N/A            | Yes                 | Wide compatibility.                                |
+| TAR           | `.tar`                                            | Yes           | Yes            | No                 | No              | N/A            | Yes                 | Basic TAR format.                                  |
+|               | `.tar.gz`, `.tgz`                                 | No            | Yes            | No                 | No              | N/A            | Yes                 | TAR with Gzip compression.                         |
+|               | `.tar.bz2`, `.tbz2`                               | No            | Yes            | No                 | No              | N/A            | Yes                 | TAR with Bzip2 compression.                        |
+|               | `.tar.xz`, `.txz`                                 | No            | Yes            | No                 | No              | N/A            | Yes                 | TAR with XZ compression.                           |
+|               | `.tar.zst`, `.tzst`                               | No            | Yes            | No                 | No              | N/A            | Yes                 | TAR with Zstandard compression.                    |
+|               | `.tar.lz4`                                        | No            | Yes            | No                 | No              | N/A            | Yes                 | TAR with LZ4 compression.                          |
+| RAR           | `.rar`                                            | Yes           | Yes (v5+)      | Yes                | Yes             | Yes            | Yes                 | Requires `unrar` binary. Streaming for RAR5+ only. |
+| 7z            | `.7z`                                             | Yes           | Yes            | Yes                | No              | Yes            | Yes                 | Requires `py7zr`.                                  |
+| ISO           | `.iso`                                            | Yes           | Yes            | No                 | No              | N/A            | Yes                 | ISO 9660 images. Requires `pycdlib`.               |
+| Single File   | `.gz`                                             | No            | Yes            | No                 | No              | N/A            | No                  | Gzip compressed single file.                       |
+|               | `.bz2`                                            | No            | Yes            | No                 | No              | N/A            | No                  | Bzip2 compressed single file.                      |
+|               | `.xz`                                             | No            | Yes            | No                 | No              | N/A            | No                  | XZ compressed single file.                         |
+|               | `.zst`                                            | No            | Yes            | No                 | No              | N/A            | No                  | Zstandard compressed single file.                  |
+|               | `.lz4`                                            | No            | Yes            | No                 | No              | N/A            | No                  | LZ4 compressed single file.                        |
+| Folder        | Directory                                         | Yes           | Yes            | N/A                | N/A             | N/A            | Yes                 | Treats a directory as an archive.                  |
+
 ## Installation
 
 Recommended:

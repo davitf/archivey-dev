@@ -100,6 +100,57 @@ return ExceptionTranslatingIO(raw_stream, my_exception_translator)
 *   **Testing:** It's highly recommended to write tests that specifically trigger various error conditions in the underlying library to ensure your translator handles them correctly. This might involve creating corrupted or specially crafted archive files.
 *   **Return `None`:** If an exception occurs that your translator doesn't specifically handle (or if it's already an `ArchiveError`), return `None` from the translator. `ExceptionTranslatingIO` will then re-raise the original exception.
 
+## Registering Your Reader
+
+Once you have implemented your custom `ArchiveReader` (e.g., `MyNewFormatReader` that handles `ArchiveFormat.NEW_FORMAT`), you need to make `archivey` aware of it. This is done by modifying the `archivey.core` module.
+
+1.  **Import your reader class** in `src/archivey/core.py`:
+    ```python
+    from archivey.mynewformat_reader import MyNewFormatReader # Assuming your reader is in this file
+    ```
+
+2.  **Add an entry to `_FORMAT_TO_READER`**: This dictionary maps `ArchiveFormat` enum members to their corresponding reader classes.
+    ```python
+    # In src/archivey/core.py
+    _FORMAT_TO_READER = {
+        ArchiveFormat.RAR: RarReader,
+        ArchiveFormat.ZIP: ZipReader,
+        ArchiveFormat.SEVENZIP: SevenZipReader,
+        ArchiveFormat.TAR: TarReader,
+        ArchiveFormat.FOLDER: FolderReader,
+        ArchiveFormat.NEW_FORMAT: MyNewFormatReader, # Add your new entry
+    }
+    ```
+    If your archive format is a variation of an existing one (like a new TAR compression), you might add it similarly to how compressed TAR formats are handled:
+    ```python
+    # Example for a new TAR variant
+    # _FORMAT_TO_READER[ArchiveFormat.TAR_NEWCOMPRESSION] = TarReader
+    ```
+    Or for single-file compressed formats:
+    ```python
+    # _FORMAT_TO_READER[ArchiveFormat.NEW_SINGLE_COMPRESSION] = SingleFileReader
+    ```
+
+3.  **(Optional) Add to `_EXTRA_DETECTORS`**: If your archive format cannot be reliably detected by `detect_archive_format` (which primarily uses magic bytes defined in `archivey.formats`), you might need to add a custom detection function.
+    `_EXTRA_DETECTORS` is a set of tuples, where each tuple is `(detection_function, ArchiveFormat_enum)`. The detection function should take a filename (str) or a file-like object as input and return `True` if it's the format it handles.
+    ```python
+    # In src/archivey/core.py
+
+    # def is_my_new_format(archive_path_or_stream) -> bool:
+    #     # ... your custom detection logic ...
+    #     pass
+
+    # _EXTRA_DETECTORS = {
+    #     (TarReader.is_tar_file, ArchiveFormat.TAR),
+    #     (RarReader.is_rar_file, ArchiveFormat.RAR),
+    #     (ZipReader.is_zip_file, ArchiveFormat.ZIP),
+    #     (MyNewFormatReader.is_my_new_format, ArchiveFormat.NEW_FORMAT), # If you have a static method in your reader
+    # }
+    ```
+    The `detect_archive_format` function in `archivey.formats` will iterate through these detectors if its initial checks fail.
+
+After these modifications, `open_archive` should be able to recognize and use your new reader. Remember to also update `ArchiveFormat` enum in `archivey.types` if you've introduced a completely new format name.
+
 ## `ArchiveMember` Object
 
 The `archivey.types.ArchiveMember` class is used to represent individual entries within an archive. When implementing `iter_members_for_registration`, you'll construct these objects. Key fields to populate include:
@@ -116,9 +167,5 @@ The `archivey.types.ArchiveMember` class is used to represent individual entries
 *   Other fields like `crc32`, `compression_method`, `comment`, `create_system`, `extra`.
 
 Refer to the `ArchiveMember` class definition in `archivey.types` for all available fields.
-
-## Registering Your Reader
-
-Once your reader is implemented, you'll need to modify `archivey.core.open_archive` to detect the archive format and instantiate your reader. (Details of this registration process might evolve, check the current `open_archive` function).
 
 By following these guidelines, you can contribute robust and well-integrated support for new archive formats to `archivey`.

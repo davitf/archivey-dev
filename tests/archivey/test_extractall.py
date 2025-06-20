@@ -13,6 +13,8 @@ from tests.archivey.sample_archives import (
     SampleArchive,
 )
 from tests.archivey.testing_utils import remove_duplicate_files, skip_if_package_missing
+from archivey.exceptions import ArchiveErrorNotSupported # Added, though might be NotImplementedError
+from archivey.types import ArchiveFormat # Added
 
 
 def _check_file_metadata(path: Path, info, sample):
@@ -99,6 +101,33 @@ def test_extractall_filter(
 
     assert not (dest / "file1.txt").exists()
     assert not (dest / "implicit_subdir" / "file3.txt").exists()
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    [sa for sa in BASIC_ARCHIVES if sa.filename.endswith(".tar.gz") and sa.creation_info.format.value == "tar.gz"],
+    ids=lambda x: x.filename,
+)
+def test_extract_on_streaming_archive_raises_error(
+    tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
+):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    with open_archive(sample_archive_path, streaming_only=True) as archive:
+        assert not archive.has_random_access(), "Archive should be in streaming-only mode for this test"
+
+        member_to_extract = None
+        if sample_archive.contents.files:
+            for f_info in sample_archive.contents.files:
+                # Ensure it's a file and not a directory entry (which might also have MemberType.FILE in some TARs if not explicitly marked)
+                if f_info.type == MemberType.FILE and not f_info.name.endswith("/"):
+                    member_to_extract = f_info.name
+                    break
+
+        assert member_to_extract is not None, "No file member found in sample archive to attempt extraction"
+
+        with pytest.raises(NotImplementedError, match="extract() is not supported for this streaming-only archive"):
+            archive.extract(member_to_extract, path=str(tmp_path / "extract_test_output"))
 
 
 @pytest.mark.parametrize(

@@ -156,7 +156,7 @@ class ArchiveReader(abc.ABC):
         | Callable[[ArchiveMember], bool]
         | None = None,
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """
@@ -245,7 +245,7 @@ class ArchiveReader(abc.ABC):
 
     @abc.abstractmethod
     def open(
-        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
+        self, member_or_filename: ArchiveMember | str, *, pwd: Optional[Union[bytes, str]] = None
     ) -> BinaryIO:
         """
         Open a specific member of the archive for reading and return a binary I/O stream.
@@ -278,7 +278,7 @@ class ArchiveReader(abc.ABC):
         self,
         member_or_filename: ArchiveMember | str,
         path: str | os.PathLike | None = None,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
     ) -> str | None:
         """Extract a member to a path.
 
@@ -298,7 +298,7 @@ class ArchiveReader(abc.ABC):
         | Callable[[ArchiveMember], bool]
         | None = None,
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
         filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
     ) -> dict[str, ArchiveMember]:
         """
@@ -377,7 +377,7 @@ class BaseArchiveReader(ArchiveReader):
         archive_path: BinaryIO | str | bytes | os.PathLike,
         random_access_supported: bool,
         members_list_supported: bool,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
     ):
         """
         Initialize the BaseArchiveReader.
@@ -395,9 +395,11 @@ class BaseArchiveReader(ArchiveReader):
         """
         super().__init__(archive_path, format)
         if pwd is not None and isinstance(pwd, str):
-            self._archive_password: bytes | None = pwd.encode("utf-8")
-        else:
-            self._archive_password: bytes | None = pwd
+            self._archive_password: Optional[bytes] = pwd.encode("utf-8")
+        elif isinstance(pwd, bytes):
+            self._archive_password: Optional[bytes] = pwd
+        else: # pwd is None
+            self._archive_password: Optional[bytes] = None
 
         # self._member_id_to_member: dict[int, ArchiveMember] = {}
         self._members: list[ArchiveMember] = []
@@ -435,13 +437,15 @@ class BaseArchiveReader(ArchiveReader):
     def _resolve_link_recursive(
         self, member: ArchiveMember, visited_ids: set[int]
     ) -> ArchiveMember | None:
-        # member_id should be set if it came from self.get_members() or iteration
-        if member.member_id is None:
+        # Ensure _member_id is set. This should be guaranteed if the member
+        # was obtained through normal archive operations.
+        if member._member_id is None:
             logger.error(
-                f"Attempted to resolve link for member {member.filename} with no member_id."
+                f"Attempted to resolve link for member {member.filename} with no internal member_id assigned."
             )
             return None
 
+        # Now it's safe to use member.member_id property, which also checks _member_id
         if member.member_id in visited_ids:
             logger.error(
                 f"Link loop detected involving {member.filename} (ID: {member.member_id})."
@@ -453,34 +457,34 @@ class BaseArchiveReader(ArchiveReader):
 
         if member.type == MemberType.HARDLINK:
             link_target_str = member.link_target
-            # This check is defensive, should be caught by the public resolve_link method
+            # This check is defensive; link_target should be set for link types.
             if link_target_str is None:
                 logger.warning(
-                    f"Hardlink target string is None for {member.filename} (ID: {member.member_id})"
+                    f"Hardlink target string is None for {member.filename} (ID: {member.member_id})."
                 )
                 return None
 
             potential_targets = self._filename_to_members.get(link_target_str, [])
-            # Find the most recent member with the same filename and a *lower* member_id
-            # Ensure member_id is not None for potential targets as well
+            # Find the most recent member with the same filename and a *lower* _member_id.
+            # Accessing _member_id directly after confirming it's not None.
             valid_targets = [
                 m
                 for m in potential_targets
-                if m.member_id is not None and m.member_id < member.member_id
+                if m._member_id is not None and m._member_id < member._member_id
             ]
             if not valid_targets:
                 logger.warning(
-                    f"Hardlink target {link_target_str} not found for {member.filename} (ID: {member.member_id}) or no earlier version exists."
+                    f"Hardlink target '{link_target_str}' not found for {member.filename} (ID: {member.member_id}) or no earlier version exists."
                 )
                 return None
-
-            target_member = max(valid_targets, key=lambda m: m.member_id)
+            # Sort by _member_id to get the highest one (most recent before current hardlink)
+            target_member = max(valid_targets, key=lambda m: m._member_id) # type: ignore
 
         elif member.type == MemberType.SYMLINK:
             link_target_str = member.link_target
             if link_target_str is None:  # Defensive check
                 logger.warning(
-                    f"Symlink target string is None for {member.filename} (ID: {member.member_id})"
+                    f"Symlink target string is None for {member.filename} (ID: {member.member_id})."
                 )
                 return None
 
@@ -608,7 +612,7 @@ class BaseArchiveReader(ArchiveReader):
             yield self._members[i]
             i += 1
 
-    def open_for_iteration(self, member, pwd: bytes | str | None = None) -> BinaryIO:
+    def open_for_iteration(self, member, pwd: Optional[Union[bytes, str]] = None) -> BinaryIO:
         """
         Open a member for reading during iteration via `iter_members_with_io`.
 
@@ -641,7 +645,7 @@ class BaseArchiveReader(ArchiveReader):
         | Callable[[ArchiveMember], bool]
         | None = None,
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
         filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """Iterate over all members in the archive.
@@ -706,7 +710,7 @@ class BaseArchiveReader(ArchiveReader):
         return self._random_access_supported
 
     def _extract_pending_files(
-        self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None
+        self, path: str, extraction_helper: ExtractionHelper, pwd: Optional[Union[bytes, str]]
     ):
         """
         Extract files that have been identified by the ExtractionHelper.
@@ -739,7 +743,8 @@ class BaseArchiveReader(ArchiveReader):
         self,
         path: str,
         filter_func: Callable[[ArchiveMember], Union[ArchiveMember, None]],
-        pwd: bytes | str | None,
+        pwd: Optional[Union[bytes, str]],
+        pwd: Optional[Union[bytes, str]],
         extraction_helper: ExtractionHelper,
     ):
         # For readers that support random access, register all members first to get
@@ -775,7 +780,7 @@ class BaseArchiveReader(ArchiveReader):
         | Callable[[ArchiveMember], bool]
         | None = None,
         *,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
         filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
     ) -> dict[str, ArchiveMember]:
         """Extract multiple members from the archive.
@@ -885,8 +890,40 @@ class BaseArchiveReader(ArchiveReader):
         self,
         member_or_filename: ArchiveMember | str,
         path: str | os.PathLike | None = None,
-        pwd: bytes | str | None = None,
+        pwd: Optional[Union[bytes, str]] = None,
     ) -> str | None:
+        """Extract a single member to the specified path.
+
+        This method is only available if `has_random_access()` returns `True`.
+        For symlinks, this will attempt to extract the link itself, not its target.
+        To extract the target of a symlink, resolve it first using `resolve_link()`
+        and then extract the resulting `ArchiveMember`.
+
+        Args:
+            member_or_filename: The ArchiveMember object or the filename (str) of
+                the member to extract.
+            path: Target directory for extraction. Defaults to the current working
+                directory if None. The directory will be created if it doesn't exist.
+            pwd: Optional password (str or bytes) for decrypting the member if it's
+                encrypted.
+
+        Returns:
+            The absolute path to the extracted file or directory, or None if nothing
+            was extracted (e.g., if the member was a directory and it already existed,
+            though specifics may vary).
+
+        Raises:
+            NotImplementedError: If the archive is opened in a streaming-only mode
+                                 (i.e., `has_random_access()` is `False`).
+            ArchiveMemberNotFoundError: If the specified member is not found.
+            ArchiveMemberCannotBeOpenedError: If the member is a type that cannot be
+                                            opened for extraction (e.g., a directory,
+                                            though behavior might vary by implementation).
+            ArchiveEncryptedError: If the member is encrypted and `pwd` is incorrect
+                                   or not provided.
+            ArchiveCorruptedError: If the member data is found to be corrupt.
+            ArchiveExtractionError: For other issues during extraction.
+        """
         if path is None:
             path = os.getcwd()
         else:
@@ -894,31 +931,43 @@ class BaseArchiveReader(ArchiveReader):
 
         if self._random_access_supported:
             member = self.get_member(member_or_filename)
+            # For extract(), we are extracting one specific item.
+            # We don't want to resolve links automatically here, because the user might
+            # specifically want to extract the symlink itself.
+            # If they want to extract the target, they should resolve it first.
+
             extraction_helper = ExtractionHelper(
                 self,
                 path,
                 self.config.overwrite_mode,
+                # can_process_pending_extractions is False because we are only extracting one item.
+                # This ensures that _extract_pending_files is not called, and extract_member
+                # will directly write the file if it's a regular file.
                 can_process_pending_extractions=False,
             )
 
+            # For non-file types like directories or symlinks, stream will be None.
+            # extract_member handles creation of these types without a stream.
             stream = self.open(member, pwd=pwd) if member.is_file else None
+            try:
+                # extract_member will handle directory creation, symlink creation, etc.
+                # and file writing if stream is provided.
+                extraction_helper.extract_member(member, stream)
+            finally:
+                if stream:
+                    stream.close()
 
-            extraction_helper.extract_member(member, stream)
-            if stream:
-                stream.close()
+            extraction_helper.apply_metadata() # Applies permissions, mtime for the extracted item.
 
-            extraction_helper.apply_metadata()
-
-        # Fall back to extractall().
-        logger.warning(
-            "extract() may be slow for streaming archives, use extractall instead if possible. ()"
-        )
-        d = self.extractall(
-            path=path,
-            members=[member_or_filename],
-            pwd=pwd,
-        )
-        return list(d.keys())[0] if len(d) else None
+            # Return the full path of the extracted item.
+            # The key in extracted_members_by_path is the absolute path.
+            extracted_paths = list(extraction_helper.extracted_members_by_path.keys())
+            return extracted_paths[0] if extracted_paths else None
+        else: # Not self._random_access_supported
+            raise NotImplementedError(
+                "extract() is not supported for this streaming-only archive. "
+                "Use extractall() or iterate with iter_members_with_io() instead."
+            )
 
 
 class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
@@ -973,7 +1022,7 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
         )
 
     def open(
-        self, member: ArchiveMember, *, pwd: bytes | str | None = None
+        self, member: ArchiveMember, *, pwd: Optional[Union[bytes, str]] = None
     ) -> BinaryIO:
         raise ValueError("Streaming-only archive reader does not support open().")
 
@@ -981,8 +1030,7 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
         self,
         member_or_filename: ArchiveMember | str,
         path: str | None = None,
-        pwd: bytes | str | None = None,
-        preserve_links: bool = True,
+        pwd: Optional[Union[bytes, str]] = None,
     ) -> str | None:
         raise ValueError("Streaming-only archive reader does not support extract().")
 

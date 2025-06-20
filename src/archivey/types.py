@@ -98,7 +98,18 @@ class CreateSystem(IntEnum):
 
 @dataclass
 class ArchiveInfo:
-    """Detailed information about an archive's format."""
+    """Detailed information about an archive's format.
+
+    Attributes:
+        format: The format of the archive. See `ArchiveFormat`.
+        version: Specific version of the archive format (e.g., "4" for RAR4, "5" for RAR5).
+            None if not applicable or unknown.
+        is_solid: Boolean indicating if the archive is solid (i.e., files are compressed
+            together in a single block).
+        extra: Dictionary holding any additional format-specific metadata about the
+            archive itself. None if no extra info.
+        comment: An archive-level comment string. None if no comment.
+    """
 
     format: ArchiveFormat
     version: Optional[str] = None  # e.g. "4" for RAR4, "5" for RAR5
@@ -109,7 +120,30 @@ class ArchiveInfo:
 
 @dataclass
 class ArchiveMember:
-    """Represents a file within an archive."""
+    """Represents a file within an archive.
+
+    Attributes:
+        filename: The full path of the member within the archive.
+        file_size: Uncompressed size of the file in bytes. None for non-file entries.
+        compress_size: Compressed size of the file in bytes. None if not applicable or unknown.
+        mtime_with_tz: Modification time of the member as a timezone-aware datetime object.
+            None if not available.
+        type: The type of the archive member (e.g., file, directory, symlink). See `MemberType`.
+        mode: File system permissions of the member as an octal number. None if not available.
+        crc32: CRC32 checksum of the uncompressed file data. None if not available.
+        compression_method: String representing the compression method used (e.g., "deflate", "lzma").
+            None if not applicable or unknown.
+        comment: A comment string associated with the member. None if no comment.
+        create_system: The operating system or file system on which the member was created.
+            See `CreateSystem`. None if unknown.
+        encrypted: Boolean indicating if the member is encrypted.
+        extra: Dictionary holding any additional format-specific metadata.
+        link_target: For symlinks or hardlinks, the path to the target entry. None for other types.
+        raw_info: The original member information object from the underlying archive library.
+            Useful for format-specific operations. None if not applicable.
+        _member_id: Internal unique ID for this member within its archive.
+        _archive_id: Internal unique ID of the archive this member belongs to.
+    """
 
     filename: str
     file_size: Optional[int]
