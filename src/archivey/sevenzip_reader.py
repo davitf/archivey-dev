@@ -569,8 +569,11 @@ class SevenZipReader(BaseArchiveReader):
                     factory.finish()
             except Exception as e:
                 q.put(e)
-                # Catch all exceptions to avoid the main thread waiting forever.
-                # Any exception will be re-raised in the main thread.
+                # The extraction runs in a separate thread. Without catching
+                # every exception here, any error would terminate the thread
+                # silently and the main thread would block waiting for items on
+                # the queue. The exception is sent through the queue so it can
+                # be re-raised in the main thread.
 
         thread = Thread(target=extractor)
         thread.start()

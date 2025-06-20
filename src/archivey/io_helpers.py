@@ -2,12 +2,63 @@
 
 import io
 import logging
+import gzip
+import lzma
+import tarfile
+import zipfile
 from dataclasses import dataclass, field
 from typing import IO, Any, BinaryIO, Callable, Optional, cast
+
+try:
+    import rarfile
+except ImportError:  # pragma: no cover - optional dependency
+    rarfile = None
+
+try:
+    import py7zr.exceptions as py7zr_exceptions
+except ImportError:  # pragma: no cover - optional dependency
+    py7zr_exceptions = None
+
+try:
+    import zstandard
+except ImportError:  # pragma: no cover - optional dependency
+    zstandard = None
+
+try:
+    import pyzstd
+except ImportError:  # pragma: no cover - optional dependency
+    pyzstd = None
+
+try:
+    import xz
+except ImportError:  # pragma: no cover - optional dependency
+    xz = None
 
 from archivey.exceptions import ArchiveError
 
 logger = logging.getLogger(__name__)
+
+_EXCEPTIONS = [
+    OSError,
+    RuntimeError,
+    ValueError,
+    EOFError,
+    lzma.LZMAError,
+    gzip.BadGzipFile,
+    tarfile.TarError,
+    zipfile.BadZipFile,
+]
+if rarfile is not None:
+    _EXCEPTIONS.append(rarfile.Error)
+if py7zr_exceptions is not None:
+    _EXCEPTIONS.append(py7zr_exceptions.ArchiveError)
+if zstandard is not None:
+    _EXCEPTIONS.append(zstandard.ZstdError)
+if pyzstd is not None:
+    _EXCEPTIONS.append(pyzstd.ZstdError)
+if xz is not None:
+    _EXCEPTIONS.append(xz.XZError)
+_CAUGHT_EXCEPTIONS = tuple(_EXCEPTIONS)
 
 
 class ErrorIOStream(io.RawIOBase, BinaryIO):
@@ -79,7 +130,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         if isinstance(inner, Callable):
             try:
                 self._inner = inner()
-            except Exception as e:
+            except _CAUGHT_EXCEPTIONS as e:
                 self._translate_exception(e)
         else:
             self._inner = inner
@@ -98,7 +149,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         assert self._inner is not None
         try:
             return self._inner.read(n)
-        except Exception as e:
+        except _CAUGHT_EXCEPTIONS as e:
             self._translate_exception(e)
             return b""  # pragma: no cover - unreachable, _translate_exception always raises
 
@@ -106,7 +157,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         assert self._inner is not None
         try:
             return self._inner.seek(offset, whence)
-        except Exception as e:
+        except _CAUGHT_EXCEPTIONS as e:
             logger.error(f"Exception when seeking {self._inner}: {e}", exc_info=e)
             self._translate_exception(e)
             return (
@@ -133,7 +184,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         assert self._inner is not None
         try:
             return self._inner.write(b)
-        except Exception as e:
+        except _CAUGHT_EXCEPTIONS as e:
             self._translate_exception(cast(Exception, e))
             return (
                 0  # pragma: no cover - unreachable, _translate_exception always raises
@@ -143,14 +194,14 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         assert self._inner is not None
         try:
             self._inner.writelines(lines)
-        except Exception as e:
+        except _CAUGHT_EXCEPTIONS as e:
             self._translate_exception(cast(Exception, e))
 
     def close(self) -> None:
         try:
             if self._inner is not None:
                 self._inner.close()
-        except Exception as e:
+        except _CAUGHT_EXCEPTIONS as e:
             self._translate_exception(cast(Exception, e))
         super().close()
 
