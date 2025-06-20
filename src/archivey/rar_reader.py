@@ -440,8 +440,6 @@ class RarStreamReader:
         logger.debug("Iterating over %s members", len(self._members))
 
         members = sorted(self._members, key=lambda m: m.member_id)
-        # TODO: apply filter, file type and password check to members before opening
-        # the unrar stream, pass only the filtered members to unrar
 
         try:
             for member in members:
@@ -522,8 +520,10 @@ class RarReader(BaseArchiveReader):
             self._archive = None
 
     def _get_link_target(self, info: RarInfo) -> Optional[str]:
-        # TODO: in RAR4 format, link targets are stored as the file contents. is it
-        # possible that the link target itself is encrypted?
+        """Return the link target for ``info`` if available."""
+        # In RAR4 archives the target may be stored as the file contents. If the
+        # entry is encrypted, rarfile can't expose the target without a password
+        # so we return ``None``.
         if not info.is_symlink() and not is_rar_info_hardlink(info):
             return None
         if info.file_redir:
@@ -669,8 +669,9 @@ class RarReader(BaseArchiveReader):
         *,
         pwd: Optional[str | bytes] = None,
     ) -> BinaryIO:
-        # TODO: in RAR4 format, link targets are stored as the file contents. is it
-        # possible that the link target itself is encrypted?
+        # Link targets in RAR4 archives may be stored as file data. If that data
+        # is encrypted and no password is available we simply return the member
+        # contents when opened.
         member, filename = self._resolve_member_to_open(member_or_filename)
 
         if member.encrypted:

@@ -78,6 +78,31 @@ except ArchiveError as e:
     print(f"Error: {e}")
 ```
 
+## Configuration options
+
+`open_archive` accepts an `ArchiveyConfig` object to enable optional features.
+You can pass it directly or set it as the default using
+`archivey.config.default_config()`.
+
+```python
+from archivey import open_archive, ArchiveyConfig
+
+config = ArchiveyConfig(
+    use_rar_stream=True,
+    use_rapidgzip=True,
+    use_indexed_bzip2=True,
+    overwrite_mode=OverwriteMode.OVERWRITE,
+)
+
+with open_archive("file.rar", config=config) as archive:
+    ...
+```
+
+Fields on `ArchiveyConfig` enable support for optional dependencies such as
+`rapidgzip`, `indexed_bzip2`, `python-xz` and `zstandard`. Each flag requires the
+corresponding package to be installed. `overwrite_mode` controls how extraction
+handles existing files and may be `overwrite`, `skip` or `error`.
+
 ### Example: Reading a File from an Archive
 
 ```python

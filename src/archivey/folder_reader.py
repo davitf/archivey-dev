@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import BinaryIO, Iterator, Optional
 
 from archivey.base_reader import BaseArchiveReader
-from archivey.exceptions import ArchiveError, ArchiveMemberNotFoundError
+from archivey.exceptions import ArchiveError, ArchiveIOError, ArchiveMemberNotFoundError
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 logger = logging.getLogger(__name__)
@@ -150,10 +150,7 @@ class FolderReader(BaseArchiveReader):
         try:
             return full_path.open("rb")
         except OSError as e:
-            raise ArchiveError(
-                # TODO: better exception type
-                f"Cannot open member '{member_name}': {e}"
-            ) from e
+            raise ArchiveIOError(f"Cannot open member '{member_name}': {e}") from e
 
     def get_archive_info(self) -> ArchiveInfo:
         return ArchiveInfo(

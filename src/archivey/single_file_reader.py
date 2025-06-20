@@ -216,9 +216,15 @@ class SingleFileReader(BaseArchiveReader):
         self.archive_path = archive_path
         if isinstance(archive_path, str):
             self.ext = os.path.splitext(archive_path)[1].lower()
-            name_for_member = (
-                os.path.splitext(os.path.basename(archive_path))[0] or "unknown"
-            )
+            base_name = os.path.basename(archive_path)
+            base_no_ext, ext = os.path.splitext(base_name)
+            known_exts = [f".{fmt.value}" for fmt in SINGLE_FILE_COMPRESSED_FORMATS] + [
+                ".zst"
+            ]
+            if ext.lower() in known_exts:
+                name_for_member = base_no_ext or "unknown"
+            else:
+                name_for_member = base_name + self.ext
             mtime = datetime.fromtimestamp(
                 os.path.getmtime(archive_path), tz=timezone.utc
             )
@@ -230,10 +236,7 @@ class SingleFileReader(BaseArchiveReader):
             compress_size = None
         self.use_stored_metadata = self.config.use_single_file_stored_metadata
 
-        # Get the base name without compression extension
-        # TODO: what if the file has no extension, or a wrong extension?
-        # maybe we should remove only extensions from known formats, and add an extra
-        # extension if it doesn't have one?
+        # Get the base name for the decompressed member
         self.member_name = name_for_member
 
         # Get file metadata

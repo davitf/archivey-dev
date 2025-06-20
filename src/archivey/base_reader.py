@@ -684,11 +684,14 @@ class BaseArchiveReader(ArchiveReader):
                 continue
 
             try:
-                # TODO: some libraries support fast seeking for files (either all,
-                # or only non-compressed ones), so we should set seekable=True
-                # if possible.
+                # Some backends provide seekable streams for regular files.
                 stream = (
-                    LazyOpenIO(self.open_for_iteration, member, pwd=pwd, seekable=False)
+                    LazyOpenIO(
+                        self.open_for_iteration,
+                        member,
+                        pwd=pwd,
+                        seekable=self._random_access_supported,
+                    )
                     if member.is_file
                     else None
                 )
