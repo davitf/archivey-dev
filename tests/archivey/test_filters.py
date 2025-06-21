@@ -12,7 +12,13 @@ from tests.archivey.sample_archives import SANITIZE_ARCHIVES
     [
         (tar_filter, True),
         (
-            create_filter(allow_absolute_paths=True, allow_symlinks_to_outside=True),
+            create_filter(
+                for_data=False,
+                sanitize_names=True,
+                sanitize_link_targets=True,
+                sanitize_permissions=True,
+                raise_on_error=True,
+            ),
             False,
         ),
     ],

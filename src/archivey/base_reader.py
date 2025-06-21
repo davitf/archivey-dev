@@ -6,17 +6,25 @@ import os
 import posixpath
 import threading
 from collections import defaultdict
-from typing import BinaryIO, Callable, Collection, Iterator, List, Union
+from typing import BinaryIO, Callable, Collection, Iterator, List, Union, cast
+from uuid import uuid4
 
-from archivey.config import ArchiveyConfig, get_default_config
+from archivey.config import ArchiveyConfig, ExtractionFilter, get_default_config
 from archivey.exceptions import (
     ArchiveMemberCannotBeOpenedError,
     ArchiveMemberNotFoundError,
 )
 from archivey.extraction_helper import ExtractionHelper
+from archivey.filters import DEFAULT_FILTERS
 from archivey.io_helpers import LazyOpenIO
-from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
-from uuid import uuid4
+from archivey.types import (
+    ArchiveFormat,
+    ArchiveInfo,
+    ArchiveMember,
+    ExtractFilterFunc,
+    IteratorFilterFunc,
+    MemberType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,29 +36,28 @@ def _build_member_included_func(
 ) -> Callable[[ArchiveMember], bool]:
     if members is None:
         return lambda _: True
-    elif isinstance(members, Callable):
+    elif callable(members):
         return members
 
     filenames: set[str] = set()
     internal_ids: set[int] = set()
 
-    if members is not None and not isinstance(members, Callable):
-        for member in members:
-            if isinstance(member, ArchiveMember):
-                internal_ids.add(member.member_id)
-            else:
-                filenames.add(member)
+    for member in members:
+        if isinstance(member, ArchiveMember):
+            internal_ids.add(member.member_id)
+        else:
+            filenames.add(member)
 
     return lambda m: m.filename in filenames or m.member_id in internal_ids
 
 
-def _build_iterator_filter(
+def _build_filter(
     members: Collection[Union[ArchiveMember, str]]
     | Callable[[ArchiveMember], bool]
     | None,
-    filter: Callable[..., ArchiveMember | None] | None,
+    filter: ExtractFilterFunc | IteratorFilterFunc | ExtractionFilter,
     dest_path: str | None = None,
-) -> Callable[[ArchiveMember], ArchiveMember | None]:
+) -> IteratorFilterFunc:
     """Build a filter function for the iterator.
 
     Args:
@@ -61,25 +68,24 @@ def _build_iterator_filter(
             iteration, so don't rely on any specific behavior.
     """
     member_included = _build_member_included_func(members)
+    filter_func = filter if callable(filter) else DEFAULT_FILTERS[filter]
 
     def _apply_filter(member: ArchiveMember) -> ArchiveMember | None:
         if not member_included(member):
             return None
 
-        if filter is None:
-            return member
+        if dest_path is None:
+            filtered = cast(IteratorFilterFunc, filter_func)(member)
         else:
-            try:
-                filtered = filter(member, dest_path)
-            except TypeError:
-                filtered = filter(member)
-            # Check the filtered still refers to the same member
-            if filtered is not None and filtered.member_id != member.member_id:
-                raise ValueError(
-                    f"Filter returned a member with a different internal ID: {member.filename} {member.member_id} -> {filtered.filename} {filtered.member_id}"
-                )
+            filtered = cast(ExtractFilterFunc, filter_func)(member, dest_path)
 
-            return filtered
+        # Check the filtered still refers to the same member
+        if filtered is not None and filtered.member_id != member.member_id:
+            raise ValueError(
+                f"Filter returned a member with a different internal ID: {member.filename} {member.member_id} -> {filtered.filename} {filtered.member_id}"
+            )
+
+        return filtered
 
     return _apply_filter
 
@@ -161,7 +167,7 @@ class ArchiveReader(abc.ABC):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
+        filter: IteratorFilterFunc | ExtractionFilter | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """
         Iterate over members in the archive, yielding a tuple of (ArchiveMember, BinaryIO_stream).
@@ -303,8 +309,7 @@ class ArchiveReader(abc.ABC):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None]
-        | None = None,
+        filter: ExtractFilterFunc | ExtractionFilter | None = None,
     ) -> dict[str, ArchiveMember]:
         """
         Extract all (or a specified subset of) members to the given path.
@@ -647,7 +652,7 @@ class BaseArchiveReader(ArchiveReader):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
+        filter: IteratorFilterFunc | ExtractionFilter | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """Iterate over all members in the archive.
 
@@ -679,12 +684,14 @@ class BaseArchiveReader(ArchiveReader):
 
         self._start_streaming_iteration()
 
-        filter_func = _build_iterator_filter(members, filter, None)
+        filter_func = _build_filter(
+            members, filter or self.config.extraction_filter, None
+        )
 
         for member in self.iter_members():
             logger.debug(f"iter_members_with_io member: {member}")
-            filtered = filter_func(member)
-            if filtered is None:
+            filtered_member = filter_func(member)
+            if filtered_member is None:
                 logger.debug(f"skipping {member.filename}")
                 continue
 
@@ -700,7 +707,7 @@ class BaseArchiveReader(ArchiveReader):
                     if member.is_file
                     else None
                 )
-                yield member, stream
+                yield filtered_member, stream
 
             finally:
                 if stream is not None:
@@ -743,7 +750,7 @@ class BaseArchiveReader(ArchiveReader):
     def _extractall_with_random_access(
         self,
         path: str,
-        filter_func: Callable[[ArchiveMember], Union[ArchiveMember, None]],
+        filter_func: IteratorFilterFunc,
         pwd: bytes | str | None,
         extraction_helper: ExtractionHelper,
     ):
@@ -763,7 +770,7 @@ class BaseArchiveReader(ArchiveReader):
     def _extractall_with_streaming_mode(
         self,
         path: str,
-        filter_func: Callable[[ArchiveMember], Union[ArchiveMember, None]],
+        filter_func: IteratorFilterFunc,
         pwd: bytes | str | None,
         extraction_helper: ExtractionHelper,
     ):
@@ -781,8 +788,7 @@ class BaseArchiveReader(ArchiveReader):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None]
-        | None = None,
+        filter: ExtractFilterFunc | ExtractionFilter | None = None,
     ) -> dict[str, ArchiveMember]:
         """Extract multiple members from the archive.
 
@@ -796,7 +802,9 @@ class BaseArchiveReader(ArchiveReader):
         else:
             path = str(path)
 
-        filter_func = _build_iterator_filter(members, filter, path)
+        filter_func = _build_filter(
+            members, filter or self.config.extraction_filter, path
+        )
 
         extraction_helper = ExtractionHelper(
             self,

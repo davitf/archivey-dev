@@ -451,18 +451,20 @@ LZ4_LIBRARY = ArchiveCreationInfo(
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 
-FOLDER_CREATION_INFO = ArchiveCreationInfo(
+FOLDER_FORMAT = ArchiveCreationInfo(
     file_suffix="_folder/",  # Results in names like 'basic_nonsolid___folder'
     format=ArchiveFormat.FOLDER,
     generation_method=GenerationMethod.TEMP_DIR_POPULATION,
     features=ArchiveFormatFeatures(  # Specify features relevant to folders
         dir_entries=True,
-        file_comments=False,  # Folders/files don't typically have embedded comments
-        archive_comment=False,  # No archive-level comment for a directory
+        file_comments=False,
+        archive_comment=False,
         mtime=True,
         rounded_mtime=False,  # Filesystem mtimes are usually not rounded
         file_size=True,
-        duplicate_files=True,  # A folder can have files with the same name in different subdirs
+        duplicate_files=False,
+        mtime_with_tz=True,
+        hardlink_mtime=False,  # Hardlinks get the timestamp of the original file
     ),
 )
 # ISO format
@@ -658,6 +660,15 @@ HARDLINKS_FILES = [
     Hardlink("hardlink_to_file2.txt", 4, "subdir/file2.txt", contents=b"Hello 2!"),
 ]
 
+HARDLINKS_FILES_FOR_FOLDER_FORMAT = [
+    File("file1.txt", 1, b"Hello 1!"),
+    File("dir1/file2.txt", 2, b"Hello 2!"),
+    Hardlink("dir1/link_to_file1.txt", 3, "file1.txt", contents=b"Hello 1!"),
+    Hardlink("dir1/link_to_file2.txt", 4, "dir1/file2.txt", contents=b"Hello 2!"),
+    Hardlink("dir2/hardlink_to_file1.txt", 4, "file1.txt", contents=b"Hello 1!"),
+    Hardlink("dir2/hardlink_to_file2.txt", 5, "dir1/file2.txt", contents=b"Hello 2!"),
+]
+
 
 # In tar archives, a hard link refers to the entry with the same name previously in
 # the archive, even if that entry is later overwritten. So in this case, the first
@@ -738,12 +749,25 @@ LARGE_FILES = [
 ]
 
 # Files with potentially unsafe names or permissions for filter testing
-SANITIZE_FILES = [
+SANITIZE_FILES_SYMLINKS = [
+    File("good.txt", 1, b"good"),
+    File("exec.sh", 4, b"#!/bin/sh\n", permissions=0o755),
+    Symlink("subdir/good_link.txt", 5, "../good.txt", contents=b"good"),
+    Symlink("link_abs", 6, "/etc/passwd", contents=None),
+    Symlink("link_outside", 7, "../escape.txt", contents=None),
+]
+
+# Files with potentially unsafe names or permissions for filter testing
+SANITIZE_FILES_FULL = [
     File("good.txt", 1, b"good"),
     File("/absfile.txt", 2, b"abs"),
-    Symlink("link_abs", 4, "/etc/passwd"),
-    Symlink("link_outside", 5, "../escape.txt"),
-    File("exec.sh", 6, b"#!/bin/sh\n", permissions=0o755),
+    File("../outside.txt", 3, b"outside"),
+    File("exec.sh", 4, b"#!/bin/sh\n", permissions=0o755),
+    Symlink("subdir/good_link.txt", 5, "../good.txt", contents=b"good"),
+    Symlink("link_abs", 6, "/etc/passwd", contents=None),
+    Symlink("link_outside", 7, "../escape.txt", contents=None),
+    Hardlink("hardlink_absfile", 8, "/absfile.txt", contents=b"abs"),
+    Hardlink("hardlink_outside", 9, "../outside.txt", contents=b"outside"),
 ]
 
 SINGLE_LARGE_FILE = File(
@@ -841,7 +865,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="basic_nonsolid",
             files=BASIC_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS + [FOLDER_CREATION_INFO],
+        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
     ),
     (
         ArchiveContents(
@@ -925,7 +949,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             files=SYMLINKS_FILES,
             solid=False,
         ),
-        ZIP_RAR_7Z_FORMATS,
+        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
     ),
     (
         ArchiveContents(
@@ -952,6 +976,13 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     ),
     (
         ArchiveContents(
+            file_basename="hardlinks_folder_format",
+            files=HARDLINKS_FILES_FOR_FOLDER_FORMAT,
+        ),
+        [FOLDER_FORMAT],
+    ),
+    (
+        ArchiveContents(
             file_basename="hardlinks_with_duplicate_files",
             files=HARDLINKS_WITH_DUPLICATE_FILES,
         ),
@@ -969,7 +1000,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="encoding",
             files=ENCODING_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS,
+        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
     ),
     (
         ArchiveContents(
@@ -1020,7 +1051,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="permissions",
             files=TEST_PERMISSIONS_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS,
+        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
     ),
     (
         ArchiveContents(
@@ -1035,7 +1066,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="large_files_nonsolid",
             files=LARGE_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS,
+        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
     ),
     (
         ArchiveContents(
@@ -1054,45 +1085,11 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     ),
     (
         ArchiveContents(
-            file_basename="fixture_zip",
-            files=[
-                FileInfo(
-                    name="fixture.txt",
-                    mtime=_fake_mtime(1),
-                    contents=b"fixture zip",
-                )
-            ],
-        ),
-        [ZIP_ZIPFILE_STORE],
-    ),
-    (
-        ArchiveContents(
-            file_basename="fixture_tar",
-            files=[
-                FileInfo(
-                    name="fixture.txt",
-                    mtime=_fake_mtime(1),
-                    contents=b"fixture tar",
-                )
-            ],
-            solid=True,
-        ),
-        [TAR_PLAIN_TARFILE],
-    ),
-    (
-        ArchiveContents(
             file_basename="symlink_loop",
             files=SYMLINK_LOOP_FILES,
         ),
-        [ZIP_INFOZIP, TAR_PLAIN_TARFILE],
+        [ZIP_INFOZIP, TAR_PLAIN_TARFILE, FOLDER_FORMAT],
     ),
-    # (
-    #     ArchiveContents(
-    #         file_basename="basic_iso",
-    #         files=BASIC_FILES,
-    #     ),
-    #     ISO_FORMATS,
-    # ),
     (
         ArchiveContents(
             file_basename="duplicate_files",
@@ -1103,9 +1100,16 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
     (
         ArchiveContents(
             file_basename="sanitize",
-            files=SANITIZE_FILES,
+            files=SANITIZE_FILES_FULL,
         ),
-        [TAR_PLAIN_TARFILE],
+        [ZIP_ZIPFILE_STORE, TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
+    ),
+    (
+        ArchiveContents(
+            file_basename="sanitize",
+            files=SANITIZE_FILES_SYMLINKS,
+        ),
+        [FOLDER_FORMAT, SEVENZIP_7ZCMD] + RAR_FORMATS,
     ),
 ]
 

@@ -1,5 +1,5 @@
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Protocol, overload
 
 if TYPE_CHECKING:
     from enum import StrEnum
@@ -8,7 +8,7 @@ elif sys.version_info >= (3, 11):
 else:
     from backports.strenum import StrEnum
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import IntEnum
 from typing import Any, Optional, Tuple
@@ -133,6 +133,9 @@ class ArchiveMember:
     # and preserve ordering, but not for direct indexing. Assigned by register_member().
     _member_id: Optional[int] = None
 
+    # A flag indicating whether the member has been modified by a filter.
+    _edited_by_filter: bool = False
+
     @property
     def mtime(self) -> Optional[datetime]:
         """Returns the mtime as a datetime object without timezone information."""
@@ -190,3 +193,29 @@ class ArchiveMember:
     @property
     def CRC(self) -> Optional[int]:
         return self.crc32
+
+    def replace(self, **kwargs: Any) -> "ArchiveMember":
+        replaced = replace(self, **kwargs)
+        replaced._edited_by_filter = True
+        return replaced
+
+
+ExtractFilterFunc = Callable[[ArchiveMember, str], ArchiveMember | None]
+
+IteratorFilterFunc = Callable[[ArchiveMember], ArchiveMember | None]
+
+
+# A type that must match both ExtractFilterFunc and IteratorFilterFunc
+# The callable must be able to handle both one and two arguments
+class FilterFunc(Protocol):
+    @overload
+    def __call__(self, member: ArchiveMember) -> ArchiveMember | None: ...
+
+    @overload
+    def __call__(
+        self, member: ArchiveMember, dest_path: str
+    ) -> ArchiveMember | None: ...
+
+    def __call__(
+        self, member: ArchiveMember, dest_path: str | None = None
+    ) -> ArchiveMember | None: ...

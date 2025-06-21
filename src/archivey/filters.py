@@ -1,119 +1,139 @@
 from __future__ import annotations
 
+import functools
+import logging
 import os
 import posixpath
-from dataclasses import replace
-from typing import Callable
+from tarfile import FilterError
 
-from .types import ArchiveMember, MemberType
+from archivey.config import ExtractionFilter
+from archivey.types import (
+    ArchiveMember,
+    FilterFunc,
+    MemberType,
+)
 
 __all__ = [
-    "FilterFunc",
     "fully_trusted",
     "create_filter",
     "tar_filter",
     "data_filter",
-    "get_filter",
 ]
 
-FilterFunc = Callable[[ArchiveMember, str | None], ArchiveMember | None]
+logger = logging.getLogger(__name__)
 
 
-class FilterError(ValueError):
-    """Raised when an archive member would extract outside the destination."""
+def _check_target_inside_archive_root(target_path: str, dest_path: str | None) -> None:
+    if os.path.isabs(target_path):
+        raise FilterError(f"Absolute path not allowed: {target_path}")
+
+    if target_path.startswith("..") or "/../" in target_path:
+        raise FilterError(f"Path outside archive root: {target_path}")
+
+    if dest_path is not None:
+        dest_real = os.path.realpath(dest_path)
+        target_real = os.path.realpath(os.path.join(dest_real, target_path))
+        if os.path.commonpath([dest_real, target_real]) != dest_real:
+            raise FilterError(f"Path outside destination: {target_path}")
 
 
 def _sanitize_name(
     member: ArchiveMember,
     dest_path: str | None,
-    *,
-    allow_absolute: bool,
-) -> tuple[str, str | None]:
-    name = member.filename
-    if os.path.isabs(name) and not allow_absolute:
-        raise FilterError(f"Absolute path not allowed: {member.filename}")
+) -> str:
+    # if member.is_dir:
+    #     assert member.filename.endswith("/")
+    name = posixpath.normpath(member.filename.lstrip("/\\"))
+    _check_target_inside_archive_root(name, dest_path)
 
-    name = name.lstrip("/\\")
-
-    if dest_path is None:
-        norm = posixpath.normpath(name)
-        if norm.startswith("..") or "/../" in norm:
-            raise FilterError(f"Extraction outside destination: {member.filename}")
-        return name, None
-
-    dest_real = os.path.realpath(dest_path)
-    target = os.path.realpath(os.path.join(dest_real, name))
-    if os.path.commonpath([dest_real, target]) != dest_real:
-        raise FilterError(f"Extraction outside destination: {member.filename}")
-    return name, target
+    if member.filename.endswith("/") and not name.endswith("/"):
+        name += "/"
+    return name
 
 
-def _check_link(
+def _sanitize_link_target(
     member: ArchiveMember,
     dest_path: str | None,
-    name: str,
-    *,
-    allow_outside: bool,
-) -> None:
-    if member.link_target is None or allow_outside:
-        return
-    if os.path.isabs(member.link_target):
-        raise FilterError(f"Absolute link target not allowed: {member.link_target}")
+) -> str | None:
+    if member.link_target is None:
+        return None
 
-    if dest_path is None:
-        norm = posixpath.normpath(member.link_target)
-        if norm.startswith("..") or "/../" in norm:
-            raise FilterError(
-                f"Link target outside destination: {member.link_target} for {member.filename}"
-            )
-        return
+    link_target = posixpath.normpath(member.link_target.lstrip("/\\"))
 
-    dest_real = os.path.realpath(dest_path)
     if member.type == MemberType.SYMLINK:
-        target = os.path.realpath(
-            os.path.join(dest_real, os.path.dirname(name), member.link_target)
+        # Symlink targets are relative to the symlink's own directory. Check that
+        # the target is inside the archive root.
+        rel_target = posixpath.normpath(
+            os.path.join(os.path.dirname(member.filename), link_target)
         )
+        _check_target_inside_archive_root(rel_target, dest_path)
+        return link_target
+
     else:
-        target = os.path.realpath(os.path.join(dest_real, member.link_target))
-    if os.path.commonpath([dest_real, target]) != dest_real:
-        raise FilterError(
-            f"Link target outside destination: {member.link_target} for {member.filename}"
-        )
+        # Hardlink targets are relative to the hardlink's own directory. Check that
+        # the target is inside the archive root.
+        _check_target_inside_archive_root(link_target, dest_path)
+
+        # Return the link target unchanged, as it refers to another member
+        # in the archive and should be an exact match to its name.
+        return member.link_target
 
 
 def _get_filtered_member(
     member: ArchiveMember,
-    dest_path: str | None,
+    dest_path: str | None = None,
     *,
     for_data: bool,
-    allow_absolute_paths: bool,
-    allow_symlinks_to_outside: bool,
+    sanitize_names: bool,
+    sanitize_link_targets: bool,
     sanitize_permissions: bool,
-) -> ArchiveMember:
-    name, _ = _sanitize_name(member, dest_path, allow_absolute=allow_absolute_paths)
-    _check_link(
-        member,
-        dest_path,
-        name,
-        allow_outside=allow_symlinks_to_outside,
-    )
+    raise_on_error: bool,
+) -> ArchiveMember | None:
+    try:
+        new_attrs = {}
+        if sanitize_names:
+            name = _sanitize_name(member, dest_path)
+            if name != member.filename:
+                new_attrs["filename"] = name
 
-    mode = member.mode
-    if sanitize_permissions and mode is not None:
-        mode &= 0o777
-        if for_data and member.is_file:
-            mode &= ~0o111
-            mode |= 0o600
-        if mode == member.mode:
-            mode = None
-    new_attrs = {}
-    if name != member.filename:
-        new_attrs["filename"] = name
-    if mode is not None:
-        new_attrs["mode"] = mode
-    if new_attrs:
-        member = replace(member, **new_attrs)
-    return member
+        if sanitize_link_targets:
+            link_target = _sanitize_link_target(member, dest_path)
+            if link_target != member.link_target:
+                new_attrs["link_target"] = link_target
+
+        if sanitize_permissions and member.mode is not None:
+            mode = member.mode & 0o777
+            if for_data and member.is_file:
+                mode &= ~0o111  # Remove executable bit
+                mode |= 0o600  # Set read/write permissions for owner
+            if mode != member.mode:
+                new_attrs["mode"] = mode
+
+        return member.replace(**new_attrs)
+
+    except FilterError as e:
+        if raise_on_error:
+            raise
+        logger.warning(f"Filter error for {member.filename}: {e}")
+        return None
+
+
+def create_filter(
+    *,
+    for_data: bool,
+    sanitize_names: bool,
+    sanitize_link_targets: bool,
+    sanitize_permissions: bool,
+    raise_on_error: bool,
+) -> FilterFunc:
+    return functools.partial(
+        _get_filtered_member,
+        for_data=for_data,
+        sanitize_names=sanitize_names,
+        sanitize_link_targets=sanitize_link_targets,
+        sanitize_permissions=sanitize_permissions,
+        raise_on_error=raise_on_error,
+    )
 
 
 def fully_trusted(
@@ -122,45 +142,26 @@ def fully_trusted(
     return member
 
 
-def create_filter(
-    *,
-    allow_absolute_paths: bool = False,
-    allow_symlinks_to_outside: bool = False,
-    sanitize_permissions: bool = True,
-    for_data: bool = False,
-) -> FilterFunc:
-    def _filter(
-        member: ArchiveMember, dest_path: str | None = None
-    ) -> ArchiveMember | None:
-        return _get_filtered_member(
-            member,
-            dest_path,
-            for_data=for_data,
-            allow_absolute_paths=allow_absolute_paths,
-            allow_symlinks_to_outside=allow_symlinks_to_outside,
-            sanitize_permissions=sanitize_permissions,
-        )
-
-    return _filter
-
-
 # Default filters inspired by Python's tarfile module
-tar_filter = create_filter()
+tar_filter = create_filter(
+    for_data=False,
+    sanitize_names=True,
+    sanitize_link_targets=True,
+    sanitize_permissions=True,
+    raise_on_error=True,
+)
 
-data_filter = create_filter(for_data=True)
+data_filter = create_filter(
+    for_data=True,
+    sanitize_names=True,
+    sanitize_link_targets=True,
+    sanitize_permissions=True,
+    raise_on_error=True,
+)
 
 
-_FILTERS: dict[str, FilterFunc] = {
-    "fully_trusted": fully_trusted,
-    "tar": tar_filter,
-    "data": data_filter,
+DEFAULT_FILTERS: dict[ExtractionFilter, FilterFunc] = {
+    ExtractionFilter.FULLY_TRUSTED: fully_trusted,
+    ExtractionFilter.TAR: tar_filter,
+    ExtractionFilter.DATA: data_filter,
 }
-
-
-def get_filter(name: str | None) -> FilterFunc | None:
-    if name is None:
-        return None
-    try:
-        return _FILTERS[name]
-    except KeyError:
-        raise ValueError(f"Unknown filter name: {name}")

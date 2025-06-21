@@ -18,7 +18,6 @@ from archivey.filters import (
     create_filter,
     data_filter,
     fully_trusted,
-    get_filter,
     tar_filter,
 )
 from archivey.types import (
@@ -51,7 +50,6 @@ __all__ = [
     "data_filter",
     "tar_filter",
     "fully_trusted",
-    "get_filter",
 ]
 
 __version__ = "0.1.0"

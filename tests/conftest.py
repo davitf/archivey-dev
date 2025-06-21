@@ -4,6 +4,7 @@ import pathlib
 import pytest
 
 from archivey.exceptions import PackageNotInstalledError
+from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import SampleArchive
 from tests.create_archives import create_archive
 from tests.create_corrupted_archives import corrupt_archive
@@ -37,6 +38,9 @@ def corrupted_archive_path(
     tmp_path_factory: pytest.TempPathFactory,
     request: pytest.FixtureRequest,
 ) -> str:
+    if sample_archive.creation_info.format == ArchiveFormat.FOLDER:
+        pytest.skip("Folder archives cannot be corrupted")
+
     corruption_type = request.param
     path = pathlib.Path(
         sample_archive.get_archive_path(variant=f"corrupted_{corruption_type}")
