@@ -795,7 +795,7 @@ class RarReader(BaseArchiveReader):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
+        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self.config.use_rar_stream:
             logger.debug("iter_members_with_io: using rar_stream_reader")
@@ -803,7 +803,7 @@ class RarReader(BaseArchiveReader):
             stream_reader = RarStreamReader(
                 self.archive_path, self.get_members(), pwd=pwd_to_use
             )
-            filter_func = _build_iterator_filter(members, filter)
+            filter_func = _build_iterator_filter(members, filter, None)
             for member, stream in stream_reader.rar_stream_iterator():
                 filtered_member = filter_func(member)
                 if filtered_member is None:
@@ -812,7 +812,11 @@ class RarReader(BaseArchiveReader):
 
         else:
             logger.debug("iter_members_with_io: not using rar_stream_reader")
-            yield from super().iter_members_with_io(members, pwd=pwd, filter=filter)
+            yield from super().iter_members_with_io(
+                members,
+                pwd=pwd,
+                filter=cast(Callable[[ArchiveMember], ArchiveMember | None] | None, filter),
+            )
 
     @classmethod
     def is_rar_file(cls, file: BinaryIO | str | os.PathLike) -> bool:

@@ -6,6 +6,7 @@ from typing import BinaryIO
 from archivey.base_reader import ArchiveReader, StreamingOnlyArchiveReaderWrapper
 from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
+from archivey.folder_reader import FolderReader
 from archivey.formats import (
     detect_archive_format,
 )
@@ -13,7 +14,6 @@ from archivey.rar_reader import RarReader
 from archivey.sevenzip_reader import SevenZipReader
 from archivey.single_file_reader import SingleFileReader
 from archivey.tar_reader import TarReader
-from archivey.folder_reader import FolderReader
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
