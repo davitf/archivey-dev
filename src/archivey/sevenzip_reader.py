@@ -544,7 +544,7 @@ class SevenZipReader(BaseArchiveReader):
         self,
         members: list[ArchiveMember],
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
+        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None] | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO]]:
         extract_filename_to_member = {
             member.extra["extract_filename"]: member for member in members
@@ -614,7 +614,7 @@ class SevenZipReader(BaseArchiveReader):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], ArchiveMember | None] | None = None,
+        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None] | None = None,
         close_streams: bool = True,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self._archive is None:
@@ -623,7 +623,7 @@ class SevenZipReader(BaseArchiveReader):
         self._start_streaming_iteration()
 
         # Don't apply the filter now, as the link members may not have the extracted path.
-        member_filter_func = _build_iterator_filter(members, None)
+        member_filter_func = _build_iterator_filter(members, None, None)
         # extract_filename_to_member = {}
         # filenames_to_extract = []
 
@@ -642,7 +642,11 @@ class SevenZipReader(BaseArchiveReader):
                 pending_links_by_id[member.member_id] = member
                 continue
 
-            filtered_member = filter(member) if filter is not None else member
+            filtered_member = (
+                cast(Callable[[ArchiveMember], ArchiveMember | None], filter)(member)
+                if filter is not None
+                else member
+            )
             if filtered_member is None:
                 continue
 

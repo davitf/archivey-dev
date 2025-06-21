@@ -14,6 +14,7 @@ from archivey.exceptions import (
     ArchiveMemberNotFoundError,
     ArchiveNotSupportedError,
 )
+from archivey.filters import data_filter, fully_trusted, get_filter, tar_filter
 from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
@@ -40,6 +41,10 @@ __all__ = [
     "default_config",
     "get_default_config",
     "set_default_config",
+    "data_filter",
+    "tar_filter",
+    "fully_trusted",
+    "get_filter",
 ]
 
 __version__ = "0.1.0"

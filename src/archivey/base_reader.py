@@ -48,7 +48,8 @@ def _build_iterator_filter(
     members: Collection[Union[ArchiveMember, str]]
     | Callable[[ArchiveMember], bool]
     | None,
-    filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None,
+    filter: Callable[..., ArchiveMember | None] | None,
+    dest_path: str | None = None,
 ) -> Callable[[ArchiveMember], ArchiveMember | None]:
     """Build a filter function for the iterator.
 
@@ -68,7 +69,10 @@ def _build_iterator_filter(
         if filter is None:
             return member
         else:
-            filtered = filter(member)
+            try:
+                filtered = filter(member, dest_path)
+            except TypeError:
+                filtered = filter(member)
             # Check the filtered still refers to the same member
             if filtered is not None and filtered.member_id != member.member_id:
                 raise ValueError(
@@ -173,10 +177,10 @@ class ArchiveReader(abc.ABC):
                 returns True if it should be included.
             pwd: Optional password (str or bytes) for decrypting members, if the
                 archive or specific members are encrypted.
-            filter: Optional callable that takes an ArchiveMember and returns
-                either the same ArchiveMember (or a modified one, though typically
-                the same) if it should be included, or None if it should be skipped.
-                This allows for more complex filtering logic.
+            filter: Optional callable applied to each member. It may accept an
+                optional destination path argument with default ``None``. When
+                used with ``iter_members_with_io`` the path is ``None``. Return
+                the member to include it, or ``None`` to skip.
 
         Yields:
             Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]: An iterator where each
@@ -299,7 +303,7 @@ class ArchiveReader(abc.ABC):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
+        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None] | None = None,
     ) -> dict[str, ArchiveMember]:
         """
         Extract all (or a specified subset of) members to the given path.
@@ -313,10 +317,10 @@ class ArchiveReader(abc.ABC):
                 be extracted.
             pwd: Optional password (str or bytes) for decrypting members if the
                 archive or specific members are encrypted.
-            filter: Optional callable that takes an ArchiveMember and returns
-                either the same ArchiveMember (or a modified one) if it should be
-                extracted, or None if it should be skipped. This is applied after
-                the `members` selection.
+            filter: Optional callable that takes an ArchiveMember and the
+                destination path. It should return the (possibly modified)
+                ArchiveMember if it should be extracted, or ``None`` to skip the
+                member. This is applied after the ``members`` selection.
 
         Returns:
             A dictionary mapping extracted file paths (absolute) to their
@@ -674,7 +678,7 @@ class BaseArchiveReader(ArchiveReader):
 
         self._start_streaming_iteration()
 
-        filter_func = _build_iterator_filter(members, filter)
+        filter_func = _build_iterator_filter(members, filter, None)
 
         for member in self.iter_members():
             logger.debug(f"iter_members_with_io member: {member}")
@@ -776,7 +780,7 @@ class BaseArchiveReader(ArchiveReader):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember], Union[ArchiveMember, None]] | None = None,
+        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None] | None = None,
     ) -> dict[str, ArchiveMember]:
         """Extract multiple members from the archive.
 
@@ -790,7 +794,7 @@ class BaseArchiveReader(ArchiveReader):
         else:
             path = str(path)
 
-        filter_func = _build_iterator_filter(members, filter)
+        filter_func = _build_iterator_filter(members, filter, path)
 
         extraction_helper = ExtractionHelper(
             self,
