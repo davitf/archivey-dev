@@ -303,7 +303,8 @@ class ArchiveReader(abc.ABC):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None] | None = None,
+        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None]
+        | None = None,
     ) -> dict[str, ArchiveMember]:
         """
         Extract all (or a specified subset of) members to the given path.
@@ -780,7 +781,8 @@ class BaseArchiveReader(ArchiveReader):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None] | None = None,
+        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None]
+        | None = None,
     ) -> dict[str, ArchiveMember]:
         """Extract multiple members from the archive.
 

@@ -545,20 +545,17 @@ class RarReader(BaseArchiveReader):
             )
             return None
         except rarfile.RarWrongPassword:
-            logger.warning(
-                "Wrong password specified for link target %s", info.filename
-            )
+            logger.warning("Wrong password specified for link target %s", info.filename)
             return None
         except rarfile.Error as e:
-            logger.warning(
-                "Error reading link target for %s: %s", info.filename, e
-            )
+            logger.warning("Error reading link target for %s: %s", info.filename, e)
             data = b""
 
         if not data:
             unrar = shutil.which("unrar")
             if unrar:
                 try:
+                    assert info.filename is not None
                     with tempfile.TemporaryDirectory() as tmpdir:
                         subprocess.run(
                             [
@@ -720,11 +717,7 @@ class RarReader(BaseArchiveReader):
         # contents when opened.
         member = self.get_member(member_or_filename)
 
-        if (
-            pwd is not None
-            and member.is_link
-            and member.link_target is None
-        ):
+        if pwd is not None and member.is_link and member.link_target is None:
             link_target = self._get_link_target(
                 cast(RarInfo, member.raw_info),
                 pwd=pwd,
@@ -795,7 +788,8 @@ class RarReader(BaseArchiveReader):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None] | None = None,
+        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None]
+        | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self.config.use_rar_stream:
             logger.debug("iter_members_with_io: using rar_stream_reader")
@@ -815,7 +809,9 @@ class RarReader(BaseArchiveReader):
             yield from super().iter_members_with_io(
                 members,
                 pwd=pwd,
-                filter=cast(Callable[[ArchiveMember], ArchiveMember | None] | None, filter),
+                filter=cast(
+                    Callable[[ArchiveMember], ArchiveMember | None] | None, filter
+                ),
             )
 
     @classmethod
