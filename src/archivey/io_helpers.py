@@ -80,6 +80,9 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
             try:
                 self._inner = inner()
             except Exception as e:
+                # Here we do want to catch all exceptions, not just ArchiveError
+                # subclasses, as the translation is intended exactly to convert
+                # any exception raised by the underlying library into an ArchiveError.
                 self._translate_exception(e)
         else:
             self._inner = inner
