@@ -477,17 +477,12 @@ class SevenZipReader(BaseArchiveReader):
             An IO object for the member.
         """
 
-
         if self._archive is None:
             raise ValueError("Archive is closed")
 
         member = self.get_member(member_or_filename)
 
-        if (
-            pwd is not None
-            and member.is_link
-            and member.link_target is None
-        ):
+        if pwd is not None and member.is_link and member.link_target is None:
             try:
                 list(
                     self.iter_members_with_io(
@@ -544,7 +539,8 @@ class SevenZipReader(BaseArchiveReader):
         self,
         members: list[ArchiveMember],
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None] | None = None,
+        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None]
+        | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO]]:
         extract_filename_to_member = {
             member.extra["extract_filename"]: member for member in members
@@ -617,7 +613,8 @@ class SevenZipReader(BaseArchiveReader):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None] | None = None,
+        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None]
+        | None = None,
         close_streams: bool = True,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self._archive is None:

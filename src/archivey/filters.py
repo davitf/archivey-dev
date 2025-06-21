@@ -18,6 +18,7 @@ __all__ = [
 
 FilterFunc = Callable[[ArchiveMember, str | None], ArchiveMember | None]
 
+
 class FilterError(ValueError):
     """Raised when an archive member would extract outside the destination."""
 
@@ -115,7 +116,9 @@ def _get_filtered_member(
     return member
 
 
-def fully_trusted(member: ArchiveMember, dest_path: str | None = None) -> ArchiveMember | None:
+def fully_trusted(
+    member: ArchiveMember, dest_path: str | None = None
+) -> ArchiveMember | None:
     return member
 
 
@@ -126,7 +129,9 @@ def create_filter(
     sanitize_permissions: bool = True,
     for_data: bool = False,
 ) -> FilterFunc:
-    def _filter(member: ArchiveMember, dest_path: str | None = None) -> ArchiveMember | None:
+    def _filter(
+        member: ArchiveMember, dest_path: str | None = None
+    ) -> ArchiveMember | None:
         return _get_filtered_member(
             member,
             dest_path,
@@ -137,6 +142,7 @@ def create_filter(
         )
 
     return _filter
+
 
 # Default filters inspired by Python's tarfile module
 tar_filter = create_filter()
