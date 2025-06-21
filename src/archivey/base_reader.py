@@ -16,7 +16,7 @@ from archivey.exceptions import (
 from archivey.extraction_helper import ExtractionHelper
 from archivey.io_helpers import LazyOpenIO
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
-from archivey.unique_ids import UNIQUE_ID_GENERATOR
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -406,7 +406,7 @@ class BaseArchiveReader(ArchiveReader):
         self._all_members_registered: bool = False
         self._registration_lock: threading.Lock = threading.Lock()
 
-        self._archive_id: int = UNIQUE_ID_GENERATOR.next_id()
+        self._archive_id: str = uuid4().hex
 
         self._random_access_supported = random_access_supported
         self._early_members_list_supported = members_list_supported

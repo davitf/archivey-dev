@@ -148,10 +148,10 @@ class ArchiveMember:
 
     # A unique identifier for the archive. Used to distinguish between archives.
     # Filled by register_member().
-    _archive_id: Optional[int] = None
+    _archive_id: Optional[str] = None
 
     @property
-    def archive_id(self) -> int:
+    def archive_id(self) -> str:
         if self._archive_id is None:
             raise ValueError("Archive ID not yet set")
         return self._archive_id

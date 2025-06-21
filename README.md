@@ -58,6 +58,19 @@ with open_archive("example.zip") as archive:
         data = stream.read()
 ```
 
+### Configuration
+You can enable optional features by passing an `ArchiveyConfig` to `open_archive`.
+
+```python
+from archivey import open_archive, ArchiveyConfig
+
+config = ArchiveyConfig(use_rar_stream=True, use_rapidgzip=True)
+with open_archive("file.rar", config=config) as archive:
+    ...
+```
+
+See the user guide for more options.
+
 ## Command line usage
 
 Archivey installs a small command line tool simply called `archivey`.

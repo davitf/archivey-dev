@@ -576,7 +576,7 @@ class RarReader(BaseArchiveReader):
                         )
                         link_path = os.path.join(tmpdir, info.filename)
                         return os.readlink(link_path)
-                except Exception as e:
+                except (subprocess.SubprocessError, OSError) as e:
                     logger.warning(
                         "Error reading link target via unrar for %s: %s",
                         info.filename,
