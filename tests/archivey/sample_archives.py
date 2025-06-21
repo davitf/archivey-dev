@@ -749,13 +749,25 @@ LARGE_FILES = [
 ]
 
 # Files with potentially unsafe names or permissions for filter testing
-SANITIZE_FILES_SYMLINKS = [
+SANITIZE_FILES_WITHOUT_ABSOLUTE_PATHS = [
     File("good.txt", 1, b"good"),
     File("exec.sh", 4, b"#!/bin/sh\n", permissions=0o755),
     Symlink("subdir/good_link.txt", 5, "../good.txt", contents=b"good"),
     Symlink("link_abs", 6, "/etc/passwd", contents=None),
     Symlink("link_outside", 7, "../escape.txt", contents=None),
 ]
+
+# Files with potentially unsafe names or permissions for filter testing
+SANITIZE_FILES_WITHOUT_HARDLINKS = [
+    File("good.txt", 1, b"good"),
+    File("/absfile.txt", 2, b"abs"),
+    File("../outside.txt", 3, b"outside"),
+    File("exec.sh", 4, b"#!/bin/sh\n", permissions=0o755),
+    Symlink("subdir/good_link.txt", 5, "../good.txt", contents=b"good"),
+    Symlink("link_abs", 6, "/etc/passwd", contents=None),
+    Symlink("link_outside", 7, "../escape.txt", contents=None),
+]
+
 
 # Files with potentially unsafe names or permissions for filter testing
 SANITIZE_FILES_FULL = [
@@ -1102,12 +1114,19 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="sanitize",
             files=SANITIZE_FILES_FULL,
         ),
-        [ZIP_ZIPFILE_STORE, TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
+        [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
     ),
     (
         ArchiveContents(
             file_basename="sanitize",
-            files=SANITIZE_FILES_SYMLINKS,
+            files=SANITIZE_FILES_WITHOUT_HARDLINKS,
+        ),
+        [ZIP_ZIPFILE_STORE],
+    ),
+    (
+        ArchiveContents(
+            file_basename="sanitize",
+            files=SANITIZE_FILES_WITHOUT_ABSOLUTE_PATHS,
         ),
         [FOLDER_FORMAT, SEVENZIP_7ZCMD] + RAR_FORMATS,
     ),
