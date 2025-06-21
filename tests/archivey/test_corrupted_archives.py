@@ -171,6 +171,8 @@ def test_read_truncated_archives(
     alternative_packages: bool,
 ):
     """Test that reading truncated archives raises appropriate errors."""
+    if sample_archive.creation_info.format == ArchiveFormat.FOLDER:
+        pytest.skip("Folder archives cannot be truncated")
 
     if alternative_packages:
         if sample_archive.creation_info.format not in _ALTERNATIVE_PACKAGES_FORMATS:

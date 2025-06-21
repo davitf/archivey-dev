@@ -1,15 +1,31 @@
 from __future__ import annotations
 
 import contextvars
+import sys
 from contextlib import contextmanager
-from dataclasses import dataclass
-from enum import Enum
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Any
+
+from archivey.types import FilterFunc
+
+if TYPE_CHECKING:
+    from enum import StrEnum
+elif sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    from backports.strenum import StrEnum
 
 
-class OverwriteMode(Enum):
-    OVERWRITE = 1
-    SKIP = 2
-    ERROR = 3
+class OverwriteMode(StrEnum):
+    OVERWRITE = "overwrite"
+    SKIP = "skip"
+    ERROR = "error"
+
+
+class ExtractionFilter(StrEnum):
+    FULLY_TRUSTED = "fully_trusted"
+    TAR = "tar"
+    DATA = "data"
 
 
 @dataclass
@@ -29,6 +45,8 @@ class ArchiveyConfig:
 
     overwrite_mode: OverwriteMode = OverwriteMode.ERROR
 
+    extraction_filter: ExtractionFilter | FilterFunc = ExtractionFilter.DATA
+
 
 _default_config_var: contextvars.ContextVar[ArchiveyConfig] = contextvars.ContextVar(
     "archivey_default_config", default=ArchiveyConfig()
@@ -45,9 +63,22 @@ def set_default_config(config: ArchiveyConfig) -> None:
     _default_config_var.set(config)
 
 
+def set_default_config_fields(**kwargs: dict[str, Any]) -> None:
+    """Set the default configuration for :func:`open_archive`."""
+    config = get_default_config()
+    config = replace(config, **kwargs)
+    set_default_config(config)
+
+
 @contextmanager
-def default_config(config: ArchiveyConfig):
+def default_config(config: ArchiveyConfig | None = None, **kwargs: dict[str, Any]):
     """Temporarily use ``config`` as the default configuration."""
+    if config is None:
+        config = get_default_config()
+
+    if kwargs:
+        config = replace(config, **kwargs)
+
     token = _default_config_var.set(config)
     try:
         yield

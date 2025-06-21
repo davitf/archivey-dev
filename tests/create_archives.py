@@ -822,7 +822,6 @@ GENERATION_METHODS_TO_GENERATOR = {
 
 
 def create_archive(archive_info: SampleArchive, base_dir: str) -> str:
-    print(archive_info)
     full_path = archive_info.get_archive_path(base_dir)
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
@@ -896,6 +895,11 @@ if __name__ == "__main__":
 
     # Filter archives based on patterns if provided
     archives_to_generate = filter_archives(SAMPLE_ARCHIVES, args.patterns)
+    archives_to_generate = [
+        archive
+        for archive in archives_to_generate
+        if archive.creation_info.format != ArchiveFormat.FOLDER
+    ]
 
     if not archives_to_generate:
         print("No matching archives found.")

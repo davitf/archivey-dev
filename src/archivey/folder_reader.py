@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import BinaryIO, Iterator, Optional
 
 from archivey.base_reader import BaseArchiveReader
-from archivey.exceptions import ArchiveError, ArchiveIOError, ArchiveMemberNotFoundError
+from archivey.exceptions import ArchiveIOError, ArchiveMemberNotFoundError
 from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class FolderReader(BaseArchiveReader):
         super().__init__(
             ArchiveFormat.FOLDER,
             archive_path,
-            random_access_supported=False,
+            random_access_supported=True,
             members_list_supported=True,
         )
         self.path = Path(self.archive_path).resolve()  # Store absolute path
@@ -46,7 +46,9 @@ class FolderReader(BaseArchiveReader):
             return MemberType.FILE
         return MemberType.OTHER
 
-    def _convert_entry_to_member(self, entry_path: Path) -> ArchiveMember:
+    def _convert_entry_to_member(
+        self, entry_path: Path, seen_inodes: Optional[dict[int, str]] = None
+    ) -> ArchiveMember:
         """Converts a filesystem path to an ArchiveMember."""
         filename = str(entry_path.relative_to(self.path)).replace(os.sep, "/")
 
@@ -69,13 +71,31 @@ class FolderReader(BaseArchiveReader):
 
         member_type = self._get_member_type(stat_result)
 
-        link_target: Optional[str] = None
+        # Check for hardlinks if this is a regular file and we're tracking inodes
+        if member_type == MemberType.FILE and seen_inodes is not None:
+            inode = stat_result.st_ino
+            if inode in seen_inodes:
+                # This is a hardlink to a previously seen file
+                member_type = MemberType.HARDLINK
+                link_target = seen_inodes[inode]
+            else:
+                # First time seeing this inode, record it
+                seen_inodes[inode] = filename
+                link_target = None
+        else:
+            link_target = None
+
+        if member_type == MemberType.DIR and not filename.endswith("/"):
+            filename += "/"
+
+        # Handle symlink targets
         if member_type == MemberType.SYMLINK:
             try:
                 link_target = os.readlink(entry_path)
             except OSError:
                 link_target = "Error reading link target"
 
+        logger.info(f"filename: {filename} member_type: {member_type}")
         return ArchiveMember(
             filename=filename,
             file_size=stat_result.st_size,
@@ -83,19 +103,24 @@ class FolderReader(BaseArchiveReader):
             # st_mtime is in seconds since the epoch, so UTC.
             mtime_with_tz=datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc),
             type=member_type,
-            mode=stat_result.st_mode,
+            mode=stat_result.st_mode & 0o7777,
             link_target=link_target,
         )
 
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
+        # Track inode numbers to detect hardlinks
+        seen_inodes: dict[int, str] = {}
+
         for root, dirnames, filenames in os.walk(
             self.path, topdown=True, followlinks=False
         ):
             dirpath = Path(root)
+            dirnames.sort()
+            filenames.sort()
             for dirname in dirnames:
-                yield self._convert_entry_to_member(dirpath / dirname)
+                yield self._convert_entry_to_member(dirpath / dirname, seen_inodes)
             for filename in filenames:
-                yield self._convert_entry_to_member(dirpath / filename)
+                yield self._convert_entry_to_member(dirpath / filename, seen_inodes)
 
     def open(
         self,
@@ -105,24 +130,16 @@ class FolderReader(BaseArchiveReader):
     ) -> BinaryIO:
         # pwd is ignored for FolderReader
 
-        member_name = (
-            member_or_filename.filename
-            if isinstance(member_or_filename, ArchiveMember)
-            else member_or_filename
-        )
+        member, filename = self._resolve_member_to_open(member_or_filename)
+        assert member.type == MemberType.FILE
 
         # Convert archive path (with '/') to OS-specific path
-        os_specific_member_path = member_name.replace("/", os.sep)
+        os_specific_member_path = member.filename.replace("/", os.sep)
         full_path = self.path / os_specific_member_path
 
         if not full_path.exists():
             raise ArchiveMemberNotFoundError(
-                f"Member not found: {member_name} (resolved to {full_path})"
-            )
-
-        if full_path.is_dir():
-            raise ArchiveError(
-                f"Cannot open directory '{member_name}' as a file stream."
+                f"Member not found: {filename} (resolved to {full_path})"
             )
 
         # It's good practice to ensure the resolved path is still within the archive root
@@ -139,23 +156,23 @@ class FolderReader(BaseArchiveReader):
                 # A more robust check:
                 if not str(resolved_full_path).startswith(str(self.archive_path)):
                     raise ArchiveMemberNotFoundError(
-                        f"Access to member '{member_name}' outside archive root is denied."
+                        f"Access to member '{filename}' outside archive root is denied."
                     )
 
         except OSError as e:  # e.g. broken symlink during resolve()
             raise ArchiveMemberNotFoundError(
-                f"Error resolving path for member '{member_name}': {e}"
+                f"Error resolving path for member '{filename}': {e}"
             ) from e
 
         try:
             return full_path.open("rb")
         except OSError as e:
-            raise ArchiveIOError(f"Cannot open member '{member_name}': {e}") from e
+            raise ArchiveIOError(f"Cannot open member '{filename}': {e}") from e
 
     def get_archive_info(self) -> ArchiveInfo:
         return ArchiveInfo(
             format=self.format,
-            comment=str(self.archive_path),  # Use folder path as comment
+            # comment=str(self.archive_path),  # Use folder path as comment
             # is_solid, version, extra are not applicable for folders
         )
 

@@ -26,6 +26,8 @@ from typing import (
     cast,
 )
 
+from archivey.config import ExtractionFilter
+
 if TYPE_CHECKING:
     import rarfile
     from rarfile import Rar3Info, Rar5Info, RarInfo
@@ -39,7 +41,7 @@ else:
         Rar5Info = object  # type: ignore[assignment]
         RarInfo = object  # type: ignore[assignment]
 
-from archivey.base_reader import BaseArchiveReader, _build_iterator_filter
+from archivey.base_reader import BaseArchiveReader, _build_filter
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -48,7 +50,13 @@ from archivey.exceptions import (
 )
 from archivey.formats import ArchiveFormat
 from archivey.io_helpers import ErrorIOStream, ExceptionTranslatingIO
-from archivey.types import ArchiveInfo, ArchiveMember, CreateSystem, MemberType
+from archivey.types import (
+    ArchiveInfo,
+    ArchiveMember,
+    CreateSystem,
+    IteratorFilterFunc,
+    MemberType,
+)
 from archivey.utils import bytes_to_str, str_to_bytes
 
 logger = logging.getLogger(__name__)
@@ -788,8 +796,7 @@ class RarReader(BaseArchiveReader):
         | None = None,
         *,
         pwd: bytes | str | None = None,
-        filter: Callable[[ArchiveMember, str | None], ArchiveMember | None]
-        | None = None,
+        filter: IteratorFilterFunc | ExtractionFilter | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self.config.use_rar_stream:
             logger.debug("iter_members_with_io: using rar_stream_reader")
@@ -797,7 +804,9 @@ class RarReader(BaseArchiveReader):
             stream_reader = RarStreamReader(
                 self.archive_path, self.get_members(), pwd=pwd_to_use
             )
-            filter_func = _build_iterator_filter(members, filter, None)
+            filter_func = _build_filter(
+                members, filter or self.config.extraction_filter, None
+            )
             for member, stream in stream_reader.rar_stream_iterator():
                 filtered_member = filter_func(member)
                 if filtered_member is None:
@@ -809,9 +818,7 @@ class RarReader(BaseArchiveReader):
             yield from super().iter_members_with_io(
                 members,
                 pwd=pwd,
-                filter=cast(
-                    Callable[[ArchiveMember], ArchiveMember | None] | None, filter
-                ),
+                filter=filter,
             )
 
     @classmethod

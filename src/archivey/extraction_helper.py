@@ -58,11 +58,6 @@ class ExtractionHelper:
         # TODO: should we handle the case where some entry in the path to the file
         # is actually a symlink pointing outside the root path? Is that a possible
         # security issue?
-        logger.info(
-            f"Checking overwrites for {member.filename} [{member.member_id}] to {path}",
-            stack_info=True,
-        )
-        logger.info(f"Extracted members by path: {self.extracted_members_by_path}")
 
         if not os.path.lexists(path):
             # File doesn't exist, nothing to do
