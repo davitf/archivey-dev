@@ -737,6 +737,15 @@ LARGE_FILES = [
     for i in range(1, 6)
 ]
 
+# Files with potentially unsafe names or permissions for filter testing
+SANITIZE_FILES = [
+    File("good.txt", 1, b"good"),
+    File("/absfile.txt", 2, b"abs"),
+    Symlink("link_abs", 4, "/etc/passwd"),
+    Symlink("link_outside", 5, "../escape.txt"),
+    File("exec.sh", 6, b"#!/bin/sh\n", permissions=0o755),
+]
+
 SINGLE_LARGE_FILE = File(
     MARKER_FILENAME_BASED_ON_ARCHIVE_NAME,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
@@ -1091,6 +1100,13 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
         ),
         ZIP_RAR_7Z_FORMATS + [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
     ),
+    (
+        ArchiveContents(
+            file_basename="sanitize",
+            files=SANITIZE_FILES,
+        ),
+        [TAR_PLAIN_TARFILE],
+    ),
 ]
 
 # Build all archive infos
@@ -1106,6 +1122,12 @@ DUPLICATE_FILES_ARCHIVES = filter_archives(
     SAMPLE_ARCHIVES,
     prefixes=["duplicate_files"],
     custom_filter=lambda x: x.creation_info.format != ArchiveFormat.ISO,
+)
+
+SANITIZE_ARCHIVES = filter_archives(
+    SAMPLE_ARCHIVES,
+    prefixes=["sanitize"],
+    extensions=["tar"],
 )
 
 

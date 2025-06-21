@@ -33,20 +33,20 @@ Key methods of the `ArchiveReader` object:
 *   **`close()`**: Closes the archive. Automatically called if using a context manager.
 *   **`get_members_if_available() -> List[ArchiveMember] | None`**: Returns a list of all members in the archive if readily available (e.g., from a central directory). May return `None` for stream-based archives where the full list isn't known without reading through the archive.
 *   **`get_members() -> List[ArchiveMember]`**: Returns a list of all members in the archive. For some archive types or streaming modes, this might involve processing a significant portion of the archive if the member list isn't available upfront.
-*   **`iter_members_with_io(members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember], Optional[ArchiveMember]]] = None) -> Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]`**: Iterates over members in the archive, yielding a tuple of `(ArchiveMember, BinaryIO_stream)` for each. The stream is `None` for non-file members like directories.
+*   **`iter_members_with_io(members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember, Optional[str]], Optional[ArchiveMember]]] = None) -> Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]`**: Iterates over members in the archive, yielding a tuple of `(ArchiveMember, BinaryIO_stream)` for each. The stream is `None` for non-file members like directories.
     *   `members`: Optionally specify a collection of member names or `ArchiveMember` objects to iterate over.
     *   `pwd`: Password for encrypted archives.
-    *   `filter`: A callable to filter members during iteration.
+    *   `filter`: Callable applied to each member (with `None` as the destination path) that can return the member to include or `None` to skip.
 *   **`get_archive_info() -> ArchiveInfo`**: Returns an `ArchiveInfo` object containing metadata about the archive itself (e.g., format, comments, solid status).
 *   **`has_random_access() -> bool`**: Returns `True` if the archive supports random access to its members (i.e., `open()` and `extract()` can be used directly without iterating). Returns `False` for streaming-only access.
 *   **`get_member(member_or_filename: Union[ArchiveMember, str]) -> ArchiveMember`**: Retrieves a specific `ArchiveMember` object by its name or by passing an existing `ArchiveMember` object (useful for identity checks).
 *   **`open(member_or_filename: Union[ArchiveMember, str], *, pwd: Optional[Union[bytes, str]] = None) -> BinaryIO`**: Opens a specific member of the archive for reading and returns a binary I/O stream. This is typically available if `has_random_access()` is `True`.
 *   **`extract(member_or_filename: Union[ArchiveMember, str], path: Optional[Union[str, os.PathLike]] = None, pwd: Optional[Union[bytes, str]] = None) -> Optional[str]`**: Extracts a single member to the specified `path` (defaults to the current directory). Returns the path to the extracted file. This is typically available if `has_random_access()` is `True`.
-*   **`extractall(path: Optional[Union[str, os.PathLike]] = None, members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember], Optional[ArchiveMember]]] = None) -> dict[str, ArchiveMember]`**: Extracts all (or a specified subset of) members to the given `path`.
+*   **`extractall(path: Optional[Union[str, os.PathLike]] = None, members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember, Optional[str]], Optional[ArchiveMember]]] = None) -> dict[str, ArchiveMember]`**: Extracts all (or a specified subset of) members to the given `path`.
     *   `path`: Target directory for extraction (defaults to current directory).
     *   `members`: A collection of member names or `ArchiveMember` objects to extract.
     *   `pwd`: Password for encrypted archives.
-    *   `filter`: A callable to filter which members get extracted.
+    *   `filter`: Callable invoked for each member with the member and destination path. Return the member to extract it, or `None` to skip.
 *   Returns a dictionary mapping extracted file paths to their `ArchiveMember` objects.
 
 Streaming-only archives (where `archive.has_random_access()` returns `False`) can be iterated only **once**. After calling `iter_members_with_io()` or `extractall()`, further attempts to read or extract members will raise a `ValueError`.

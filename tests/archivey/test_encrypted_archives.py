@@ -302,17 +302,21 @@ def test_open_encrypted_symlink(
 ):
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
-    encrypted_symlink = next(
-        f
-        for f in sample_archive.contents.files
-        if f.type == MemberType.SYMLINK and f.password is not None
-    )
+    sample_files = {f.name: f for f in sample_archive.contents.files}
 
+    files_to_test = [
+        ("encrypted_link_to_secret.txt", "pwd"),
+        ("encrypted_link_to_not_secret.txt", "longpwd"),
+        ("plain_link_to_secret.txt", "pwd"),
+    ]
     with open_archive(sample_archive_path) as archive:
-        with archive.open(encrypted_symlink.name, pwd=encrypted_symlink.password) as fh:
-            assert fh.read() == encrypted_symlink.contents
-        member = archive.get_member(encrypted_symlink.name)
-        assert member.link_target == encrypted_symlink.link_target
+        for filename, pwd in files_to_test:
+            data = archive.open(filename, pwd=pwd).read()
+            assert data == sample_files[filename].contents
+
+            # After reading the file, the link target should have been set
+            member = archive.get_member(filename)
+            assert member.link_target == sample_files[filename].link_target
 
 
 @pytest.mark.parametrize(
