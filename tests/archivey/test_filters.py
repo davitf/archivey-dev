@@ -11,7 +11,10 @@ from tests.archivey.sample_archives import SANITIZE_ARCHIVES
     "filter_func, expect_error",
     [
         (tar_filter, True),
-        (create_filter(allow_absolute_paths=True, allow_symlinks_to_outside=True), False),
+        (
+            create_filter(allow_absolute_paths=True, allow_symlinks_to_outside=True),
+            False,
+        ),
     ],
 )
 def test_iter_members_filter(filter_func, expect_error):
@@ -24,7 +27,7 @@ def test_iter_members_filter(filter_func, expect_error):
             with pytest.raises(FilterError):
                 list(archive.iter_members_with_io(filter=filter_func))
         else:
-            names = [m.filename for m, _ in archive.iter_members_with_io(filter=filter_func)]
+            names = [
+                m.filename for m, _ in archive.iter_members_with_io(filter=filter_func)
+            ]
             assert "absfile.txt" in [Path(n).name for n in names]
-
-
