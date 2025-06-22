@@ -367,6 +367,8 @@ class SevenZipReader(BaseArchiveReader):
             raise ArchiveEOFError(
                 f"Possibly truncated 7-Zip archive {archive_path}"
             ) from e
+        except IndexError as e:
+            raise ArchiveCorruptedError(f"Invalid 7-Zip archive {archive_path}") from e
 
     def close(self) -> None:
         """Close the archive and release any resources."""

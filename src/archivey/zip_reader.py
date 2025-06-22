@@ -121,8 +121,7 @@ class ZipReader(BaseArchiveReader):
         return self._format_info
 
     def _read_link_target(self, info: zipfile.ZipInfo) -> str | None:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        assert self._archive is not None
 
         # Zip archives store the link target as the contents of the file.
         # TODO: do we need to handle the UTF8 flag or fallback encodings?

@@ -433,12 +433,9 @@ class BaseArchiveReader(ArchiveReader):
         if not member.is_link or member.link_target is None:
             return member  # Not a link or no target path specified
 
-        # Ensure all members are registered so lookups are complete
-        # This is crucial for _normalized_path_to_last_member and _filename_to_members
-        if not self._all_members_registered:
-            # This call populates self._members and related lookup dicts
-            # by exhausting self.iter_members_for_registration()
-            self.get_members()
+        # Ensure all members are registered so lookups are complete, for files that
+        # support it. If the file doesn't support it, the lookup will be incomplete.
+        self.get_members_if_available()
 
         return self._resolve_link_recursive(member, set())
 
@@ -510,13 +507,8 @@ class BaseArchiveReader(ArchiveReader):
             # Not a link type that this method resolves, or already resolved.
             return member
 
-        if target_member is None:
-            # This case should ideally be covered by the specific checks above,
-            # but acts as a fallback.
-            logger.warning(
-                f"Could not find target for {member.type.value} link '{member.filename}' pointing to '{member.link_target}'."
-            )
-            return None
+        # One of the above cases should have set target_member.
+        assert target_member is not None
 
         # If the direct target is itself a link, resolve it further
         if target_member.is_link and target_member.link_target is not None:
