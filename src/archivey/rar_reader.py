@@ -372,9 +372,11 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
             super().close()
 
 
-# Streams file data by running ``unrar p`` in a subprocess. The external
-# command outputs the contents of all archive members sequentially, allowing us
-# to provide streaming access even when the ``rarfile`` library cannot.
+# Streams archive data once by running ``unrar p`` in a subprocess.
+# ``rarfile`` only extracts one file at a time, which in a solid archive would
+# require re-decompressing all earlier members for each ``open()`` call. By
+# invoking the external ``unrar p`` command we decompress sequentially a single
+# time and yield the file streams one after another.
 class RarStreamReader:
     def __init__(
         self,
