@@ -925,7 +925,7 @@ class BaseArchiveReader(ArchiveReader):
 
         # Fall back to extractall().
         logger.warning(
-            "extract() may be slow for streaming archives, use extractall instead if possible. ()"
+            "extract() may be slow for streaming archives, use extractall instead if possible."
         )
         d = self.extractall(
             path=path,
