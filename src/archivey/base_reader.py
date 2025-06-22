@@ -442,6 +442,8 @@ class BaseArchiveReader(ArchiveReader):
     def _resolve_link_recursive(
         self, member: ArchiveMember, visited_ids: set[int]
     ) -> ArchiveMember | None:
+        assert member.is_link, "member should be a link"
+
         # member_id should be set if it came from self.get_members() or iteration
         if member.member_id is None:
             logger.error(
@@ -505,7 +507,7 @@ class BaseArchiveReader(ArchiveReader):
                 return None
         else:
             # Not a link type that this method resolves, or already resolved.
-            return member
+            return member  # pragma: no cover
 
         # One of the above cases should have set target_member.
         assert target_member is not None

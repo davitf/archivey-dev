@@ -45,11 +45,6 @@ _FORMAT_TO_READER = {
     ArchiveFormat.FOLDER: FolderReader,
 }
 
-_EXTRA_DETECTORS = {
-    (TarReader.is_tar_file, ArchiveFormat.TAR),
-    (RarReader.is_rar_file, ArchiveFormat.RAR),
-    (ZipReader.is_zip_file, ArchiveFormat.ZIP),
-}
 for format in TAR_COMPRESSED_FORMATS:
     _FORMAT_TO_READER[format] = TarReader
 
