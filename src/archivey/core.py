@@ -45,11 +45,12 @@ _FORMAT_TO_READER = {
     ArchiveFormat.FOLDER: FolderReader,
 }
 
-_EXTRA_DETECTORS = {
+_EXTRA_DETECTORS = [
     (TarReader.is_tar_file, ArchiveFormat.TAR),
     (RarReader.is_rar_file, ArchiveFormat.RAR),
     (ZipReader.is_zip_file, ArchiveFormat.ZIP),
-}
+]
+
 for format in TAR_COMPRESSED_FORMATS:
     _FORMAT_TO_READER[format] = TarReader
 
@@ -121,9 +122,17 @@ def open_archive(
 
     format = detect_archive_format(archive_path_normalized)
     if format == ArchiveFormat.UNKNOWN:
-        raise ArchiveNotSupportedError(
-            f"Unknown archive format for {archive_path_normalized}"
-        )
+        for detector, detected_format in _EXTRA_DETECTORS:
+            try:
+                if detector(archive_path_normalized):
+                    format = detected_format
+                    break
+            except OSError:
+                continue
+        if format == ArchiveFormat.UNKNOWN:
+            raise ArchiveNotSupportedError(
+                f"Unknown archive format for {archive_path_normalized}"
+            )
 
     if format not in _FORMAT_TO_READER:
         raise ArchiveNotSupportedError(
