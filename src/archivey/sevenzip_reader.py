@@ -617,13 +617,13 @@ class SevenZipReader(BaseArchiveReader):
         filter: IteratorFilterFunc | ExtractionFilter | None = None,
         close_streams: bool = True,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
-        """Yield members and their associated streams using a background extractor.
+        """Yield members and their streams using a worker thread and queue.
 
-        py7zr exposes file data only through ``extract`` calls that write to a
-        ``WriterFactory``. To stream contents lazily we spawn a worker thread
-        that performs the extraction and sends each created stream through a
-        ``Queue``. This generator consumes from that queue so the caller can
-        process members while extraction continues.
+        ``py7zr`` expects a ``WriterFactory`` to collect extracted files at
+        once. To provide a true iterator that lazily returns ``BinaryIO``
+        streams, we spin up a background thread that performs the extraction and
+        places each stream into a ``Queue``. This generator consumes from the
+        queue so callers can process files as they are decompressed.
         """
         if self._archive is None:
             raise ValueError("Archive is closed")
