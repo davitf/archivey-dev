@@ -7,6 +7,7 @@ from archivey.core import open_archive
 from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
+    SYMLINK_ARCHIVES,
     SampleArchive,
     filter_archives,
 )
@@ -137,6 +138,16 @@ def test_streaming_only_mode(
                         f"previous_stream.read() = {data[:20]} -- {previous_stream=}"
                     )
 
+            if m.is_link:
+                # The link target should have been filled before the member was yielded
+                assert m.link_target is not None
+                assert stream is None
+            elif m.is_dir:
+                assert stream is None
+            else:
+                assert stream is not None
+                data = stream.read()
+
             previous_stream = stream
 
             assert (stream is None) == (m.type != MemberType.FILE)
@@ -266,3 +277,36 @@ def test_random_access_allows_multiple_iterations(
         next(archive.iter_members_with_io())
         list(archive.iter_members_with_io())
         list(archive.iter_members_with_io())
+
+
+@pytest.mark.parametrize("sample_archive", SYMLINK_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
+def test_resolve_link_symlink_without_target(
+    sample_archive: SampleArchive, sample_archive_path: str, streaming_only: bool
+) -> None:
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
+        for sample_file in sample_archive.contents.files:
+            member = archive.get_member(sample_file.name)
+            resolved = archive.resolve_link(member)
+
+            if member.type != MemberType.SYMLINK:
+                assert member is resolved
+                continue
+
+            if sample_archive.creation_info.features.link_targets_in_header:
+                assert member.link_target is not None
+
+            if member.link_target is None:
+                assert resolved is None
+            else:
+                assert resolved is not None
+                logger.info(f"{member.filename=} {member.link_target=} {resolved=}")
+                assert resolved.type in (MemberType.FILE, MemberType.DIR)
+                if resolved.type == MemberType.FILE:
+                    if not streaming_only:
+                        with archive.open(resolved) as f:
+                            assert f.read() == sample_file.contents
+                        with archive.open(member) as f:
+                            assert f.read() == sample_file.contents

@@ -368,11 +368,10 @@ class SevenZipReader(BaseArchiveReader):
                 f"Possibly truncated 7-Zip archive {archive_path}"
             ) from e
 
-    def close(self) -> None:
+    def _close_archive(self) -> None:
         """Close the archive and release any resources."""
-        if self._archive:
-            self._archive.close()
-            self._archive = None
+        self._archive.close()  # type: ignore
+        self._archive = None
 
     def _is_member_encrypted(self, file: ArchiveFile) -> bool:
         # This information is not directly exposed by py7zr, so we need to use an
@@ -383,8 +382,7 @@ class SevenZipReader(BaseArchiveReader):
         return py7zr.compressor.SupportedMethods.needs_password(file.folder.coders)
 
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        assert self._archive is not None
 
         name_counters: collections.defaultdict[str, int] = collections.defaultdict(int)
         links_to_resolve = {}
@@ -480,9 +478,8 @@ class SevenZipReader(BaseArchiveReader):
         Returns:
             An IO object for the member.
         """
-
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        self.check_archive_open()
+        assert self._archive is not None
 
         member = self.get_member(member_or_filename)
 
@@ -625,8 +622,8 @@ class SevenZipReader(BaseArchiveReader):
         places each stream into a ``Queue``. This generator consumes from the
         queue so callers can process files as they are decompressed.
         """
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        self.check_archive_open()
+        assert self._archive is not None
 
         self._start_streaming_iteration()
 
@@ -718,8 +715,8 @@ class SevenZipReader(BaseArchiveReader):
         *,
         pwd: bytes | str | None = None,
     ) -> str:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        self.check_archive_open()
+        assert self._archive is not None
 
         member_obj = self.get_member(member)
 
@@ -796,8 +793,8 @@ class SevenZipReader(BaseArchiveReader):
         Returns:
             ArchiveInfo: Detailed format information
         """
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        self.check_archive_open()
+        assert self._archive is not None
 
         sevenzip_info = self._archive.archiveinfo()
 

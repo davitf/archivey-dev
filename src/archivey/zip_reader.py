@@ -87,11 +87,10 @@ class ZipReader(BaseArchiveReader):
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Invalid ZIP archive {archive_path}") from e
 
-    def close(self) -> None:
+    def _close_archive(self) -> None:
         """Close the archive and release any resources."""
-        if self._archive:
-            self._archive.close()
-            self._archive = None
+        self._archive.close()  # type: ignore
+        self._archive = None
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -99,8 +98,8 @@ class ZipReader(BaseArchiveReader):
         Returns:
             ArchiveInfo: Detailed format information
         """
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        self.check_archive_open()
+        assert self._archive is not None
 
         if self._format_info is None:
             self._format_info = ArchiveInfo(
@@ -121,8 +120,7 @@ class ZipReader(BaseArchiveReader):
         return self._format_info
 
     def _read_link_target(self, info: zipfile.ZipInfo) -> str | None:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        assert self._archive is not None
 
         # Zip archives store the link target as the contents of the file.
         # TODO: do we need to handle the UTF8 flag or fallback encodings?
@@ -192,8 +190,8 @@ class ZipReader(BaseArchiveReader):
         *,
         pwd: Optional[bytes | str] = None,
     ) -> BinaryIO:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        self.check_archive_open()
+        assert self._archive is not None
 
         member, filename = self._resolve_member_to_open(member_or_filename)
 

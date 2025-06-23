@@ -272,7 +272,7 @@ class SingleFileReader(BaseArchiveReader):
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         yield self.member
 
-    def close(self) -> None:
+    def _close_archive(self) -> None:
         """Close the archive and release any resources."""
         if self.fileobj is not None:
             self.fileobj.close()

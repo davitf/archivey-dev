@@ -166,6 +166,7 @@ class ArchiveFormatFeatures:
     # correctly encoded in comment fields.
     comment_corrupts_unicode_non_bmp_chars: bool = False
     mtime_with_tz: bool = False
+    link_targets_in_header: bool = True
 
 
 DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
@@ -232,6 +233,7 @@ ZIP_ZIPFILE_STORE = ArchiveCreationInfo(
         rounded_mtime=True,
         duplicate_files=True,
         mtime_with_tz=False,
+        link_targets_in_header=False,
     ),
     generation_method_options={"compression_method": "store"},
 )
@@ -245,6 +247,7 @@ ZIP_ZIPFILE_DEFLATE = ArchiveCreationInfo(
         rounded_mtime=True,
         duplicate_files=True,
         mtime_with_tz=False,
+        link_targets_in_header=False,
     ),
     generation_method_options={"compression_method": "deflate"},
 )
@@ -260,6 +263,7 @@ ZIP_INFOZIP = ArchiveCreationInfo(
         # Info-zip files include the extended timestamp extra field, which store
         # times in UTC.
         mtime_with_tz=True,
+        link_targets_in_header=False,
     ),
 )
 
@@ -273,6 +277,7 @@ SEVENZIP_PY7ZR = ArchiveCreationInfo(
         archive_comment=True,
         duplicate_files=True,
         mtime_with_tz=True,
+        link_targets_in_header=False,
     ),
 )
 SEVENZIP_7ZCMD = ArchiveCreationInfo(
@@ -280,7 +285,10 @@ SEVENZIP_7ZCMD = ArchiveCreationInfo(
     format=ArchiveFormat.SEVENZIP,
     generation_method=GenerationMethod.SEVENZIP_COMMAND_LINE,
     features=ArchiveFormatFeatures(
-        dir_entries=False, archive_comment=True, mtime_with_tz=True
+        dir_entries=False,
+        archive_comment=True,
+        mtime_with_tz=True,
+        link_targets_in_header=False,
     ),
 )
 
@@ -303,6 +311,7 @@ RAR4_CMD = ArchiveCreationInfo(
         archive_comment=True,
         comment_corrupts_unicode_non_bmp_chars=True,
         mtime_with_tz=False,
+        link_targets_in_header=False,
     ),
 )
 
@@ -1138,6 +1147,12 @@ SAMPLE_ARCHIVES = build_archive_infos()
 BASIC_ARCHIVES = filter_archives(
     SAMPLE_ARCHIVES,
     prefixes=["basic_nonsolid", "basic_solid"],
+    custom_filter=lambda x: x.creation_info.format != ArchiveFormat.ISO,
+)
+
+SYMLINK_ARCHIVES = filter_archives(
+    SAMPLE_ARCHIVES,
+    prefixes=["symlinks"],
     custom_filter=lambda x: x.creation_info.format != ArchiveFormat.ISO,
 )
 

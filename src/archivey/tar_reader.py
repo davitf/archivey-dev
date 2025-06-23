@@ -115,11 +115,10 @@ class TarReader(BaseArchiveReader):
                 raise translated from e
             raise
 
-    def close(self) -> None:
+    def _close_archive(self) -> None:
         """Close the archive and release any resources."""
-        if self._archive:
-            self._archive.close()
-            self._archive = None
+        self._archive.close()  # type: ignore
+        self._archive = None
         if self._fileobj is not None:
             self._fileobj.close()
             self._fileobj = None
@@ -202,8 +201,9 @@ class TarReader(BaseArchiveReader):
         pwd: bytes | str | None = None,
         is_streaming_mode: bool = False,
     ) -> BinaryIO:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        self.check_archive_open()
+        assert self._archive is not None
+
         if self._streaming_only and not is_streaming_mode:
             raise ValueError(
                 "Archive opened in streaming mode does not support opening specific members."
@@ -244,8 +244,8 @@ class TarReader(BaseArchiveReader):
         Returns:
             ArchiveInfo: Detailed format information
         """
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        self.check_archive_open()
+        assert self._archive is not None
 
         if self._format_info is None:
             format = self.format
@@ -264,8 +264,8 @@ class TarReader(BaseArchiveReader):
         return self._format_info
 
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
-        if self._archive is None:
-            raise ValueError("Archive is closed")
+        self.check_archive_open()
+        assert self._archive is not None
 
         try:
             tarinfo: tarfile.TarInfo | None = None

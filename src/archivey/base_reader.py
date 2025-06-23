@@ -424,13 +424,14 @@ class BaseArchiveReader(ArchiveReader):
         self._iterator_for_registration: Iterator[ArchiveMember] | None = None
 
         self._streaming_iteration_started: bool = False
+        self._closed: bool = False
 
     def get_archive_password(self) -> bytes | None:
         """Return the default password for the archive, if one was provided."""
         return self._archive_password
 
     def resolve_link(self, member: ArchiveMember) -> ArchiveMember | None:
-        if not member.is_link or member.link_target is None:
+        if not member.is_link:
             return member  # Not a link or no target path specified
 
         # Ensure all members are registered so lookups are complete
@@ -438,7 +439,7 @@ class BaseArchiveReader(ArchiveReader):
         if not self._all_members_registered:
             # This call populates self._members and related lookup dicts
             # by exhausting self.iter_members_for_registration()
-            self.get_members()
+            self.get_members_if_available()
 
         return self._resolve_link_recursive(member, set())
 
@@ -586,8 +587,14 @@ class BaseArchiveReader(ArchiveReader):
             self._register_member(next_member)
             return
 
+    def check_archive_open(self) -> None:
+        if self._closed:
+            raise ValueError("Archive is closed")
+
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         """Get a list of all members in the archive, or None if not available. May not be available for stream archives."""
+        self.check_archive_open()
+
         if self._all_members_registered:
             return list(self._members)
 
@@ -598,6 +605,8 @@ class BaseArchiveReader(ArchiveReader):
 
     def iter_members(self) -> Iterator[ArchiveMember]:
         """Iterate over all members, registering them as they are discovered."""
+        self.check_archive_open()
+
         i: int = 0
         # While the _iter_members_for_registration() iterator is still not exhausted,
         # yield all the members that have been registered so far, and register the next
@@ -681,6 +690,7 @@ class BaseArchiveReader(ArchiveReader):
         # assert self._random_access_supported, (
         #     "Non-random access readers must override iter_members_with_io()"
         # )
+        self.check_archive_open()
 
         self._start_streaming_iteration()
 
@@ -796,6 +806,7 @@ class BaseArchiveReader(ArchiveReader):
             For streaming-only archives (:meth:`has_random_access` returns ``False``)
             this method may only be called once, as it exhausts the underlying stream.
         """
+        self.check_archive_open()
 
         if path is None:
             path = os.getcwd()
@@ -827,6 +838,8 @@ class BaseArchiveReader(ArchiveReader):
         return extraction_helper.extracted_members_by_path
 
     def get_members(self) -> List[ArchiveMember]:
+        self.check_archive_open()
+
         if not self._early_members_list_supported:
             raise ValueError("Archive reader does not support get_members().")
 
@@ -881,6 +894,7 @@ class BaseArchiveReader(ArchiveReader):
         return final_member, filename
 
     def get_member(self, member_or_filename: ArchiveMember | str) -> ArchiveMember:
+        self.check_archive_open()
         if isinstance(member_or_filename, ArchiveMember):
             if member_or_filename.archive_id != self._archive_id:
                 raise ValueError(
@@ -901,6 +915,8 @@ class BaseArchiveReader(ArchiveReader):
         path: str | os.PathLike | None = None,
         pwd: bytes | str | None = None,
     ) -> str | None:
+        self.check_archive_open()
+
         if path is None:
             path = os.getcwd()
         else:
@@ -933,6 +949,19 @@ class BaseArchiveReader(ArchiveReader):
             pwd=pwd,
         )
         return list(d.keys())[0] if len(d) else None
+
+    @abc.abstractmethod
+    def _close_archive(self) -> None:
+        pass
+
+    def close(self) -> None:
+        if not self._closed:
+            self._close_archive()
+            self._closed = True
+            self._members = None  # type: ignore
+            self._filename_to_members = None  # type: ignore
+            self._normalized_path_to_last_member = None  # type: ignore
+            self._iterator_for_registration = None
 
 
 class StreamingOnlyArchiveReaderWrapper(ArchiveReader):

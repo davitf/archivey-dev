@@ -18,6 +18,4 @@ def test_zip_extra_field_before_timestamp(tmp_path) -> None:
         zf.writestr(zi, b"data")
     with open_archive(str(path)) as archive:
         info = archive.get_members()[0]
-        assert info.mtime_with_tz == datetime(
-            2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc
-        )
+        assert info.mtime_with_tz == datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
