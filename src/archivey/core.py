@@ -3,6 +3,7 @@
 import os
 from typing import BinaryIO
 
+from archivey.ar_reader import ArReader
 from archivey.base_reader import ArchiveReader, StreamingOnlyArchiveReaderWrapper
 from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
@@ -41,6 +42,7 @@ _FORMAT_TO_READER = {
     ArchiveFormat.RAR: RarReader,
     ArchiveFormat.ZIP: ZipReader,
     ArchiveFormat.SEVENZIP: SevenZipReader,
+    ArchiveFormat.AR: ArReader,
     ArchiveFormat.TAR: TarReader,
     ArchiveFormat.FOLDER: FolderReader,
 }

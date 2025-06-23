@@ -19,7 +19,9 @@ class ArchiveFormat(StrEnum):
 
     ZIP = "zip"
     RAR = "rar"
+
     SEVENZIP = "7z"
+    AR = "ar"
 
     GZIP = "gz"
     BZIP2 = "bz2"

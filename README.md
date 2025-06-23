@@ -6,7 +6,7 @@ Archivey is a library for reading the contents of many common archive formats. I
 ## Features
 
 - Automatic file format detection
-- Support for ZIP, TAR (including compressed tar variants), RAR and 7z files, and single-file compressed formats
+- Support for ZIP, TAR (including compressed tar variants), RAR, 7z, and AR files, as well as single-file compressed formats
 - Optimized streaming access reading of archive members
 - Consistent handling of symlinks, file times, permissions, and passwords
 - Consistent exception hierarchy
@@ -27,6 +27,7 @@ RAR support relies on the `unrar` tool, which you'll need to install separately.
 | TAR archives | `tarfile` | | |
 | RAR archives | | [`rarfile`](https://pypi.org/project/rarfile)<br>[`cryptography`](https://pypi.org/project/cryptography) (for encrypted headers) | `unrar` binary |
 | 7z archives | | [`py7zr`](https://pypi.org/project/py7zr) | |
+| AR archives | | [`ar`](https://pypi.org/project/ar) | |
 | Gzip |`gzip` | [`rapidgzip`](https://pypi.org/project/rapidgzip) (multithreaded decompression and random access) | |
 | Bzip2 | `bz2` | [`indexed_bzip2`](https://pypi.org/project/indexed-bzip2) (multithreaded decompression and random access) | |
 | XZ | `lzma` | [`python-xz`](https://pypi.org/project/python-xz) (random access) | |
