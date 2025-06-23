@@ -51,16 +51,14 @@ class ArReader(BaseArchiveReader):
     ) -> None:
         if pwd is not None:
             raise ValueError("AR archives do not support password protection")
-        if streaming_only:
-            # ar archives require random access to read members
-            raise ValueError("AR archives do not support streaming-only mode")
 
         super().__init__(
             ArchiveFormat.AR,
             archive_path,
-            random_access_supported=True,
+            random_access_supported=not streaming_only,
             members_list_supported=True,
         )
+        self._streaming_only = streaming_only
 
         if isinstance(archive_path, (str, os.PathLike)):
             self._fileobj: BinaryIO | None = open(archive_path, "rb")
@@ -145,9 +143,18 @@ class ArReader(BaseArchiveReader):
             yield member
 
     def open(
-        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
+        self,
+        member_or_filename: ArchiveMember | str,
+        *,
+        pwd: bytes | str | None = None,
+        is_streaming_mode: bool = False,
     ) -> BinaryIO:
         self.check_archive_open()
+        if self._streaming_only and not is_streaming_mode:
+            raise ValueError(
+                "Archive opened in streaming mode does not support opening specific members."
+            )
+
         member, _ = self._resolve_member_to_open(member_or_filename)
         entry = member.raw_info
         if not isinstance(entry, _ArEntry):
@@ -161,3 +168,8 @@ class ArReader(BaseArchiveReader):
             return None
 
         return ExceptionTranslatingIO(stream, _translate)
+
+    def open_for_iteration(
+        self, member: ArchiveMember, *, pwd: bytes | str | None = None
+    ) -> BinaryIO:
+        return self.open(member, is_streaming_mode=True, pwd=pwd)
