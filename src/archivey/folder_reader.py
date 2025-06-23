@@ -36,6 +36,8 @@ class FolderReader(BaseArchiveReader):
         if not self.path.is_dir():
             raise ValueError(f"Path is not a directory: {self.path}")
 
+        self._closed = False
+
     def _get_member_type(self, lstat_result: os.stat_result) -> MemberType:
         """Determines the MemberType from a path and its lstat result."""
         if stat.S_ISDIR(lstat_result.st_mode):
@@ -129,6 +131,7 @@ class FolderReader(BaseArchiveReader):
         pwd: Optional[str | bytes] = None,
     ) -> BinaryIO:
         # pwd is ignored for FolderReader
+        self.check_archive_open()
 
         member, filename = self._resolve_member_to_open(member_or_filename)
         assert member.type == MemberType.FILE
@@ -170,13 +173,14 @@ class FolderReader(BaseArchiveReader):
             raise ArchiveIOError(f"Cannot open member '{filename}': {e}") from e
 
     def get_archive_info(self) -> ArchiveInfo:
+        self.check_archive_open()
+
         return ArchiveInfo(
             format=self.format,
-            # comment=str(self.archive_path),  # Use folder path as comment
-            # is_solid, version, extra are not applicable for folders
         )
 
-    def close(self) -> None:
+    def _close_archive(self) -> None:
+        """Close the archive and release any resources."""
         # No-op for FolderReader, as there's no main file handle to close.
         # Individual files are opened and closed in the open() method.
         pass

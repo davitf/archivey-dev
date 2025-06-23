@@ -339,20 +339,17 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         if not matches:
             raise ArchiveCorruptedError(f"CRC mismatch in {self._filename}")
 
-    def readable(self) -> bool:
-        return True
+    def readable(self) -> bool: return True  # pragma: no cover
 
-    def writable(self) -> bool:
-        return False
+    def writable(self) -> bool: return False  # pragma: no cover
 
-    def seekable(self) -> bool:
-        return False
+    def seekable(self) -> bool: return False  # pragma: no cover
 
     def write(self, b: Any) -> int:
-        raise io.UnsupportedOperation("write")
+        raise io.UnsupportedOperation("write")  # pragma: no cover
 
     def writelines(self, lines: Iterable[Any]) -> None:
-        raise io.UnsupportedOperation("writelines")
+        raise io.UnsupportedOperation("writelines")  # pragma: no cover
 
     def close(self) -> None:
         if self._closed:
@@ -528,10 +525,10 @@ class RarReader(BaseArchiveReader):
                 "cryptography package is not installed. Please install it to read RAR files with encrypted headers."
             ) from e
 
-    def close(self):
-        if self._archive:
-            self._archive.close()
-            self._archive = None
+    def _close_archive(self) -> None:
+        """Close the archive and release any resources."""
+        self._archive.close()  # type: ignore
+        self._archive = None
 
     def _get_link_target(
         self, info: RarInfo, *, pwd: bytes | str | None = None
@@ -541,11 +538,10 @@ class RarReader(BaseArchiveReader):
         If the link target is encrypted and ``pwd`` is not provided or is
         incorrect, a warning is logged and ``None`` is returned.
         """
+        assert self._archive is not None
+
         if not info.is_symlink() and not is_rar_info_hardlink(info):
             return None
-
-        if self._archive is None:
-            raise ArchiveError("Archive is closed")
 
         if info.file_redir:
             return info.file_redir[2]
@@ -678,8 +674,8 @@ class RarReader(BaseArchiveReader):
         Returns:
             ArchiveInfo: Detailed format information
         """
-        if self._archive is None:
-            raise ArchiveError("Archive is closed")
+        self.check_archive_open()
+        assert self._archive is not None
 
         if self._format_info is None:
             # RAR5 archives have a different magic number and structure
@@ -725,6 +721,8 @@ class RarReader(BaseArchiveReader):
         *,
         pwd: Optional[str | bytes] = None,
     ) -> BinaryIO:
+        self.check_archive_open()
+
         # Link targets in RAR4 archives may be stored as file data. If that data
         # is encrypted and no password is available we simply return the member
         # contents when opened.
@@ -764,9 +762,6 @@ class RarReader(BaseArchiveReader):
                 raise ArchiveEncryptedError(
                     f"Wrong password specified for {member.filename}"
                 )
-
-        if self._archive is None:
-            raise ValueError("Archive is closed")
 
         if member.type == MemberType.DIR:  # or member.type == MemberType.SYMLINK:
             raise ValueError(
