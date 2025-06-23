@@ -339,20 +339,17 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         if not matches:
             raise ArchiveCorruptedError(f"CRC mismatch in {self._filename}")
 
-    def readable(self) -> bool:
-        return True
+    def readable(self) -> bool: return True  # pragma: no cover
 
-    def writable(self) -> bool:
-        return False
+    def writable(self) -> bool: return False  # pragma: no cover
 
-    def seekable(self) -> bool:
-        return False
+    def seekable(self) -> bool: return False  # pragma: no cover
 
     def write(self, b: Any) -> int:
-        raise io.UnsupportedOperation("write")
+        raise io.UnsupportedOperation("write")  # pragma: no cover
 
     def writelines(self, lines: Iterable[Any]) -> None:
-        raise io.UnsupportedOperation("writelines")
+        raise io.UnsupportedOperation("writelines")  # pragma: no cover
 
     def close(self) -> None:
         if self._closed:
