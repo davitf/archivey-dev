@@ -23,18 +23,20 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-def _check_target_inside_archive_root(target_path: str, dest_path: str | None) -> None:
+def _check_target_inside_archive_root(
+    target_path: str, dest_path: str | None, target_type_str: str
+) -> None:
     if os.path.isabs(target_path):
-        raise FilterError(f"Absolute path not allowed: {target_path}")
+        raise FilterError(f"Absolute {target_type_str} not allowed: {target_path}")
 
     if target_path.startswith("..") or "/../" in target_path:
-        raise FilterError(f"Path outside archive root: {target_path}")
+        raise FilterError(f"{target_type_str} outside archive root: {target_path}")
 
     if dest_path is not None:
         dest_real = os.path.realpath(dest_path)
         target_real = os.path.realpath(os.path.join(dest_real, target_path))
         if os.path.commonpath([dest_real, target_real]) != dest_real:
-            raise FilterError(f"Path outside destination: {target_path}")
+            raise FilterError(f"{target_type_str} outside destination: {target_path}")
 
 
 def _sanitize_name(
@@ -44,7 +46,7 @@ def _sanitize_name(
     # if member.is_dir:
     #     assert member.filename.endswith("/")
     name = posixpath.normpath(member.filename.lstrip("/\\"))
-    _check_target_inside_archive_root(name, dest_path)
+    _check_target_inside_archive_root(name, dest_path, "Path")
 
     if member.filename.endswith("/") and not name.endswith("/"):
         name += "/"
@@ -66,13 +68,13 @@ def _sanitize_link_target(
         rel_target = posixpath.normpath(
             os.path.join(os.path.dirname(member.filename), link_target)
         )
-        _check_target_inside_archive_root(rel_target, dest_path)
+        _check_target_inside_archive_root(rel_target, dest_path, "Symlink target")
         return link_target
 
     else:
         # Hardlink targets are relative to the hardlink's own directory. Check that
         # the target is inside the archive root.
-        _check_target_inside_archive_root(link_target, dest_path)
+        _check_target_inside_archive_root(link_target, dest_path, "Hardlink target")
 
         # Return the link target unchanged, as it refers to another member
         # in the archive and should be an exact match to its name.

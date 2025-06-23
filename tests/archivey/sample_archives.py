@@ -782,6 +782,7 @@ SANITIZE_FILES_WITHOUT_HARDLINKS = [
 SANITIZE_FILES_FULL = [
     File("good.txt", 1, b"good"),
     File("/absfile.txt", 2, b"abs"),
+    File("C:/windows_absfile.txt", 2, b"abs"),
     File("../outside.txt", 3, b"outside"),
     File("exec.sh", 4, b"#!/bin/sh\n", permissions=0o755),
     Symlink("subdir/good_link.txt", 5, "../good.txt", contents=b"good"),
