@@ -1,15 +1,15 @@
 # Archivey
 
-Archivey is a library for reading the contents of many common archive formats. It provides a simple, unified interface on top of several builtin modules and external packages, and improves on some of their shortcomings.
+Archivey is a library for reading the contents of many common archive formats. It provides a simple, unified interface on top of several builtin modules and external packages, and adds some features missing from them.
 
 
 ## Features
 
-- Support for ZIP, TAR (including compressed tar variants), RAR, 7z and ISO files, and single-file compressed formats
+- Automatic file format detection
+- Support for ZIP, TAR (including compressed tar variants), RAR and 7z files, and single-file compressed formats
 - Optimized streaming access reading of archive members
 - Consistent handling of symlinks, file times, permissions, and passwords
 - Consistent exception hierarchy
-- Automatic file format detection
 
 ## Installation
 
@@ -21,16 +21,17 @@ Or, if you don't want to add all dependencies to your project, add only the ones
 
 RAR support relies on the `unrar` tool, which you'll need to install separately.
 
-| Feature/Format | Python package | System requirement |
-| --- | --- | --- |
-| RAR archives | `rarfile` | `unrar` binary |
-| 7z archives | `py7zr` | |
-| ISO images | `pycdlib` | |
-| Gzip (fast) | `rapidgzip` | |
-| Bzip2 (indexed) | `indexed_bzip2` | |
-| XZ (pure Python) | `python-xz` | |
-| Zstandard | `zstandard` or `pyzstd` | |
-| LZ4 | `lz4` | |
+| Format | Builtin module | Python package | System requirement |
+| --- | --- | --- | --- |
+| ZIP archives | `zipfile` | | |
+| TAR archives | `tarfile` | | |
+| RAR archives | | `rarfile`<br>`cryptography` (for encrypted headers) | `unrar` binary |
+| 7z archives | | `py7zr` | |
+| Gzip |`gzip` | `rapidgzip` (multithreaded decompression and random access) | |
+| Bzip2 | `bz2` | `indexed_bzip2` (multithreaded decompression and random access) | |
+| XZ | `lzma` | `python-xz` (random access) | |
+| Zstandard | | `pyzstd` (preferred) or`zstandard` | |
+| LZ4 | | `lz4` | |
 
 ## Usage
 

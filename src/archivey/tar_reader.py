@@ -10,7 +10,7 @@ from archivey.base_reader import (
     ArchiveMember,
     BaseArchiveReader,
 )
-from archivey.compressed_streams import open_stream, open_stream_fileobj
+from archivey.compressed_streams import open_stream
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
@@ -71,14 +71,9 @@ class TarReader(BaseArchiveReader):
 
         if format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
             self.compression_method = TAR_FORMAT_TO_COMPRESSION_FORMAT[format]
-            if isinstance(archive_path, str):
-                self._fileobj = open_stream(
-                    self.compression_method, archive_path, self.config
-                )
-            else:
-                self._fileobj = open_stream_fileobj(
-                    self.compression_method, archive_path, self.config
-                )
+            self._fileobj = open_stream(
+                self.compression_method, archive_path, self.config
+            )
             logger.debug(
                 f"Compressed tar opened: {self._fileobj} seekable={self._fileobj.seekable()}"
             )
