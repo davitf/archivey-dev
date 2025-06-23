@@ -465,26 +465,9 @@ class SevenZipReader(BaseArchiveReader):
 
         self._all_members_registered = True
 
-    def open(
-        self, member_or_filename: ArchiveMember | str, *, pwd: str | None = None
-    ) -> BinaryIO:
-        """Open a member of the archive.
-
-        Warning: this is slow for 7-zip archives. Prefer using iter_members() if you
-        need to read multiple members.
-
-        Args:
-            member: The member to open
-            pwd: The password to use to open the member
-
-        Returns:
-            An IO object for the member.
-        """
-        self.check_archive_open()
-        assert self._archive is not None
-
-        member = self.get_member(member_or_filename)
-
+    def _prepare_member_for_open(
+        self, member: ArchiveMember, *, pwd: bytes | str | None, for_iteration: bool
+    ) -> ArchiveMember:
         if pwd is not None and member.is_link and member.link_target is None:
             try:
                 list(
@@ -504,8 +487,16 @@ class SevenZipReader(BaseArchiveReader):
                 raise ArchiveEncryptedError(
                     f"Cannot read link target for {member.filename}"
                 )
+        return member
 
-        member, filename = self._resolve_member_to_open(member)
+    def _open_member(
+        self,
+        member: ArchiveMember,
+        *,
+        pwd: str | None = None,
+        for_iteration: bool = False,
+    ) -> BinaryIO:
+        assert self._archive is not None
 
         try:
             it = list(
@@ -518,12 +509,8 @@ class SevenZipReader(BaseArchiveReader):
             )
             stream = cast(StreamingFile.Reader, it[0][1])
             if isinstance(stream, ErrorIOStream):
-                # When a wrong password is provided, iter_members_with_io
-                # returns an ErrorIOStream instead of raising. In the context of
-                # `open`, propagate the error to match the behaviour of other
-                # readers.
                 stream.read()
-            return stream  # BufferedReaderContextManager(stream)
+            return stream
 
         except py7zr.exceptions.ArchiveError as e:
             raise ArchiveCorruptedError(f"Error reading member {member.filename}: {e}")
@@ -535,8 +522,6 @@ class SevenZipReader(BaseArchiveReader):
             raise ArchiveCorruptedError(
                 f"Error reading member {member.filename}: {e}"
             ) from e
-        finally:
-            pass
 
     def _extract_members_iterator(
         self,

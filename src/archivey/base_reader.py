@@ -621,24 +621,51 @@ class BaseArchiveReader(ArchiveReader):
             yield self._members[i]
             i += 1
 
+    def _prepare_member_for_open(
+        self, member: ArchiveMember, *, pwd: bytes | str | None, for_iteration: bool
+    ) -> ArchiveMember:
+        """Hook for subclasses to adjust a member before opening."""
+        return member
+
+    @abc.abstractmethod
+    def _open_member(
+        self,
+        member: ArchiveMember,
+        *,
+        pwd: bytes | str | None = None,
+        for_iteration: bool = False,
+    ) -> BinaryIO:
+        """Open ``member`` and return a readable binary stream."""
+
+    def _open_internal(
+        self,
+        member_or_filename: ArchiveMember | str,
+        *,
+        pwd: bytes | str | None,
+        for_iteration: bool,
+    ) -> BinaryIO:
+        self.check_archive_open()
+        if not for_iteration and not self._random_access_supported:
+            raise ValueError(
+                "Archive opened in streaming mode does not support opening specific members."
+            )
+
+        member = self.get_member(member_or_filename)
+        member = self._prepare_member_for_open(
+            member, pwd=pwd, for_iteration=for_iteration
+        )
+        final_member, _ = self._resolve_member_to_open(member)
+        return self._open_member(final_member, pwd=pwd, for_iteration=for_iteration)
+
+    def open(
+        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
+    ) -> BinaryIO:
+        """Open ``member_or_filename`` for random access reading."""
+        return self._open_internal(member_or_filename, pwd=pwd, for_iteration=False)
+
     def open_for_iteration(self, member, pwd: bytes | str | None = None) -> BinaryIO:
-        """
-        Open a member for reading during iteration via `iter_members_with_io`.
-
-        Defaults to calling `self.open(member, pwd=pwd)`.
-        Subclasses can override this if opening a file during iteration requires
-        different logic or optimizations than a direct `open()` call (e.g., if
-        the underlying library provides a specific way to get a stream during
-        its own iteration process).
-
-        Args:
-            member: The ArchiveMember to open.
-            pwd: Optional password for decryption.
-
-        Returns:
-            A binary I/O stream for the member's content.
-        """
-        return self.open(member, pwd=pwd)
+        """Open a member while iterating over the archive."""
+        return self._open_internal(member, pwd=pwd, for_iteration=True)
 
     def _start_streaming_iteration(self) -> None:
         """Ensure only a single streaming iteration is performed for non-random-access readers."""

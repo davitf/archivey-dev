@@ -339,11 +339,14 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         if not matches:
             raise ArchiveCorruptedError(f"CRC mismatch in {self._filename}")
 
-    def readable(self) -> bool: return True  # pragma: no cover
+    def readable(self) -> bool:
+        return True  # pragma: no cover
 
-    def writable(self) -> bool: return False  # pragma: no cover
+    def writable(self) -> bool:
+        return False  # pragma: no cover
 
-    def seekable(self) -> bool: return False  # pragma: no cover
+    def seekable(self) -> bool:
+        return False  # pragma: no cover
 
     def write(self, b: Any) -> int:
         raise io.UnsupportedOperation("write")  # pragma: no cover
@@ -715,19 +718,9 @@ class RarReader(BaseArchiveReader):
             )
         return None
 
-    def open(
-        self,
-        member_or_filename: ArchiveMember | str,
-        *,
-        pwd: Optional[str | bytes] = None,
-    ) -> BinaryIO:
-        self.check_archive_open()
-
-        # Link targets in RAR4 archives may be stored as file data. If that data
-        # is encrypted and no password is available we simply return the member
-        # contents when opened.
-        member = self.get_member(member_or_filename)
-
+    def _prepare_member_for_open(
+        self, member: ArchiveMember, *, pwd: bytes | str | None, for_iteration: bool
+    ) -> ArchiveMember:
         if pwd is not None and member.is_link and member.link_target is None:
             link_target = self._get_link_target(
                 cast(RarInfo, member.raw_info),
@@ -739,9 +732,15 @@ class RarReader(BaseArchiveReader):
                 raise ArchiveEncryptedError(
                     f"Cannot read link target for {member.filename}"
                 )
+        return member
 
-        member, filename = self._resolve_member_to_open(member)
-
+    def _open_member(
+        self,
+        member: ArchiveMember,
+        *,
+        pwd: Optional[str | bytes] = None,
+        for_iteration: bool = False,
+    ) -> BinaryIO:
         if member.is_link and member.link_target is None:
             link_target = self._get_link_target(
                 cast(RarInfo, member.raw_info),
@@ -763,13 +762,12 @@ class RarReader(BaseArchiveReader):
                     f"Wrong password specified for {member.filename}"
                 )
 
-        if member.type == MemberType.DIR:  # or member.type == MemberType.SYMLINK:
+        if member.type == MemberType.DIR:
             raise ValueError(
                 f"Cannot open directories in RAR archives: {member.filename}"
             )
 
         try:
-            # Apparently pwd can be either bytes or str.
             inner: BinaryIO = self._archive.open(member.raw_info, pwd=bytes_to_str(pwd))  # type: ignore[arg-type]
             return ExceptionTranslatingIO(inner, self._exception_translator)
         except rarfile.BadRarFile as e:
