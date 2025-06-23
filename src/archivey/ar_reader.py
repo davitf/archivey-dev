@@ -153,7 +153,7 @@ class ArReader(BaseArchiveReader):
         if not isinstance(entry, _ArEntry):
             raise ArchiveFormatError("Invalid raw_info for AR member")
         assert self._fileobj is not None
-        stream = ar.substream.Substream(self._fileobj, entry.offset, entry.size)
+        stream = ar.substream.Substream(self._fileobj, entry.offset, entry.size)  # type: ignore[attr-defined]
 
         def _translate(exc: Exception):
             if isinstance(exc, OSError):
