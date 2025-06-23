@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import BinaryIO, Iterator, List
 
 from archivey.base_reader import BaseArchiveReader
-from archivey.compressed_streams import open_stream, open_stream_fileobj
+from archivey.compressed_streams import open_stream
 from archivey.exceptions import (
     ArchiveFormatError,
 )
@@ -264,10 +264,7 @@ class SingleFileReader(BaseArchiveReader):
         # Open the file to see if it's supported by the library and valid.
         # To avoid opening the file twice, we'll store the reference and return it
         # on the first open() call.
-        if isinstance(archive_path, str):
-            self.fileobj = open_stream(self.format, archive_path, self.config)
-        else:
-            self.fileobj = open_stream_fileobj(self.format, archive_path, self.config)
+        self.fileobj = open_stream(self.format, archive_path, self.config)
 
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         yield self.member

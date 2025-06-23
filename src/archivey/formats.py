@@ -4,7 +4,7 @@ import tarfile
 import zipfile
 from typing import TYPE_CHECKING, BinaryIO, cast
 
-from archivey.compressed_streams import open_stream_fileobj
+from archivey.compressed_streams import open_stream
 from archivey.config import get_default_config
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
@@ -115,7 +115,7 @@ def detect_archive_format_by_signature(
         # Check if it is a compressed tar file
         if detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT:
             assert detected_format is not None
-            with open_stream_fileobj(
+            with open_stream(
                 detected_format, f, get_default_config()
             ) as decompressed_stream:
                 if tarfile.is_tarfile(decompressed_stream):

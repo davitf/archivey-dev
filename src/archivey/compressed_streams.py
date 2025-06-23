@@ -1,7 +1,6 @@
 import bz2
 import gzip
 import lzma
-from os import PathLike
 from typing import TYPE_CHECKING, BinaryIO, Optional
 
 from archivey.config import ArchiveyConfig
@@ -205,93 +204,33 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
 
 
 def open_stream(
-    format: ArchiveFormat, path: str | PathLike | BinaryIO, config: ArchiveyConfig
+    format: ArchiveFormat, path_or_stream: str | BinaryIO, config: ArchiveyConfig
 ) -> BinaryIO:
-    path = str(path)
     if format == ArchiveFormat.GZIP:
         if config.use_rapidgzip:
-            return open_rapidgzip_stream(path)
+            return open_rapidgzip_stream(path_or_stream)
         else:
-            return open_gzip_stream(path)
+            return open_gzip_stream(path_or_stream)
 
     elif format == ArchiveFormat.BZIP2:
         if config.use_indexed_bzip2:
-            return open_indexed_bzip2_stream(path)
+            return open_indexed_bzip2_stream(path_or_stream)
         else:
-            return open_bzip2_stream(path)
+            return open_bzip2_stream(path_or_stream)
 
     elif format == ArchiveFormat.XZ:
         if config.use_python_xz:
-            return open_python_xz_stream(path)
+            return open_python_xz_stream(path_or_stream)
         else:
-            return open_lzma_stream(path)
+            return open_lzma_stream(path_or_stream)
 
     elif format == ArchiveFormat.LZ4:
-        return open_lz4_stream(path)
+        return open_lz4_stream(path_or_stream)
 
     elif format == ArchiveFormat.ZSTD:
         if config.use_zstandard:
-            return open_zstandard_stream(path)
+            return open_zstandard_stream(path_or_stream)
         else:
-            return open_pyzstd_stream(path)
+            return open_pyzstd_stream(path_or_stream)
 
     raise ValueError(f"Unsupported archive format: {format}")  # pragma: no cover
-
-
-def open_gzip_stream_fileobj(fileobj: BinaryIO) -> BinaryIO:
-    return ExceptionTranslatingIO(
-        gzip.GzipFile(fileobj=fileobj), _translate_gzip_exception
-    )
-
-
-def open_bzip2_stream_fileobj(fileobj: BinaryIO) -> BinaryIO:
-    return ExceptionTranslatingIO(bz2.BZ2File(fileobj), _translate_bz2_exception)
-
-
-def open_lzma_stream_fileobj(fileobj: BinaryIO) -> BinaryIO:
-    return ExceptionTranslatingIO(lzma.LZMAFile(fileobj), _translate_lzma_exception)
-
-
-def open_zstandard_stream_fileobj(fileobj: BinaryIO, use_zstandard: bool) -> BinaryIO:
-    if use_zstandard:
-        if zstandard is None:
-            raise PackageNotInstalledError(
-                "zstandard package is not installed, required for Zstandard archives"
-            ) from None
-        return ExceptionTranslatingIO(
-            zstandard.ZstdDecompressor().stream_reader(fileobj),
-            _translate_zstandard_exception,
-        )
-    else:
-        if pyzstd is None:
-            raise PackageNotInstalledError(
-                "pyzstd package is not installed, required for Zstandard archives"
-            ) from None
-        return ExceptionTranslatingIO(
-            pyzstd.ZstdFile(fileobj),
-            _translate_pyzstd_exception,
-        )
-
-
-def open_lz4_stream_fileobj(fileobj: BinaryIO) -> BinaryIO:
-    if lz4 is None:
-        raise PackageNotInstalledError(
-            "lz4 package is not installed, required for LZ4 archives"
-        ) from None
-    return ExceptionTranslatingIO(lz4.frame.open(fileobj), _translate_lz4_exception)
-
-
-def open_stream_fileobj(
-    format: ArchiveFormat, fileobj: BinaryIO, config: ArchiveyConfig
-) -> BinaryIO:
-    if format == ArchiveFormat.GZIP:
-        return open_gzip_stream_fileobj(fileobj)
-    elif format == ArchiveFormat.BZIP2:
-        return open_bzip2_stream_fileobj(fileobj)
-    elif format == ArchiveFormat.XZ:
-        return open_lzma_stream_fileobj(fileobj)
-    elif format == ArchiveFormat.LZ4:
-        return open_lz4_stream_fileobj(fileobj)
-    elif format == ArchiveFormat.ZSTD:
-        return open_zstandard_stream_fileobj(fileobj, config.use_zstandard)
-    raise ValueError(f"Unsupported archive format: {format}")
