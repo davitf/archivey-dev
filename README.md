@@ -25,13 +25,13 @@ RAR support relies on the `unrar` tool, which you'll need to install separately.
 | --- | --- | --- | --- |
 | ZIP archives | `zipfile` | | |
 | TAR archives | `tarfile` | | |
-| RAR archives | | `rarfile`<br>`cryptography` (for encrypted headers) | `unrar` binary |
-| 7z archives | | `py7zr` | |
-| Gzip |`gzip` | `rapidgzip` (multithreaded decompression and random access) | |
-| Bzip2 | `bz2` | `indexed_bzip2` (multithreaded decompression and random access) | |
-| XZ | `lzma` | `python-xz` (random access) | |
-| Zstandard | | `pyzstd` (preferred) or`zstandard` | |
-| LZ4 | | `lz4` | |
+| RAR archives | | [`rarfile`](https://pypi.org/project/rarfile)<br>[`cryptography`](https://pypi.org/project/cryptography) (for encrypted headers) | `unrar` binary |
+| 7z archives | | [`py7zr`](https://pypi.org/project/py7zr) | |
+| Gzip |`gzip` | [`rapidgzip`](https://pypi.org/project/rapidgzip) (multithreaded decompression and random access) | |
+| Bzip2 | `bz2` | [`indexed_bzip2`](https://pypi.org/project/indexed-bzip2) (multithreaded decompression and random access) | |
+| XZ | `lzma` | [`python-xz`](https://pypi.org/project/python-xz) (random access) | |
+| Zstandard | | [`pyzstd`](https://pypi.org/project/pyzstd) (preferred) or [`zstandard`](https://pypi.org/project/zstandard) | |
+| LZ4 | | [`lz4`](https://pypi.org/project/lz4) | |
 
 ## Usage
 
