@@ -40,6 +40,11 @@ TESTING_FILTER = create_filter(
 )
 
 
+@pytest.fixture(params=[False, True])
+def use_libarchive(request) -> bool:
+    return request.param
+
+
 def check_member_metadata(
     member: ArchiveMember,
     sample_file: FileInfo | None,
@@ -152,6 +157,7 @@ def check_iter_members(
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
     config: Optional[ArchiveyConfig] = None,
+    use_libarchive: bool = False,
 ):
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
@@ -208,7 +214,11 @@ def check_iter_members(
         )
 
     archive_path_resolved = archive_path or sample_archive.get_archive_path()
-    config = replace(config or ArchiveyConfig(), extraction_filter=TESTING_FILTER)
+    config = replace(
+        config or ArchiveyConfig(),
+        extraction_filter=TESTING_FILTER,
+        use_libarchive=use_libarchive,
+    )
 
     with open_archive(
         archive_path_resolved,
@@ -357,8 +367,16 @@ def check_iter_members(
     ),
     ids=lambda x: x.filename,
 )
-def test_read_zip_archives(sample_archive: SampleArchive, sample_archive_path: str):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+def test_read_zip_archives(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    use_libarchive: bool,
+):
+    check_iter_members(
+        sample_archive,
+        archive_path=sample_archive_path,
+        use_libarchive=use_libarchive,
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -374,7 +392,10 @@ logger = logging.getLogger(__name__)
 )
 @pytest.mark.parametrize("alternative_packages", [False, True])
 def test_read_tar_archives(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    alternative_packages: bool,
+    use_libarchive: bool,
 ):
     logger.info(
         f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
@@ -397,6 +418,7 @@ def test_read_tar_archives(
         archive_path=sample_archive_path,
         skip_member_contents=True,
         config=config,
+        use_libarchive=use_libarchive,
     )
 
 
@@ -407,7 +429,10 @@ def test_read_tar_archives(
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives(
-    sample_archive: SampleArchive, sample_archive_path: str, use_rar_stream: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    use_rar_stream: bool,
+    use_libarchive: bool,
 ):
     deps = get_dependency_versions()
     if (
@@ -440,6 +465,7 @@ def test_read_rar_archives(
                 sample_archive,
                 archive_path=sample_archive_path,
                 config=config,
+                use_libarchive=use_libarchive,
             )
     else:
         check_iter_members(
@@ -447,6 +473,7 @@ def test_read_rar_archives(
             archive_path=sample_archive_path,
             config=config,
             skip_member_contents=deps.unrar_version is None,
+            use_libarchive=use_libarchive,
         )
 
 
@@ -463,7 +490,10 @@ def test_read_rar_archives(
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives_with_password_in_constructor(
-    sample_archive: SampleArchive, sample_archive_path: str, use_rar_stream: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    use_rar_stream: bool,
+    use_libarchive: bool,
 ):
     deps = get_dependency_versions()
     if use_rar_stream and deps.unrar_version is None:
@@ -476,6 +506,7 @@ def test_read_rar_archives_with_password_in_constructor(
         config=config,
         set_file_password_in_constructor=True,
         skip_member_contents=deps.unrar_version is None,
+        use_libarchive=use_libarchive,
     )
 
 
@@ -493,11 +524,13 @@ def test_read_rar_archives_with_password_in_constructor(
 def test_read_zip_and_7z_archives_with_password_in_constructor(
     sample_archive: SampleArchive,
     sample_archive_path: str,
+    use_libarchive: bool,
 ):
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
         set_file_password_in_constructor=True,
+        use_libarchive=use_libarchive,
     )
 
 
@@ -507,9 +540,15 @@ def test_read_zip_and_7z_archives_with_password_in_constructor(
     ids=lambda x: x.filename,
 )
 def test_read_sevenzip_py7zr_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    use_libarchive: bool,
 ):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    check_iter_members(
+        sample_archive,
+        archive_path=sample_archive_path,
+        use_libarchive=use_libarchive,
+    )
 
 
 @pytest.mark.parametrize(
@@ -521,7 +560,10 @@ def test_read_sevenzip_py7zr_archives(
 )
 @pytest.mark.parametrize("alternative_packages", [False, True])
 def test_read_single_file_compressed_archives(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    alternative_packages: bool,
+    use_libarchive: bool,
 ):
     if alternative_packages:
         config = ArchiveyConfig(
@@ -534,7 +576,12 @@ def test_read_single_file_compressed_archives(
     else:
         config = ArchiveyConfig(use_single_file_stored_metadata=True)
 
-    check_iter_members(sample_archive, archive_path=sample_archive_path, config=config)
+    check_iter_members(
+        sample_archive,
+        archive_path=sample_archive_path,
+        config=config,
+        use_libarchive=use_libarchive,
+    )
 
 
 @pytest.mark.parametrize(
@@ -543,9 +590,15 @@ def test_read_single_file_compressed_archives(
     ids=lambda x: x.filename,
 )
 def test_read_symlinks_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    use_libarchive: bool,
 ):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    check_iter_members(
+        sample_archive,
+        archive_path=sample_archive_path,
+        use_libarchive=use_libarchive,
+    )
 
 
 @pytest.mark.parametrize(
@@ -553,9 +606,16 @@ def test_read_symlinks_archives(
     filter_archives(SAMPLE_ARCHIVES, prefixes=["symlink_loop"]),
     ids=lambda x: x.filename,
 )
-def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_path: str):
+def test_symlink_loop_archives(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    use_libarchive: bool,
+):
     """Ensure that archives with symlink loops do not cause infinite loops."""
-    with open_archive(sample_archive_path) as archive:
+    with open_archive(
+        sample_archive_path,
+        config=ArchiveyConfig(use_libarchive=use_libarchive),
+    ) as archive:
         for member in archive.get_members():
             if member.type == MemberType.SYMLINK:
                 if member.link_target == "file5.txt":
@@ -577,9 +637,15 @@ def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_pat
     ids=lambda x: x.filename,
 )
 def test_read_hardlinks_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    use_libarchive: bool,
 ):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    check_iter_members(
+        sample_archive,
+        archive_path=sample_archive_path,
+        use_libarchive=use_libarchive,
+    )
 
 
 @pytest.mark.parametrize(
@@ -587,6 +653,14 @@ def test_read_hardlinks_archives(
     filter_archives(SAMPLE_ARCHIVES, extensions=["_folder/"]),
     ids=lambda x: x.filename,
 )
-def test_read_folder_archives(sample_archive: SampleArchive, sample_archive_path: str):
+def test_read_folder_archives(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    use_libarchive: bool,
+):
     logger.info(f"Testing {sample_archive.filename}; files at {sample_archive_path}")
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    check_iter_members(
+        sample_archive,
+        archive_path=sample_archive_path,
+        use_libarchive=use_libarchive,
+    )

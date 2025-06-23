@@ -11,6 +11,7 @@ from archivey.formats import (
     detect_archive_format,
 )
 from archivey.rar_reader import RarReader
+from archivey.libarchive_reader import LibarchiveReader
 from archivey.sevenzip_reader import SevenZipReader
 from archivey.single_file_reader import SingleFileReader
 from archivey.tar_reader import TarReader
@@ -129,6 +130,11 @@ def open_archive(
 
     if config is None:
         config = get_default_config()
+
+    if config.use_libarchive and format != ArchiveFormat.FOLDER:
+        reader_class = LibarchiveReader
+
+    # config was already set above
 
     with default_config(config):
         if format == ArchiveFormat.FOLDER:
