@@ -7,6 +7,7 @@ from archivey.base_reader import ArchiveReader, StreamingOnlyArchiveReaderWrappe
 from archivey.config import ArchiveyConfig, default_config, get_default_config
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.folder_reader import FolderReader
+from archivey.libarchive_reader import LibarchiveReader
 from archivey.formats import (
     detect_archive_format,
 )
@@ -131,21 +132,32 @@ def open_archive(
         config = get_default_config()
 
     with default_config(config):
-        if format == ArchiveFormat.FOLDER:
+        if config.use_libarchive and format != ArchiveFormat.FOLDER:
+            # If use_libarchive is true, and it's not a folder, use LibarchiveReader
+            reader = LibarchiveReader(
+                archive_path_normalized,
+                format=format, # Will be updated by LibarchiveReader internally
+                pwd=pwd,
+                # streaming_only is not directly passed to LibarchiveReader constructor
+                # as its random_access capability is determined by input type.
+                # The streaming_only flag for open_archive controls the wrapper.
+            )
+        elif format == ArchiveFormat.FOLDER:
             assert isinstance(archive_path_normalized, str), (
                 "FolderReader only supports string paths"
             )
             reader = FolderReader(archive_path_normalized)
         else:
+            # Use the original reader selection logic
             assert reader_class is not None
             reader = reader_class(
                 archive_path_normalized,
                 format=format,
                 pwd=pwd,
-                streaming_only=streaming_only,
+                streaming_only=streaming_only, # Passed to specific readers
             )
 
-        if streaming_only:
+        if streaming_only and not isinstance(reader, FolderReader): # FolderReader doesn't get wrapped
             return StreamingOnlyArchiveReaderWrapper(reader)
         else:
             return reader

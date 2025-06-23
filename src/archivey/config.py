@@ -38,6 +38,7 @@ class ArchiveyConfig:
     use_indexed_bzip2: bool = False
     use_python_xz: bool = False
     use_zstandard: bool = False
+    use_libarchive: bool = False
 
     tar_check_integrity: bool = True
 
