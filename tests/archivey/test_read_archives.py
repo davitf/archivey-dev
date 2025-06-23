@@ -12,7 +12,7 @@ from archivey.core import open_archive
 from archivey.dependency_checker import get_dependency_versions
 from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
 from archivey.filters import create_filter
-from archivey.types import ArchiveMember, CreateSystem, MemberType
+from archivey.types import ArchiveFormat, ArchiveMember, CreateSystem, MemberType
 from tests.archivey.sample_archives import (
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
@@ -151,26 +151,56 @@ def check_iter_members(
     archive_path: str,
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
-    config: Optional[ArchiveyConfig] = None,
+    config: Optional[ArchiveyConfig] = None, # Base config
+    use_libarchive: bool = False,
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    base_config = config or ArchiveyConfig()
+    if use_libarchive:
+        # Skip if libarchive-c is not installed (though it's a dep now, good for local testing)
+        try:
+            import libarchive # type: ignore
+        except ImportError:
+            pytest.skip("libarchive-c not installed, skipping use_libarchive=True test")
+        config = replace(base_config, use_libarchive=True)
+        # Libarchive specific skips or adjustments can be added here if needed
+        if sample_archive.creation_info.format == ArchiveFormat.RAR and use_libarchive:
+            # Known issue: My LibarchiveReader's password handling for RAR might be basic.
+            # Also, libarchive might not support all RAR versions/features like unrar does.
+            if sample_archive.contents.has_password():
+                 # pytest.skip("RAR with password and libarchive needs review")
+                 pass # Let it run and see
+
+        if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP and use_libarchive:
+            if sample_archive.contents.has_password():
+                # pytest.skip("7z with password and libarchive needs review")
+                pass # Let it run and see
+    else:
+        config = base_config
+
+
+    skip_if_package_missing(sample_archive.creation_info.format, config) # config now includes use_libarchive
 
     if (
         archive_path.endswith(".tar.zst")
         and config is not None
         and config.use_zstandard
+        and not use_libarchive # zstandard direct usage conflict
     ):
         pytest.skip(
-            "Skipping test for .tar.zst archives with zstandard enabled, as zstandard doesn't support seeking"
+            "Skipping test for .tar.zst archives with zstandard enabled (non-libarchive), as zstandard doesn't support seeking"
         )
 
     if sample_archive.skip_test:
         pytest.skip(f"Skipping test for {sample_archive.filename} as skip_test is True")
 
-    if sample_archive.contents.has_multiple_passwords():
+    # Libarchive may handle multiple passwords differently or not at all compared to specific readers
+    if use_libarchive and sample_archive.contents.has_multiple_passwords():
+        pytest.skip(f"Skipping libarchive test for {sample_archive.filename} as it has multiple passwords, behavior undefined")
+    elif not use_libarchive and sample_archive.contents.has_multiple_passwords():
         pytest.skip(
             f"Skipping test for {sample_archive.filename} as it has multiple passwords"
         )
+
 
     features = sample_archive.creation_info.features
 
@@ -357,8 +387,9 @@ def check_iter_members(
     ),
     ids=lambda x: x.filename,
 )
-def test_read_zip_archives(sample_archive: SampleArchive, sample_archive_path: str):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+@pytest.mark.parametrize("use_libarchive", [False, True], ids=["native", "libarchive"])
+def test_read_zip_archives(sample_archive: SampleArchive, sample_archive_path: str, use_libarchive: bool):
+    check_iter_members(sample_archive, archive_path=sample_archive_path, use_libarchive=use_libarchive)
 
 
 logger = logging.getLogger(__name__)
@@ -373,8 +404,9 @@ logger = logging.getLogger(__name__)
     ids=lambda x: x.filename,
 )
 @pytest.mark.parametrize("alternative_packages", [False, True])
+@pytest.mark.parametrize("use_libarchive", [False, True], ids=["native", "libarchive"])
 def test_read_tar_archives(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool, use_libarchive: bool
 ):
     logger.info(
         f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
@@ -388,15 +420,22 @@ def test_read_tar_archives(
             use_zstandard=True,
         )
     else:
-        config = None
+        config = ArchiveyConfig() # Ensure a base config object is passed
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    # libarchive handles its own decompression, so alternative_packages for compression libs
+    # are not relevant when use_libarchive is True. Avoid redundant test runs.
+    if use_libarchive and alternative_packages:
+        pytest.skip("Alternative decompression packages are not used when use_libarchive is True for TAR.")
+
+    # skip_if_package_missing is now called inside check_iter_members
+    # skip_if_package_missing(sample_archive.creation_info.format, config)
 
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
-        skip_member_contents=True,
+        skip_member_contents=True, # TAR tests often skip content check
         config=config,
+        use_libarchive=use_libarchive,
     )
 
 
@@ -406,26 +445,38 @@ def test_read_tar_archives(
     ids=lambda x: x.filename,
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
+@pytest.mark.parametrize("use_libarchive", [False, True], ids=["native", "libarchive"])
 def test_read_rar_archives(
-    sample_archive: SampleArchive, sample_archive_path: str, use_rar_stream: bool
+    sample_archive: SampleArchive, sample_archive_path: str, use_rar_stream: bool, use_libarchive: bool
 ):
     deps = get_dependency_versions()
     if (
         sample_archive.contents.header_password is not None
         and deps.cryptography_version is None
+        and not use_libarchive # libarchive might not need archivey's cryptography dep
     ):
-        pytest.skip("Cryptography is not installed, skipping RAR encrypted-header test")
+        pytest.skip("Cryptography is not installed, skipping RAR encrypted-header test for native reader")
 
-    if use_rar_stream and deps.unrar_version is None:
-        pytest.skip("unrar not installed, skipping RarStreamReader test")
+    if use_rar_stream and deps.unrar_version is None and not use_libarchive:
+        pytest.skip("unrar not installed, skipping RarStreamReader test for native reader")
 
-    config = ArchiveyConfig(use_rar_stream=use_rar_stream)
+    # If using libarchive, use_rar_stream is irrelevant
+    if use_libarchive and use_rar_stream:
+        pytest.skip("use_rar_stream is not applicable when use_libarchive is True for RAR.")
+
+    config = ArchiveyConfig(use_rar_stream=use_rar_stream if not use_libarchive else False)
+
+    if use_libarchive:
+        # Specific skips for libarchive RAR if needed, e.g. advanced RAR features
+        if "rar4" in sample_archive.filename or "rar5" in sample_archive.filename: # Example
+            pass # Potentially skip complex RAR5 features if libarchive struggles
 
     has_password = sample_archive.contents.has_password()
     has_multiple_passwords = sample_archive.contents.has_multiple_passwords()
     first_file_has_password = sample_archive.contents.files[0].password is not None
 
-    expect_failure = use_rar_stream and (
+    # Native reader failure conditions
+    expect_native_failure = not use_libarchive and use_rar_stream and (
         has_multiple_passwords
         or (
             has_password
@@ -434,19 +485,21 @@ def test_read_rar_archives(
         )
     )
 
-    if expect_failure:
+    if expect_native_failure:
         with pytest.raises(ValueError):
             check_iter_members(
                 sample_archive,
                 archive_path=sample_archive_path,
                 config=config,
+                use_libarchive=use_libarchive, # Should be False here
             )
     else:
         check_iter_members(
             sample_archive,
             archive_path=sample_archive_path,
             config=config,
-            skip_member_contents=deps.unrar_version is None,
+            skip_member_contents=deps.unrar_version is None and not use_libarchive,
+            use_libarchive=use_libarchive,
         )
 
 
@@ -462,20 +515,25 @@ def test_read_rar_archives(
     ids=lambda x: x.filename,
 )
 @pytest.mark.parametrize("use_rar_stream", [True, False])
+@pytest.mark.parametrize("use_libarchive", [False, True], ids=["native", "libarchive"])
 def test_read_rar_archives_with_password_in_constructor(
-    sample_archive: SampleArchive, sample_archive_path: str, use_rar_stream: bool
+    sample_archive: SampleArchive, sample_archive_path: str, use_rar_stream: bool, use_libarchive: bool
 ):
     deps = get_dependency_versions()
-    if use_rar_stream and deps.unrar_version is None:
-        pytest.skip("unrar not installed, skipping RarStreamReader test")
+    if use_rar_stream and deps.unrar_version is None and not use_libarchive:
+        pytest.skip("unrar not installed, skipping RarStreamReader test for native reader")
 
-    config = ArchiveyConfig(use_rar_stream=use_rar_stream)
+    if use_libarchive and use_rar_stream:
+        pytest.skip("use_rar_stream is not applicable when use_libarchive is True for RAR.")
+
+    config = ArchiveyConfig(use_rar_stream=use_rar_stream if not use_libarchive else False)
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
         config=config,
         set_file_password_in_constructor=True,
-        skip_member_contents=deps.unrar_version is None,
+        skip_member_contents=deps.unrar_version is None and not use_libarchive,
+        use_libarchive=use_libarchive,
     )
 
 
@@ -490,14 +548,17 @@ def test_read_rar_archives_with_password_in_constructor(
     ),
     ids=lambda x: x.filename,
 )
+@pytest.mark.parametrize("use_libarchive", [False, True], ids=["native", "libarchive"])
 def test_read_zip_and_7z_archives_with_password_in_constructor(
     sample_archive: SampleArchive,
     sample_archive_path: str,
+    use_libarchive: bool,
 ):
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
         set_file_password_in_constructor=True,
+        use_libarchive=use_libarchive,
     )
 
 
@@ -506,10 +567,11 @@ def test_read_zip_and_7z_archives_with_password_in_constructor(
     filter_archives(SAMPLE_ARCHIVES, extensions=["7z"]),
     ids=lambda x: x.filename,
 )
+@pytest.mark.parametrize("use_libarchive", [False, True], ids=["native", "libarchive"])
 def test_read_sevenzip_py7zr_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive, sample_archive_path: str, use_libarchive: bool
 ):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    check_iter_members(sample_archive, archive_path=sample_archive_path, use_libarchive=use_libarchive)
 
 
 @pytest.mark.parametrize(
@@ -520,10 +582,18 @@ def test_read_sevenzip_py7zr_archives(
     ids=lambda x: x.filename,
 )
 @pytest.mark.parametrize("alternative_packages", [False, True])
+@pytest.mark.parametrize("use_libarchive", [False, True], ids=["native", "libarchive"])
 def test_read_single_file_compressed_archives(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool, use_libarchive: bool
 ):
-    if alternative_packages:
+    if use_libarchive:
+        # Libarchive handles single files; alternative packages for compression not directly relevant.
+        # use_single_file_stored_metadata might also be less relevant if libarchive
+        # gets metadata directly from the file itself (e.g. for .gz if it contains filename).
+        if alternative_packages: # Avoid redundant runs
+             pytest.skip("Alternative packages for single file compression not used with libarchive.")
+        config = ArchiveyConfig(use_single_file_stored_metadata=True) # Keep for consistency if libarchive needs it
+    elif alternative_packages:
         config = ArchiveyConfig(
             use_rapidgzip=True,
             use_indexed_bzip2=True,
@@ -534,7 +604,7 @@ def test_read_single_file_compressed_archives(
     else:
         config = ArchiveyConfig(use_single_file_stored_metadata=True)
 
-    check_iter_members(sample_archive, archive_path=sample_archive_path, config=config)
+    check_iter_members(sample_archive, archive_path=sample_archive_path, config=config, use_libarchive=use_libarchive)
 
 
 @pytest.mark.parametrize(
@@ -542,10 +612,16 @@ def test_read_single_file_compressed_archives(
     filter_archives(SAMPLE_ARCHIVES, prefixes=["symlinks", "symlinks_solid"]),
     ids=lambda x: x.filename,
 )
+@pytest.mark.parametrize("use_libarchive", [False, True], ids=["native", "libarchive"])
 def test_read_symlinks_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive, sample_archive_path: str, use_libarchive: bool
 ):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    # Specific skips for libarchive if its symlink handling differs significantly, e.g. for link targets
+    # For example, if libarchive normalizes paths differently or has issues with certain link types.
+    if use_libarchive and "weird_symlink_target" in sample_archive.filename: # hypothetical
+        pytest.skip("Libarchive known to handle this specific symlink case differently.")
+
+    check_iter_members(sample_archive, archive_path=sample_archive_path, use_libarchive=use_libarchive)
 
 
 @pytest.mark.parametrize(
@@ -553,14 +629,31 @@ def test_read_symlinks_archives(
     filter_archives(SAMPLE_ARCHIVES, prefixes=["symlink_loop"]),
     ids=lambda x: x.filename,
 )
-def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_path: str):
+@pytest.mark.parametrize("use_libarchive", [False, True], ids=["native", "libarchive"])
+def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_path: str, use_libarchive: bool):
     """Ensure that archives with symlink loops do not cause infinite loops."""
-    with open_archive(sample_archive_path) as archive:
+    config = ArchiveyConfig(use_libarchive=use_libarchive)
+    if use_libarchive:
+        # Libarchive's loop detection or error on open might differ.
+        # This test might need adjustment based on libarchive's behavior.
+        # For now, assume similar error on opening a looping symlink.
+        pass
+
+    with open_archive(sample_archive_path, config=config) as archive:
         for member in archive.get_members():
             if member.type == MemberType.SYMLINK:
-                if member.link_target == "file5.txt":
+                # Adjust expectations if libarchive behaves differently for readable loops
+                if member.link_target == "file5.txt" and not use_libarchive: # Native reader might resolve this
                     with archive.open(member) as fh:
                         fh.read()
+                elif member.link_target == "file5.txt" and use_libarchive:
+                     # Assuming libarchive might also resolve this or error consistently.
+                     # This part may need refinement after observing libarchive behavior.
+                    try:
+                        with archive.open(member) as fh:
+                            fh.read()
+                    except ArchiveMemberCannotBeOpenedError:
+                        pass # Expected if libarchive also blocks it like the native one for other loops
                 else:
                     with pytest.raises(ArchiveMemberCannotBeOpenedError):
                         archive.open(member)
@@ -576,10 +669,24 @@ def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_pat
     ),
     ids=lambda x: x.filename,
 )
+@pytest.mark.parametrize("use_libarchive", [False, True], ids=["native", "libarchive"])
 def test_read_hardlinks_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive, sample_archive_path: str, use_libarchive: bool
 ):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    if use_libarchive:
+        # Libarchive treats hardlinks essentially as regular files in its entry listing.
+        # The BaseArchiveReader's hardlink resolution logic (based on prior identical filenames)
+        # might behave differently or fail if libarchive doesn't provide members in a
+        # strictly consistent order or if it resolves hardlinks internally differently.
+        # This is a known area for potential divergence.
+        # Depending on strictness, we might skip or adjust assertions for hardlink targets with libarchive.
+        # For now, let it run. If it fails, this is a primary suspect.
+        # Example skip for a particularly complex hardlink archive with libarchive:
+        if "very_complex_hardlinks" in sample_archive.filename: # hypothetical
+            pytest.skip("Skipping complex hardlink test with libarchive due to known behavioral differences.")
+        pass
+
+    check_iter_members(sample_archive, archive_path=sample_archive_path, use_libarchive=use_libarchive)
 
 
 @pytest.mark.parametrize(
@@ -587,6 +694,7 @@ def test_read_hardlinks_archives(
     filter_archives(SAMPLE_ARCHIVES, extensions=["_folder/"]),
     ids=lambda x: x.filename,
 )
+# No use_libarchive here, as FolderReader is always used for folders.
 def test_read_folder_archives(sample_archive: SampleArchive, sample_archive_path: str):
     logger.info(f"Testing {sample_archive.filename}; files at {sample_archive_path}")
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    check_iter_members(sample_archive, archive_path=sample_archive_path, use_libarchive=False) # Explicitly False

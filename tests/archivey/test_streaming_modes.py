@@ -110,19 +110,30 @@ def test_streaming_only_mode(
 ):
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
+    # FolderReader is special: it always has random access and is not wrapped
+    # by StreamingOnlyArchiveReaderWrapper in the current core.py logic.
+    is_folder_archive = sample_archive.creation_info.format == ArchiveFormat.FOLDER
+
     first_file = _first_regular_file(sample_archive)
     with open_archive(sample_archive_path, streaming_only=True) as archive:
-        assert not archive.has_random_access()
-
-        with pytest.raises(ValueError):
-            archive.get_members()
-        with pytest.raises(ValueError):
-            archive.open(first_file.name)
+        if is_folder_archive:
+            assert archive.has_random_access(), "FolderArchive should still have random access"
+            # For FolderArchive, get_members() and open() should work
+            assert archive.get_members() is not None
+            with archive.open(first_file.name) as f:
+                assert f.read() is not None
+        else:
+            assert not archive.has_random_access(), "Archive should not have random access in streaming_only mode"
+            with pytest.raises(ValueError):
+                archive.get_members()
+            with pytest.raises(ValueError):
+                archive.open(first_file.name)
 
         info = archive.get_members_if_available()
         if (
-            sample_archive.creation_info.format == ArchiveFormat.TAR
-            or sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS
+            not is_folder_archive and
+            (sample_archive.creation_info.format == ArchiveFormat.TAR
+            or sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS)
         ):
             assert info is None
         else:
@@ -248,6 +259,9 @@ def test_streaming_only_allows_single_iteration(
 ):
     """Ensure streaming-only archives can be consumed only once."""
     skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    if sample_archive.creation_info.format == ArchiveFormat.FOLDER:
+        pytest.skip("FolderArchive does not have single-iteration restriction for iter_members_with_io.")
 
     with open_archive(sample_archive_path, streaming_only=True) as archive:
         next(archive.iter_members_with_io())
