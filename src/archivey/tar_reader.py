@@ -3,7 +3,7 @@ import os
 import stat
 import tarfile
 from datetime import datetime, timezone
-from typing import IO, BinaryIO, Iterator, List, Optional, Union, cast
+from typing import IO, BinaryIO, Iterator, List, Optional, cast
 
 from archivey.base_reader import (
     ArchiveInfo,
@@ -189,25 +189,26 @@ class TarReader(BaseArchiveReader):
         if data != b"\x00" * (512 * 2):
             raise ArchiveCorruptedError("Invalid data after last tarinfo")
 
-    def open(
-        self,
-        member_or_filename: Union[str, ArchiveMember],
-        *,
-        pwd: bytes | str | None = None,
-        is_streaming_mode: bool = False,
-    ) -> BinaryIO:
-        self.check_archive_open()
-        assert self._archive is not None
-
-        if self._streaming_only and not is_streaming_mode:
+    def _prepare_member_for_open(
+        self, member: ArchiveMember, *, pwd: bytes | str | None, for_iteration: bool
+    ) -> ArchiveMember:
+        if self._streaming_only and not for_iteration:
             raise ValueError(
                 "Archive opened in streaming mode does not support opening specific members."
             )
-
         if pwd is not None:
             raise ValueError("TAR format does not support password protection.")
+        return member
 
-        member, filename = self._resolve_member_to_open(member_or_filename)
+    def _open_member(
+        self,
+        member: ArchiveMember,
+        *,
+        pwd: bytes | str | None = None,
+        for_iteration: bool = False,
+    ) -> BinaryIO:
+        assert self._archive is not None
+
         tarinfo = cast(tarfile.TarInfo, member.raw_info)
 
         def _open_stream() -> IO[bytes]:
@@ -215,7 +216,7 @@ class TarReader(BaseArchiveReader):
             stream = self._archive.extractfile(tarinfo)
             if stream is None:
                 raise ArchiveMemberCannotBeOpenedError(
-                    f"Member {filename} cannot be opened"
+                    f"Member {member.filename} cannot be opened"
                 )
             return stream
 
@@ -227,11 +228,6 @@ class TarReader(BaseArchiveReader):
             if translated is not None:
                 raise translated from e
             raise
-
-    def open_for_iteration(
-        self, member: ArchiveMember, *, pwd: bytes | str | None = None
-    ) -> BinaryIO:
-        return self.open(member, is_streaming_mode=True, pwd=pwd)
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.

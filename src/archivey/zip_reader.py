@@ -184,16 +184,14 @@ class ZipReader(BaseArchiveReader):
             )
             yield member
 
-    def open(
+    def _open_member(
         self,
-        member_or_filename: ArchiveMember | str,
+        member: ArchiveMember,
         *,
         pwd: Optional[bytes | str] = None,
+        for_iteration: bool = False,
     ) -> BinaryIO:
-        self.check_archive_open()
         assert self._archive is not None
-
-        member, filename = self._resolve_member_to_open(member_or_filename)
 
         try:
             stream = self._archive.open(
@@ -205,16 +203,22 @@ class ZipReader(BaseArchiveReader):
 
             return ExceptionTranslatingIO(
                 cast(BinaryIO, stream),
-                lambda e: ArchiveCorruptedError(f"Error reading member {filename}: {e}")
+                lambda e: ArchiveCorruptedError(
+                    f"Error reading member {member.filename}: {e}"
+                )
                 if isinstance(e, zipfile.BadZipFile)
                 else None,
             )
         except RuntimeError as e:
             if "password required" in str(e):
-                raise ArchiveEncryptedError(f"Member {filename} is encrypted") from e
-            raise ArchiveError(f"Error reading member {filename}: {e}") from e
+                raise ArchiveEncryptedError(
+                    f"Member {member.filename} is encrypted"
+                ) from e
+            raise ArchiveError(f"Error reading member {member.filename}: {e}") from e
         except zipfile.BadZipFile as e:
-            raise ArchiveCorruptedError(f"Error reading member {filename}: {e}") from e
+            raise ArchiveCorruptedError(
+                f"Error reading member {member.filename}: {e}"
+            ) from e
 
     @classmethod
     def is_zip_file(cls, file: BinaryIO | str | os.PathLike) -> bool:

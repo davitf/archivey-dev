@@ -124,16 +124,13 @@ class FolderReader(BaseArchiveReader):
             for filename in filenames:
                 yield self._convert_entry_to_member(dirpath / filename, seen_inodes)
 
-    def open(
+    def _open_member(
         self,
-        member_or_filename: ArchiveMember | str,
+        member: ArchiveMember,
         *,
         pwd: Optional[str | bytes] = None,
+        for_iteration: bool = False,
     ) -> BinaryIO:
-        # pwd is ignored for FolderReader
-        self.check_archive_open()
-
-        member, filename = self._resolve_member_to_open(member_or_filename)
         assert member.type == MemberType.FILE
 
         # Convert archive path (with '/') to OS-specific path
@@ -142,7 +139,7 @@ class FolderReader(BaseArchiveReader):
 
         if not full_path.exists():
             raise ArchiveMemberNotFoundError(
-                f"Member not found: {filename} (resolved to {full_path})"
+                f"Member not found: {member.filename} (resolved to {full_path})"
             )
 
         # It's good practice to ensure the resolved path is still within the archive root
@@ -159,18 +156,18 @@ class FolderReader(BaseArchiveReader):
                 # A more robust check:
                 if not str(resolved_full_path).startswith(str(self.archive_path)):
                     raise ArchiveMemberNotFoundError(
-                        f"Access to member '{filename}' outside archive root is denied."
+                        f"Access to member '{member.filename}' outside archive root is denied."
                     )
 
         except OSError as e:  # e.g. broken symlink during resolve()
             raise ArchiveMemberNotFoundError(
-                f"Error resolving path for member '{filename}': {e}"
+                f"Error resolving path for member '{member.filename}': {e}"
             ) from e
 
         try:
             return full_path.open("rb")
         except OSError as e:
-            raise ArchiveIOError(f"Cannot open member '{filename}': {e}") from e
+            raise ArchiveIOError(f"Cannot open member '{member.filename}': {e}") from e
 
     def get_archive_info(self) -> ArchiveInfo:
         self.check_archive_open()
