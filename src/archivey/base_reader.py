@@ -663,10 +663,6 @@ class BaseArchiveReader(ArchiveReader):
         """Open ``member_or_filename`` for random access reading."""
         return self._open_internal(member_or_filename, pwd=pwd, for_iteration=False)
 
-    def open_for_iteration(self, member, pwd: bytes | str | None = None) -> BinaryIO:
-        """Open a member while iterating over the archive."""
-        return self._open_internal(member, pwd=pwd, for_iteration=True)
-
     def _start_streaming_iteration(self) -> None:
         """Ensure only a single streaming iteration is performed for non-random-access readers."""
         if self._random_access_supported:
@@ -727,13 +723,17 @@ class BaseArchiveReader(ArchiveReader):
                 continue
 
             try:
-                # Some backends provide seekable streams for regular files.
                 stream = (
                     LazyOpenIO(
-                        self.open_for_iteration,
+                        self._open_internal,
                         member,
                         pwd=pwd,
-                        seekable=self._random_access_supported,
+                        for_iteration=True,
+                        # Some backends are optimized for seeking inside files.
+                        # Most others support seeking, but need to re-read the file from
+                        # the beginning when seeking backwards.
+                        # TODO: should we make these streams non-seekable?
+                        seekable=self._random_access_supported,  # LazyOpenIO kwarg
                     )
                     if member.is_file
                     else None

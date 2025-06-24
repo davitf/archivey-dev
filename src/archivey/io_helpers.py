@@ -3,7 +3,7 @@
 import io
 import logging
 from dataclasses import dataclass, field
-from typing import IO, Any, BinaryIO, Callable, Optional, cast
+from typing import IO, Any, BinaryIO, Callable, NoReturn, Optional
 
 from archivey.exceptions import ArchiveError
 
@@ -40,14 +40,26 @@ class ErrorIOStream(io.RawIOBase, BinaryIO):
         return False  # pragma: no cover - trivial
 
 
+def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
+    """Check if a stream is seekable."""
+    try:
+        return stream.seekable()
+    except AttributeError as e:
+        # Some streams (e.g. tarfile._Stream) don't have a seekable method, which seems
+        # like a bug. Sometimes they are wrapped in other classes
+        # (e.g. tarfile._FileInFile) that do have one and assume the inner ones also do.
+        #
+        # In the tarfile case specifically, _Stream actually does have a seek() method,
+        # but calling seek() on the stream returned by tarfile will raise an exception,
+        # as it's wrapped in a BufferedReader which calls seekable() when doing a seek().
+        logger.debug(f"Stream {stream} does not have a seekable method: {e}")
+        return False
+
+
 class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     """
     Wraps an I/O stream to translate specific exceptions from an underlying library
     into ArchiveError subclasses.
-
-    This class is crucial for providing a consistent exception hierarchy to the
-    users of `archivey`, regardless of the third-party library used for a
-    specific archive format.
     """
 
     def __init__(
@@ -74,7 +86,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         """
         super().__init__()
         self._translate = exception_translator
-        self._inner: io.IOBase | IO[bytes] | None = None
+        self._inner: io.IOBase | IO[bytes]
 
         if isinstance(inner, Callable):
             try:
@@ -87,7 +99,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         else:
             self._inner = inner
 
-    def _translate_exception(self, e: Exception) -> None:
+    def _translate_exception(self, e: Exception) -> NoReturn:
         translated = self._translate(e)
         if translated is not None:
             logger.debug(f"Translated exception: {repr(e)} -> {repr(translated)}")
@@ -98,63 +110,57 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         raise e
 
     def read(self, n: int = -1) -> bytes:
-        assert self._inner is not None
+        # Some rarfile streams don't actually prevent reading after closing, so we
+        # enforce that here.
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
         try:
             return self._inner.read(n)
         except Exception as e:
             self._translate_exception(e)
-            return b""  # pragma: no cover - unreachable, _translate_exception always raises
 
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
-        assert self._inner is not None
         try:
             return self._inner.seek(offset, whence)
         except Exception as e:
-            logger.error(f"Exception when seeking {self._inner}: {e}", exc_info=e)
             self._translate_exception(e)
-            return (
-                0  # pragma: no cover - unreachable, _translate_exception always raises
-            )
 
     def tell(self) -> int:
-        assert self._inner is not None
         return self._inner.tell()
 
     def readable(self) -> bool:
-        assert self._inner is not None
         return self._inner.readable()
 
     def writable(self) -> bool:
-        assert self._inner is not None
         return self._inner.writable()
 
     def seekable(self) -> bool:
-        assert self._inner is not None
-        return self._inner.seekable()
+        return is_seekable(self._inner)
 
     def write(self, b: Any) -> int:
-        assert self._inner is not None
         try:
             return self._inner.write(b)
         except Exception as e:
-            self._translate_exception(cast(Exception, e))
-            return (
-                0  # pragma: no cover - unreachable, _translate_exception always raises
-            )
+            self._translate_exception(e)
 
     def writelines(self, lines: Any) -> None:
-        assert self._inner is not None
         try:
             self._inner.writelines(lines)
         except Exception as e:
-            self._translate_exception(cast(Exception, e))
+            self._translate_exception(e)
 
     def close(self) -> None:
+        # If the object raised an exception during initialization, it might not have
+        # an _inner attribute. But IOBase.__del__() will eventually be called and may
+        # call close() here. If we don't check that the attribute exists, we'll get an
+        # spurious exception at that point.
+        if not hasattr(self, "_inner"):
+            return
+
         try:
-            if self._inner is not None:
-                self._inner.close()
+            self._inner.close()
         except Exception as e:
-            self._translate_exception(cast(Exception, e))
+            self._translate_exception(e)
         super().close()
 
     def __str__(self) -> str:
@@ -210,28 +216,32 @@ class LazyOpenIO(io.RawIOBase, BinaryIO):
     # ------------------------------------------------------------------
     # Basic IO methods
     # ------------------------------------------------------------------
-    def read(self, n: int = -1) -> bytes:
-        return self._ensure_open().read(n)
+    def read(self, n: int = -1, /) -> bytes:
+        # Replace this method with the one from the underlying stream, to avoid
+        # the overhead of an extra method call on future reads.
+        self.read = self._ensure_open().read
+        return self.read(n)
 
-    def readable(self) -> bool:
-        return True  # pragma: no cover - trivial
-
-    def writable(self) -> bool:
-        return False  # pragma: no cover - trivial
+    def readable(self) -> bool: return True  # pragma: no cover - trivial
+    def writable(self) -> bool: return False  # pragma: no cover - trivial
 
     def seekable(self) -> bool:
-        return self._seekable  # pragma: no cover - trivial
+        return is_seekable(self._inner) if self._inner is not None else self._seekable
 
     def close(self) -> None:  # pragma: no cover - simple delegation
         if self._inner is not None:
             self._inner.close()
         super().close()
 
-    def __enter__(self) -> "LazyOpenIO":
-        return self
+    def seek(self, offset: int, whence: int = io.SEEK_SET, /) -> int:
+        # Replace this method with the one from the underlying stream.
+        self.seek = self._ensure_open().seek
+        return self.seek(offset, whence)
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self.close()
+    def tell(self) -> int:
+        # Replace this method with the one from the underlying stream.
+        self.tell = self._ensure_open().tell
+        return self.tell()
 
 
 @dataclass
@@ -306,12 +316,3 @@ class StatsIO(io.RawIOBase, BinaryIO):
     # Delegate unknown attributes --------------------------------------
     def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
         return getattr(self._inner, item)
-
-    # Context manager support -----------------------------------------
-    def __enter__(self) -> "StatsIO":  # pragma: no cover - trivial
-        self._inner.__enter__()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # pragma: no cover - trivial
-        self._inner.__exit__(exc_type, exc_val, exc_tb)
-        self.close()

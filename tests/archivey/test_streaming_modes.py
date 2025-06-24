@@ -3,6 +3,7 @@ from typing import IO
 
 import pytest
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
@@ -14,13 +15,6 @@ from tests.archivey.sample_archives import (
 from tests.archivey.testing_utils import skip_if_package_missing
 
 
-def _last_regular_file(sample: SampleArchive):
-    for f in reversed(sample.contents.files):
-        if f.type == MemberType.FILE:
-            return f
-    raise ValueError("sample archive has no regular file")
-
-
 def _first_regular_file(sample: SampleArchive):
     for f in sample.contents.files:
         if f.type == MemberType.FILE:
@@ -29,12 +23,6 @@ def _first_regular_file(sample: SampleArchive):
 
 
 logger = logging.getLogger(__name__)
-
-#  "duplicate_files",
-#                   "hardlinks_nonsolid", "hardlinks_solid",
-#                   "hardlinks_with_duplicate_files",
-#                   "hardlinks_recursive_and_broken",
-#                   "symlinks", "symlinks_solid"
 
 
 @pytest.mark.parametrize(
@@ -105,13 +93,32 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
     ids=lambda a: a.filename,
 )
 @pytest.mark.parametrize("close_streams", [False, True], ids=["noclose", "close"])
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["default", "alternative"]
+)
 def test_streaming_only_mode(
-    sample_archive: SampleArchive, sample_archive_path: str, close_streams: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    close_streams: bool,
+    alternative_packages: bool,
 ):
+    if alternative_packages:
+        config = ArchiveyConfig(
+            use_rar_stream=True,
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            use_zstandard=True,
+        )
+    else:
+        config = ArchiveyConfig()
+
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
     first_file = _first_regular_file(sample_archive)
-    with open_archive(sample_archive_path, streaming_only=True) as archive:
+    with open_archive(
+        sample_archive_path, streaming_only=True, config=config
+    ) as archive:
         assert not archive.has_random_access()
 
         with pytest.raises(ValueError):
@@ -146,7 +153,18 @@ def test_streaming_only_mode(
                 assert stream is None
             else:
                 assert stream is not None
+                seekable_before = stream.seekable()
                 data = stream.read()
+                seekable_after = stream.seekable()
+                if seekable_before:
+                    # Check that we didn't report the stream as seekable if it's actually not
+                    assert seekable_after
+                if seekable_after:
+                    # Check that the stream is actually seekable
+                    print(m, f"Stream: {stream}")
+                    stream.seek(0)
+                    data_after = stream.read()
+                    assert data == data_after
 
             previous_stream = stream
 

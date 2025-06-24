@@ -299,14 +299,13 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         )
         self._actual_crc = 0
         self._lock = lock
-        self._closed = False
         self._filename = member.filename
         self._fully_read = False
         self._member = member
         self._crc_checked = False
 
     def read(self, n: int = -1) -> bytes:
-        if self._closed:
+        if self.closed:
             raise ValueError(f"Cannot read from closed/expired file: {self._filename}")
 
         with self._lock:
@@ -355,7 +354,7 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         raise io.UnsupportedOperation("writelines")  # pragma: no cover
 
     def close(self) -> None:
-        if self._closed:
+        if self.closed:
             return
         try:
             with self._lock:
@@ -368,7 +367,6 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
 
             self._check_crc()
         finally:
-            self._closed = True
             super().close()
 
 

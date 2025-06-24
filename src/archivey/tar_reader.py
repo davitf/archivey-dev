@@ -167,7 +167,7 @@ class TarReader(BaseArchiveReader):
         )
 
     def _check_tar_integrity(self, last_tarinfo: tarfile.TarInfo) -> None:
-        # See what's after the last tarinfo. It should be an empty block.
+        # See what's after the last tarinfo. It should be two empty blocks.
         data_size = last_tarinfo.size
         # Round up to the next multiple of 512.
         data_blocks = (data_size + 511) & ~511
@@ -182,12 +182,23 @@ class TarReader(BaseArchiveReader):
         else:
             remaining = next_member_offset - self._fileobj.tell()
             if remaining > 0:
-                self._fileobj.read(remaining)
-        data = self._fileobj.read(512 * 2)
-        if len(data) < 512 * 2:
-            raise ArchiveCorruptedError("Missing data after last tarinfo")
-        if data != b"\x00" * (512 * 2):
-            raise ArchiveCorruptedError("Invalid data after last tarinfo")
+                data = self._fileobj.read(remaining)
+                assert len(data) == remaining, (
+                    f"Expected {remaining} bytes, got {len(data)}"
+                )
+            elif remaining < 0:
+                # The pointer has moved past the end of the file, we can't check for
+                # integrity.
+                return
+
+        expected_zeroes = 512 * 2
+        data = self._fileobj.read(expected_zeroes)
+        if len(data) < expected_zeroes:
+            raise ArchiveCorruptedError(
+                f"Missing data after last tarinfo: {len(data)} bytes"
+            )
+        if data != b"\x00" * expected_zeroes:
+            raise ArchiveCorruptedError(f"Invalid data after last tarinfo: {data!r}")
 
     def _prepare_member_for_open(
         self, member: ArchiveMember, *, pwd: bytes | str | None, for_iteration: bool
