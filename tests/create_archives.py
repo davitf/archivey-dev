@@ -570,6 +570,33 @@ def create_rar_archive_with_command_line(
                 os.remove(comment_file_path)
 
 
+def create_ar_archive_with_command_line(
+    archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
+):
+    assert compression_format == ArchiveFormat.AR, (
+        f"Only AR format is supported, got {compression_format}"
+    )
+    if shutil.which("ar") is None:
+        raise PackageNotInstalledError("ar command is not installed")
+    if contents.archive_comment:
+        raise ValueError("AR format does not support archive comments")
+    if contents.header_password or contents.has_password_in_files():
+        raise ValueError("AR format does not support passwords")
+
+    abs_archive_path = os.path.abspath(archive_path)
+    if os.path.exists(abs_archive_path):
+        os.remove(abs_archive_path)
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        write_files_to_dir(tempdir, contents.files)
+        command = ["ar", "rcs", abs_archive_path]
+        for file_info in contents.files:
+            if file_info.type != MemberType.FILE:
+                raise ValueError("AR format only supports regular files")
+            command.append(file_info.name)
+        subprocess.run(command, check=True, cwd=tempdir)
+
+
 def create_7z_archive_with_py7zr(
     archive_path: str, contents: ArchiveContents, compression_format: ArchiveFormat
 ):
@@ -811,6 +838,7 @@ GENERATION_METHODS_TO_GENERATOR = {
     GenerationMethod.TAR_COMMAND_LINE: create_tar_archive_with_command_line,
     GenerationMethod.TAR_LIBRARY: create_tar_archive_with_tarfile,
     GenerationMethod.RAR_COMMAND_LINE: create_rar_archive_with_command_line,
+    GenerationMethod.AR_COMMAND_LINE: create_ar_archive_with_command_line,
     GenerationMethod.PY7ZR: create_7z_archive_with_py7zr,
     GenerationMethod.SEVENZIP_COMMAND_LINE: create_7z_archive_with_command_line,
     GenerationMethod.SINGLE_FILE_COMMAND_LINE: create_single_file_compressed_archive_with_command_line,

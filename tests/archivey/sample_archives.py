@@ -19,6 +19,7 @@ class GenerationMethod(Enum):
     PY7ZR = "py7zr"
     SEVENZIP_COMMAND_LINE = "7z_cmd"
     RAR_COMMAND_LINE = "rar_cmd"
+    AR_COMMAND_LINE = "ar_cmd"
     SINGLE_FILE_COMMAND_LINE = "single_file_cmd"
     SINGLE_FILE_LIBRARY = "single_file_lib"
     ISO_PYCDLIB = "iso_pycdlib"
@@ -315,6 +316,14 @@ RAR4_CMD = ArchiveCreationInfo(
     ),
 )
 
+# AR format
+AR_CMD = ArchiveCreationInfo(
+    file_suffix=".a",
+    format=ArchiveFormat.AR,
+    generation_method=GenerationMethod.AR_COMMAND_LINE,
+    features=ArchiveFormatFeatures(dir_entries=False, link_targets_in_header=False),
+)
+
 _TAR_FORMAT_FEATURES_TARCMD = ArchiveFormatFeatures(mtime_with_tz=True)
 _TAR_FORMAT_FEATURES_TARFILE = ArchiveFormatFeatures(
     duplicate_files=True, hardlink_mtime=True, mtime_with_tz=True
@@ -499,6 +508,7 @@ ALL_SINGLE_FILE_FORMATS = [
     XZ_LIBRARY,
     ZSTD_LIBRARY,
     LZ4_LIBRARY,
+    AR_CMD,
 ]
 
 BASIC_TAR_FORMATS = [
@@ -528,6 +538,8 @@ RAR_FORMATS = [
     RAR4_CMD,
 ]
 
+AR_FORMATS = [AR_CMD]
+
 SEVENZIP_FORMATS = [
     SEVENZIP_PY7ZR,
     SEVENZIP_7ZCMD,
@@ -539,6 +551,7 @@ ISO_FORMATS = [
 ]
 
 ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
+ZIP_RAR_7Z_AR_FORMATS = ZIP_RAR_7Z_FORMATS + AR_FORMATS
 
 # Skip test filenames
 SKIP_TEST_FILENAMES = set(
@@ -1022,7 +1035,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="encoding",
             files=ENCODING_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
+        ZIP_RAR_7Z_AR_FORMATS + [FOLDER_FORMAT],
     ),
     (
         ArchiveContents(
@@ -1073,7 +1086,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="permissions",
             files=TEST_PERMISSIONS_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
+        ZIP_RAR_7Z_AR_FORMATS + [FOLDER_FORMAT],
     ),
     (
         ArchiveContents(
@@ -1088,7 +1101,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="large_files_nonsolid",
             files=LARGE_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
+        ZIP_RAR_7Z_AR_FORMATS + [FOLDER_FORMAT],
     ),
     (
         ArchiveContents(
@@ -1096,7 +1109,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             files=LARGE_FILES,
             solid=True,
         ),
-        RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
+        RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS + AR_FORMATS,
     ),
     (
         ArchiveContents(
@@ -1117,7 +1130,7 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             file_basename="duplicate_files",
             files=DUPLICATE_FILES,
         ),
-        ZIP_RAR_7Z_FORMATS + [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
+        ZIP_RAR_7Z_AR_FORMATS + [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
     ),
     (
         ArchiveContents(

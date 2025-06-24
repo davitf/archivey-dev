@@ -62,6 +62,7 @@ def detect_archive_format_by_signature(
             ArchiveFormat.RAR,
         ),
         ([b"\x37\x7a\xbc\xaf\x27\x1c"], 0, ArchiveFormat.SEVENZIP),
+        ([b"!<arch>\n"], 0, ArchiveFormat.AR),
         ([b"\x1f\x8b"], 0, ArchiveFormat.GZIP),
         ([b"\x42\x5a\x68"], 0, ArchiveFormat.BZIP2),
         ([b"\xfd\x37\x7a\x58\x5a\x00"], 0, ArchiveFormat.XZ),
@@ -168,6 +169,8 @@ _EXTENSION_TO_FORMAT = {
     ".lz4": ArchiveFormat.LZ4,
     ".zip": ArchiveFormat.ZIP,
     ".rar": ArchiveFormat.RAR,
+    ".a": ArchiveFormat.AR,
+    ".ar": ArchiveFormat.AR,
     ".7z": ArchiveFormat.SEVENZIP,
     ".iso": ArchiveFormat.ISO,
 }
