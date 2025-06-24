@@ -7,7 +7,6 @@ import hmac
 import io
 import logging
 import os
-import shutil
 import stat
 import struct
 import subprocess
@@ -391,15 +390,15 @@ class RarStreamReader:
 
     def _open_unrar_stream(self):
         try:
-            unrar_path = shutil.which("unrar")
-            if not unrar_path:
-                raise PackageNotInstalledError(
-                    "unrar command is not installed. It is required to read RAR member contents."
-                )
-
-            # Open an unrar process that outputs the contents of all files in the archive to stdout.
+            rarfile.tool_setup(
+                unrar=True,
+                unar=False,
+                bsdtar=False,
+                sevenzip=False,
+                sevenzip2=False,
+            )
             password_args = ["-p" + bytes_to_str(self._pwd)] if self._pwd else ["-p-"]
-            cmd = [unrar_path, "p", "-inul", *password_args, self.archive_path]
+            cmd = [rarfile.UNRAR_TOOL, "p", "-inul", *password_args, self.archive_path]
             logger.debug(
                 f"Opening RAR archive {self.archive_path} with command: {' '.join(cmd)}"
             )
@@ -412,6 +411,10 @@ class RarStreamReader:
                 raise RuntimeError("Could not open unrar output stream")
             self._stream = cast(BinaryIO, self._proc.stdout)
 
+        except rarfile.RarCannotExec as e:
+            raise PackageNotInstalledError(
+                "unrar command is not installed. It is required to read RAR member contents."
+            ) from e
         except (OSError, subprocess.SubprocessError) as e:
             raise ArchiveError(
                 f"Error opening RAR archive {self.archive_path}: {e}"
@@ -557,33 +560,40 @@ class RarReader(BaseArchiveReader):
             data = b""
 
         if not data:
-            unrar = shutil.which("unrar")
-            if unrar:
-                try:
-                    assert info.filename is not None
-                    with tempfile.TemporaryDirectory() as tmpdir:
-                        subprocess.run(
-                            [
-                                unrar,
-                                "x",
-                                "-inul",
-                                f"-p{bytes_to_str(pwd) if pwd is not None else '-'}",
-                                str(self.archive_path),
-                                info.filename,
-                                tmpdir,
-                            ],
-                            check=True,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                        )
-                        link_path = os.path.join(tmpdir, info.filename)
-                        return os.readlink(link_path)
-                except (subprocess.SubprocessError, OSError) as e:
-                    logger.warning(
-                        "Error reading link target via unrar for %s: %s",
-                        info.filename,
-                        e,
+            try:
+                rarfile.tool_setup(
+                    unrar=True,
+                    unar=False,
+                    bsdtar=False,
+                    sevenzip=False,
+                    sevenzip2=False,
+                )
+                assert info.filename is not None
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    subprocess.run(
+                        [
+                            rarfile.UNRAR_TOOL,
+                            "x",
+                            "-inul",
+                            f"-p{bytes_to_str(pwd) if pwd is not None else '-'}",
+                            str(self.archive_path),
+                            info.filename,
+                            tmpdir,
+                        ],
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                     )
+                    link_path = os.path.join(tmpdir, info.filename)
+                    return os.readlink(link_path)
+            except rarfile.RarCannotExec:
+                logger.debug("unrar not found when resolving link target")
+            except (subprocess.SubprocessError, OSError) as e:
+                logger.warning(
+                    "Error reading link target via unrar for %s: %s",
+                    info.filename,
+                    e,
+                )
             return None
 
         return data.decode("utf-8")
