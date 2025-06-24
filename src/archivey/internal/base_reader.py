@@ -5,6 +5,7 @@ import logging
 import os
 import posixpath
 import threading
+from weakref import WeakSet
 from collections import defaultdict
 from typing import BinaryIO, Callable, Collection, Iterator, List, Union, cast
 from uuid import uuid4
@@ -151,6 +152,12 @@ class BaseArchiveReader(ArchiveReader):
 
         self._streaming_iteration_started: bool = False
         self._closed: bool = False
+        self._open_streams: WeakSet[BinaryIO] = WeakSet()
+
+    def _track_stream(self, stream: BinaryIO) -> BinaryIO:
+        """Register an opened stream to be closed when the archive closes."""
+        self._open_streams.add(stream)
+        return stream
 
     def get_archive_password(self) -> bytes | None:
         """Return the default password for the archive, if one was provided."""
@@ -401,8 +408,10 @@ class BaseArchiveReader(ArchiveReader):
         """Open ``member_or_filename`` for random access reading."""
         self.check_archive_open()
         self.check_not_streaming_only("open()")
-
-        return self._open_internal(member_or_filename, pwd=pwd, for_iteration=False)
+        stream = self._open_internal(
+            member_or_filename, pwd=pwd, for_iteration=False
+        )
+        return self._track_stream(stream)
 
     def _start_streaming_iteration(self) -> None:
         """Ensure only a single streaming iteration is performed for non-random-access readers."""
@@ -459,16 +468,18 @@ class BaseArchiveReader(ArchiveReader):
 
             try:
                 stream = (
-                    LazyOpenIO(
-                        self._open_internal,
-                        member,
-                        pwd=pwd,
-                        for_iteration=True,
-                        # Some backends are optimized for seeking inside files.
-                        # Most others support seeking, but need to re-read the file from
-                        # the beginning when seeking backwards.
-                        # TODO: should we make these streams non-seekable?
-                        seekable=not self._streaming_only,  # LazyOpenIO kwarg
+                    self._track_stream(
+                        LazyOpenIO(
+                            self._open_internal,
+                            member,
+                            pwd=pwd,
+                            for_iteration=True,
+                            # Some backends are optimized for seeking inside files.
+                            # Most others support seeking, but need to re-read the file from
+                            # the beginning when seeking backwards.
+                            # TODO: should we make these streams non-seekable?
+                            seekable=not self._streaming_only,  # LazyOpenIO kwarg
+                        )
                     )
                     if member.is_file
                     else None
@@ -686,6 +697,9 @@ class BaseArchiveReader(ArchiveReader):
 
     def close(self) -> None:
         if not self._closed:
+            for stream in list(self._open_streams):
+                stream.close()
+            self._open_streams.clear()
             self._close_archive()
             self._closed = True
             self._members = None  # type: ignore
