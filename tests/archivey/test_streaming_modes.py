@@ -113,7 +113,7 @@ def test_streaming_only_mode(
     else:
         config = ArchiveyConfig()
 
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, config)
 
     first_file = _first_regular_file(sample_archive)
     with open_archive(
