@@ -77,11 +77,11 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
                 == sample_archive.contents.files[i].contents
             )
 
-    # After the archive context manager is closed, all streams should have been closed.
-    # TODO: this is not actually true. Should this be implemented? Or should we test
-    # that trying to read() from these streams raises an error?
-    # for f in files:
-    #     assert f.closed
+    # After closing the archive, all previously opened streams should be closed.
+    for f in files:
+        assert f.closed
+        with pytest.raises(ValueError):
+            f.read()
 
 
 @pytest.mark.parametrize(
