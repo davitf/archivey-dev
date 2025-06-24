@@ -33,6 +33,11 @@ RAR support relies on the `unrar` tool, which you'll need to install separately.
 | Zstandard | | [`pyzstd`](https://pypi.org/project/pyzstd) (preferred) or [`zstandard`](https://pypi.org/project/zstandard) | |
 | LZ4 | | [`lz4`](https://pypi.org/project/lz4) | |
 
+Archivey's modules are organized into three packages:
+`archivey.api` (public API utilities like `open_archive`),
+`archivey.readers` (base classes and helpers), and
+`archivey.formats` (format-specific readers).
+
 ## Usage
 
 ### Streaming access

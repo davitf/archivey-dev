@@ -57,7 +57,7 @@ except ModuleNotFoundError:
     zstandard = None
 
 from archivey.exceptions import PackageNotInstalledError
-from archivey.types import TAR_FORMAT_TO_COMPRESSION_FORMAT, ArchiveFormat, MemberType
+from archivey.api.types import TAR_FORMAT_TO_COMPRESSION_FORMAT, ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     ArchiveContents,

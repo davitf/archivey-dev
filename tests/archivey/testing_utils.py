@@ -8,9 +8,9 @@ from typing import Optional
 
 import pytest
 
-from archivey.config import ArchiveyConfig
+from archivey.api.config import ArchiveyConfig
 from archivey.dependency_checker import get_dependency_versions
-from archivey.types import (
+from archivey.api.types import (
     TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,
     MemberType,

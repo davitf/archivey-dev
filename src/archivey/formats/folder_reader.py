@@ -5,9 +5,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import BinaryIO, Iterator, Optional
 
-from archivey.base_reader import BaseArchiveReader
+from archivey.readers.base_reader import BaseArchiveReader
 from archivey.exceptions import ArchiveIOError, ArchiveMemberNotFoundError
-from archivey.types import ArchiveFormat, ArchiveInfo, ArchiveMember, MemberType
+from archivey.api.types import (
+    ArchiveFormat,
+    ArchiveInfo,
+    ArchiveMember,
+    MemberType,
+)
 
 logger = logging.getLogger(__name__)
 

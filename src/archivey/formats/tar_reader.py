@@ -5,20 +5,20 @@ import tarfile
 from datetime import datetime, timezone
 from typing import IO, BinaryIO, Iterator, List, Optional, cast
 
-from archivey.base_reader import (
+from archivey.readers.base_reader import (
     ArchiveInfo,
     ArchiveMember,
     BaseArchiveReader,
 )
-from archivey.compressed_streams import open_stream
+from archivey.formats.compressed_streams import open_stream
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
     ArchiveError,
     ArchiveMemberCannotBeOpenedError,
 )
-from archivey.io_helpers import ExceptionTranslatingIO
-from archivey.types import (
+from archivey.readers.io_helpers import ExceptionTranslatingIO
+from archivey.api.types import (
     TAR_COMPRESSED_FORMATS,
     TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,

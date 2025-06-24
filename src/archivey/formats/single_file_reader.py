@@ -5,12 +5,12 @@ import struct
 from datetime import datetime, timezone
 from typing import BinaryIO, Iterator, List
 
-from archivey.base_reader import BaseArchiveReader
-from archivey.compressed_streams import open_stream
+from archivey.readers.base_reader import BaseArchiveReader
+from archivey.formats.compressed_streams import open_stream
 from archivey.exceptions import (
     ArchiveFormatError,
 )
-from archivey.types import (
+from archivey.api.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     ArchiveFormat,
     ArchiveInfo,
