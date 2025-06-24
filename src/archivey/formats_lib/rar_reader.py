@@ -26,7 +26,7 @@ from typing import (
     cast,
 )
 
-from archivey.config import ExtractionFilter
+from archivey.api.config import ExtractionFilter
 
 if TYPE_CHECKING:
     import rarfile
@@ -41,23 +41,23 @@ else:
         Rar5Info = object  # type: ignore[assignment]
         RarInfo = object  # type: ignore[assignment]
 
-from archivey.base_reader import BaseArchiveReader, _build_filter
+from archivey.internal.base_reader import BaseArchiveReader, _build_filter
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveError,
     PackageNotInstalledError,
 )
-from archivey.formats import ArchiveFormat
-from archivey.io_helpers import ErrorIOStream, ExceptionTranslatingIO
-from archivey.types import (
+from archivey.api.types import ArchiveFormat # ArchiveFormat is in types.py
+from archivey.internal.io_helpers import ErrorIOStream, ExceptionTranslatingIO
+from archivey.api.types import (
     ArchiveInfo,
     ArchiveMember,
     CreateSystem,
     IteratorFilterFunc,
     MemberType,
 )
-from archivey.utils import bytes_to_str, str_to_bytes
+from archivey.internal.utils import bytes_to_str, str_to_bytes
 
 logger = logging.getLogger(__name__)
 
