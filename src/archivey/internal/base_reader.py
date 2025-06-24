@@ -9,15 +9,15 @@ from collections import defaultdict
 from typing import BinaryIO, Callable, Collection, Iterator, List, Union, cast
 from uuid import uuid4
 
-from archivey.config import ArchiveyConfig, ExtractionFilter, get_default_config
+from archivey.api.config import ArchiveyConfig, ExtractionFilter, get_default_config
 from archivey.exceptions import (
     ArchiveMemberCannotBeOpenedError,
     ArchiveMemberNotFoundError,
 )
-from archivey.extraction_helper import ExtractionHelper
-from archivey.filters import DEFAULT_FILTERS
-from archivey.io_helpers import LazyOpenIO
-from archivey.types import (
+from .extraction_helper import ExtractionHelper
+from archivey.filters import DEFAULT_FILTERS # Will be reviewed later
+from .io_helpers import LazyOpenIO
+from archivey.api.types import (
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,

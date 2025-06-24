@@ -3,8 +3,8 @@ import gzip
 import lzma
 from typing import TYPE_CHECKING, BinaryIO, Optional
 
-from archivey.config import ArchiveyConfig
-from archivey.types import ArchiveFormat
+from archivey.api.config import ArchiveyConfig
+from archivey.api.types import ArchiveFormat
 
 if TYPE_CHECKING:
     import indexed_bzip2
@@ -51,7 +51,7 @@ from archivey.exceptions import (
     ArchiveError,
     PackageNotInstalledError,
 )
-from archivey.io_helpers import ExceptionTranslatingIO
+from archivey.internal.io_helpers import ExceptionTranslatingIO
 
 
 def _translate_gzip_exception(e: Exception) -> Optional[ArchiveError]:
