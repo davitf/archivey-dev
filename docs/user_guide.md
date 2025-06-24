@@ -92,6 +92,7 @@ config = ArchiveyConfig(
     use_rapidgzip=True,
     use_indexed_bzip2=True,
     overwrite_mode=OverwriteMode.OVERWRITE,
+    extraction_filter=ExtractionFilter.TAR, # Example: use tar-like filtering
 )
 
 with open_archive("file.rar", config=config) as archive:
@@ -102,6 +103,18 @@ Fields on `ArchiveyConfig` enable support for optional dependencies such as
 `rapidgzip`, `indexed_bzip2`, `python-xz` and `zstandard`. Each flag requires the
 corresponding package to be installed. `overwrite_mode` controls how extraction
 handles existing files and may be `overwrite`, `skip` or `error`.
+
+The `extraction_filter` option controls which files are extracted and how their
+paths are sanitized. It can be set to one of the predefined `ExtractionFilter`
+enum values:
+*   `ExtractionFilter.DATA`: (Default) Aims to be safe for extracting general data archives.
+    It might be more restrictive about filenames or paths.
+*   `ExtractionFilter.TAR`: Mimics typical behavior of `tar` extraction, which might
+    be more permissive.
+*   `ExtractionFilter.FULLY_TRUSTED`: Assumes the archive content is fully trusted
+    and performs minimal to no sanitization. Use with caution.
+It can also be set to a custom callable function that takes an `ArchiveMember`
+and the destination path, and returns a modified `ArchiveMember` or `None` to skip.
 
 ### Example: Reading a File from an Archive
 
