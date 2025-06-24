@@ -6,6 +6,11 @@ This guide is for developers who want to extend `archivey` by adding support for
 
 The core of `archivey`'s extensibility lies in the `ArchiveReader` abstract base class (defined in `archivey.readers.base_reader`) and its helper concrete class `BaseArchiveReader`. Most new readers will want to inherit from `BaseArchiveReader`.
 
+Archivey's modules are organized into three packages:
+`archivey.api` (public API utilities like `open_archive`),
+`archivey.internal` (base classes and helpers), and
+`archivey.formats` (format-specific readers).
+
 ## Key Steps to Create a New Reader
 
 1.  **Create a New Class:**
