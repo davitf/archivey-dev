@@ -2,7 +2,7 @@ import pytest
 
 from archivey import open_archive
 from archivey.api.config import ExtractionFilter
-from archivey.filters import (
+from archivey.api.filters import (
     FilterError,
     create_filter,
     fully_trusted,

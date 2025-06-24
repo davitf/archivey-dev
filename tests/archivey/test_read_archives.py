@@ -9,10 +9,10 @@ import pytest
 
 from archivey.api.config import ArchiveyConfig
 from archivey.api.core import open_archive
-from archivey.dependency_checker import get_dependency_versions
-from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
-from archivey.filters import create_filter
+from archivey.api.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
+from archivey.api.filters import create_filter
 from archivey.api.types import ArchiveMember, CreateSystem, MemberType
+from archivey.internal.dependency_checker import get_dependency_versions
 from tests.archivey.sample_archives import (
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,

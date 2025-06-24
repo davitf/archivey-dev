@@ -5,7 +5,7 @@ import pytest
 
 from archivey.api.config import ArchiveyConfig
 from archivey.api.core import open_archive
-from archivey.exceptions import (
+from archivey.api.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
 )

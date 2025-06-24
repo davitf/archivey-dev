@@ -3,7 +3,7 @@ import logging
 import pytest
 
 from archivey.api.core import open_archive
-from archivey.exceptions import ArchiveMemberCannotBeOpenedError
+from archivey.api.exceptions import ArchiveMemberCannotBeOpenedError
 from archivey.api.types import ArchiveMember, MemberType
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,

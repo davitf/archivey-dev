@@ -45,13 +45,13 @@ else:
         xz = None
 
 
-from archivey.exceptions import (
+from archivey.api.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
     ArchiveError,
     PackageNotInstalledError,
 )
-from archivey.readers.io_helpers import ExceptionTranslatingIO
+from archivey.internal.io_helpers import ExceptionTranslatingIO
 
 
 def _translate_gzip_exception(e: Exception) -> Optional[ArchiveError]:

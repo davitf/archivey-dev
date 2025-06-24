@@ -10,13 +10,11 @@ from typing import BinaryIO, Callable, Collection, Iterator, List, Union, cast
 from uuid import uuid4
 
 from archivey.api.config import ArchiveyConfig, ExtractionFilter, get_default_config
-from archivey.exceptions import (
+from archivey.api.exceptions import (
     ArchiveMemberCannotBeOpenedError,
     ArchiveMemberNotFoundError,
 )
-from archivey.extraction_helper import ExtractionHelper
-from archivey.filters import DEFAULT_FILTERS
-from .io_helpers import LazyOpenIO
+from archivey.api.filters import DEFAULT_FILTERS
 from archivey.api.types import (
     ArchiveFormat,
     ArchiveInfo,
@@ -26,6 +24,9 @@ from archivey.api.types import (
     IteratorFilterFunc,
     MemberType,
 )
+from archivey.internal.extraction_helper import ExtractionHelper
+
+from .io_helpers import LazyOpenIO
 
 logger = logging.getLogger(__name__)
 
