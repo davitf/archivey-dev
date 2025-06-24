@@ -5,7 +5,7 @@ from archivey.api.config import (
     set_default_config,
 )
 from archivey.api.core import open_archive
-from archivey.exceptions import (
+from archivey.api.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveEOFError,
@@ -14,7 +14,7 @@ from archivey.exceptions import (
     ArchiveMemberNotFoundError,
     ArchiveNotSupportedError,
 )
-from archivey.filters import (
+from archivey.api.filters import (
     create_filter,
     data_filter,
     fully_trusted,

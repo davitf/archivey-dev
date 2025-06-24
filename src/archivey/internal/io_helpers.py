@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import IO, Any, BinaryIO, Callable, NoReturn, Optional
 
-from archivey.exceptions import ArchiveError
+from archivey.api.exceptions import ArchiveError
 
 logger = logging.getLogger(__name__)
 

@@ -12,13 +12,16 @@ from typing import BinaryIO, Callable, Tuple, cast
 
 from tqdm import tqdm
 
-from .readers.base_reader import ArchiveReader
-from .api.config import ArchiveyConfig, OverwriteMode
-from .api.core import open_archive
-from .dependency_checker import format_dependency_versions, get_dependency_versions
-from .exceptions import ArchiveError
-from .readers.io_helpers import IOStats, StatsIO
-from .api.types import ArchiveMember, MemberType
+from archivey.api.config import ArchiveyConfig, OverwriteMode
+from archivey.api.core import open_archive
+from archivey.api.exceptions import ArchiveError
+from archivey.api.types import ArchiveMember, MemberType
+from archivey.internal.base_reader import ArchiveReader
+from archivey.internal.dependency_checker import (
+    format_dependency_versions,
+    get_dependency_versions,
+)
+from archivey.internal.io_helpers import IOStats, StatsIO
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 

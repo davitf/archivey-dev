@@ -3,7 +3,7 @@ import pathlib
 
 import pytest
 
-from archivey.exceptions import PackageNotInstalledError
+from archivey.api.exceptions import PackageNotInstalledError
 from archivey.api.types import ArchiveFormat
 from tests.archivey.sample_archives import SampleArchive
 from tests.create_archives import create_archive

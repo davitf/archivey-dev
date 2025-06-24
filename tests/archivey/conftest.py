@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from archivey.dependency_checker import (
+from archivey.internal.dependency_checker import (
     format_dependency_versions,
     get_dependency_versions,
 )

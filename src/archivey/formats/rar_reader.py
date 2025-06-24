@@ -41,23 +41,23 @@ else:
         Rar5Info = object  # type: ignore[assignment]
         RarInfo = object  # type: ignore[assignment]
 
-from archivey.readers.base_reader import BaseArchiveReader, _build_filter
-from archivey.exceptions import (
+from archivey.api.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveError,
     PackageNotInstalledError,
 )
-from archivey.api.types import ArchiveFormat
-from archivey.readers.io_helpers import ErrorIOStream, ExceptionTranslatingIO
 from archivey.api.types import (
+    ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
     CreateSystem,
     IteratorFilterFunc,
     MemberType,
 )
-from archivey.utils import bytes_to_str, str_to_bytes
+from archivey.internal.base_reader import BaseArchiveReader, _build_filter
+from archivey.internal.io_helpers import ErrorIOStream, ExceptionTranslatingIO
+from archivey.internal.utils import bytes_to_str, str_to_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -797,9 +797,7 @@ class RarReader(BaseArchiveReader):
             members = self.get_members_if_available()
             assert members is not None
 
-            stream_reader = RarStreamReader(
-                self.archive_path, members, pwd=pwd_to_use
-            )
+            stream_reader = RarStreamReader(self.archive_path, members, pwd=pwd_to_use)
             filter_func = _build_filter(
                 members, filter or self.config.extraction_filter, None
             )

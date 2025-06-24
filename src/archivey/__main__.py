@@ -1,6 +1,6 @@
 """Entry point for ``python -m archivey``."""
 
-from .cli import main as _cli_main
+from archivey.internal.cli import main as _cli_main
 
 
 def main(argv: list[str] | None = None) -> None:

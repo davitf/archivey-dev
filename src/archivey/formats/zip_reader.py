@@ -6,23 +6,23 @@ import zipfile
 from datetime import datetime, timezone
 from typing import BinaryIO, Iterator, Optional, cast
 
-from archivey.readers.base_reader import (
-    BaseArchiveReader,
-)
-from archivey.exceptions import (
+from archivey.api.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveError,
 )
-from archivey.api.types import ArchiveFormat
-from archivey.readers.io_helpers import ExceptionTranslatingIO
 from archivey.api.types import (
+    ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
     CreateSystem,
     MemberType,
 )
-from archivey.utils import decode_bytes_with_fallback, str_to_bytes
+from archivey.internal.base_reader import (
+    BaseArchiveReader,
+)
+from archivey.internal.io_helpers import ExceptionTranslatingIO
+from archivey.internal.utils import decode_bytes_with_fallback, str_to_bytes
 
 # TODO: check if this is correct
 _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]
