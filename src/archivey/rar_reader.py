@@ -464,30 +464,25 @@ class RarStreamReader:
         finally:
             self.close()
 
-    def has_random_access(self) -> bool:
-        return False
-
-    def open(
-        self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
-    ) -> BinaryIO:
-        raise ValueError("RarStreamReader does not support opening specific members")
-
 
 class RarReader(BaseArchiveReader):
     """Base class for RAR archive readers."""
 
     def __init__(
         self,
-        archive_path: str | BinaryIO | os.PathLike,
         format: ArchiveFormat,
+        archive_path: str | BinaryIO | os.PathLike,
         *,
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
     ):
+        if format != ArchiveFormat.RAR:
+            raise ValueError(f"Unsupported archive format: {format}")
+
         super().__init__(
-            ArchiveFormat.RAR,
-            archive_path,
-            random_access_supported=not streaming_only,
+            format=format,
+            archive_path=archive_path,
+            streaming_only=streaming_only,
             members_list_supported=True,
             pwd=pwd,
         )
@@ -797,8 +792,13 @@ class RarReader(BaseArchiveReader):
         if self.config.use_rar_stream:
             logger.debug("iter_members_with_io: using rar_stream_reader")
             pwd_to_use = pwd if pwd is not None else self.get_archive_password()
+
+            # This never returns None for archives with member list support.
+            members = self.get_members_if_available()
+            assert members is not None
+
             stream_reader = RarStreamReader(
-                self.archive_path, self.get_members(), pwd=pwd_to_use
+                self.archive_path, members, pwd=pwd_to_use
             )
             filter_func = _build_filter(
                 members, filter or self.config.extraction_filter, None

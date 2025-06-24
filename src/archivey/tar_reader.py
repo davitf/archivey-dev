@@ -18,7 +18,12 @@ from archivey.exceptions import (
     ArchiveMemberCannotBeOpenedError,
 )
 from archivey.io_helpers import ExceptionTranslatingIO
-from archivey.types import TAR_FORMAT_TO_COMPRESSION_FORMAT, ArchiveFormat, MemberType
+from archivey.types import (
+    TAR_COMPRESSED_FORMATS,
+    TAR_FORMAT_TO_COMPRESSION_FORMAT,
+    ArchiveFormat,
+    MemberType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +58,17 @@ class TarReader(BaseArchiveReader):
             pwd: Password for decryption (not supported for TAR)
             format: The format of the archive. If None, will be detected from the file extension.
         """
+        if format != ArchiveFormat.TAR and format not in TAR_COMPRESSED_FORMATS:
+            raise ValueError(f"Unsupported archive format: {format}")
+
         if pwd is not None:
-            raise ValueError("TAR format does not support password protection.")
+            raise ValueError("TAR format does not support password protection")
 
         super().__init__(
-            format,
-            archive_path,
-            random_access_supported=not streaming_only,
-            members_list_supported=not streaming_only,
+            format=format,
+            archive_path=archive_path,
+            streaming_only=streaming_only,
+            members_list_supported=False,
             pwd=pwd,
         )
         self._streaming_only = streaming_only

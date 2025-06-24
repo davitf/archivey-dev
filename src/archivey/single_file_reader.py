@@ -186,11 +186,11 @@ class SingleFileReader(BaseArchiveReader):
 
     def __init__(
         self,
-        archive_path: BinaryIO | str,
         format: ArchiveFormat,
+        archive_path: BinaryIO | str,
         *,
         pwd: bytes | str | None = None,
-        **kwargs,
+        streaming_only: bool = False,
     ):
         """Initialize the reader.
 
@@ -200,18 +200,19 @@ class SingleFileReader(BaseArchiveReader):
             format: The format of the archive. If None, will be detected from the file extension.
             **kwargs: Additional options (ignored)
         """
-        super().__init__(
-            format,
-            archive_path,
-            random_access_supported=True,
-            members_list_supported=True,
-            pwd=pwd,
-        )
+        if format not in SINGLE_FILE_COMPRESSED_FORMATS:
+            raise ValueError(f"Unsupported archive format: {format}")
+
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
 
-        if format not in SINGLE_FILE_COMPRESSED_FORMATS:
-            raise ValueError(f"Unsupported archive format: {format}")
+        super().__init__(
+            format=format,
+            archive_path=archive_path,
+            streaming_only=streaming_only,
+            members_list_supported=True,
+            pwd=pwd,
+        )
 
         self.archive_path = archive_path
         if isinstance(archive_path, str):

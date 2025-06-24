@@ -73,11 +73,14 @@ class ZipReader(BaseArchiveReader):
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
     ):
+        if format != ArchiveFormat.ZIP:
+            raise ValueError(f"Unsupported archive format: {format}")
+
         super().__init__(
-            ArchiveFormat.ZIP,
-            archive_path,
+            format=format,
+            archive_path=archive_path,
+            streaming_only=streaming_only,
             members_list_supported=True,
-            random_access_supported=not streaming_only,
             pwd=pwd,
         )
         self._format_info: ArchiveInfo | None = None

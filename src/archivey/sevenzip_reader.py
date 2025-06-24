@@ -319,11 +319,14 @@ class SevenZipReader(BaseArchiveReader):
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
     ):
+        if format != ArchiveFormat.SEVENZIP:
+            raise ValueError(f"Unsupported archive format: {format}")
+
         super().__init__(
-            ArchiveFormat.SEVENZIP,
-            archive_path,
+            format=format,
+            archive_path=archive_path,
+            streaming_only=streaming_only,
             members_list_supported=True,
-            random_access_supported=not streaming_only,
             pwd=pwd,
         )
         self._format_info: ArchiveInfo | None = None

@@ -139,8 +139,8 @@ def open_archive(
         else:
             assert reader_class is not None
             reader = reader_class(
-                archive_path_normalized,
                 format=format,
+                archive_path=archive_path_normalized,
                 pwd=pwd,
                 streaming_only=streaming_only,
             )

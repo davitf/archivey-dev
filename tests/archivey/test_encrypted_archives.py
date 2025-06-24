@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 
-from archivey.config import OverwriteMode
 from archivey.core import open_archive
 from archivey.exceptions import ArchiveEncryptedError, ArchiveError
 from archivey.types import ArchiveFormat, MemberType
@@ -150,10 +149,11 @@ def test_extract_with_password(
     dest = tmp_path / "out"
     dest.mkdir()
     encrypted = _first_encrypted_file(sample_archive)
+    # config = get_default_config()
     with open_archive(sample_archive_path) as archive:
         if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
             pytest.skip("py7zr extract password support incomplete")
-        archive.config.overwrite_mode = OverwriteMode.OVERWRITE
+        # archive.config.overwrite_mode = OverwriteMode.OVERWRITE
         path = archive.extract(encrypted.name, dest, pwd=pwd)
     extracted_path = Path(path or dest / encrypted.name)
     with open(extracted_path, "rb") as f:
@@ -196,7 +196,7 @@ def test_extract_wrong_password(
     with open_archive(sample_archive_path) as archive:
         if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
             pytest.skip("py7zr extract password support incomplete")
-        archive.config.overwrite_mode = OverwriteMode.OVERWRITE
+        # archive.config.overwrite_mode = OverwriteMode.OVERWRITE
         with pytest.raises((ArchiveEncryptedError, ArchiveError)):
             archive.extract(encrypted.name, dest, pwd=wrong)
 

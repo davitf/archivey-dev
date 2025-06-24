@@ -222,8 +222,11 @@ class LazyOpenIO(io.RawIOBase, BinaryIO):
         self.read = self._ensure_open().read
         return self.read(n)
 
-    def readable(self) -> bool: return True  # pragma: no cover - trivial
-    def writable(self) -> bool: return False  # pragma: no cover - trivial
+    def readable(self) -> bool:
+        return True  # pragma: no cover - trivial
+
+    def writable(self) -> bool:
+        return False  # pragma: no cover - trivial
 
     def seekable(self) -> bool:
         return is_seekable(self._inner) if self._inner is not None else self._seekable

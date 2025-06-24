@@ -17,10 +17,6 @@ class FolderReader(BaseArchiveReader):
     Reads a folder on the filesystem as an archive.
     """
 
-    format = ArchiveFormat.FOLDER
-    magic = None  # Not applicable for folders
-    magic_offset = -1
-
     def __init__(
         self,
         archive_path: str | bytes | os.PathLike,
@@ -28,7 +24,7 @@ class FolderReader(BaseArchiveReader):
         super().__init__(
             ArchiveFormat.FOLDER,
             archive_path,
-            random_access_supported=True,
+            streaming_only=False,
             members_list_supported=True,
         )
         self.path = Path(self.archive_path).resolve()  # Store absolute path

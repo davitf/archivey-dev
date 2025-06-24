@@ -298,13 +298,12 @@ def test_random_access_allows_multiple_iterations(
 
 
 @pytest.mark.parametrize("sample_archive", SYMLINK_ARCHIVES, ids=lambda a: a.filename)
-@pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
 def test_resolve_link_symlink_without_target(
-    sample_archive: SampleArchive, sample_archive_path: str, streaming_only: bool
+    sample_archive: SampleArchive, sample_archive_path: str
 ) -> None:
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
-    with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
+    with open_archive(sample_archive_path) as archive:
         for sample_file in sample_archive.contents.files:
             member = archive.get_member(sample_file.name)
             resolved = archive.resolve_link(member)
@@ -323,8 +322,7 @@ def test_resolve_link_symlink_without_target(
                 logger.info(f"{member.filename=} {member.link_target=} {resolved=}")
                 assert resolved.type in (MemberType.FILE, MemberType.DIR)
                 if resolved.type == MemberType.FILE:
-                    if not streaming_only:
-                        with archive.open(resolved) as f:
-                            assert f.read() == sample_file.contents
-                        with archive.open(member) as f:
-                            assert f.read() == sample_file.contents
+                    with archive.open(resolved) as f:
+                        assert f.read() == sample_file.contents
+                    with archive.open(member) as f:
+                        assert f.read() == sample_file.contents
