@@ -70,7 +70,7 @@ with open_archive("file.rar", config=config) as archive:
     ...
 ```
 
-See the user guide for more options.
+See the [ArchiveyConfig fields](docs/user_guide.md#archiveyconfig-fields) section of the user guide for all options.
 
 ## Command line usage
 

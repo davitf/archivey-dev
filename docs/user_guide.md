@@ -103,6 +103,36 @@ Fields on `ArchiveyConfig` enable support for optional dependencies such as
 corresponding package to be installed. `overwrite_mode` controls how extraction
 handles existing files and may be `overwrite`, `skip` or `error`.
 
+### ArchiveyConfig fields
+
+* `use_rar_stream` – use rarfile's streaming API to avoid temporary files when possible.
+* `use_single_file_stored_metadata` – preserve metadata for single-file compressed formats (`.gz`, `.bz2`, etc.) using sidecar files.
+* `use_rapidgzip` – enable the `rapidgzip` backend for faster gzip decompression.
+* `use_indexed_bzip2` – enable random access for bzip2 files via `indexed_bzip2`.
+* `use_python_xz` – fall back to the `python-xz` implementation instead of `lzma`.
+* `use_zstandard` – enable zstandard decompression using `zstandard` or `pyzstd`.
+* `tar_check_integrity` – verify that TAR member sizes match the header while reading.
+* `sevenzip_read_link_targets_eagerly` – read symlink targets up front in 7z archives.
+* `overwrite_mode` – how extraction handles existing files.
+* `extraction_filter` – control sanitization of extracted paths.
+
+#### Example: additional configuration flags
+
+```python
+from archivey import open_archive, ArchiveyConfig
+
+config = ArchiveyConfig(
+    use_python_xz=True,
+    use_zstandard=True,
+    use_single_file_stored_metadata=True,
+    tar_check_integrity=False,
+    sevenzip_read_link_targets_eagerly=True,
+)
+
+with open_archive("example.tar.zst", config=config) as archive:
+    print(archive.get_members()[0].filename)
+```
+
 ### Example: Reading a File from an Archive
 
 ```python
