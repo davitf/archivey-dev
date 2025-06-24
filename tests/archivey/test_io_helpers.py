@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from archivey.io_helpers import LazyOpenIO
+from archivey.readers.io_helpers import LazyOpenIO
 
 
 def test_lazy_open_only_on_read():

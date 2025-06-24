@@ -1,14 +1,14 @@
 import pytest
 
 from archivey import open_archive
-from archivey.config import ExtractionFilter
+from archivey.api.config import ExtractionFilter
 from archivey.filters import (
     FilterError,
     create_filter,
     fully_trusted,
     tar_filter,
 )
-from archivey.types import ArchiveMember
+from archivey.api.types import ArchiveMember
 from tests.archivey.sample_archives import SANITIZE_ARCHIVES, SampleArchive
 
 

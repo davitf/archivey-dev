@@ -3,9 +3,9 @@ from typing import IO
 
 import pytest
 
-from archivey.config import ArchiveyConfig
-from archivey.core import open_archive
-from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
+from archivey.api.config import ArchiveyConfig
+from archivey.api.core import open_archive
+from archivey.api.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     SYMLINK_ARCHIVES,

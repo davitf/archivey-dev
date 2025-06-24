@@ -1,10 +1,10 @@
-from archivey.config import (
+from archivey.api.config import (
     ArchiveyConfig,
     default_config,
     get_default_config,
     set_default_config,
 )
-from archivey.core import open_archive
+from archivey.api.core import open_archive
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -20,7 +20,7 @@ from archivey.filters import (
     fully_trusted,
     tar_filter,
 )
-from archivey.types import (
+from archivey.api.types import (
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,

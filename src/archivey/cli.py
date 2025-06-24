@@ -12,13 +12,13 @@ from typing import BinaryIO, Callable, Tuple, cast
 
 from tqdm import tqdm
 
-from .base_reader import ArchiveReader
-from .config import ArchiveyConfig, OverwriteMode
-from .core import open_archive
+from .readers.base_reader import ArchiveReader
+from .api.config import ArchiveyConfig, OverwriteMode
+from .api.core import open_archive
 from .dependency_checker import format_dependency_versions, get_dependency_versions
 from .exceptions import ArchiveError
-from .io_helpers import IOStats, StatsIO
-from .types import ArchiveMember, MemberType
+from .readers.io_helpers import IOStats, StatsIO
+from .api.types import ArchiveMember, MemberType
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 

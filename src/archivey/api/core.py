@@ -3,23 +3,24 @@
 import os
 from typing import BinaryIO
 
-from archivey.base_reader import ArchiveReader, StreamingOnlyArchiveReaderWrapper
-from archivey.config import ArchiveyConfig, default_config, get_default_config
-from archivey.exceptions import ArchiveNotSupportedError
-from archivey.folder_reader import FolderReader
-from archivey.formats import (
-    detect_archive_format,
+from archivey.readers.base_reader import (
+    ArchiveReader,
+    StreamingOnlyArchiveReaderWrapper,
 )
-from archivey.rar_reader import RarReader
-from archivey.sevenzip_reader import SevenZipReader
-from archivey.single_file_reader import SingleFileReader
-from archivey.tar_reader import TarReader
-from archivey.types import (
+from archivey.api.config import ArchiveyConfig, default_config, get_default_config
+from archivey.exceptions import ArchiveNotSupportedError
+from archivey.formats.folder_reader import FolderReader
+from archivey.formats import detect_archive_format
+from archivey.formats.rar_reader import RarReader
+from archivey.formats.sevenzip_reader import SevenZipReader
+from archivey.formats.single_file_reader import SingleFileReader
+from archivey.formats.tar_reader import TarReader
+from archivey.api.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
     ArchiveFormat,
 )
-from archivey.zip_reader import ZipReader
+from archivey.formats.zip_reader import ZipReader
 
 
 def _normalize_archive_path(

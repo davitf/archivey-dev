@@ -4,9 +4,9 @@ import tarfile
 import zipfile
 from typing import TYPE_CHECKING, BinaryIO, cast
 
-from archivey.compressed_streams import open_stream
-from archivey.config import get_default_config
-from archivey.types import (
+from .compressed_streams import open_stream
+from archivey.api.config import get_default_config
+from archivey.api.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
@@ -241,3 +241,29 @@ def detect_archive_format(filename: str | BinaryIO | os.PathLike) -> ArchiveForm
         )
 
     return format_by_signature
+
+from .zip_reader import ZipReader
+from .tar_reader import TarReader
+from .rar_reader import RarReader
+from .sevenzip_reader import SevenZipReader
+from .single_file_reader import SingleFileReader
+from .folder_reader import FolderReader
+from .compressed_streams import open_stream
+
+__all__ = [
+    "detect_archive_format",
+    "detect_archive_format_by_signature",
+    "detect_archive_format_by_filename",
+    "has_tar_extension",
+    "ArchiveFormat",
+    "COMPRESSION_FORMAT_TO_TAR_FORMAT",
+    "SINGLE_FILE_COMPRESSED_FORMATS",
+    "TAR_COMPRESSED_FORMATS",
+    "ZipReader",
+    "TarReader",
+    "RarReader",
+    "SevenZipReader",
+    "SingleFileReader",
+    "FolderReader",
+    "open_stream",
+]

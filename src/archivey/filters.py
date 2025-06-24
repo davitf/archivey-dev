@@ -6,8 +6,8 @@ import os
 import posixpath
 from tarfile import FilterError
 
-from archivey.config import ExtractionFilter
-from archivey.types import (
+from archivey.api.config import ExtractionFilter
+from archivey.api.types import (
     ArchiveMember,
     FilterFunc,
     MemberType,

@@ -4,7 +4,7 @@ import pathlib
 import pytest
 
 from archivey.exceptions import PackageNotInstalledError
-from archivey.types import ArchiveFormat
+from archivey.api.types import ArchiveFormat
 from tests.archivey.sample_archives import SampleArchive
 from tests.create_archives import create_archive
 from tests.create_corrupted_archives import corrupt_archive

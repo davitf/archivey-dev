@@ -18,13 +18,13 @@ from typing import (
     cast,
 )
 
-from archivey.base_reader import (
+from archivey.readers.base_reader import (
     BaseArchiveReader,
     _build_filter,
     _build_member_included_func,
 )
-from archivey.config import ExtractionFilter
-from archivey.io_helpers import ErrorIOStream
+from archivey.api.config import ExtractionFilter
+from archivey.readers.io_helpers import ErrorIOStream
 
 if TYPE_CHECKING:
     import py7zr
@@ -60,8 +60,8 @@ from archivey.exceptions import (
     PackageNotInstalledError,
 )
 from archivey.extraction_helper import ExtractionHelper
-from archivey.formats import ArchiveFormat
-from archivey.types import (
+from archivey.api.types import ArchiveFormat
+from archivey.api.types import (
     ArchiveInfo,
     ArchiveMember,
     IteratorFilterFunc,
@@ -809,7 +809,7 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) != 2:
-        print("Usage: python -m archivey.sevenzip_reader <archive_path>")
+        print("Usage: python -m archivey.formats.sevenzip_reader <archive_path>")
         sys.exit(1)
 
     archive_path = sys.argv[1]

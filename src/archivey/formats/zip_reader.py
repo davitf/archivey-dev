@@ -6,7 +6,7 @@ import zipfile
 from datetime import datetime, timezone
 from typing import BinaryIO, Iterator, Optional, cast
 
-from archivey.base_reader import (
+from archivey.readers.base_reader import (
     BaseArchiveReader,
 )
 from archivey.exceptions import (
@@ -14,9 +14,14 @@ from archivey.exceptions import (
     ArchiveEncryptedError,
     ArchiveError,
 )
-from archivey.formats import ArchiveFormat
-from archivey.io_helpers import ExceptionTranslatingIO
-from archivey.types import ArchiveInfo, ArchiveMember, CreateSystem, MemberType
+from archivey.api.types import ArchiveFormat
+from archivey.readers.io_helpers import ExceptionTranslatingIO
+from archivey.api.types import (
+    ArchiveInfo,
+    ArchiveMember,
+    CreateSystem,
+    MemberType,
+)
 from archivey.utils import decode_bytes_with_fallback, str_to_bytes
 
 # TODO: check if this is correct
