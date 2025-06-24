@@ -296,10 +296,16 @@ class BaseArchiveReader(ArchiveReader):
         This is a **crucial abstract method** that subclasses must implement.
         It's the primary way `BaseArchiveReader` discovers archive contents.
         The yielded `ArchiveMember` objects should have their metadata fields
-        populated (filename, size, type, mtime, etc.). `BaseArchiveReader`
-        will handle internal registration and link resolution. Subclasses should
+        populated (filename, size, type, mtime, etc.). Subclasses should
         store any library-specific member information in the `raw_info` field
         of the `ArchiveMember` object, as this may be needed by `_open_member`.
+
+        **Guarantees for Implementers:**
+        - `BaseArchiveReader` handles the registration of yielded members
+          (assigning IDs, making them available via `get_member`, etc.).
+          Subclasses do not need to call `_register_member` themselves.
+        - This iterator will generally be consumed once by `BaseArchiveReader`
+          to build its initial list of all members.
 
         Yields:
             Iterator[ArchiveMember]: ArchiveMember instances from the archive.
@@ -424,8 +430,20 @@ class BaseArchiveReader(ArchiveReader):
         metadata required for opening, or decrypting member-specific headers,
         if not done during `iter_members_for_registration`.
 
+        **Guarantees for Implementers:**
+        - This method is called with the `ArchiveMember` object that
+          `get_member()` resolved to from the user's input. This object might
+          itself be a link.
+        - The `_open_member` method will subsequently be called with the
+          *target* of this member if it's a link (after resolution via
+          `_resolve_member_to_open`). If this member is not a link,
+          `_open_member` will be called with the same member instance
+          (potentially modified by this method).
+
         Args:
-            member: The `ArchiveMember` to prepare.
+            member: The `ArchiveMember` to prepare. This is the member as
+                initially resolved by `get_member()`, prior to final link
+                resolution for the open operation.
             pwd: The password, if provided for the open operation.
             for_iteration: A boolean hint. If True, this open request is part
                 of a sequential iteration (e.g., via `iter_members_with_io`).
@@ -455,18 +473,37 @@ class BaseArchiveReader(ArchiveReader):
         exceptions from the underlying archive library are converted into
         `archivey.api.exceptions.ArchiveError` subclasses.
 
+        **Guarantees for Implementers:**
+        - This method is guaranteed to be called only for members where
+          `member.is_file` is `True`, after any link resolution by
+          `_resolve_member_to_open`. Subclasses do not need to re-check if the
+          member is a file.
+        - The `member` object passed will be an instance previously yielded by
+          `iter_members_for_registration` (or its resolved target), so
+          `member.raw_info` (if populated by the subclass) will be available.
+        - If `streaming_only` is `True` and `for_iteration` is `True` (i.e.,
+          called from `iter_members_with_io`):
+            - This method is called for a member that has just been yielded by
+              the `self.iter_members()` chain to the caller of
+              `iter_members_with_io`.
+            - The call occurs *before* `iter_members_with_io` proceeds to the
+              next member, ensuring the underlying archive's read position
+              should be appropriate for sequential access to this member's data.
+        - Note: Direct calls to the public `open()` method (which results in
+          `for_iteration=False`) are blocked if `streaming_only` is `True`
+          *before* this method is reached.
+
         Args:
-            member: The `ArchiveMember` to open. The `raw_info` attribute
-                can be used to access the original library-specific member object
-                if needed.
+            member: The `ArchiveMember` to open. This is the actual member
+                to be opened (e.g., the target of a link, if a link was
+                originally requested). Its `raw_info` attribute can be used to
+                access the original library-specific member object.
             pwd: The password to use for decryption, if applicable. This might
                 be different from the default archive password.
             for_iteration: A boolean hint. If True, this open request is part
                 of a sequential iteration (e.g., via `iter_members_with_io`).
                 Subclasses can use this to optimize if opening for iteration
-                is different or cheaper than a random access `open()` call (e.g.,
-                if the underlying library can yield a stream more efficiently
-                when iterating sequentially).
+                is different or cheaper than a random access `open()` call.
 
         Returns:
             A readable `BinaryIO` stream for the member's content.
@@ -496,7 +533,13 @@ class BaseArchiveReader(ArchiveReader):
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
     ) -> BinaryIO:
-        """Open ``member_or_filename`` for random access reading."""
+        """
+        Open ``member_or_filename`` for random access reading.
+
+        Note: Streams returned by this method are tracked by `BaseArchiveReader`.
+        If they are still open when `BaseArchiveReader.close()` is called,
+        they will be closed automatically.
+        """
         self.check_archive_open()
         self.check_not_streaming_only("open()")
         stream = self._open_internal(
@@ -791,6 +834,10 @@ class BaseArchiveReader(ArchiveReader):
         they acquired, such as closing file handles opened by the underlying
         archive library or cleaning up temporary data. This method is called
         by the public `close()` method.
+
+        **Guarantees for Implementers:**
+        - This method is called at most once by the public `close()` method
+          when the archive is not already closed.
         """
         pass  # pragma: no cover
 
