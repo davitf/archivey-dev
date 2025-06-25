@@ -120,11 +120,24 @@ class TarReader(BaseArchiveReader):
 
     def _close_archive(self) -> None:
         """Close the archive and release any resources."""
-        self._archive.close()  # type: ignore
-        self._archive = None
+        logger.debug(f"TarReader {id(self)} _close_archive() called.")
+        if self._archive:
+            logger.debug(f"TarReader {id(self)}: Closing self._archive (TarFile): {self._archive}")
+            self._archive.close()  # type: ignore
+            logger.debug(f"TarReader {id(self)}: Closed self._archive.")
+            self._archive = None
+        else:
+            logger.debug(f"TarReader {id(self)}: self._archive was already None.")
+
         if self._fileobj is not None:
+            logger.debug(f"TarReader {id(self)}: Closing self._fileobj: {self._fileobj}")
             self._fileobj.close()
+            logger.debug(f"TarReader {id(self)}: Closed self._fileobj. Fileobj closed: {getattr(self._fileobj, 'closed', 'N/A')}")
             self._fileobj = None
+        else:
+            logger.debug(f"TarReader {id(self)}: self._fileobj was already None.")
+        logger.debug(f"TarReader {id(self)} _close_archive() finished.")
+
 
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         if self._streaming_only:

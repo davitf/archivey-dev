@@ -357,20 +357,21 @@ class NonSeekableStreamWrapper(io.BytesIO):
         return super().read(size)
 
     def close(self) -> None:
-        super().close()
-        # self.closed is a property of BytesIO and should be True after super().close()
-        # No need to manage a separate _explicitly_closed unless debugging specific behaviors.
+        logger.debug(f"NonSeekableStreamWrapper {id(self)} close() called. Was closed: {self.closed}")
+        if not self.closed: # Check if BytesIO thinks it's closed
+            super().close() # Call BytesIO.close()
+        logger.debug(f"NonSeekableStreamWrapper {id(self)} close() finished. Now closed: {self.closed}")
 
     # Note: The `closed` attribute is a property on io.BytesIO.
     # Accessing `non_seekable_stream.closed` in the test directly uses this property.
 
 @pytest.mark.parametrize(
-    "sample_archive",  # Changed from sample_archive_fixture to sample_archive
+    "sample_archive",
     [
         pytest.param(s, id=s.filename)
         for s in filter_archives(
             SAMPLE_ARCHIVES,
-            prefixes=["basic_solid"],
+            prefixes=["basic_solid", "single_file"], # Added "single_file" prefix
             custom_filter=lambda sa: sa.creation_info.format in [
                 ArchiveFormat.TAR_GZ,
                 ArchiveFormat.TAR_BZ2,
@@ -378,11 +379,20 @@ class NonSeekableStreamWrapper(io.BytesIO):
                 ArchiveFormat.TAR_ZSTD,
                 ArchiveFormat.TAR_LZ4,
                 ArchiveFormat.TAR,
-                ArchiveFormat.ZIP,
-                ArchiveFormat.SEVENZIP,
+                ArchiveFormat.ZIP,       # Will be skipped by known_problematic_formats
+                ArchiveFormat.SEVENZIP,  # Will be skipped by known_problematic_formats
+                ArchiveFormat.GZIP,
+                ArchiveFormat.BZIP2,
+                ArchiveFormat.XZ,
+                ArchiveFormat.ZSTD,
+                ArchiveFormat.LZ4,
             ]
             and not (
-                sa.filename.startswith("basic_solid") and sa.creation_info.format in [ArchiveFormat.RAR, ArchiveFormat.ISO]
+                # Exclude problematic formats from specific prefixes if necessary,
+                # though the main skip is handled by known_problematic_formats later.
+                (sa.filename.startswith("basic_solid") and sa.creation_info.format in [ArchiveFormat.RAR, ArchiveFormat.ISO]) or
+                # Add any specific exclusions for "single_file" if they arise, e.g.
+                (sa.filename.startswith("single_file") and sa.creation_info.format == ArchiveFormat.ISO) # ISO is not single_file anyway
             )
         )
     ],
@@ -438,4 +448,7 @@ def test_open_non_seekable_stream_streaming_only(
                                       # Typically, if archivey opens a path, it closes.
                                       # If passed a stream, it might leave it open or close it.
                                       # The current open_archive implementation does close passed streams.
-    assert non_seekable_stream.closed
+        # assert non_seekable_stream.closed
+        # Instead, check behavior: reading from a closed BytesIO should raise ValueError
+        with pytest.raises(ValueError, match="I/O operation on closed file"):
+            non_seekable_stream.read(1)

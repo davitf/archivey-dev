@@ -2,6 +2,7 @@
 
 import io
 import logging
+import gzip # For GzipFile type checking in ExceptionTranslatingIO.close
 from dataclasses import dataclass, field
 from typing import IO, Any, BinaryIO, Callable, NoReturn, Optional
 
@@ -158,10 +159,39 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
             return
 
         try:
-            self._inner.close()
+            logger.debug(f"ExceptionTranslatingIO {id(self)} close() called. Inner stream: {self._inner}, Inner closed: {getattr(self._inner, 'closed', 'N/A')}")
+            # Special handling for gzip.GzipFile to ensure underlying stream is closed
+            # if GzipFile itself doesn't own the fd (i.e., was passed a fileobj).
+            if isinstance(self._inner, gzip.GzipFile) and hasattr(self._inner, 'myfileobj'):
+                # GzipFile.name is None if it was initialized with a fileobj
+                is_fileobj_init = getattr(self._inner, 'name', "dummy_filename_if_not_present") is None
+                logger.debug(f"ExceptionTranslatingIO {id(self)}: gzip.GzipFile detected. is_fileobj_init: {is_fileobj_init}, myfileobj: {getattr(self._inner, 'myfileobj', None)}")
+
+                try:
+                    logger.debug(f"ExceptionTranslatingIO {id(self)}: Calling self._inner.close() (GzipFile)")
+                    self._inner.close() # Close GzipFile first
+                    logger.debug(f"ExceptionTranslatingIO {id(self)}: Called self._inner.close() (GzipFile). GzipFile closed: {self._inner.closed}")
+                finally:
+                    if is_fileobj_init and \
+                       self._inner.myfileobj is not None and \
+                       self._inner.myfileobj is not self._inner: # Prevent closing itself
+                        logger.debug(f"ExceptionTranslatingIO {id(self)}: Explicitly closing GzipFile.myfileobj: {self._inner.myfileobj}")
+                        self._inner.myfileobj.close()
+                        logger.debug(f"ExceptionTranslatingIO {id(self)}: Explicitly closed GzipFile.myfileobj. myfileobj closed: {getattr(self._inner.myfileobj, 'closed', 'N/A')}")
+            else:
+                logger.debug(f"ExceptionTranslatingIO {id(self)}: Calling self._inner.close() (Non-GzipFile)")
+                self._inner.close() # For other stream types
+                logger.debug(f"ExceptionTranslatingIO {id(self)}: Called self._inner.close() (Non-GzipFile). Inner closed: {getattr(self._inner, 'closed', 'N/A')}")
         except Exception as e:
-            self._translate_exception(e)
-        super().close()
+            logger.error(f"ExceptionTranslatingIO {id(self)}: Error during _inner.close(): {e}", exc_info=True)
+            self._translate_exception(e) # This will re-raise
+        finally:
+            # This super().close() marks the ExceptionTranslatingIO wrapper as closed.
+            if not super().closed:
+                 logger.debug(f"ExceptionTranslatingIO {id(self)}: Calling super().close()")
+                 super().close()
+            logger.debug(f"ExceptionTranslatingIO {id(self)}: Finished close(). Wrapper closed: {self.closed}")
+
 
     def __str__(self) -> str:
         return f"ExceptionTranslatingIO({self._inner!s})"
@@ -343,12 +373,13 @@ class LimitedSeekStreamWrapper(io.RawIOBase, BinaryIO):
         self._stream_pos = 0  # Current position in the underlying stream
         # self._buffer_offset = 0  # Offset of the start of the buffer relative to stream_pos -- seems unused
         self._current_pos = 0 # Current position of the user of this stream
-        self._closed_internally = False # Custom flag to track if we've attempted to close underlying stream
+        self._underlying_stream_closed_attempted = False # New flag
 
     def readable(self) -> bool:
-        if self._closed_internally: # Or self.closed from RawIOBase
+        # RawIOBase.closed is the canonical way to check if the wrapper itself is closed
+        if self.closed:
             return False
-        return self._stream.readable()
+        return self._stream.readable() # Check underlying stream's readability
 
     def writable(self) -> bool:
         return False
@@ -360,7 +391,7 @@ class LimitedSeekStreamWrapper(io.RawIOBase, BinaryIO):
         return self._current_pos
 
     def read(self, size: int = -1) -> bytes:
-        if self.closed or self._closed_internally: # Check our flag too
+        if self.closed: # Check RawIOBase.closed
             raise ValueError("I/O operation on closed file.")
 
         # Determine how much data is needed
@@ -511,22 +542,31 @@ class LimitedSeekStreamWrapper(io.RawIOBase, BinaryIO):
         return self._current_pos
 
     def close(self) -> None:
-        if self._closed_internally:
-            # If already called, super().close() might have been called.
-            # Ensure RawIOBase.closed is also set if it wasn't.
-            if not super().closed: # RawIOBase.closed
-                 super().close()
+        logger.debug(f"LimitedSeekStreamWrapper {id(self)} close() called. Underlying attempted: {self._underlying_stream_closed_attempted}, Wrapper closed: {self.closed}")
+        if self._underlying_stream_closed_attempted:
+            if not super().closed: # Check RawIOBase.closed for this wrapper
+                logger.debug(f"LimitedSeekStreamWrapper {id(self)}: Underlying already attempted, calling super().close() as wrapper not marked closed.")
+                super().close()
+            else:
+                logger.debug(f"LimitedSeekStreamWrapper {id(self)}: Underlying already attempted, wrapper already marked closed.")
             return
 
+        logger.debug(f"LimitedSeekStreamWrapper {id(self)}: Attempting to close underlying stream: {self._stream}")
         try:
             if hasattr(self._stream, 'close'):
-                self._stream.close()
+                self._stream.close() # This should call NonSeekableStreamWrapper.close()
+                logger.debug(f"LimitedSeekStreamWrapper {id(self)}: Called close() on underlying stream {self._stream}.")
+            else:
+                logger.warning(f"LimitedSeekStreamWrapper {id(self)}: Underlying stream {self._stream} has no close method.")
+        except Exception as e:
+            logger.error(f"LimitedSeekStreamWrapper {id(self)}: Error closing underlying stream {self._stream}: {e}", exc_info=True)
         finally:
-            # This block ensures that _closed_internally is set and super().close() is called
-            # even if self._stream.close() raises an exception, marking the wrapper as closed.
-            self._closed_internally = True
-            if not super().closed: # RawIOBase.closed, in case of exceptions during _stream.close()
+            self._underlying_stream_closed_attempted = True
+            logger.debug(f"LimitedSeekStreamWrapper {id(self)}: Marked underlying_stream_closed_attempted=True. Current wrapper closed state: {self.closed}")
+            if not super().closed: # Ensure RawIOBase.closed is set for this wrapper
+                logger.debug(f"LimitedSeekStreamWrapper {id(self)}: Calling super().close() to mark wrapper as closed.")
                 super().close()
+            logger.debug(f"LimitedSeekStreamWrapper {id(self)}: Finished close(). Wrapper closed: {self.closed}")
 
     def __str__(self) -> str:
         return f"LimitedSeekStreamWrapper({self._stream!s})"

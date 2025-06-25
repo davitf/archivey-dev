@@ -92,7 +92,11 @@ def read_gzip_metadata(
                 "utf-8", errors="replace"
             )
             if use_stored_metadata:
-                member.filename = extra_fields["original_filename"]
+                # Only update if original_filename is non-empty, otherwise keep default.
+                if extra_fields["original_filename"]:
+                    member.filename = extra_fields["original_filename"]
+                # If extra_fields["original_filename"] is empty, member.filename retains
+                # the default name like "content.gz" assigned in SingleFileReader.__init__.
 
         if flg & 0x10:  # FCOMMENT
             comment_bytes = _read_null_terminated_bytes(f)
@@ -238,14 +242,19 @@ class SingleFileReader(BaseArchiveReader):
         self.use_stored_metadata = self.config.use_single_file_stored_metadata
 
         # Get the base name for the decompressed member
-        self.member_name = name_for_member
+        # Ensure member_name is a valid string, defaulting if necessary
+        _member_name_candidate = name_for_member
+        if not _member_name_candidate or _member_name_candidate == "<fdopen>" or not isinstance(_member_name_candidate, str):
+            _member_name_candidate = f"content{self.ext}"
+        self.member_name = _member_name_candidate
+
 
         # Get file metadata
         logger.info(f"Compressed file {archive_path} mtime: {mtime}")
 
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
-            filename=self.member_name,
+            filename=self.member_name, # Now guaranteed to be a string
             file_size=None,  # Not available for all formats
             compress_size=compress_size,
             mtime_with_tz=mtime,
@@ -272,9 +281,15 @@ class SingleFileReader(BaseArchiveReader):
 
     def _close_archive(self) -> None:
         """Close the archive and release any resources."""
+        logger.debug(f"SingleFileReader {id(self)} _close_archive() called.")
         if self.fileobj is not None:
+            logger.debug(f"SingleFileReader {id(self)}: Closing self.fileobj: {self.fileobj}")
             self.fileobj.close()
+            logger.debug(f"SingleFileReader {id(self)}: Closed self.fileobj. Fileobj closed: {getattr(self.fileobj, 'closed', 'N/A')}")
             self.fileobj = None
+        else:
+            logger.debug(f"SingleFileReader {id(self)}: self.fileobj was already None.")
+        logger.debug(f"SingleFileReader {id(self)} _close_archive() finished.")
 
     def get_members(self) -> List[ArchiveMember]:
         """Get a list of all members in the archive."""
