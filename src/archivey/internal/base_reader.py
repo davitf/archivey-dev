@@ -5,10 +5,10 @@ import logging
 import os
 import posixpath
 import threading
-from weakref import WeakSet
 from collections import defaultdict
 from typing import BinaryIO, Callable, Collection, Iterator, List, Union, cast
 from uuid import uuid4
+from weakref import WeakSet
 
 from archivey.api.config import ArchiveyConfig, ExtractionFilter, get_default_config
 from archivey.api.exceptions import (
@@ -542,9 +542,7 @@ class BaseArchiveReader(ArchiveReader):
         """
         self.check_archive_open()
         self.check_not_streaming_only("open()")
-        stream = self._open_internal(
-            member_or_filename, pwd=pwd, for_iteration=False
-        )
+        stream = self._open_internal(member_or_filename, pwd=pwd, for_iteration=False)
         return self._track_stream(stream)
 
     def _start_streaming_iteration(self) -> None:
