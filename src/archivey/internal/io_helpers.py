@@ -319,3 +319,217 @@ class StatsIO(io.RawIOBase, BinaryIO):
     # Delegate unknown attributes --------------------------------------
     def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
         return getattr(self._inner, item)
+
+
+class LimitedSeekStreamWrapper(io.RawIOBase, BinaryIO):
+    """
+    Wraps a non-seekable stream to provide limited backward seeking capability.
+
+    This is achieved by maintaining a circular buffer of recently read data.
+    Seeking forward beyond the current position will read from the underlying
+    stream. Seeking backwards is only possible within the buffered range.
+    """
+
+    def __init__(self, stream: BinaryIO, buffer_size: int = 65536):
+        super().__init__()
+        if not hasattr(stream, "read"):
+            raise TypeError("Stream must have a read method.")
+        if buffer_size <= 0:
+            raise ValueError("Buffer size must be positive.")
+
+        self._stream = stream
+        self._buffer_size = buffer_size
+        self._buffer = bytearray()
+        self._stream_pos = 0  # Current position in the underlying stream
+        # self._buffer_offset = 0  # Offset of the start of the buffer relative to stream_pos -- seems unused
+        self._current_pos = 0 # Current position of the user of this stream
+        self._closed_internally = False # Custom flag to track if we've attempted to close underlying stream
+
+    def readable(self) -> bool:
+        if self._closed_internally: # Or self.closed from RawIOBase
+            return False
+        return self._stream.readable()
+
+    def writable(self) -> bool:
+        return False
+
+    def seekable(self) -> bool:
+        return True
+
+    def tell(self) -> int:
+        return self._current_pos
+
+    def read(self, size: int = -1) -> bytes:
+        if self.closed or self._closed_internally: # Check our flag too
+            raise ValueError("I/O operation on closed file.")
+
+        # Determine how much data is needed
+        bytes_needed = size if size >= 0 else float('inf')
+        result = bytearray()
+
+        # Try to satisfy read from buffer first
+        buffer_available = len(self._buffer) - (self._current_pos - (self._stream_pos - len(self._buffer)))
+        if self._current_pos >= (self._stream_pos - len(self._buffer)) and buffer_available > 0 :
+            read_from_buffer = min(int(bytes_needed), buffer_available)
+
+            buffer_start_index = self._current_pos - (self._stream_pos - len(self._buffer))
+            result.extend(self._buffer[buffer_start_index : buffer_start_index+read_from_buffer])
+            self._current_pos += read_from_buffer
+            bytes_needed -= read_from_buffer
+
+        if bytes_needed == 0:
+            return bytes(result)
+
+        # Read remaining from stream
+        # If current_pos is behind stream_pos, it means we seeked back.
+        # We need to advance stream_pos to current_pos before reading.
+        if self._current_pos < self._stream_pos:
+            # This case should ideally be handled by seeking, but as a fallback:
+            # Discard buffer and read from stream. This might happen if we seek
+            # back, then read past the buffer end.
+            self._buffer = bytearray() # Clear buffer as it's no longer valid relative to stream_pos
+            # Effectively, we are "catching up" the stream_pos to current_pos
+            # This is complex because the original stream is non-seekable.
+            # For simplicity in this wrapper, we assume reads are mostly sequential
+            # or with limited seeks. If a read requires data before current buffer,
+            # and current_pos is ahead of stream_pos (which means we read from stream already)
+            # it's an issue.
+            # However, if current_pos is where stream_pos is, we just read.
+            # pass # This pass was causing an IndentationError
+
+
+        # If current_pos is not at the end of the stream (stream_pos),
+        # it implies a seek occurred. We need to read new data.
+        if self._current_pos >= self._stream_pos:
+            read_from_stream = int(bytes_needed if bytes_needed != float('inf') else self._buffer_size)
+
+            # If size is -1 (read all), we can't know how much to read from a non-seekable stream
+            # without potentially exhausting it. We'll read up to buffer_size chunks.
+            # This is a limitation when size is -1 with this wrapper.
+            # A true read-all would require reading in a loop.
+            # For format detection, specific small reads are usually made.
+            if size == -1:
+                # Read until EOF in chunks
+                while True:
+                    chunk = self._stream.read(self._buffer_size) # Read a chunk
+                    if not chunk:
+                        break
+                    result.extend(chunk)
+                    self._buffer.extend(chunk)
+                    self._stream_pos += len(chunk)
+                    self._current_pos += len(chunk)
+                     # Maintain buffer size
+                    if len(self._buffer) > self._buffer_size:
+                        self._buffer = self._buffer[len(self._buffer) - self._buffer_size:]
+                return bytes(result)
+
+            # If not size == -1, proceed with original logic for specific size reads
+            data_read = self._stream.read(read_from_stream)
+            if data_read:
+                result.extend(data_read)
+
+                self._buffer.extend(data_read)
+                self._stream_pos += len(data_read)
+                self._current_pos += len(data_read)
+
+                # Maintain buffer size
+                if len(self._buffer) > self._buffer_size:
+                    self._buffer = self._buffer[len(self._buffer) - self._buffer_size:]
+            elif not result and size != 0: # EOF and no data in result
+                return b''
+
+
+        return bytes(result)
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+
+        new_pos: int
+        if whence == io.SEEK_SET:
+            new_pos = offset
+        elif whence == io.SEEK_CUR:
+            new_pos = self._current_pos + offset
+        elif whence == io.SEEK_END:
+            # Seeking from end is not supported for non-seekable stream
+            raise io.UnsupportedOperation(
+                "Cannot seek from end of a non-seekable stream."
+            )
+        else:
+            raise ValueError("invalid whence (%r, should be 0, 1 or 2)" % whence)
+
+        if new_pos < 0:
+            raise ValueError("Negative seek position")
+
+        # Buffer start position in the absolute coordinate system
+        buffer_abs_start = self._stream_pos - len(self._buffer)
+
+        if new_pos >= buffer_abs_start and new_pos <= self._stream_pos :
+            # Seek is within the current buffer
+            self._current_pos = new_pos
+        elif new_pos > self._stream_pos:
+            # Seek forward, beyond the current buffered data and stream position
+            # We need to read from the stream to reach this position.
+            # This is like a read operation that discards the data.
+            bytes_to_skip = new_pos - self._stream_pos
+
+            # First, skip any remaining part of the buffer that's between current_pos and stream_pos
+            if self._current_pos < self._stream_pos:
+                 bytes_to_skip_in_buffer = min(bytes_to_skip, self._stream_pos - self._current_pos)
+                 # This part is tricky as we are "consuming" buffer by seeking forward
+                 # For simplicity, if seek is forward, we assume current_pos catches up to new_pos
+
+            # Then, read and discard from the underlying stream
+            # To avoid large reads if skipping far, read in chunks
+            chunk_size = 8192
+            while bytes_to_skip > 0:
+                data_to_read = min(bytes_to_skip, chunk_size)
+                data = self._stream.read(data_to_read)
+                if not data: # EOF
+                    # Cannot seek past EOF
+                    self._current_pos = self._stream_pos # Update current_pos to where stream ended
+                    # If new_pos was beyond EOF, this means we couldn't reach it.
+                    # The Python file object behavior is to allow seek past EOF,
+                    # but tell() will report the actual EOF position until a write happens.
+                    # For a read-only stream, current_pos should be capped at EOF.
+                    raise io.UnsupportedOperation("Cannot seek past EOF on this stream type when seeking forward by reading.")
+
+                self._buffer.extend(data) # Add to buffer
+                self._stream_pos += len(data)
+                bytes_to_skip -= len(data)
+
+                # Maintain buffer size
+                if len(self._buffer) > self._buffer_size:
+                    self._buffer = self._buffer[len(self._buffer) - self._buffer_size:]
+            self._current_pos = new_pos
+        else: # new_pos < buffer_abs_start
+            # Seek is before the start of the buffer
+            raise io.UnsupportedOperation(
+                f"Cannot seek to position {new_pos}. Buffer starts at {buffer_abs_start} (stream_pos={self._stream_pos}, buffer_len={len(self._buffer)})"
+            )
+
+        return self._current_pos
+
+    def close(self) -> None:
+        if self._closed_internally:
+            # If already called, super().close() might have been called.
+            # Ensure RawIOBase.closed is also set if it wasn't.
+            if not super().closed: # RawIOBase.closed
+                 super().close()
+            return
+
+        try:
+            if hasattr(self._stream, 'close'):
+                self._stream.close()
+        finally:
+            # This block ensures that _closed_internally is set and super().close() is called
+            # even if self._stream.close() raises an exception, marking the wrapper as closed.
+            self._closed_internally = True
+            if not super().closed: # RawIOBase.closed, in case of exceptions during _stream.close()
+                super().close()
+
+    def __str__(self) -> str:
+        return f"LimitedSeekStreamWrapper({self._stream!s})"
+
+    def __repr__(self) -> str:
+        return f"LimitedSeekStreamWrapper({self._stream!r}, buffer_size={self._buffer_size})"

@@ -11,8 +11,11 @@ from tests.archivey.sample_archives import (
     SYMLINK_ARCHIVES,
     SampleArchive,
     filter_archives,
+    # get_sample_archive_path, # This was the incorrect import
 )
 from tests.archivey.testing_utils import skip_if_package_missing
+
+import io
 
 
 def _first_regular_file(sample: SampleArchive):
@@ -326,3 +329,113 @@ def test_resolve_link_symlink_without_target(
                         assert f.read() == sample_file.contents
                     with archive.open(member) as f:
                         assert f.read() == sample_file.contents
+
+
+class NonSeekableStreamWrapper(io.BytesIO):
+    """
+    Wraps a BytesIO stream to make it appear non-seekable.
+    Useful for testing scenarios with streams that don't support seeking.
+    """
+
+    def __init__(self, initial_bytes: bytes):
+        super().__init__(initial_bytes)
+        self._true_pos = 0 # Underlying BytesIO is seekable, so we track position manually for read
+
+    def seekable(self) -> bool:
+        return False
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        raise io.UnsupportedOperation("Stream is not seekable")
+
+    def tell(self) -> int:
+        # Using super().tell() as our _true_pos might not reflect internal BytesIO state if other methods are called.
+        return super().tell()
+
+    def read(self, size: int = -1) -> bytes:
+        # Rely on super().read() which correctly updates the position for subsequent reads.
+        # self._true_pos is removed as it can diverge from actual BytesIO position.
+        return super().read(size)
+
+    def close(self) -> None:
+        super().close()
+        # self.closed is a property of BytesIO and should be True after super().close()
+        # No need to manage a separate _explicitly_closed unless debugging specific behaviors.
+
+    # Note: The `closed` attribute is a property on io.BytesIO.
+    # Accessing `non_seekable_stream.closed` in the test directly uses this property.
+
+@pytest.mark.parametrize(
+    "sample_archive",  # Changed from sample_archive_fixture to sample_archive
+    [
+        pytest.param(s, id=s.filename)
+        for s in filter_archives(
+            SAMPLE_ARCHIVES,
+            prefixes=["basic_solid"],
+            custom_filter=lambda sa: sa.creation_info.format in [
+                ArchiveFormat.TAR_GZ,
+                ArchiveFormat.TAR_BZ2,
+                ArchiveFormat.TAR_XZ,
+                ArchiveFormat.TAR_ZSTD,
+                ArchiveFormat.TAR_LZ4,
+                ArchiveFormat.TAR,
+                ArchiveFormat.ZIP,
+                ArchiveFormat.SEVENZIP,
+            ]
+            and not (
+                sa.filename.startswith("basic_solid") and sa.creation_info.format in [ArchiveFormat.RAR, ArchiveFormat.ISO]
+            )
+        )
+    ],
+)
+def test_open_non_seekable_stream_streaming_only(
+    sample_archive: SampleArchive, sample_archive_path: str # Changed from sample_archive_fixture
+):
+    # sample_archive_path is now directly provided by the fixture defined in tests/conftest.py
+    fmt = sample_archive.creation_info.format # Changed from sample_archive_fixture
+    config = ArchiveyConfig() # Use default config for now
+
+    skip_if_package_missing(fmt, config) # Uses sample_archive.creation_info.format
+
+    # These formats are known to require seeking even for basic processing or detection,
+    # or their current Python implementations don't support non-seekable stream well.
+    known_problematic_formats = {
+        ArchiveFormat.RAR,
+        ArchiveFormat.SEVENZIP,
+        ArchiveFormat.ZIP,
+        ArchiveFormat.ISO,
+    }
+    if fmt in known_problematic_formats:
+        pytest.skip(f"Format {fmt.value} is known to be problematic with non-seekable streams or its backend lacks support.")
+
+
+    with open(sample_archive_path, "rb") as f:
+        archive_data = f.read()
+
+    non_seekable_stream = NonSeekableStreamWrapper(archive_data)
+
+    with open_archive(non_seekable_stream, streaming_only=True) as archive:
+        assert not archive.has_random_access()
+        member_count = 0
+        for member, stream in archive.iter_members_with_io():
+            member_count += 1
+            if member.type == MemberType.FILE and stream:
+                stream.read()
+
+        assert member_count == len(sample_archive.contents.files) # Changed from sample_archive_fixture
+
+        with pytest.raises(ValueError):
+            archive.get_members()
+
+        first_file_in_sample = next((f for f in sample_archive.contents.files if f.type == MemberType.FILE), None) # Changed
+        if first_file_in_sample:
+            with pytest.raises(ValueError):
+                archive.open(first_file_in_sample.name)
+
+    # Ensure the original non-seekable stream is closed if open_archive took ownership (which it does)
+    # However, NonSeekableStreamWrapper(BytesIO) doesn't strictly need external close if not written to.
+    # For file streams, this would be more critical.
+    # assert non_seekable_stream.closed # This depends on open_archive's behavior with passed streams.
+                                      # Typically, if archivey opens a path, it closes.
+                                      # If passed a stream, it might leave it open or close it.
+                                      # The current open_archive implementation does close passed streams.
+    assert non_seekable_stream.closed

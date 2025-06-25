@@ -21,6 +21,7 @@ from archivey.internal.base_reader import (
     ArchiveReader,
     StreamingOnlyArchiveReaderWrapper,
 )
+from archivey.internal.io_helpers import LimitedSeekStreamWrapper, is_seekable
 
 
 def _normalize_archive_path(
@@ -107,46 +108,71 @@ def open_archive(
     if pwd is not None and not isinstance(pwd, (str, bytes)):
         raise TypeError("Password must be a string or bytes")
 
-    archive_path_normalized = _normalize_archive_path(archive_path)
+    archive_path_input = _normalize_archive_path(archive_path)
+    stream_for_detection: BinaryIO | str = archive_path_input
+    stream_for_reader: BinaryIO | str = archive_path_input # This will be passed to the reader
 
-    if isinstance(archive_path_normalized, str):
-        if not os.path.exists(archive_path_normalized):
+    if isinstance(archive_path_input, str):
+        if not os.path.exists(archive_path_input):
             raise FileNotFoundError(
-                f"Archive file not found: {archive_path_normalized}"
+                f"Archive file not found: {archive_path_input}"
             )
+    elif hasattr(archive_path_input, "read"): # It's a stream object
+        if streaming_only and not is_seekable(archive_path_input):
+            # If streaming_only and original stream is not seekable,
+            # wrap it for detection AND for the reader.
+            # The LimitedSeekStreamWrapper needs to be used consistently.
+            # Its internal buffer will be consumed by detection, so the reader needs the same instance.
+            wrapped_stream = LimitedSeekStreamWrapper(archive_path_input, buffer_size=65536)
+            stream_for_detection = wrapped_stream
+            stream_for_reader = wrapped_stream # Reader gets the wrapped stream
+        # If not (streaming_only and not is_seekable), detection and reader use original stream_for_detection
+    # else: it's a path string, detection and reader use it directly
 
-    format = detect_archive_format(archive_path_normalized)
-    if format == ArchiveFormat.UNKNOWN:
+    detected_format = detect_archive_format(stream_for_detection)
+
+    if detected_format == ArchiveFormat.UNKNOWN:
+        # If detection failed with a wrapped stream, it implies the format might not
+        # be detectable even with limited seeking, or the wrapper interfered.
+        # There isn't a simple fallback to the original stream here if it was non-seekable,
+        # as detection would have failed there too.
         raise ArchiveNotSupportedError(
-            f"Unknown archive format for {archive_path_normalized}"
+            f"Unknown archive format for {archive_path_input}"
         )
 
-    if format not in _FORMAT_TO_READER:
+    if detected_format not in _FORMAT_TO_READER:
         raise ArchiveNotSupportedError(
-            f"Unsupported archive format: {format} (for {archive_path_normalized})"
+            f"Unsupported archive format: {detected_format} (for {archive_path_input})"
         )
 
-    reader_class = _FORMAT_TO_READER.get(format)
+    reader_class = _FORMAT_TO_READER.get(detected_format)
 
     if config is None:
         config = get_default_config()
 
     with default_config(config):
-        if format == ArchiveFormat.FOLDER:
-            assert isinstance(archive_path_normalized, str), (
+        if detected_format == ArchiveFormat.FOLDER:
+            assert isinstance(stream_for_reader, str), ( # Should be archive_path_input if FOLDER
                 "FolderReader only supports string paths"
             )
-            reader = FolderReader(archive_path_normalized)
+            reader = FolderReader(stream_for_reader)
         else:
             assert reader_class is not None
             reader = reader_class(
-                format=format,
-                archive_path=archive_path_normalized,
+                format=detected_format,
+                archive_path=stream_for_reader, # Pass the (potentially wrapped) stream
                 pwd=pwd,
                 streaming_only=streaming_only,
             )
 
         if streaming_only:
+            # If the reader itself is already a streaming type due to stream_for_reader
+            # being a LimitedSeekStreamWrapper, the StreamingOnlyArchiveReaderWrapper might be redundant
+            # in some aspects but still enforces the streaming API contract.
+            # If stream_for_reader was the original seekable stream, or a path,
+            # and the reader chose a random-access backend, this wrapper makes it streaming.
+            if isinstance(reader, StreamingOnlyArchiveReaderWrapper): # Should not happen with current logic
+                return reader
             return StreamingOnlyArchiveReaderWrapper(reader)
         else:
             return reader
