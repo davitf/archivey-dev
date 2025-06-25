@@ -272,12 +272,34 @@ class BaseArchiveReader(ArchiveReader):
 
         logger.debug(f"Registering member {member.filename} ({member.member_id})")
 
-        members_with_filename = self._filename_to_members[member.filename]
+        # Handle cases where filename might be None (e.g., for single compressed files
+        # without internal filename metadata from some libraries).
+        _filename_for_lookup = member.filename
+        if _filename_for_lookup is None:
+            # Create a placeholder name. This helps with internal dict lookups.
+            # The actual member.filename remains None if that's what the reader provided.
+            _filename_for_lookup = f"__{self.format.value if self.format else 'unknown'}_member_{member.member_id}"
+
+
+        members_with_filename = self._filename_to_members[_filename_for_lookup]
         if member not in members_with_filename:
             members_with_filename.append(member)
-            members_with_filename.sort(key=lambda m: m.member_id)
+            # No need to sort here if we always append and _filename_to_members[key][-1] is used
+            # members_with_filename.sort(key=lambda m: m.member_id) # Re-evaluate if sorting is essential
 
-        normalized_path = posixpath.normpath(member.filename)
+        # For normalized_path_to_last_member, we must use a non-None filename.
+        # If original member.filename was None, this path won't be naturally discoverable
+        # by filename, which is acceptable for single-file archives.
+        _filename_for_norm = member.filename
+        if _filename_for_norm is None:
+            # For single file archives, the concept of a "path" for normalization
+            # might not be very relevant if no filename is in the header.
+            # We'll use the placeholder for consistency if needed, or skip this part.
+            # For now, let's use a placeholder to avoid normpath error.
+             _filename_for_norm = f"unknown_member.{self.format.value.split('.')[-1]}" if self.format else "unknown_member"
+
+
+        normalized_path = posixpath.normpath(_filename_for_norm)
         if (
             normalized_path not in self._normalized_path_to_last_member
             or self._normalized_path_to_last_member[normalized_path].member_id
