@@ -2,6 +2,7 @@
 
 import io
 import logging
+import tempfile
 from dataclasses import dataclass, field
 from typing import IO, Any, BinaryIO, Callable, NoReturn, Optional
 
@@ -317,5 +318,94 @@ class StatsIO(io.RawIOBase, BinaryIO):
         super().close()
 
     # Delegate unknown attributes --------------------------------------
+    def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
+        return getattr(self._inner, item)
+
+
+class BufferedSeekableIO(io.RawIOBase, BinaryIO):
+    """Wrap a non-seekable binary stream to provide limited backward seeking."""
+
+    def __init__(self, inner: BinaryIO, *, buffer_size: int = 65536) -> None:
+        super().__init__()
+        self._inner = inner
+        self._buffer = tempfile.SpooledTemporaryFile(max_size=buffer_size)
+        self._pos = 0
+        self._buffer_end = 0
+        self._eof = False
+
+    # ---------------------------------------------------------------
+    def _fill_to(self, length: int) -> None:
+        while not self._eof and self._buffer_end < length:
+            chunk = self._inner.read(length - self._buffer_end)
+            if not chunk:
+                self._eof = True
+                break
+            self._buffer.seek(self._buffer_end)
+            self._buffer.write(chunk)
+            self._buffer_end += len(chunk)
+
+    def _fill_all(self) -> None:
+        while not self._eof:
+            chunk = self._inner.read(8192)
+            if not chunk:
+                self._eof = True
+                break
+            self._buffer.seek(self._buffer_end)
+            self._buffer.write(chunk)
+            self._buffer_end += len(chunk)
+
+    # Basic IO methods ---------------------------------------------
+    def read(self, n: int = -1) -> bytes:
+        if n < 0:
+            self._fill_all()
+            self._buffer.seek(self._pos)
+            data = self._buffer.read()
+            self._pos = self._buffer_end
+            return data
+
+        self._fill_to(self._pos + n)
+        self._buffer.seek(self._pos)
+        data = self._buffer.read(n)
+        self._pos += len(data)
+        return data
+
+    def readable(self) -> bool:  # pragma: no cover - trivial
+        return True
+
+    def seekable(self) -> bool:  # pragma: no cover - trivial
+        return True
+
+    def writable(self) -> bool:  # pragma: no cover - trivial
+        return False
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        if whence == io.SEEK_SET:
+            target = offset
+        elif whence == io.SEEK_CUR:
+            target = self._pos + offset
+        elif whence == io.SEEK_END:
+            self._fill_all()
+            target = self._buffer_end + offset
+        else:
+            raise ValueError(f"Invalid whence: {whence}")
+
+        if target < 0:
+            raise OSError("Negative seek position")
+
+        self._fill_to(target)
+        self._buffer.seek(target)
+        self._pos = target
+        return self._pos
+
+    def tell(self) -> int:
+        return self._pos
+
+    def close(self) -> None:
+        try:
+            self._inner.close()
+        finally:
+            self._buffer.close()
+            super().close()
+
     def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
         return getattr(self._inner, item)
