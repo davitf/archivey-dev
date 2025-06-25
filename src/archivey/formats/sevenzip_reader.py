@@ -690,7 +690,7 @@ class SevenZipReader(BaseArchiveReader):
             logger.error(f"Error in iter_members_with_io: {e}")
             # Yield any remaining members that were not extracted, with the error.
             for member in pending_files_by_id.values():
-                yield member, ErrorIOStream(e)
+                yield member, cast(BinaryIO, ErrorIOStream(e))
             # raise e
 
         for member in pending_links_by_id.values():

@@ -3,7 +3,7 @@ import os
 import stat
 import tarfile
 from datetime import datetime, timezone
-from typing import IO, BinaryIO, Iterator, List, Optional, cast
+from typing import BinaryIO, Iterator, List, Optional, cast
 
 from archivey.api.exceptions import (
     ArchiveCorruptedError,
@@ -230,17 +230,20 @@ class TarReader(BaseArchiveReader):
 
         tarinfo = cast(tarfile.TarInfo, member.raw_info)
 
-        def _open_stream() -> IO[bytes]:
+        def _open_stream() -> BinaryIO:
             assert self._archive is not None
             stream = self._archive.extractfile(tarinfo)
             if stream is None:
                 raise ArchiveMemberCannotBeOpenedError(
                     f"Member {member.filename} cannot be opened"
                 )
-            return stream
+            return cast(BinaryIO, stream)
 
         try:
-            return ExceptionTranslatingIO(_open_stream, _translate_tar_exception)
+            return cast(
+                BinaryIO,
+                ExceptionTranslatingIO(_open_stream, _translate_tar_exception),
+            )
 
         except tarfile.ReadError as e:
             translated = _translate_tar_exception(e)

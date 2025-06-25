@@ -209,13 +209,16 @@ class ZipReader(BaseArchiveReader):
                 ),
             )
 
-            return ExceptionTranslatingIO(
-                cast(BinaryIO, stream),
-                lambda e: ArchiveCorruptedError(
-                    f"Error reading member {member.filename}: {e}"
-                )
-                if isinstance(e, zipfile.BadZipFile)
-                else None,
+            return cast(
+                BinaryIO,
+                ExceptionTranslatingIO(
+                    cast(BinaryIO, stream),
+                    lambda e: ArchiveCorruptedError(
+                        f"Error reading member {member.filename}: {e}"
+                    )
+                    if isinstance(e, zipfile.BadZipFile)
+                    else None,
+                ),
             )
         except RuntimeError as e:
             if "password required" in str(e):

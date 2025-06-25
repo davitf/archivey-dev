@@ -428,11 +428,19 @@ class RarStreamReader:
             == PasswordCheckResult.INCORRECT
         ):
             # unrar silently skips encrypted files with incorrect passwords
-            return ErrorIOStream(
-                ArchiveEncryptedError(f"Wrong password specified for {member.filename}")
+            return cast(
+                BinaryIO,
+                ErrorIOStream(
+                    ArchiveEncryptedError(
+                        f"Wrong password specified for {member.filename}"
+                    )
+                ),
             )
 
-        return RarStreamMemberFile(member, self._stream, self._lock, pwd=pwd_bytes)
+        return cast(
+            BinaryIO,
+            RarStreamMemberFile(member, self._stream, self._lock, pwd=pwd_bytes),
+        )
 
     def close(self):
         self._proc.terminate()
@@ -762,7 +770,10 @@ class RarReader(BaseArchiveReader):
 
         try:
             inner: BinaryIO = self._archive.open(member.raw_info, pwd=bytes_to_str(pwd))  # type: ignore[arg-type]
-            return ExceptionTranslatingIO(inner, self._exception_translator)
+            return cast(
+                BinaryIO,
+                ExceptionTranslatingIO(inner, self._exception_translator),
+            )
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(
                 f"Error reading member {member.filename}"

@@ -601,16 +601,19 @@ class BaseArchiveReader(ArchiveReader):
             try:
                 stream = (
                     self._track_stream(
-                        LazyOpenIO(
-                            self._open_internal,
-                            member,
-                            pwd=pwd,
-                            for_iteration=True,
-                            # Some backends are optimized for seeking inside files.
-                            # Most others support seeking, but need to re-read the file from
-                            # the beginning when seeking backwards.
-                            # TODO: should we make these streams non-seekable?
-                            seekable=not self._streaming_only,  # LazyOpenIO kwarg
+                        cast(
+                            BinaryIO,
+                            LazyOpenIO(
+                                self._open_internal,
+                                member,
+                                pwd=pwd,
+                                for_iteration=True,
+                                # Some backends are optimized for seeking inside files.
+                                # Most others support seeking, but need to re-read the file from
+                                # the beginning when seeking backwards.
+                                # TODO: should we make these streams non-seekable?
+                                seekable=not self._streaming_only,  # LazyOpenIO kwarg
+                            ),
                         )
                     )
                     if member.is_file

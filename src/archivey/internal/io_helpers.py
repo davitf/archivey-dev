@@ -10,7 +10,7 @@ from archivey.api.exceptions import ArchiveError
 logger = logging.getLogger(__name__)
 
 
-class ErrorIOStream(io.RawIOBase, BinaryIO):
+class ErrorIOStream(io.RawIOBase):
     """
     An I/O stream that always raises a predefined exception on any I/O operation.
 
@@ -56,7 +56,7 @@ def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
         return False
 
 
-class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
+class ExceptionTranslatingIO(io.RawIOBase):
     """
     Wraps an I/O stream to translate specific exceptions from an underlying library
     into ArchiveError subclasses.
@@ -65,7 +65,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     def __init__(
         self,
         # TODO: can we reduce the number of types here?
-        inner: io.IOBase | IO[bytes] | Callable[[], io.IOBase | IO[bytes]],
+        inner: BinaryIO | Callable[[], BinaryIO],
         exception_translator: Callable[[Exception], Optional[ArchiveError]],
     ):
         """
@@ -86,7 +86,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         """
         super().__init__()
         self._translate = exception_translator
-        self._inner: io.IOBase | IO[bytes]
+        self._inner: BinaryIO
 
         if isinstance(inner, Callable):
             try:
@@ -137,13 +137,13 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     def seekable(self) -> bool:
         return is_seekable(self._inner)
 
-    def write(self, b: Any) -> int:
+    def write(self, b: bytes | bytearray | memoryview) -> int:
         try:
             return self._inner.write(b)
         except Exception as e:
             self._translate_exception(e)
 
-    def writelines(self, lines: Any) -> None:
+    def writelines(self, lines: list[bytes | bytearray | memoryview]) -> None:
         try:
             self._inner.writelines(lines)
         except Exception as e:
@@ -170,7 +170,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         return f"ExceptionTranslatingIO({self._inner!r})"
 
 
-class LazyOpenIO(io.RawIOBase, BinaryIO):
+class LazyOpenIO(io.RawIOBase):
     """
     An I/O stream wrapper that defers the actual opening of an underlying stream
     until the first I/O operation (e.g., read, seek) is attempted.
@@ -182,7 +182,7 @@ class LazyOpenIO(io.RawIOBase, BinaryIO):
 
     def __init__(
         self,
-        open_fn: Callable[..., IO[bytes]],
+        open_fn: Callable[..., BinaryIO],
         *args: Any,
         seekable: bool,
         **kwargs: Any,
@@ -203,10 +203,10 @@ class LazyOpenIO(io.RawIOBase, BinaryIO):
         self._open_fn = open_fn
         self._args = args
         self._kwargs = kwargs
-        self._inner: IO[bytes] | None = None
+        self._inner: BinaryIO | None = None
         self._seekable = seekable
 
-    def _ensure_open(self) -> IO[bytes]:
+    def _ensure_open(self) -> BinaryIO:
         if self.closed:
             raise ValueError("I/O operation on closed file.")
         if self._inner is None:
@@ -256,7 +256,7 @@ class IOStats:
     read_ranges: list[list[int]] = field(default_factory=lambda: [[0, 0]])
 
 
-class StatsIO(io.RawIOBase, BinaryIO):
+class StatsIO(io.RawIOBase):
     """
     An I/O stream wrapper that tracks statistics about read and seek operations
     performed on an underlying stream.
@@ -309,7 +309,9 @@ class StatsIO(io.RawIOBase, BinaryIO):
     def seekable(self) -> bool:  # pragma: no cover - trivial
         return self._inner.seekable()
 
-    def write(self, b: Any) -> int:  # pragma: no cover - simple delegation
+    def write(
+        self, b: bytes | bytearray | memoryview
+    ) -> int:  # pragma: no cover - simple delegation
         return self._inner.write(b)
 
     def close(self) -> None:  # pragma: no cover - simple delegation
