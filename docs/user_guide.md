@@ -1,10 +1,10 @@
 # archivey User Guide
 
-This guide explains how to use the `archivey` library to work with various archive formats.
+Welcome! This guide walks you through using `archivey` with many different archive formats.
 
 ## Opening an Archive
 
-The main entry point to the library is the `open_archive` function:
+Start with the `open_archive` function:
 
 ```python
 from archivey import open_archive
@@ -22,11 +22,11 @@ except ArchiveError as e:
 
 ```
 
-The `open_archive` function takes the path to the archive file as its primary argument. It can also accept an optional `config` object and `streaming_only` flag.
+Provide the path to your archive when calling `open_archive`. You can also pass a `config` object and set `streaming_only` if needed.
 
 ## The ArchiveReader Object
 
-When an archive is successfully opened, `open_archive` returns an `ArchiveReader` object. This object provides methods to interact with the archive's contents. It's recommended to use the `ArchiveReader` as a context manager (as shown above) to ensure resources are properly released.
+When the archive opens successfully, `open_archive` returns an `ArchiveReader` object with methods to explore and extract files. Use it as a context manager so resources are cleaned up automatically.
 
 Key methods of the `ArchiveReader` object:
 
@@ -49,7 +49,7 @@ Key methods of the `ArchiveReader` object:
     *   `filter`: Callable invoked for each member with the member and destination path. Return the member to extract it, or `None` to skip.
 *   Returns a dictionary mapping extracted file paths to their `ArchiveMember` objects.
 
-Streaming-only archives (where `archive.has_random_access()` returns `False`) can be iterated only **once**. After calling `iter_members_with_io()` or `extractall()`, further attempts to read or extract members will raise a `ValueError`.
+Streaming-only archives (where `archive.has_random_access()` returns `False`) can be iterated only once. After calling `iter_members_with_io()` or `extractall()`, trying to read members again will raise a `ValueError`.
 
 ## Working with Archive Members
 
@@ -99,10 +99,7 @@ with open_archive("file.rar", config=config) as archive:
     ...
 ```
 
-Fields on `ArchiveyConfig` enable support for optional dependencies such as
-`rapidgzip`, `indexed_bzip2`, `python-xz` and `zstandard`. Each flag requires the
-corresponding package to be installed. `overwrite_mode` controls how extraction
-handles existing files and may be `overwrite`, `skip` or `error`.
+These fields enable optional features when the corresponding packages (`rapidgzip`, `indexed_bzip2`, `python-xz`, `zstandard`, and so on) are installed. `overwrite_mode` controls how extraction handles existing files and may be `overwrite`, `skip` or `error`.
 
 The `extraction_filter` option controls which files are extracted and how their
 paths are sanitized. It can be set to one of the predefined `ExtractionFilter`
@@ -184,4 +181,4 @@ except ArchiveError as e:
     print(f"Error: {e}")
 ```
 
-This guide provides a basic overview. For more detailed information on specific classes and methods, please refer to the [API documentation](./api/archivey.html).
+This guide only scratches the surface. Check out the [API documentation](./api/archivey.html) for all the details.

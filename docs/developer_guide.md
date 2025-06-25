@@ -1,10 +1,10 @@
 # archivey Developer Guide: Creating New ArchiveReaders
 
-This guide is for developers who want to extend `archivey` by adding support for new archive formats by creating custom `ArchiveReader` implementations.
+If you'd like to teach `archivey` about a new archive format, this guide shows how to build your own `ArchiveReader` implementation.
 
 ## Overview
 
-The core of `archivey`'s extensibility lies in the `ArchiveReader` abstract base class and its concrete helper class `BaseArchiveReader` (both defined in `archivey.internal.base_reader`). Most new readers will want to inherit from `BaseArchiveReader`.
+At the heart of `archivey` are the `ArchiveReader` abstract base class and the `BaseArchiveReader` helper (both found in `archivey.internal.base_reader`). Most readers will simply inherit from `BaseArchiveReader`.
 
 Archivey's modules are organized into three packages:
 `archivey.api` (public API utilities like `open_archive`),
@@ -39,7 +39,7 @@ Archivey's modules are organized into three packages:
     *   **Guarantees:** `BaseArchiveReader` handles the registration of yielded members. This iterator is generally consumed once to build the initial member list.
 
 4.  **Implement `get_archive_info(self) -> ArchiveInfo` (Abstract Method):**
-    *   This method **must** be implemented. It should return an `archivey.api.types.ArchiveInfo` object.
+    *   You need to implement this method. It should return an `archivey.api.types.ArchiveInfo` object.
     *   Populate it with information about the archive as a whole, such as:
         *   `format`: The `ArchiveFormat` enum.
         *   `is_solid`: Whether the archive is solid (True/False).
@@ -47,12 +47,12 @@ Archivey's modules are organized into three packages:
         *   `extra`: A dictionary for any other format-specific information (e.g., version).
 
 5.  **Implement `_open_member(self, member: ArchiveMember, *, pwd: Optional[Union[bytes, str]] = None, for_iteration: bool = False) -> BinaryIO` (Abstract Method):**
-    *   This method **must** be implemented. (While `BaseArchiveReader` defines it as abstract, its direct usage might be bypassed if a reader is strictly `streaming_only` and only overrides `iter_members_with_io` without ever needing to open individual members through the base class's `open` or `extract` methods. However, for full compatibility and to support all base features, it should be implemented.)
+    *   You need to implement this method. (While `BaseArchiveReader` defines it as abstract, its direct usage might be bypassed if a reader is strictly `streaming_only` and only overrides `iter_members_with_io` without ever needing to open individual members through the base class's `open` or `extract` methods. However, for full compatibility and to support all base features, it should still be implemented.)
     *   It should open the specified archive member for reading and return a binary I/O stream (`BinaryIO`).
     *   The `member` argument is an `ArchiveMember` object. Use `member.raw_info` to access the original library-specific member object if needed.
     *   `pwd`: Handle password for encrypted members if applicable.
     *   `for_iteration`: This boolean flag is a hint. If `True`, the open request is part of a sequential iteration (e.g., via `iter_members_with_io`). Subclasses can use this to optimize if opening for iteration is different or cheaper than a random access `open()` call.
-    *   **Important**: The returned stream **MUST** be wrapped with `archivey.internal.io_helpers.ExceptionTranslatingIO` (see section below) to ensure proper error handling.
+    *   **Important**: Always wrap the returned stream with `archivey.internal.io_helpers.ExceptionTranslatingIO` (see section below) to ensure proper error handling.
     *   **Guarantees:**
         *   Called only for members where `member.is_file` is `True` (after link resolution).
         *   `member.raw_info` (if populated by your `iter_members_for_registration`) is available.
@@ -60,7 +60,7 @@ Archivey's modules are organized into three packages:
         *   Streams returned via the public `BaseArchiveReader.open()` (which calls this method) are tracked and auto-closed by `BaseArchiveReader.close()`.
 
 6.  **Implement `_close_archive(self) -> None` (Abstract Method):**
-    *   This method **must** be implemented. Release any resources held by your reader (e.g., close file handles opened by the underlying library, cleanup temporary files). This is called by the public `close()` method.
+    *   You need to implement this method. Release any resources held by your reader (e.g., close file handles opened by the underlying library, cleanup temporary files). This is called by the public `close()` method.
     *   **Guarantee:** Called at most once by the public `close()` method if the archive is not already closed.
 
 ## Optional Methods to Override
@@ -85,7 +85,7 @@ While the above are essential, you might override other methods from `BaseArchiv
 
 ## Exception Handling with `ExceptionTranslatingIO`
 
-When you return a file stream from `_open_member()` (or from a custom `iter_members_with_io` override), it's **mandatory** to wrap it with `archivey.internal.io_helpers.ExceptionTranslatingIO`. This ensures that exceptions raised by the underlying third-party library during stream operations (like `read()`, `seek()`) are translated into `archivey.api.exceptions.ArchiveError` subclasses.
+Whenever you return a file stream from `_open_member()` (or from a custom `iter_members_with_io`), always wrap it with `archivey.internal.io_helpers.ExceptionTranslatingIO`. This ensures that exceptions raised by the underlying third-party library during stream operations (like `read()`, `seek()`) are translated into `archivey.api.exceptions.ArchiveError` subclasses.
 
 ```python
 from archivey.internal.io_helpers import ExceptionTranslatingIO # Corrected path
@@ -138,4 +138,4 @@ Refer to the `ArchiveMember` class definition in `archivey.api.types` for all av
 
 Once your reader is implemented, you'll need to modify `archivey.api.core.open_archive` to detect the archive format and instantiate your reader. (Details of this registration process might evolve, check the current `open_archive` function).
 
-By following these guidelines, you can contribute robust and well-integrated support for new archive formats to `archivey`.
+With these steps, you can help the community add support for even more archive formats to `archivey`.
