@@ -15,6 +15,7 @@ import tempfile
 import threading
 import zlib
 from typing import (
+    IO,
     TYPE_CHECKING,
     Any,
     BinaryIO,
@@ -281,7 +282,7 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
     def __init__(
         self,
         member: ArchiveMember,
-        shared_stream: BinaryIO,
+        shared_stream: IO[bytes],
         lock: threading.Lock,
         *,
         pwd: bytes | None = None,
@@ -410,7 +411,7 @@ class RarStreamReader:
             )
             if self._proc.stdout is None:
                 raise RuntimeError("Could not open unrar output stream")
-            self._stream = cast(BinaryIO, self._proc.stdout)
+            self._stream = self._proc.stdout
 
         except (OSError, subprocess.SubprocessError) as e:
             raise ArchiveError(
@@ -761,7 +762,7 @@ class RarReader(BaseArchiveReader):
             )
 
         try:
-            inner: BinaryIO = self._archive.open(member.raw_info, pwd=bytes_to_str(pwd))  # type: ignore[arg-type]
+            inner = self._archive.open(member.raw_info, pwd=bytes_to_str(pwd))  # type: ignore[arg-type]
             return ExceptionTranslatingIO(inner, self._exception_translator)
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(

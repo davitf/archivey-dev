@@ -2,7 +2,7 @@ import logging
 import os
 import tarfile
 import zipfile
-from typing import TYPE_CHECKING, BinaryIO, cast
+from typing import IO, TYPE_CHECKING, BinaryIO, cast
 
 from archivey.api.config import get_default_config
 from archivey.api.types import (
@@ -34,7 +34,7 @@ _ISO_MAGIC_BYTES = (
 )
 
 
-def _is_executable(stream: BinaryIO) -> bool:
+def _is_executable(stream: IO[bytes]) -> bool:
     EXECUTABLE_MAGICS = {
         "pe": b"MZ",
         "elf": b"\x7fELF",
@@ -49,7 +49,7 @@ def _is_executable(stream: BinaryIO) -> bool:
 
 
 def detect_archive_format_by_signature(
-    path_or_file: str | bytes | BinaryIO,
+    path_or_file: str | bytes | IO[bytes],
 ) -> ArchiveFormat:
     # [signature, ...], offset, format
     SIGNATURES = [
@@ -82,7 +82,7 @@ def detect_archive_format_by_signature(
     if rarfile is not None:
         _SFX_DETECTORS.append((rarfile.is_rarfile_sfx, ArchiveFormat.RAR))
 
-    f: BinaryIO
+    f: IO[bytes]
 
     if isinstance(path_or_file, (str, bytes, os.PathLike)):
         # If it's a path, check if it's a directory first
@@ -93,7 +93,7 @@ def detect_archive_format_by_signature(
         close_after = True
 
     elif hasattr(path_or_file, "read") and hasattr(path_or_file, "seek"):
-        f = cast(BinaryIO, path_or_file)
+        f = cast(IO[bytes], path_or_file)
         # We can't check is_dir on a stream, assume it's not a folder for streams
         close_after = False
     else:
@@ -117,7 +117,7 @@ def detect_archive_format_by_signature(
         if detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT:
             assert detected_format is not None
             with open_stream(
-                detected_format, f, get_default_config()
+                detected_format, cast(BinaryIO, f), get_default_config()
             ) as decompressed_stream:
                 if tarfile.is_tarfile(decompressed_stream):
                     detected_format = COMPRESSION_FORMAT_TO_TAR_FORMAT[detected_format]
@@ -196,7 +196,7 @@ def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
 logger = logging.getLogger(__name__)
 
 
-def detect_archive_format(filename: str | BinaryIO | os.PathLike) -> ArchiveFormat:
+def detect_archive_format(filename: str | IO[bytes] | os.PathLike) -> ArchiveFormat:
     # Check if it's a directory first
     if isinstance(filename, os.PathLike):
         filename = str(filename)

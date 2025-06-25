@@ -210,7 +210,7 @@ class ZipReader(BaseArchiveReader):
             )
 
             return ExceptionTranslatingIO(
-                cast(BinaryIO, stream),
+                stream,
                 lambda e: ArchiveCorruptedError(
                     f"Error reading member {member.filename}: {e}"
                 )

@@ -265,7 +265,7 @@ class StatsIO(io.RawIOBase, BinaryIO):
     access patterns.
     """
 
-    def __init__(self, inner: BinaryIO, stats: IOStats) -> None:
+    def __init__(self, inner: IO[bytes], stats: IOStats) -> None:
         super().__init__()
         self._inner = inner
         self.stats = stats

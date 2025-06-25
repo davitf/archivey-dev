@@ -8,7 +8,7 @@ import sys
 import zlib
 from datetime import datetime
 from importlib.metadata import version as package_version
-from typing import BinaryIO, Callable, Tuple, cast
+from typing import IO, BinaryIO, Callable, Tuple, cast
 
 from tqdm import tqdm
 
@@ -261,7 +261,7 @@ def main(argv: list[str] | None = None) -> None:
             ):
                 f = original_open(file, mode, *oargs, **okwargs)
                 stats = stats_per_file.setdefault(path, IOStats())
-                return StatsIO(cast(BinaryIO, f), stats)
+                return StatsIO(cast(IO[bytes], f), stats)
             return original_open(file, mode, *oargs, **okwargs)
 
         builtins.open = patched_open
