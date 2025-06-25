@@ -2,7 +2,6 @@
 
 import io
 import logging
-import tempfile
 from dataclasses import dataclass, field
 from typing import IO, Any, BinaryIO, Callable, NoReturn, Optional
 
@@ -328,21 +327,31 @@ class BufferedSeekableIO(io.RawIOBase, BinaryIO):
     def __init__(self, inner: BinaryIO, *, buffer_size: int = 65536) -> None:
         super().__init__()
         self._inner = inner
-        self._buffer = tempfile.SpooledTemporaryFile(max_size=buffer_size)
+        self._buffer = bytearray()
+        self._buffer_limit = buffer_size
+        self._start_pos = 0
         self._pos = 0
-        self._buffer_end = 0
         self._eof = False
 
     # ---------------------------------------------------------------
+    @property
+    def _buffer_end(self) -> int:
+        return self._start_pos + len(self._buffer)
+
+    def _append(self, data: bytes) -> None:
+        self._buffer.extend(data)
+        if len(self._buffer) > self._buffer_limit:
+            drop = len(self._buffer) - self._buffer_limit
+            del self._buffer[:drop]
+            self._start_pos += drop
+
     def _fill_to(self, length: int) -> None:
         while not self._eof and self._buffer_end < length:
             chunk = self._inner.read(length - self._buffer_end)
             if not chunk:
                 self._eof = True
                 break
-            self._buffer.seek(self._buffer_end)
-            self._buffer.write(chunk)
-            self._buffer_end += len(chunk)
+            self._append(chunk)
 
     def _fill_all(self) -> None:
         while not self._eof:
@@ -350,22 +359,21 @@ class BufferedSeekableIO(io.RawIOBase, BinaryIO):
             if not chunk:
                 self._eof = True
                 break
-            self._buffer.seek(self._buffer_end)
-            self._buffer.write(chunk)
-            self._buffer_end += len(chunk)
+            self._append(chunk)
 
     # Basic IO methods ---------------------------------------------
     def read(self, n: int = -1) -> bytes:
         if n < 0:
             self._fill_all()
-            self._buffer.seek(self._pos)
-            data = self._buffer.read()
+            start = self._pos - self._start_pos
+            data = bytes(self._buffer[start:])
             self._pos = self._buffer_end
             return data
 
         self._fill_to(self._pos + n)
-        self._buffer.seek(self._pos)
-        data = self._buffer.read(n)
+        start = self._pos - self._start_pos
+        end = start + n
+        data = bytes(self._buffer[start:end])
         self._pos += len(data)
         return data
 
@@ -392,8 +400,10 @@ class BufferedSeekableIO(io.RawIOBase, BinaryIO):
         if target < 0:
             raise OSError("Negative seek position")
 
+        if target < self._start_pos:
+            raise OSError("Seek position beyond buffered range")
+
         self._fill_to(target)
-        self._buffer.seek(target)
         self._pos = target
         return self._pos
 
@@ -404,7 +414,6 @@ class BufferedSeekableIO(io.RawIOBase, BinaryIO):
         try:
             self._inner.close()
         finally:
-            self._buffer.close()
             super().close()
 
     def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
