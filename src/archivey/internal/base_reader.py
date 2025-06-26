@@ -863,7 +863,7 @@ class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
     """
 
     def __init__(self, reader: ArchiveReader):
-        super().__init__(reader.archive_path, reader.format)
+        super().__init__(reader.path_or_stream, reader.format)
         self.reader = reader
         self._streaming_iteration_started = False
 

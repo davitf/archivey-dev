@@ -5,7 +5,23 @@
 class ArchiveError(Exception):
     """Base exception for all archive-related errors encountered by archivey."""
 
-    pass
+    def __init__(
+        self,
+        message: str,
+        archive_path: str | None = None,
+        member_name: str | None = None,
+    ):
+        super().__init__(message)
+        self.archive_path = archive_path
+        self.member_name = member_name
+
+    def __str__(self):
+        base = super().__str__()
+        if self.archive_path:
+            base = f"{base} (in {self.archive_path})"
+        if self.member_name:
+            base = f"{base} (when processing {self.member_name})"
+        return base
 
 
 class ArchiveFormatError(ArchiveError):

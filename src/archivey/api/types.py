@@ -12,6 +12,8 @@ from typing import (
     overload,
 )
 
+from archivey.internal.utils import is_stream
+
 if TYPE_CHECKING:
     from enum import StrEnum
 elif sys.version_info >= (3, 11):
@@ -247,15 +249,25 @@ class ArchiveReader(abc.ABC):
     format-specific functionality.
     """
 
+    path_or_stream: str | BinaryIO
+    path_str: str | None
+
     def __init__(
         self, archive_path: BinaryIO | str | bytes | os.PathLike, format: ArchiveFormat
     ):
-        if isinstance(archive_path, (str, os.PathLike)):
-            self.archive_path = str(archive_path)
+        if is_stream(archive_path):
+            self.path_str = None
+            self.path_or_stream = archive_path
+
+        elif isinstance(archive_path, (str, os.PathLike)):
+            self.path_or_stream = self.path_str = str(archive_path)
         elif isinstance(archive_path, bytes):
-            self.archive_path = archive_path.decode("utf-8")
+            self.path_or_stream = self.path_str = archive_path.decode("utf-8")
         else:
-            self.archive_path = "<stream>"
+            raise ValueError(
+                f"Expected a stream, str, or bytes, got {type(archive_path)} {archive_path!r}"
+            )
+
         self.format = format
 
     @abc.abstractmethod

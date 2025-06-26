@@ -32,7 +32,11 @@ class FolderReader(BaseArchiveReader):
             streaming_only=False,
             members_list_supported=True,
         )
-        self.path = Path(self.archive_path).resolve()  # Store absolute path
+
+        if self.path_str is None:
+            raise ValueError("FolderReader cannot be opened from a stream")
+
+        self.path = Path(self.path_str).resolve()  # Store absolute path
 
         if not self.path.is_dir():
             raise ValueError(f"Path is not a directory: {self.path}")
@@ -148,14 +152,14 @@ class FolderReader(BaseArchiveReader):
         try:
             resolved_full_path = full_path.resolve()
             if (
-                self.archive_path not in resolved_full_path.parents
-                and resolved_full_path != self.archive_path
+                self.path_str not in resolved_full_path.parents
+                and resolved_full_path != self.path_str
             ):
                 # This check needs to be careful. If archive_path is /foo/bar and resolved_full_path is /foo/bar/file.txt
                 # then archive_path is in resolved_full_path.parents.
                 # If archive_path is /foo/bar and resolved_full_path is /foo/baz/file.txt (due to symlink or ..) this is bad.
                 # A more robust check:
-                if not str(resolved_full_path).startswith(str(self.archive_path)):
+                if not str(resolved_full_path).startswith(str(self.path_str)):
                     raise ArchiveMemberNotFoundError(
                         f"Access to member '{member.filename}' outside archive root is denied."
                     )

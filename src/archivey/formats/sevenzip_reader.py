@@ -718,9 +718,7 @@ class SevenZipReader(BaseArchiveReader):
                 f"Password required to extract member {member_obj.filename}"
             ) from e
         except py7zr.Bad7zFile as e:
-            raise ArchiveCorruptedError(
-                f"Invalid 7-Zip archive {self.archive_path}"
-            ) from e
+            raise ArchiveCorruptedError(f"Invalid 7-Zip archive {self.path_str}") from e
         except py7zr.exceptions.ArchiveError as e:
             raise ArchiveError(
                 f"Error extracting member {member_obj.filename}: {e}"
@@ -757,19 +755,15 @@ class SevenZipReader(BaseArchiveReader):
                 )
         except py7zr.PasswordRequired as e:
             raise ArchiveEncryptedError(
-                f"Password required to extract archive {self.archive_path}"
+                f"Password required to extract archive {self.path_str}"
             ) from e
         except py7zr.Bad7zFile as e:
-            raise ArchiveCorruptedError(
-                f"Invalid 7-Zip archive {self.archive_path}"
-            ) from e
+            raise ArchiveCorruptedError(f"Invalid 7-Zip archive {self.path_str}") from e
         except py7zr.exceptions.ArchiveError as e:
-            raise ArchiveError(
-                f"Error extracting archive {self.archive_path}: {e}"
-            ) from e
+            raise ArchiveError(f"Error extracting archive {self.path_str}: {e}") from e
         except lzma.LZMAError as e:
             raise ArchiveCorruptedError(
-                f"Error extracting archive {self.archive_path}: {e}"
+                f"Error extracting archive {self.path_str}: {e}"
             ) from e
         logger.info("Extraction done")
 
