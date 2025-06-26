@@ -768,8 +768,11 @@ class RarReader(BaseArchiveReader):
         try:
             return ExceptionTranslatingIO(
                 lambda: ensure_binaryio(
-                    ensure_not_none(self._archive).open(
-                        member.raw_info, pwd=bytes_to_str(pwd)
+                    cast(
+                        IO[bytes],
+                        ensure_not_none(self._archive).open(
+                            member.raw_info, pwd=bytes_to_str(pwd)
+                        ),
                     )
                 ),
                 self._exception_translator,
