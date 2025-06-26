@@ -134,6 +134,7 @@ def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
     if all(callable(getattr(obj, m, None)) for m in ALL_IO_METHODS):
         return obj  # type: ignore
 
+    logger.info(f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper")
     return BinaryIOWrapper(obj)
 
 
