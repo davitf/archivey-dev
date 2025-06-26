@@ -3,19 +3,158 @@
 import io
 import logging
 from dataclasses import dataclass, field
-from typing import IO, Any, BinaryIO, Callable, NoReturn, Optional, TypeVar
+from typing import (
+    IO,
+    Any,
+    BinaryIO,
+    Callable,
+    NoReturn,
+    Optional,
+    Protocol,
+    TypeVar,
+    Union,
+    runtime_checkable,
+)
 
 from archivey.api.exceptions import ArchiveError
 
 logger = logging.getLogger(__name__)
 
 
-def ensure_binaryio(stream: io.IOBase) -> BinaryIO:
+def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
+    """Check if a stream is seekable."""
+    try:
+        return stream.seekable()
+    except AttributeError as e:
+        # Some streams (e.g. tarfile._Stream) don't have a seekable method, which seems
+        # like a bug. Sometimes they are wrapped in other classes
+        # (e.g. tarfile._FileInFile) that do have one and assume the inner ones also do.
+        #
+        # In the tarfile case specifically, _Stream actually does have a seek() method,
+        # but calling seek() on the stream returned by tarfile will raise an exception,
+        # as it's wrapped in a BufferedReader which calls seekable() when doing a seek().
+        logger.debug(f"Stream {stream} does not have a seekable method: {e}")
+        return False
+
+
+@runtime_checkable
+class ReadableBinaryStream(Protocol):
+    def read(self, n: int = -1, /) -> bytes: ...
+
+
+@runtime_checkable
+class WritableBinaryStream(Protocol):
+    def write(self, data: bytes, /) -> int: ...
+
+
+BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream]
+
+
+class BinaryIOWrapper(io.IOBase, BinaryIO):
+    """
+    Wraps an object that doesn't match the BinaryIO protocol, adding any missing
+    methods to make the type checker happy.
+    """
+
+    def __init__(self, raw: BinaryStreamLike):
+        self._raw = raw
+
+    def read(self, size=-1, /):
+        if not hasattr(self._raw, "read"):
+            raise io.UnsupportedOperation("read not supported")
+        self.read = self._raw.read  # type: ignore
+        return self._raw.read(size)  # type: ignore
+
+    def write(self, data, /):
+        if not hasattr(self._raw, "write"):
+            raise io.UnsupportedOperation("write not supported")
+        self.write = self._raw.write  # type: ignore
+        return self._raw.write(data)  # type: ignore
+
+    def seek(self, offset, whence=io.SEEK_SET, /):
+        if not hasattr(self._raw, "seek"):
+            raise io.UnsupportedOperation("seek not supported")
+        self.seek = self._raw.seek  # type: ignore
+        return self._raw.seek(offset, whence)  # type: ignore
+
+    def tell(self, /):
+        if not hasattr(self._raw, "tell"):
+            raise io.UnsupportedOperation("tell not supported")
+        self.tell = self._raw.tell  # type: ignore
+        return self._raw.tell()  # type: ignore
+
+    def close(self):
+        if hasattr(self._raw, "close"):
+            return self._raw.close()  # type: ignore
+
+    def flush(self):
+        if hasattr(self._raw, "flush"):
+            return self._raw.flush()  # type: ignore
+
+    def readable(self):
+        try:
+            return self._raw.readable()  # type: ignore
+        except AttributeError:
+            return hasattr(self._raw, "read")  # type: ignore
+
+    def writable(self):
+        try:
+            return self._raw.writable()  # type: ignore
+        except AttributeError:
+            return hasattr(self._raw, "write")  # type: ignore
+
+    def seekable(self):
+        return is_seekable(self._raw)  # type: ignore
+
+
+ALL_IO_METHODS = (
+    "read",
+    "write",
+    "seek",
+    "tell",
+    "__enter__",
+    "__exit__",
+    "close",
+    "closed",
+    "flush",
+    "readable",
+    "writable",
+    "seekable",
+    "readline",
+    "readlines",
+    "readinto",
+    "write",
+    "writelines",
+)
+
+
+def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
     """Some libraries return an object that doesn't match the BinaryIO protocol,
     so we need to ensure it does to make the type checker happy."""
-    assert isinstance(stream, io.IOBase)
-    # assert isinstance(stream, IO[bytes])
-    return stream  # type: ignore[return-value]
+    if all(callable(getattr(obj, m, None)) for m in ALL_IO_METHODS):
+        return obj  # type: ignore
+
+    return BinaryIOWrapper(obj)
+
+
+# def ensure_bufferedio(obj: Any) -> BinaryIO:
+#     bio = ensure_binaryio(obj)
+
+#     if isinstance(bio, io.BufferedIOBase):
+#         return bio
+
+#     # Check if it supports read/write for bidirectional buffering
+#     has_read = hasattr(bio, "read") and callable(bio.read)
+#     has_write = hasattr(bio, "write") and callable(bio.write)
+
+#     if has_read and has_write:
+#         return io.BufferedRWPair(bio, bio)
+#     elif has_read:
+#         return io.BufferedReader(bio)
+#     elif has_write:
+#         return io.BufferedWriter(bio)
+
+#     raise TypeError("ensure_binaryio returned an unbufferable object")
 
 
 class ErrorIOStream(io.RawIOBase, BinaryIO):
@@ -46,22 +185,6 @@ class ErrorIOStream(io.RawIOBase, BinaryIO):
 
     def seekable(self) -> bool:
         return False  # pragma: no cover - trivial
-
-
-def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
-    """Check if a stream is seekable."""
-    try:
-        return stream.seekable()
-    except AttributeError as e:
-        # Some streams (e.g. tarfile._Stream) don't have a seekable method, which seems
-        # like a bug. Sometimes they are wrapped in other classes
-        # (e.g. tarfile._FileInFile) that do have one and assume the inner ones also do.
-        #
-        # In the tarfile case specifically, _Stream actually does have a seek() method,
-        # but calling seek() on the stream returned by tarfile will raise an exception,
-        # as it's wrapped in a BufferedReader which calls seekable() when doing a seek().
-        logger.debug(f"Stream {stream} does not have a seekable method: {e}")
-        return False
 
 
 T = TypeVar("T")

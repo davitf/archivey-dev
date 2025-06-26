@@ -1,7 +1,7 @@
 import bz2
 import gzip
 import lzma
-from typing import TYPE_CHECKING, BinaryIO, Optional
+from typing import TYPE_CHECKING, BinaryIO, Optional, cast
 
 from archivey.api.config import ArchiveyConfig
 from archivey.api.types import ArchiveFormat
@@ -210,7 +210,8 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
         ) from None  # pragma: no cover -- lz4 is installed for main tests
 
     return ExceptionTranslatingIO(
-        lambda: ensure_binaryio(lz4.frame.open(path)), _translate_lz4_exception
+        lambda: ensure_binaryio(cast(lz4.frame.LZ4FrameFile, lz4.frame.open(path))),
+        _translate_lz4_exception,
     )
 
 
