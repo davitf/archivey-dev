@@ -3,11 +3,19 @@
 import io
 import logging
 from dataclasses import dataclass, field
-from typing import IO, Any, BinaryIO, Callable, NoReturn, Optional
+from typing import IO, Any, BinaryIO, Callable, NoReturn, Optional, TypeVar
 
 from archivey.api.exceptions import ArchiveError
 
 logger = logging.getLogger(__name__)
+
+
+def ensure_binaryio(stream: io.IOBase) -> BinaryIO:
+    """Some libraries return an object that doesn't match the BinaryIO protocol,
+    so we need to ensure it does to make the type checker happy."""
+    assert isinstance(stream, io.IOBase)
+    # assert isinstance(stream, IO[bytes])
+    return stream  # type: ignore[return-value]
 
 
 class ErrorIOStream(io.RawIOBase, BinaryIO):
@@ -56,6 +64,27 @@ def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
         return False
 
 
+T = TypeVar("T")
+
+
+def run_with_exception_translation(
+    func: Callable[[], T],
+    exception_translator: Callable[[Exception], Optional[ArchiveError]],
+    archive_path: str | None = None,
+    member_name: str | None = None,
+) -> T:
+    try:
+        return func()
+    except Exception as e:
+        translated = exception_translator(e)
+        if translated is not None:
+            translated.archive_path = archive_path
+            translated.member_name = member_name
+            logger.debug(f"Translated exception: {repr(e)} -> {repr(translated)}")
+            raise translated from e
+        raise e
+
+
 class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     """
     Wraps an I/O stream to translate specific exceptions from an underlying library
@@ -64,9 +93,10 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
 
     def __init__(
         self,
-        # TODO: can we reduce the number of types here?
-        inner: io.IOBase | IO[bytes] | Callable[[], io.IOBase | IO[bytes]],
+        inner: IO[bytes] | Callable[[], IO[bytes]],
         exception_translator: Callable[[Exception], Optional[ArchiveError]],
+        archive_path: str | None = None,
+        member_name: str | None = None,
     ):
         """
         Initialize the ExceptionTranslatingIO wrapper.
@@ -86,9 +116,11 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         """
         super().__init__()
         self._translate = exception_translator
-        self._inner: io.IOBase | IO[bytes]
+        self._inner: IO[bytes]
+        self.archive_path = archive_path
+        self.member_name = member_name
 
-        if isinstance(inner, Callable):
+        if callable(inner):
             try:
                 self._inner = inner()
             except Exception as e:
@@ -102,7 +134,10 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     def _translate_exception(self, e: Exception) -> NoReturn:
         translated = self._translate(e)
         if translated is not None:
+            translated.archive_path = self.archive_path
+            translated.member_name = self.member_name
             logger.debug(f"Translated exception: {repr(e)} -> {repr(translated)}")
+
             raise translated from e
 
         if not isinstance(e, ArchiveError):

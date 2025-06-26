@@ -57,8 +57,18 @@ from archivey.api.types import (
     MemberType,
 )
 from archivey.internal.base_reader import BaseArchiveReader, _build_filter
-from archivey.internal.io_helpers import ErrorIOStream, ExceptionTranslatingIO
-from archivey.internal.utils import bytes_to_str, str_to_bytes
+from archivey.internal.io_helpers import (
+    ErrorIOStream,
+    ExceptionTranslatingIO,
+    ensure_binaryio,
+    run_with_exception_translation,
+)
+from archivey.internal.utils import (
+    bytes_to_str,
+    ensure_not_none,
+    is_stream,
+    str_to_bytes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -494,33 +504,17 @@ class RarReader(BaseArchiveReader):
                 "rarfile package is not installed. Please install it to work with RAR archives."
             )
 
-        try:
-            self._archive = rarfile.RarFile(archive_path, "r")
+        def open_rar_file():
+            r = rarfile.RarFile(archive_path, "r", pwd)
             if pwd:
-                self._archive.setpassword(pwd)
-            elif (
-                self._archive._file_parser is not None
-                and self._archive._file_parser.has_header_encryption()
-            ):
-                raise ArchiveEncryptedError(
-                    f"Archive {archive_path} has header encryption, password required to list files"
-                )
-        except rarfile.BadRarFile as e:
-            raise ArchiveCorruptedError(f"Invalid RAR archive {archive_path}: {e}")
-        except rarfile.NotRarFile as e:
-            raise ArchiveCorruptedError(f"Not a RAR archive {archive_path}: {e}")
-        except rarfile.NeedFirstVolume as e:
-            raise ArchiveError(
-                f"Need first volume of multi-volume RAR archive {archive_path}: {e}"
-            )
-        except rarfile.RarWrongPassword as e:
-            raise ArchiveEncryptedError(
-                f"Wrong password specified for {archive_path}"
-            ) from e
-        except rarfile.NoCrypto as e:
-            raise PackageNotInstalledError(
-                "cryptography package is not installed. Please install it to read RAR files with encrypted headers."
-            ) from e
+                r.setpassword(pwd)
+            return r
+
+        self._archive = run_with_exception_translation(
+            open_rar_file,
+            self._exception_translator,
+            archive_path=str(archive_path),
+        )
 
     def _close_archive(self) -> None:
         """Close the archive and release any resources."""
@@ -558,6 +552,12 @@ class RarReader(BaseArchiveReader):
             data = b""
 
         if not data:
+            if is_stream(self.path_or_stream):
+                logger.warning(
+                    "Cannot read link targets for RAR4 file when opening from a stream"
+                )
+                return None
+
             unrar = shutil.which("unrar")
             if unrar:
                 try:
@@ -569,7 +569,7 @@ class RarReader(BaseArchiveReader):
                                 "x",
                                 "-inul",
                                 f"-p{bytes_to_str(pwd) if pwd is not None else '-'}",
-                                str(self.archive_path),
+                                str(self.path_str),
                                 info.filename,
                                 tmpdir,
                             ],
@@ -675,14 +675,8 @@ class RarReader(BaseArchiveReader):
         assert self._archive is not None
 
         if self._format_info is None:
-            # RAR5 archives have a different magic number and structure
-            with open(self.archive_path, "rb") as f:
-                magic = f.read(8)
-                version = (
-                    "5"
-                    if magic.startswith(b"\x52\x61\x72\x21\x1a\x07\x01\x00")
-                    else "4"
-                )
+            version = rarfile.get_rar_version(self.path_or_stream)
+            version_str = str(version) if version else "unknown"
 
             has_header_encryption = (
                 self._archive._file_parser is not None
@@ -691,7 +685,7 @@ class RarReader(BaseArchiveReader):
 
             self._format_info = ArchiveInfo(
                 format=self.format,
-                version=version,
+                version=version_str,
                 is_solid=getattr(
                     self._archive, "is_solid", lambda: False
                 )(),  # rarfile < 4.1 doesn't have is_solid
@@ -707,9 +701,19 @@ class RarReader(BaseArchiveReader):
 
     def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, rarfile.BadRarFile):
-            return ArchiveCorruptedError(
-                f"Error reading RAR archive {self.archive_path}"
-            )
+            return ArchiveCorruptedError("Error reading RAR archive")
+        elif isinstance(e, rarfile.RarWrongPassword):
+            return ArchiveEncryptedError("Wrong password specified")
+        elif isinstance(e, rarfile.PasswordRequired):
+            return ArchiveEncryptedError("Password required")
+        elif isinstance(e, rarfile.NotRarFile):
+            return ArchiveCorruptedError("Not a RAR archive")
+        elif isinstance(e, rarfile.NeedFirstVolume):
+            return ArchiveError("Need first volume of multi-volume RAR archive")
+        elif isinstance(e, rarfile.NoCrypto):
+            return PackageNotInstalledError("cryptography package is not installed")
+        elif isinstance(e, rarfile.Error):
+            return ArchiveError("Unknown error reading RAR archive")
         return None
 
     def _prepare_member_for_open(
@@ -762,8 +766,16 @@ class RarReader(BaseArchiveReader):
             )
 
         try:
-            inner = self._archive.open(member.raw_info, pwd=bytes_to_str(pwd))  # type: ignore[arg-type]
-            return ExceptionTranslatingIO(inner, self._exception_translator)
+            return ExceptionTranslatingIO(
+                lambda: ensure_binaryio(
+                    ensure_not_none(self._archive).open(
+                        member.raw_info, pwd=bytes_to_str(pwd)
+                    )
+                ),
+                self._exception_translator,
+                archive_path=self.path_str,
+                member_name=member.filename,
+            )
         except rarfile.BadRarFile as e:
             raise ArchiveCorruptedError(
                 f"Error reading member {member.filename}"
@@ -798,7 +810,10 @@ class RarReader(BaseArchiveReader):
             members = self.get_members_if_available()
             assert members is not None
 
-            stream_reader = RarStreamReader(self.archive_path, members, pwd=pwd_to_use)
+            if self.path_str is None:
+                raise ValueError("RAR stream reader cannot be opened from a stream")
+
+            stream_reader = RarStreamReader(self.path_str, members, pwd=pwd_to_use)
             filter_func = _build_filter(
                 members, filter or self.config.extraction_filter, None
             )

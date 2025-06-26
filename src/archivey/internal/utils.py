@@ -2,8 +2,9 @@
 Utility functions for archivey.
 """
 
+import io
 import logging
-from typing import overload
+from typing import Any, BinaryIO, TypeGuard, TypeVar, overload
 
 
 @overload
@@ -61,3 +62,20 @@ def bytes_to_str(b: str | bytes | None) -> str | None:
         return b
     assert isinstance(b, bytes), f"Expected bytes, got {type(b)}"
     return b.decode("utf-8")
+
+
+T = TypeVar("T")
+
+
+def ensure_not_none(x: T | None) -> T:
+    if x is None:
+        raise ValueError("Expected non-None value")
+    return x
+
+
+def is_stream(x: Any) -> TypeGuard[BinaryIO]:
+    if isinstance(x, io.IOBase):
+        return True
+    if hasattr(x, "read"):
+        raise ValueError(f"Expected a stream, got this weird object: {type(x)} {x!r}")
+    return False

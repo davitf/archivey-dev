@@ -150,7 +150,7 @@ def detect_archive_format_by_signature(
             logger.warning(f"{path_or_file}: Not a path or stream")
 
 
-_EXTENSION_TO_FORMAT = {
+EXTENSION_TO_FORMAT = {
     ".tar": ArchiveFormat.TAR,
     ".tar.gz": ArchiveFormat.TAR_GZ,
     ".tar.bz2": ArchiveFormat.TAR_BZ2,
@@ -176,7 +176,7 @@ _EXTENSION_TO_FORMAT = {
 
 def has_tar_extension(filename: str) -> bool:
     base_filename, ext = os.path.splitext(filename.lower())
-    return _EXTENSION_TO_FORMAT.get(
+    return EXTENSION_TO_FORMAT.get(
         ext
     ) in TAR_COMPRESSED_FORMATS or base_filename.endswith(".tar")
 
@@ -186,7 +186,7 @@ def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
     if os.path.isdir(filename):
         return ArchiveFormat.FOLDER
     filename_lower = filename.lower()
-    for ext, format in _EXTENSION_TO_FORMAT.items():
+    for ext, format in EXTENSION_TO_FORMAT.items():
         if filename_lower.endswith(ext):
             return format
 
