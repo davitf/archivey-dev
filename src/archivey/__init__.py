@@ -4,7 +4,7 @@ from archivey.api.config import (
     get_default_config,
     set_default_config,
 )
-from archivey.api.core import open_archive
+from archivey.api.core import open_archive, open_compressed_stream
 from archivey.api.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -30,6 +30,7 @@ from archivey.api.types import (
 
 __all__ = [
     "open_archive",
+    "open_compressed_stream",
     "ArchiveError",
     "ArchiveFormatError",
     "ArchiveCorruptedError",
