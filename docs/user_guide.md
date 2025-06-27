@@ -24,6 +24,22 @@ except ArchiveError as e:
 
 The `open_archive` function takes the path to the archive file as its primary argument. It can also accept an optional `config` object and `streaming_only` flag.
 
+## Opening a Compressed Stream
+
+Archivey can also handle single-file compressed formats such as gzip, bzip2, xz,
+zstd and lz4. Use `open_compressed_stream()` to obtain an uncompressed binary
+stream:
+
+```python
+from archivey import open_compressed_stream
+
+with open_compressed_stream("example.txt.gz") as f:
+    data = f.read()
+```
+
+`open_compressed_stream` accepts the same `ArchiveyConfig` object as
+`open_archive` for enabling alternative decompression libraries.
+
 ## The ArchiveReader Object
 
 When an archive is successfully opened, `open_archive` returns an `ArchiveReader` object. This object provides methods to interact with the archive's contents. It's recommended to use the `ArchiveReader` as a context manager (as shown above) to ensure resources are properly released.

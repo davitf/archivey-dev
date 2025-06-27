@@ -70,6 +70,21 @@ with open_archive("file.rar", config=config) as archive:
     ...
 ```
 
+### Single-file compressed streams
+
+To open a standalone compressed file (e.g., `.gz` or `.xz`) and work with the
+uncompressed data, use `open_compressed_stream`:
+
+```python
+from archivey import open_compressed_stream
+
+with open_compressed_stream("example.txt.gz") as f:
+    data = f.read()
+```
+
+Like `open_archive`, this helper accepts an optional `ArchiveyConfig` to enable
+alternative decompression libraries.
+
 See the user guide for more options.
 
 ## Command line usage
