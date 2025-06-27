@@ -12,6 +12,7 @@ from archivey.api.types import (
 )
 from archivey.formats.folder_reader import FolderReader
 from archivey.formats.format_detection import detect_archive_format
+from archivey.formats.compressed_streams import open_stream
 from archivey.formats.rar_reader import RarReader
 from archivey.formats.sevenzip_reader import SevenZipReader
 from archivey.formats.single_file_reader import SingleFileReader
@@ -150,3 +151,33 @@ def open_archive(
             return StreamingOnlyArchiveReaderWrapper(reader)
         else:
             return reader
+
+
+def open_compressed_stream(
+    archive_path: BinaryIO | str | bytes | os.PathLike,
+    *,
+    config: ArchiveyConfig | None = None,
+) -> BinaryIO:
+    """Open a single-file compressed stream and return the uncompressed stream."""
+
+    archive_path_normalized = _normalize_archive_path(archive_path)
+
+    if isinstance(archive_path_normalized, str) and not os.path.exists(
+        archive_path_normalized
+    ):
+        raise FileNotFoundError(
+            f"Archive file not found: {archive_path_normalized}"
+        )
+
+    format = detect_archive_format(archive_path_normalized)
+
+    if format not in SINGLE_FILE_COMPRESSED_FORMATS:
+        raise ArchiveNotSupportedError(
+            f"Unsupported single-file compressed format: {format}"
+        )
+
+    if config is None:
+        config = get_default_config()
+
+    with default_config(config):
+        return open_stream(format, archive_path_normalized, config)
