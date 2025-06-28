@@ -13,8 +13,6 @@ SKIPPABLE_FORMATS: set[ArchiveFormat] = {
     ArchiveFormat.ZIP,
     ArchiveFormat.RAR,
     ArchiveFormat.SEVENZIP,
-    ArchiveFormat.TAR,
-    ArchiveFormat.TAR_GZ,
 }
 
 
@@ -62,7 +60,8 @@ def test_open_from_nonseekable_memory(sample_archive):
             assert has_member
     except Exception as exc:  # pragma: no cover - environment dependent
         if sample_archive.creation_info.format in SKIPPABLE_FORMATS:
-            pytest.xfail(f"Format {sample_archive.creation_info.format} unsupported: {exc}")
+            pytest.xfail(
+                f"Format {sample_archive.creation_info.format} unsupported: {exc}"
+            )
         else:
             raise
-

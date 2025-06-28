@@ -134,7 +134,9 @@ def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
     if all(callable(getattr(obj, m, None)) for m in ALL_IO_METHODS):
         return obj  # type: ignore
 
-    logger.info(f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper")
+    logger.info(
+        f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper"
+    )
     return BinaryIOWrapper(obj)
 
 
@@ -523,8 +525,18 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
         if not self._rewindable:
             raise io.UnsupportedOperation("seek")
-        if whence != io.SEEK_SET or offset < 0 or offset > len(self._buffer):
+        if whence != io.SEEK_SET or offset < 0:
             raise io.UnsupportedOperation("seek")
+
+        if offset > len(self._buffer):
+            to_read = offset - len(self._buffer)
+            while to_read > 0:
+                chunk = self._inner.read(to_read)
+                if not chunk:
+                    break
+                self._buffer.extend(chunk)
+                to_read -= len(chunk)
+
         self._pos = offset
         return self._pos
 

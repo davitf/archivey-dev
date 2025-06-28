@@ -1,10 +1,13 @@
 import bz2
 import gzip
 import lzma
-from typing import TYPE_CHECKING, BinaryIO, Optional, cast
+import os
+import io
+from typing import TYPE_CHECKING, BinaryIO, Optional, cast, IO
 
 from archivey.api.config import ArchiveyConfig
 from archivey.api.types import ArchiveFormat
+from archivey.internal.io_helpers import is_seekable
 
 if TYPE_CHECKING:
     import indexed_bzip2
@@ -63,9 +66,23 @@ def _translate_gzip_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
-    return ExceptionTranslatingIO(
-        lambda: ensure_binaryio(gzip.open(path, mode="rb")), _translate_gzip_exception
-    )
+    def _open() -> IO[bytes]:
+        if isinstance(path, (str, bytes, os.PathLike)):
+            gz = gzip.open(path, mode="rb")
+        else:
+            gz = gzip.GzipFile(fileobj=path, mode="rb")
+
+        if not is_seekable(path):
+            gz.seekable = lambda: False  # type: ignore[assignment]
+
+            def _unsupported_seek(offset: int, whence: int = io.SEEK_SET) -> int:
+                raise io.UnsupportedOperation("seek")
+
+            gz.seek = _unsupported_seek  # type: ignore[assignment]
+
+        return ensure_binaryio(gz)
+
+    return ExceptionTranslatingIO(_open, _translate_gzip_exception)
 
 
 def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
