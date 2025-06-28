@@ -329,7 +329,7 @@ def main(argv: list[str] | None = None) -> None:
             abs_path = os.path.abspath(archive_path)
             stats = stats_per_file.get(abs_path)
             if stats is not None:
-                logger.debug(
+                logger.info(
                     f"IO stats for {archive_path}: {stats.bytes_read} bytes read, {stats.seek_calls} seeks"
                 )
 

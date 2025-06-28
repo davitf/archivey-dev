@@ -3,7 +3,6 @@ from venv import logger
 
 import pytest
 
-from archivey.api.config import ArchiveyConfig
 from archivey.api.core import open_archive
 from archivey.api.exceptions import (
     ArchiveCorruptedError,
@@ -14,29 +13,13 @@ from archivey.api.types import (
     ArchiveFormat,
 )
 from tests.archivey.sample_archives import (
+    ALTERNATIVE_CONFIG,
+    ALTERNATIVE_PACKAGES_FORMATS,
     SAMPLE_ARCHIVES,
     SampleArchive,
     filter_archives,
 )
 from tests.archivey.testing_utils import skip_if_package_missing
-
-_ALTERNATIVE_CONFIG = ArchiveyConfig(
-    use_rapidgzip=True,
-    use_indexed_bzip2=True,
-    use_python_xz=True,
-    use_zstandard=True,
-)
-
-_ALTERNATIVE_PACKAGES_FORMATS = (
-    ArchiveFormat.GZIP,
-    ArchiveFormat.BZIP2,
-    ArchiveFormat.XZ,
-    ArchiveFormat.ZSTD,
-    ArchiveFormat.TAR_GZ,
-    ArchiveFormat.TAR_BZ2,
-    ArchiveFormat.TAR_XZ,
-    ArchiveFormat.TAR_ZSTD,
-)
 
 
 @pytest.mark.parametrize(
@@ -68,9 +51,9 @@ def test_read_corrupted_archives(
             - "checksum": Corruption near the end of the file
     """
     if alternative_packages:
-        if sample_archive.creation_info.format not in _ALTERNATIVE_PACKAGES_FORMATS:
+        if sample_archive.creation_info.format not in ALTERNATIVE_PACKAGES_FORMATS:
             pytest.skip("No alternative package for this format, no need to test")
-        config = _ALTERNATIVE_CONFIG
+        config = ALTERNATIVE_CONFIG
     else:
         config = None
 
@@ -175,9 +158,9 @@ def test_read_truncated_archives(
         pytest.skip("Folder archives cannot be truncated")
 
     if alternative_packages:
-        if sample_archive.creation_info.format not in _ALTERNATIVE_PACKAGES_FORMATS:
+        if sample_archive.creation_info.format not in ALTERNATIVE_PACKAGES_FORMATS:
             pytest.skip("No alternative package for this format, no need to test")
-        config = _ALTERNATIVE_CONFIG
+        config = ALTERNATIVE_CONFIG
     else:
         config = None
 

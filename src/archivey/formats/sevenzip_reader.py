@@ -132,6 +132,11 @@ class StreamingFile(BasePy7zIOWriter):
             self._buffer = self._buffer[size:]
             return bytes(data)
 
+        def readinto(self, b: bytearray) -> int:
+            data = self.read(len(b))
+            b[: len(data)] = data
+            return len(data)
+
         def close(self):
             self._parent._reader_alive = False
             self._parent._data_queue.put(None)
@@ -687,7 +692,7 @@ class SevenZipReader(BaseArchiveReader):
                     if close_streams:
                         stream.close()
         except ArchiveError as e:
-            logger.error(f"Error in iter_members_with_io: {e}")
+            logger.error(f"Error in iter_members_with_io: {e}", exc_info=True)
             # Yield any remaining members that were not extracted, with the error.
             for member in pending_files_by_id.values():
                 yield member, ErrorIOStream(e)

@@ -14,6 +14,7 @@ from archivey.api.filters import create_filter
 from archivey.api.types import ArchiveMember, CreateSystem, MemberType
 from archivey.internal.dependency_checker import get_dependency_versions
 from tests.archivey.sample_archives import (
+    ALTERNATIVE_CONFIG,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
     FileInfo,
@@ -372,7 +373,9 @@ logger = logging.getLogger(__name__)
     ),
     ids=lambda x: x.filename,
 )
-@pytest.mark.parametrize("alternative_packages", [False, True])
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+)
 def test_read_tar_archives(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
@@ -380,15 +383,7 @@ def test_read_tar_archives(
         f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
     )
 
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = None
+    config = ALTERNATIVE_CONFIG if alternative_packages else None
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
@@ -519,7 +514,9 @@ def test_read_sevenzip_py7zr_archives(
     ),
     ids=lambda x: x.filename,
 )
-@pytest.mark.parametrize("alternative_packages", [False, True])
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+)
 def test_read_single_file_compressed_archives(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):

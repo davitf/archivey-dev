@@ -46,6 +46,7 @@ from archivey.api.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveError,
+    ArchiveStreamNotSeekableError,
     PackageNotInstalledError,
 )
 from archivey.api.types import (
@@ -714,6 +715,10 @@ class RarReader(BaseArchiveReader):
             return PackageNotInstalledError("cryptography package is not installed")
         elif isinstance(e, rarfile.Error):
             return ArchiveError("Unknown error reading RAR archive")
+        elif isinstance(e, io.UnsupportedOperation) and "seek" in str(e):
+            return ArchiveStreamNotSeekableError(
+                "RAR archives do not support non-seekable streams"
+            )
         return None
 
     def _prepare_member_for_open(

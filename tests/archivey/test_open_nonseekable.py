@@ -1,11 +1,23 @@
 import io
+import logging
 
 import pytest
 
-from archivey.api.core import open_archive
+from archivey.api.config import ArchiveyConfig
+from archivey.api.core import open_archive, open_compressed_stream
+from archivey.api.exceptions import ArchiveStreamNotSeekableError
 from archivey.api.types import ArchiveFormat
-from tests.archivey.sample_archives import SAMPLE_ARCHIVES
+from archivey.internal.io_helpers import ensure_binaryio
+from tests.archivey.sample_archives import (
+    BASIC_ARCHIVES,
+    LARGE_ARCHIVES,
+    SampleArchive,
+    filter_archives,
+)
+from tests.archivey.test_open_compressed_stream import SINGLE_FILE_ARCHIVES
 from tests.archivey.testing_utils import skip_if_package_missing
+
+logger = logging.getLogger(__name__)
 
 # Formats known to fail when opened from a non-seekable stream
 SKIPPABLE_FORMATS: set[ArchiveFormat] = {
@@ -15,13 +27,19 @@ SKIPPABLE_FORMATS: set[ArchiveFormat] = {
 }
 
 
-# Select one sample archive for each format except folder/iso
-archives_by_format = {}
-for a in SAMPLE_ARCHIVES:
-    fmt = a.creation_info.format
-    if fmt in (ArchiveFormat.FOLDER, ArchiveFormat.ISO):
-        continue
-    archives_by_format.setdefault(fmt, a)
+# Formats known to fail when opened from a non-seekable stream with default/alternative packages
+EXPECTED_FAILURES: set[tuple[ArchiveFormat, bool]] = {
+    (ArchiveFormat.GZIP, True),
+    (ArchiveFormat.BZIP2, True),
+    (ArchiveFormat.XZ, True),
+    (ArchiveFormat.TAR_GZ, True),
+    (ArchiveFormat.TAR_BZ2, True),
+    (ArchiveFormat.TAR_XZ, True),
+    (ArchiveFormat.ZIP, False),
+    (ArchiveFormat.ZIP, True),
+    (ArchiveFormat.RAR, False),
+    (ArchiveFormat.RAR, True),
+}
 
 
 class NonSeekableBytesIO(io.BytesIO):
@@ -36,31 +54,105 @@ class NonSeekableBytesIO(io.BytesIO):
 
 
 @pytest.mark.parametrize(
-    "sample_archive", list(archives_by_format.values()), ids=lambda a: a.filename
+    "sample_archive",
+    filter_archives(
+        BASIC_ARCHIVES + LARGE_ARCHIVES,
+        custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
+    ),
+    ids=lambda a: a.filename,
 )
-def test_open_from_nonseekable_memory(sample_archive):
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+)
+def test_open_archive_nonseekable(
+    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+):
     """Ensure open_archive can read from non-seekable streams in streaming mode."""
+    if alternative_packages:
+        config = ArchiveyConfig(
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            use_zstandard=True,
+        )
+    else:
+        config = None
 
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, config)
 
-    path = sample_archive.get_archive_path()
-    with open(path, "rb") as f:
+    with open(sample_archive_path, "rb") as f:
         data = f.read()
 
     stream = NonSeekableBytesIO(data)
 
     try:
-        with open_archive(stream, streaming_only=True) as archive:
+        with open_archive(stream, streaming_only=True, config=config) as archive:
             has_member = False
             for member, member_stream in archive.iter_members_with_io():
                 has_member = True
                 if member_stream is not None:
                     member_stream.read()
             assert has_member
-    except Exception as exc:  # pragma: no cover - environment dependent
-        if sample_archive.creation_info.format in SKIPPABLE_FORMATS:
+    except (
+        ArchiveStreamNotSeekableError
+    ) as exc:  # pragma: no cover - environment dependent
+        key = (sample_archive.creation_info.format, alternative_packages)
+        if key in EXPECTED_FAILURES:
             pytest.xfail(
-                f"Format {sample_archive.creation_info.format} unsupported: {exc}"
+                f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
             )
         else:
-            raise
+            assert False, (
+                f"Expected format {key} to work with non-seekable streams, but it failed with {exc!r}"
+            )
+
+
+@pytest.mark.parametrize(
+    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
+)
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+)
+def test_open_compressed_stream_nonseekable(
+    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+):
+    if alternative_packages:
+        config = ArchiveyConfig(
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            use_zstandard=True,
+        )
+    else:
+        config = None
+
+    skip_if_package_missing(sample_archive.creation_info.format, config)
+
+    with open(sample_archive_path, "rb") as f:
+        data = f.read()
+
+    stream = ensure_binaryio(NonSeekableBytesIO(data))
+    # stream = BinaryIOWrapper(io.BytesIO(data))
+    # print(stream.fileno())
+
+    try:
+        with open_compressed_stream(stream, config=config) as f:
+            out = f.read()
+
+    except (
+        ArchiveStreamNotSeekableError
+    ) as exc:  # pragma: no cover - environment dependent
+        key = (sample_archive.creation_info.format, alternative_packages)
+        logger.error(f"key: {key}")
+        logger.error(f"EXPECTED_FAILURES: {EXPECTED_FAILURES}")
+        if key in EXPECTED_FAILURES:
+            pytest.xfail(
+                f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
+            )
+        else:
+            assert False, (
+                f"Expected format {key} to work with non-seekable streams, but it failed with {exc!r}"
+            )
+
+    expected = sample_archive.contents.files[0].contents
+    assert out == expected

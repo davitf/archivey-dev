@@ -104,3 +104,9 @@ class ArchiveLinkTargetNotFoundError(ArchiveError):
     """
 
     pass
+
+
+class ArchiveStreamNotSeekableError(ArchiveError):
+    """Raised when a stream is not seekable and it's not supported by the archive format or library."""
+
+    pass
