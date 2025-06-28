@@ -139,3 +139,12 @@ Refer to the `ArchiveMember` class definition in `archivey.api.types` for all av
 Once your reader is implemented, you'll need to modify `archivey.api.core.open_archive` to detect the archive format and instantiate your reader. (Details of this registration process might evolve, check the current `open_archive` function).
 
 By following these guidelines, you can contribute robust and well-integrated support for new archive formats to `archivey`.
+
+## Testing Guidelines
+
+* Use `pytest` via `uv run --extra optional pytest` to run the suite.
+* Add tests for new features and bug fixes using the public API when possible.
+* Avoid brittle tests that depend on internal details such as log messages or
+  private attributes.
+* Focus on verifying behaviour that users rely on rather than increasing code
+  coverage numbers for their own sake.
