@@ -7,7 +7,6 @@ from archivey.api.types import ArchiveFormat
 from tests.archivey.sample_archives import SAMPLE_ARCHIVES
 from tests.archivey.testing_utils import skip_if_package_missing
 
-
 # Formats known to fail when opened from a non-seekable stream
 SKIPPABLE_FORMATS: set[ArchiveFormat] = {
     ArchiveFormat.ZIP,

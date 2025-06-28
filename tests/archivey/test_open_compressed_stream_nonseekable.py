@@ -1,11 +1,11 @@
 import io
+
 import pytest
 
-from archivey.api.core import open_compressed_stream
 from archivey.api.config import ArchiveyConfig
+from archivey.api.core import open_compressed_stream
 from tests.archivey.sample_archives import SAMPLE_ARCHIVES, filter_archives
 from tests.archivey.testing_utils import skip_if_package_missing
-
 
 SINGLE_FILE_ARCHIVES = filter_archives(
     SAMPLE_ARCHIVES, prefixes=["single_file", "single_file_with_metadata"]
@@ -23,7 +23,9 @@ class NonSeekableBytesIO(io.BytesIO):
         raise io.UnsupportedOperation("tell")
 
 
-@pytest.mark.parametrize("sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.parametrize(
+    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
+)
 def test_open_compressed_stream_nonseekable(sample_archive, sample_archive_path):
     config = ArchiveyConfig()
 

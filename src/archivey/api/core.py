@@ -10,9 +10,9 @@ from archivey.api.types import (
     TAR_COMPRESSED_FORMATS,
     ArchiveFormat,
 )
+from archivey.formats.compressed_streams import open_stream
 from archivey.formats.folder_reader import FolderReader
 from archivey.formats.format_detection import detect_archive_format
-from archivey.formats.compressed_streams import open_stream
 from archivey.formats.rar_reader import RarReader
 from archivey.formats.sevenzip_reader import SevenZipReader
 from archivey.formats.single_file_reader import SingleFileReader
@@ -22,7 +22,7 @@ from archivey.internal.base_reader import (
     ArchiveReader,
     StreamingOnlyArchiveReaderWrapper,
 )
-from archivey.internal.io_helpers import is_seekable, RewindableNonSeekableStream
+from archivey.internal.io_helpers import RewindableNonSeekableStream, is_seekable
 
 
 def _normalize_archive_path(
@@ -112,7 +112,9 @@ def open_archive(
     archive_path_normalized = _normalize_archive_path(archive_path)
 
     wrapper: RewindableNonSeekableStream | None = None
-    if not isinstance(archive_path_normalized, str) and not is_seekable(archive_path_normalized):
+    if not isinstance(archive_path_normalized, str) and not is_seekable(
+        archive_path_normalized
+    ):
         wrapper = RewindableNonSeekableStream(archive_path_normalized)
         archive_path_normalized = wrapper
 
@@ -173,16 +175,16 @@ def open_compressed_stream(
     archive_path_normalized = _normalize_archive_path(archive_path)
 
     wrapper: RewindableNonSeekableStream | None = None
-    if not isinstance(archive_path_normalized, str) and not is_seekable(archive_path_normalized):
+    if not isinstance(archive_path_normalized, str) and not is_seekable(
+        archive_path_normalized
+    ):
         wrapper = RewindableNonSeekableStream(archive_path_normalized)
         archive_path_normalized = wrapper
 
     if isinstance(archive_path_normalized, str) and not os.path.exists(
         archive_path_normalized
     ):
-        raise FileNotFoundError(
-            f"Archive file not found: {archive_path_normalized}"
-        )
+        raise FileNotFoundError(f"Archive file not found: {archive_path_normalized}")
 
     format = detect_archive_format(archive_path_normalized)
 

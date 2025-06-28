@@ -1,9 +1,9 @@
 import bz2
 import gzip
+import io
 import lzma
 import os
-import io
-from typing import TYPE_CHECKING, BinaryIO, Optional, cast, IO
+from typing import IO, TYPE_CHECKING, BinaryIO, Optional, cast
 
 from archivey.api.config import ArchiveyConfig
 from archivey.api.types import ArchiveFormat
