@@ -4,6 +4,7 @@ import stat
 import tarfile
 from datetime import datetime, timezone
 from typing import IO, BinaryIO, Iterator, List, Optional, cast
+from dataclasses import replace
 
 from archivey.api.exceptions import (
     ArchiveCorruptedError,
@@ -85,6 +86,10 @@ class TarReader(BaseArchiveReader):
             logger.debug(
                 f"Compressed tar opened: {self._fileobj} seekable={self._fileobj.seekable()}"
             )
+
+            if streaming_only and not self._fileobj.seekable():
+                # Integrity checking requires seeking; disable it for non-seekable streams
+                self.config = replace(self.config, tar_check_integrity=False)
 
             if not streaming_only and not self._fileobj.seekable():
                 raise ArchiveError(
