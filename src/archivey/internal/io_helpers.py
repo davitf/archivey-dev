@@ -478,3 +478,102 @@ class StatsIO(io.RawIOBase, BinaryIO):
     # Delegate unknown attributes --------------------------------------
     def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
         return getattr(self._inner, item)
+
+
+class BufferedSeekableIO(io.RawIOBase, BinaryIO):
+    """Wrap a non-seekable binary stream to provide limited backward seeking."""
+
+    def __init__(self, inner: BinaryIO, *, buffer_size: int = 65536) -> None:
+        super().__init__()
+        self._inner = inner
+        self._buffer = bytearray()
+        self._buffer_limit = buffer_size
+        self._start_pos = 0
+        self._pos = 0
+        self._eof = False
+
+    # ---------------------------------------------------------------
+    @property
+    def _buffer_end(self) -> int:
+        return self._start_pos + len(self._buffer)
+
+    def _append(self, data: bytes) -> None:
+        self._buffer.extend(data)
+        if len(self._buffer) > self._buffer_limit:
+            drop = len(self._buffer) - self._buffer_limit
+            del self._buffer[:drop]
+            self._start_pos += drop
+
+    def _fill_to(self, length: int) -> None:
+        while not self._eof and self._buffer_end < length:
+            chunk = self._inner.read(length - self._buffer_end)
+            if not chunk:
+                self._eof = True
+                break
+            self._append(chunk)
+
+    def _fill_all(self) -> None:
+        while not self._eof:
+            chunk = self._inner.read(8192)
+            if not chunk:
+                self._eof = True
+                break
+            self._append(chunk)
+
+    # Basic IO methods ---------------------------------------------
+    def read(self, n: int = -1) -> bytes:
+        if n < 0:
+            self._fill_all()
+            start = self._pos - self._start_pos
+            data = bytes(self._buffer[start:])
+            self._pos = self._buffer_end
+            return data
+
+        self._fill_to(self._pos + n)
+        start = self._pos - self._start_pos
+        end = start + n
+        data = bytes(self._buffer[start:end])
+        self._pos += len(data)
+        return data
+
+    def readable(self) -> bool:  # pragma: no cover - trivial
+        return True
+
+    def seekable(self) -> bool:  # pragma: no cover - trivial
+        return True
+
+    def writable(self) -> bool:  # pragma: no cover - trivial
+        return False
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        if whence == io.SEEK_SET:
+            target = offset
+        elif whence == io.SEEK_CUR:
+            target = self._pos + offset
+        elif whence == io.SEEK_END:
+            self._fill_all()
+            target = self._buffer_end + offset
+        else:
+            raise ValueError(f"Invalid whence: {whence}")
+
+        if target < 0:
+            raise OSError("Negative seek position")
+
+        if target < self._start_pos:
+            raise OSError("Seek position beyond buffered range")
+
+        self._fill_to(target)
+        self._pos = target
+        return self._pos
+
+    def tell(self) -> int:
+        return self._pos
+
+    def close(self) -> None:
+        try:
+            self._inner.close()
+        finally:
+            super().close()
+
+    def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
+        return getattr(self._inner, item)

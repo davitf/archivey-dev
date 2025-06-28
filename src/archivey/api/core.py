@@ -22,6 +22,7 @@ from archivey.internal.base_reader import (
     ArchiveReader,
     StreamingOnlyArchiveReaderWrapper,
 )
+from archivey.internal.io_helpers import BufferedSeekableIO, is_seekable
 
 
 def _normalize_archive_path(
@@ -109,6 +110,13 @@ def open_archive(
         raise TypeError("Password must be a string or bytes")
 
     archive_path_normalized = _normalize_archive_path(archive_path)
+
+    if (
+        not isinstance(archive_path_normalized, str)
+        and not is_seekable(archive_path_normalized)
+        and streaming_only
+    ):
+        archive_path_normalized = BufferedSeekableIO(archive_path_normalized)
 
     if isinstance(archive_path_normalized, str):
         if not os.path.exists(archive_path_normalized):
