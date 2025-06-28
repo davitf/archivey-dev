@@ -17,6 +17,7 @@ from typing import (
 )
 
 from archivey.api.exceptions import ArchiveError
+from streamadapt import ensure_stream
 
 logger = logging.getLogger(__name__)
 
@@ -129,13 +130,8 @@ ALL_IO_METHODS = (
 
 
 def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
-    """Some libraries return an object that doesn't match the BinaryIO protocol,
-    so we need to ensure it does to make the type checker happy."""
-    if all(callable(getattr(obj, m, None)) for m in ALL_IO_METHODS):
-        return obj  # type: ignore
-
-    logger.info(f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper")
-    return BinaryIOWrapper(obj)
+    """Ensure *obj* behaves like a :class:`BinaryIO`."""
+    return ensure_stream(obj, mode="binary")
 
 
 # def ensure_bufferedio(obj: Any) -> BinaryIO:
