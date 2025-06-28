@@ -204,7 +204,11 @@ class TarReader(BaseArchiveReader):
         if self._fileobj.seekable():
             self._fileobj.seek(next_member_offset)
         else:
-            remaining = next_member_offset - self._fileobj.tell()
+            # We should ideally use self._fileobj.tell() here, but it doesn't work
+            # for non-seekable streams. TarFile wraps the stream in a file-like object
+            # that has a tell() method.
+            remaining = next_member_offset - self._archive.fileobj.tell()  # type: ignore
+
             if remaining > 0:
                 data = self._fileobj.read(remaining)
                 assert len(data) == remaining, (
