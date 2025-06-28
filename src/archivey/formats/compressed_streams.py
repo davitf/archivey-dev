@@ -69,10 +69,12 @@ def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
     def _open() -> IO[bytes]:
         if isinstance(path, (str, bytes, os.PathLike)):
             gz = gzip.open(path, mode="rb")
+            underlying_seekable = True
         else:
             gz = gzip.GzipFile(fileobj=path, mode="rb")
+            underlying_seekable = is_seekable(path)
 
-        if not is_seekable(path):
+        if not underlying_seekable:
             gz.seekable = lambda: False  # type: ignore[assignment]
 
             def _unsupported_seek(offset: int, whence: int = io.SEEK_SET) -> int:
