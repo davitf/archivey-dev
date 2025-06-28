@@ -478,3 +478,82 @@ class StatsIO(io.RawIOBase, BinaryIO):
     # Delegate unknown attributes --------------------------------------
     def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
         return getattr(self._inner, item)
+
+
+class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
+    """Wrap a non-seekable stream allowing a temporary rewind."""
+
+    def __init__(self, inner: IO[bytes]):
+        super().__init__()
+        self._inner = inner
+        self._buffer = bytearray()
+        self._pos = 0
+        self._rewindable = True
+
+    # Basic IO methods -------------------------------------------------
+    def read(self, n: int = -1) -> bytes:
+        data = bytearray()
+        if self._pos < len(self._buffer):
+            if n == -1 or self._pos + n > len(self._buffer):
+                data.extend(self._buffer[self._pos :])
+                n = -1 if n == -1 else n - (len(self._buffer) - self._pos)
+                self._pos = len(self._buffer)
+            else:
+                end = self._pos + n
+                data.extend(self._buffer[self._pos : end])
+                self._pos = end
+                n = 0
+
+        if n != 0:
+            chunk = self._inner.read(n)
+            if self._rewindable:
+                self._buffer.extend(chunk)
+            self._pos += len(chunk)
+            data.extend(chunk)
+
+        return bytes(data)
+
+    def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
+        data = self.read(len(b))
+        n = len(data)
+        b[:n] = data
+        return n
+
+    # Seek/Tell --------------------------------------------------------
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        if not self._rewindable:
+            raise io.UnsupportedOperation("seek")
+        if whence != io.SEEK_SET or offset < 0 or offset > len(self._buffer):
+            raise io.UnsupportedOperation("seek")
+        self._pos = offset
+        return self._pos
+
+    def tell(self) -> int:
+        return self._pos
+
+    # Properties -------------------------------------------------------
+    def readable(self) -> bool:  # pragma: no cover - trivial
+        return True
+
+    def writable(self) -> bool:  # pragma: no cover - trivial
+        return False
+
+    def seekable(self) -> bool:  # pragma: no cover - trivial
+        return self._rewindable
+
+    # Control methods --------------------------------------------------
+    def rewind(self) -> None:
+        if not self._rewindable:
+            raise ValueError("Cannot rewind after disable_rewind")
+        self._pos = 0
+
+    def disable_rewind(self) -> None:
+        self._rewindable = False
+
+    def close(self) -> None:  # pragma: no cover - simple delegation
+        self._inner.close()
+        super().close()
+
+    # Delegate unknown attributes -------------------------------------
+    def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
+        return getattr(self._inner, item)
