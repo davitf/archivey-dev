@@ -2,12 +2,11 @@ import logging
 
 import pytest
 
-from archivey.api.core import open_compressed_stream
 from archivey.api.config import ArchiveyConfig
+from archivey.api.core import open_compressed_stream
 from archivey.api.exceptions import ArchiveNotSupportedError
 from tests.archivey.sample_archives import SAMPLE_ARCHIVES, filter_archives
 from tests.archivey.testing_utils import skip_if_package_missing
-
 
 # Select single-file archives for testing
 SINGLE_FILE_ARCHIVES = filter_archives(
@@ -21,9 +20,15 @@ BASIC_ZIP_ARCHIVE = filter_archives(
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize("sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename)
-@pytest.mark.parametrize("alternative_packages", [False, True], ids=["default", "altlibs"])
-def test_open_compressed_stream(sample_archive, sample_archive_path, alternative_packages):
+@pytest.mark.parametrize(
+    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
+)
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["default", "altlibs"]
+)
+def test_open_compressed_stream(
+    sample_archive, sample_archive_path, alternative_packages
+):
     if alternative_packages:
         config = ArchiveyConfig(
             use_rapidgzip=True,

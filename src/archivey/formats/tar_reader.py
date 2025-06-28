@@ -2,9 +2,9 @@ import logging
 import os
 import stat
 import tarfile
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import IO, BinaryIO, Iterator, List, Optional, cast
-from dataclasses import replace
 
 from archivey.api.exceptions import (
     ArchiveCorruptedError,
