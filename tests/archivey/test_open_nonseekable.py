@@ -8,6 +8,16 @@ from tests.archivey.sample_archives import SAMPLE_ARCHIVES
 from tests.archivey.testing_utils import skip_if_package_missing
 
 
+# Formats known to fail when opened from a non-seekable stream
+SKIPPABLE_FORMATS: set[ArchiveFormat] = {
+    ArchiveFormat.ZIP,
+    ArchiveFormat.RAR,
+    ArchiveFormat.SEVENZIP,
+    ArchiveFormat.TAR,
+    ArchiveFormat.TAR_GZ,
+}
+
+
 # Select one sample archive for each format except folder/iso
 archives_by_format = {}
 for a in SAMPLE_ARCHIVES:
@@ -51,5 +61,8 @@ def test_open_from_nonseekable_memory(sample_archive):
                     member_stream.read()
             assert has_member
     except Exception as exc:  # pragma: no cover - environment dependent
-        pytest.skip(f"Format {sample_archive.creation_info.format} unsupported: {exc}")
+        if sample_archive.creation_info.format in SKIPPABLE_FORMATS:
+            pytest.xfail(f"Format {sample_archive.creation_info.format} unsupported: {exc}")
+        else:
+            raise
 
