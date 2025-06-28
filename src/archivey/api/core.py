@@ -22,6 +22,7 @@ from archivey.internal.base_reader import (
     ArchiveReader,
     StreamingOnlyArchiveReaderWrapper,
 )
+from archivey.internal.io_helpers import is_seekable, RewindableNonSeekableStream
 
 
 def _normalize_archive_path(
@@ -110,6 +111,11 @@ def open_archive(
 
     archive_path_normalized = _normalize_archive_path(archive_path)
 
+    wrapper: RewindableNonSeekableStream | None = None
+    if not isinstance(archive_path_normalized, str) and not is_seekable(archive_path_normalized):
+        wrapper = RewindableNonSeekableStream(archive_path_normalized)
+        archive_path_normalized = wrapper
+
     if isinstance(archive_path_normalized, str):
         if not os.path.exists(archive_path_normalized):
             raise FileNotFoundError(
@@ -117,6 +123,10 @@ def open_archive(
             )
 
     format = detect_archive_format(archive_path_normalized)
+
+    if wrapper is not None:
+        wrapper.rewind()
+        wrapper.disable_rewind()
     if format == ArchiveFormat.UNKNOWN:
         raise ArchiveNotSupportedError(
             f"Unknown archive format for {archive_path_normalized}"
@@ -162,6 +172,11 @@ def open_compressed_stream(
 
     archive_path_normalized = _normalize_archive_path(archive_path)
 
+    wrapper: RewindableNonSeekableStream | None = None
+    if not isinstance(archive_path_normalized, str) and not is_seekable(archive_path_normalized):
+        wrapper = RewindableNonSeekableStream(archive_path_normalized)
+        archive_path_normalized = wrapper
+
     if isinstance(archive_path_normalized, str) and not os.path.exists(
         archive_path_normalized
     ):
@@ -170,6 +185,10 @@ def open_compressed_stream(
         )
 
     format = detect_archive_format(archive_path_normalized)
+
+    if wrapper is not None:
+        wrapper.rewind()
+        wrapper.disable_rewind()
 
     if format not in SINGLE_FILE_COMPRESSED_FORMATS:
         raise ArchiveNotSupportedError(
