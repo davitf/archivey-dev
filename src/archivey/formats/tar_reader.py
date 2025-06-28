@@ -2,7 +2,6 @@ import logging
 import os
 import stat
 import tarfile
-from dataclasses import replace
 from datetime import datetime, timezone
 from typing import IO, BinaryIO, Iterator, List, Optional, cast
 
@@ -75,6 +74,7 @@ class TarReader(BaseArchiveReader):
         self._streaming_only = streaming_only
         self._format_info: ArchiveInfo | None = None
         self._fileobj: BinaryIO | None = None
+        self._close_fileobj: bool
 
         logger.debug(f"TarReader init: {archive_path} {format} {streaming_only}")
 
@@ -83,15 +83,23 @@ class TarReader(BaseArchiveReader):
             self._fileobj = open_stream(
                 self.compression_method, archive_path, self.config
             )
+            self._close_fileobj = True
             logger.debug(
                 f"Compressed tar opened: {self._fileobj} seekable={self._fileobj.seekable()}"
             )
 
-            if streaming_only and not self._fileobj.seekable():
-                # Integrity checking requires seeking; disable it for non-seekable streams
-                self.config = replace(self.config, tar_check_integrity=False)
+            # if streaming_only and not self._fileobj.seekable():
+            #     # Integrity checking requires seeking; disable it for non-seekable streams
+            #     self.config = replace(self.config, tar_check_integrity=False)
 
             if not streaming_only and not self._fileobj.seekable():
+                if format == ArchiveFormat.TAR_ZSTD and self.config.use_zstandard:
+                    raise ArchiveError(
+                        "Tried to open a random-access tar.zstd file, but zstandard "
+                        "does not support seeking. Disable the use_zstandard config "
+                        "option."
+                    )
+
                 raise ArchiveError(
                     f"Tried to open a random-access {format.value} file, but inner stream is not seekable ({self._fileobj})"
                 )
@@ -100,8 +108,10 @@ class TarReader(BaseArchiveReader):
             self.compression_method = "store"
             if isinstance(archive_path, str):
                 self._fileobj = open(archive_path, "rb")
+                self._close_fileobj = True
             else:
                 self._fileobj = archive_path
+                self._close_fileobj = False
         else:
             raise ValueError(f"Unsupported archive format: {format}")
 
@@ -127,7 +137,8 @@ class TarReader(BaseArchiveReader):
         """Close the archive and release any resources."""
         self._archive.close()  # type: ignore
         self._archive = None
-        if self._fileobj is not None:
+
+        if self._close_fileobj and self._fileobj is not None:
             self._fileobj.close()
             self._fileobj = None
 

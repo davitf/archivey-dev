@@ -8,6 +8,7 @@ from typing import IO, TYPE_CHECKING, BinaryIO, Optional, cast
 from archivey.api.config import ArchiveyConfig
 from archivey.api.types import ArchiveFormat
 from archivey.internal.io_helpers import is_seekable
+from archivey.internal.utils import is_stream
 
 if TYPE_CHECKING:
     import indexed_bzip2
@@ -48,13 +49,18 @@ else:
         xz = None
 
 
+import logging
+
 from archivey.api.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
     ArchiveError,
+    ArchiveStreamNotSeekableError,
     PackageNotInstalledError,
 )
 from archivey.internal.io_helpers import ExceptionTranslatingIO, ensure_binaryio
+
+logger = logging.getLogger(__name__)
 
 
 def _translate_gzip_exception(e: Exception) -> Optional[ArchiveError]:
@@ -97,6 +103,12 @@ def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
         # If we have opened a gzip stream, the magic bytes are there. So if the library
         # fails to detect a valid format, it's because the file is truncated.
         return ArchiveEOFError(f"Possibly truncated GZIP stream: {repr(e)}")
+    elif isinstance(e, ValueError) and "has no valid fileno" in exc_text:
+        # Rapidgzip tries to look at the underlying stream's fileno if it's not
+        # seekable.
+        return ArchiveStreamNotSeekableError(
+            "rapidgzip does not support non-seekable streams"
+        )
 
     # Found in rapidgzip 0.11.0
     elif (
@@ -137,6 +149,12 @@ def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
         return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {repr(e)}")
     elif isinstance(e, ValueError) and "[BZip2 block data]" in exc_text:
         return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {repr(e)}")
+    elif isinstance(e, ValueError) and "has no valid fileno" in exc_text:
+        # Indexed BZIP2 tries to look at the underlying stream's fileno if it's not
+        # seekable.
+        return ArchiveStreamNotSeekableError(
+            "Indexed BZIP2 does not support non-seekable streams"
+        )
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
@@ -166,6 +184,10 @@ def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
     logger.debug("TRANSLATING XZ EXCEPTION", exc_info=e)
     if isinstance(e, xz.XZError):
         return ArchiveCorruptedError(f"Error reading XZ archive: {repr(e)}")
+    elif isinstance(e, ValueError) and "filename is not seekable" in str(e):
+        return ArchiveStreamNotSeekableError(
+            "Python XZ does not support non-seekable streams"
+        )
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
@@ -180,6 +202,60 @@ def open_python_xz_stream(path: str | BinaryIO) -> BinaryIO:
     )
 
 
+class ZstandardReopenOnBackwardsSeekIO(io.RawIOBase, BinaryIO):
+    """Wrap a stream that supports seeking backwards, and reopen it if a backwards seek is attempted."""
+
+    def __init__(self, archive_path: str | BinaryIO):
+        super().__init__()
+        self._archive_path = archive_path
+        self._inner = zstandard.open(archive_path)
+
+    def _reopen_stream(self) -> None:
+        self._inner.close()
+        logger.warning(
+            "Reopening Zstandard stream for backwards seeking: {self._archive_path}"
+        )
+        if is_stream(self._archive_path):
+            self._archive_path.seek(0)
+        self._inner = zstandard.open(self._archive_path)
+
+    def seekable(self) -> bool:
+        if is_stream(self._archive_path):
+            return self._archive_path.seekable()
+        return True
+
+    def read(self, n: int = -1) -> bytes:
+        return self._inner.read(n)
+
+    def readinto(self, b: bytearray | memoryview) -> int:
+        return self._inner.readinto(b)  # type: ignore[attr-defined]
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        new_pos: int
+        if whence == io.SEEK_SET:
+            new_pos = offset
+        elif whence == io.SEEK_CUR:
+            new_pos = self._inner.tell() + offset
+        elif whence == io.SEEK_END:
+            raise io.UnsupportedOperation(
+                "seek backwards from end of stream in Zstandard "
+            )
+        else:
+            raise ValueError(f"Invalid whence: {whence}")
+
+        try:
+            return self._inner.seek(offset, whence)
+        except OSError as e:
+            if "cannot seek zstd decompression stream backwards" in str(e):
+                self._reopen_stream()
+                return self._inner.seek(new_pos)
+            raise
+
+    def close(self) -> None:
+        self._inner.close()
+        super().close()
+
+
 def _translate_zstandard_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, zstandard.ZstdError):
         return ArchiveCorruptedError(f"Error reading Zstandard archive: {repr(e)}")
@@ -191,8 +267,9 @@ def open_zstandard_stream(path: str | BinaryIO) -> BinaryIO:
         raise PackageNotInstalledError(
             "zstandard package is not installed, required for Zstandard archives"
         ) from None  # pragma: no cover -- lz4 is installed for main tests
+
     return ExceptionTranslatingIO(
-        lambda: zstandard.open(path), _translate_zstandard_exception
+        lambda: ZstandardReopenOnBackwardsSeekIO(path), _translate_zstandard_exception
     )
 
 

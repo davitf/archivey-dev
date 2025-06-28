@@ -71,6 +71,22 @@ class BinaryIOWrapper(io.IOBase, BinaryIO):
         self.write = self._raw.write  # type: ignore
         return self._raw.write(data)  # type: ignore
 
+    def _readinto_fallback(self, b: bytearray | memoryview, /) -> int:
+        data = self.read(len(b))
+        b[: len(data)] = data
+        return len(data)
+
+    def readinto(self, b: bytearray | memoryview, /) -> int:
+        try:
+            bytes_read = self._raw.readinto(b)  # type: ignore[attr-defined]
+            # If readinto succeeded, we can use it for future reads
+            self.readinto = self._raw.readinto  # type: ignore
+            return bytes_read
+        except NotImplementedError:
+            # Some streams don't support readinto, so we fall back to read()
+            self.readinto = self._readinto_fallback
+            return self._readinto_fallback(b)
+
     def seek(self, offset, whence=io.SEEK_SET, /):
         if not hasattr(self._raw, "seek"):
             raise io.UnsupportedOperation("seek not supported")
@@ -280,6 +296,21 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         except Exception as e:
             self._translate_exception(e)
 
+    def _readinto_with_fallback(self, b: bytearray | memoryview) -> int:
+        try:
+            return self._inner.readinto(b)  # type: ignore[attr-defined]
+        except NotImplementedError:
+            # Some streams don't support readinto, so we fall back to read()
+            data = self.read(len(b))
+            b[: len(data)] = data
+            return len(data)
+
+    def readinto(self, b: bytearray | memoryview) -> int:
+        try:
+            return self._readinto_with_fallback(b)
+        except Exception as e:
+            self._translate_exception(e)
+
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
         try:
             return self._inner.seek(offset, whence)
@@ -383,6 +414,10 @@ class LazyOpenIO(io.RawIOBase, BinaryIO):
         self.read = self._ensure_open().read
         return self.read(n)
 
+    def readinto(self, b: bytearray | memoryview, /) -> int:
+        self.readinto = self._ensure_open().readinto  # type: ignore[attr-defined]
+        return self.readinto(b)  # type: ignore[attr-defined]
+
     def readable(self) -> bool:
         return True  # pragma: no cover - trivial
 
@@ -439,26 +474,26 @@ class StatsIO(io.RawIOBase, BinaryIO):
         return data
 
     def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
-        if isinstance(self._inner, io.BufferedIOBase):
-            n = self._inner.readinto(b)
-        else:
-            logger.debug(f"Reading {len(b)} bytes into buffer")
-            data = self._inner.read(len(b))
-            assert len(data) <= len(b)
+        try:
+            n = self._inner.readinto(b)  # type: ignore[attr-defined]
+            self.stats.bytes_read += n
+            self.stats.read_ranges[-1][1] += n
+            return n
+        except NotImplementedError:
+            # Some streams don't support readinto, so we fall back to read()
+            data = self.read(len(b))
             b[: len(data)] = data
-            n = len(data)
-
-        self.stats.bytes_read += n
-        self.stats.read_ranges[-1][1] += n
-        return n
+            self.stats.bytes_read += len(data)
+            self.stats.read_ranges[-1][1] += len(data)
+            return len(data)
 
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
-        logger.debug(
-            f"Seeking to {offset} whence={whence}, prev read range: {self.stats.read_ranges[-1]}"
-        )
-        self.stats.seek_calls += 1
         newpos = self._inner.seek(offset, whence)
-        self.stats.read_ranges.append([newpos, 0])
+        if offset != 0 or whence != 1:
+            # Called by IOBase.tell(), doesn't actually move the stream. Ignore these seeks.
+            self.stats.seek_calls += 1
+            self.stats.read_ranges.append([newpos, 0])
+
         return newpos
 
     def readable(self) -> bool:  # pragma: no cover - trivial

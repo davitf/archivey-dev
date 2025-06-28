@@ -10,6 +10,7 @@ from archivey.api.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveError,
+    ArchiveStreamNotSeekableError,
 )
 from archivey.api.types import (
     ArchiveFormat,
@@ -21,8 +22,8 @@ from archivey.api.types import (
 from archivey.internal.base_reader import (
     BaseArchiveReader,
 )
-from archivey.internal.io_helpers import ExceptionTranslatingIO
-from archivey.internal.utils import decode_bytes_with_fallback, str_to_bytes
+from archivey.internal.io_helpers import ExceptionTranslatingIO, is_seekable
+from archivey.internal.utils import decode_bytes_with_fallback, is_stream, str_to_bytes
 
 # TODO: check if this is correct
 _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]
@@ -88,6 +89,12 @@ class ZipReader(BaseArchiveReader):
             members_list_supported=True,
             pwd=pwd,
         )
+
+        if is_stream(self.path_or_stream) and not is_seekable(self.path_or_stream):
+            raise ArchiveStreamNotSeekableError(
+                "ZIP archives do not support non-seekable streams"
+            )
+
         self._format_info: ArchiveInfo | None = None
         try:
             # The typeshed definition of ZipFile is incorrect, it should allow byte streams.

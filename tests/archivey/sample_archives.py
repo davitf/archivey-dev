@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional
 
 # import lz4.frame
 # import zstandard
+from archivey.api.config import ArchiveyConfig
 from archivey.api.types import ArchiveFormat, MemberType
 
 
@@ -1169,6 +1170,11 @@ SANITIZE_ARCHIVES = filter_archives(
     extensions=["tar"],
 )
 
+LARGE_ARCHIVES = filter_archives(
+    SAMPLE_ARCHIVES,
+    prefixes=["large_files_nonsolid", "large_files_solid", "large_single_file"],
+)
+
 
 # TODO: add tests and fixes for:
 #   - rar4 archives
@@ -1189,3 +1195,22 @@ SANITIZE_ARCHIVES = filter_archives(
 
 # Currently failing with uncaught exception:
 #  archivey tests/test_archives/encryption_several_passwords__7zcmd.7z  --password password --hide-progress
+
+
+ALTERNATIVE_CONFIG = ArchiveyConfig(
+    use_rapidgzip=True,
+    use_indexed_bzip2=True,
+    use_python_xz=True,
+    use_zstandard=True,
+)
+
+ALTERNATIVE_PACKAGES_FORMATS = (
+    ArchiveFormat.GZIP,
+    ArchiveFormat.BZIP2,
+    ArchiveFormat.XZ,
+    ArchiveFormat.ZSTD,
+    ArchiveFormat.TAR_GZ,
+    ArchiveFormat.TAR_BZ2,
+    ArchiveFormat.TAR_XZ,
+    ArchiveFormat.TAR_ZSTD,
+)
