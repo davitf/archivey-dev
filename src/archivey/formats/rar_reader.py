@@ -715,7 +715,9 @@ class RarReader(BaseArchiveReader):
             return PackageNotInstalledError("cryptography package is not installed")
         elif isinstance(e, rarfile.Error):
             return ArchiveError("Unknown error reading RAR archive")
-        elif isinstance(e, io.UnsupportedOperation) and "seek" in str(e):
+        elif isinstance(e, io.UnsupportedOperation) and (
+            "seek" in str(e) or "non buffered" in str(e)
+        ):
             return ArchiveStreamNotSeekableError(
                 "RAR archives do not support non-seekable streams"
             )

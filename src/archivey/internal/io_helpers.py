@@ -518,33 +518,78 @@ class StatsIO(io.RawIOBase, BinaryIO):
 
 
 class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
-    """Wrap a non-seekable stream allowing a temporary rewind."""
+    """Wrap a non-seekable stream that supports seeking via an internal buffer."""
 
     def __init__(self, inner: IO[bytes]):
         super().__init__()
         self._inner = inner
         self._buffer = bytearray()
         self._pos = 0
-        self._rewindable = True
+        self._stream_pos = 0
+        self._recording = True
+
+    def stop_recording(self) -> None:
+        """Stop storing new data into the rewind buffer."""
+        self._recording = False
+
+    def _advance_stream_to(self, target: int) -> None:
+        while self._stream_pos < target:
+            to_read = target - self._stream_pos
+            chunk = self._inner.read(to_read)
+            if not chunk:
+                break
+            if self._recording:
+                self._buffer.extend(chunk)
+            self._stream_pos += len(chunk)
 
     # Basic IO methods -------------------------------------------------
     def read(self, n: int = -1) -> bytes:
         data = bytearray()
-        if self._pos < len(self._buffer):
-            if n == -1 or self._pos + n > len(self._buffer):
-                data.extend(self._buffer[self._pos :])
-                n = -1 if n == -1 else n - (len(self._buffer) - self._pos)
-                self._pos = len(self._buffer)
-            else:
-                end = self._pos + n
-                data.extend(self._buffer[self._pos : end])
-                self._pos = end
-                n = 0
+        remaining = n
 
-        if n != 0:
-            chunk = self._inner.read(n)
-            if self._rewindable:
+        if self._pos < len(self._buffer):
+            to_take = (
+                len(self._buffer) - self._pos
+                if remaining == -1
+                else min(len(self._buffer) - self._pos, remaining)
+            )
+            data.extend(self._buffer[self._pos : self._pos + to_take])
+            self._pos += to_take
+            if remaining != -1:
+                remaining -= to_take
+
+        if remaining == 0:
+            return bytes(data)
+
+        if self._pos < self._stream_pos:
+            raise io.UnsupportedOperation("cannot read from non buffered region")
+
+        if self._pos > self._stream_pos:
+            self._advance_stream_to(self._pos)
+            if self._stream_pos < self._pos:
+                self._pos = self._stream_pos
+                return bytes(data)
+
+        if remaining == 0:
+            return bytes(data)
+
+        if remaining == -1:
+            while True:
+                chunk = self._inner.read()
+                if not chunk:
+                    break
+                if self._recording:
+                    self._buffer.extend(chunk)
+                self._stream_pos += len(chunk)
+                self._pos += len(chunk)
+                data.extend(chunk)
+            return bytes(data)
+
+        chunk = self._inner.read(remaining)
+        if chunk:
+            if self._recording:
                 self._buffer.extend(chunk)
+            self._stream_pos += len(chunk)
             self._pos += len(chunk)
             data.extend(chunk)
 
@@ -558,21 +603,13 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
 
     # Seek/Tell --------------------------------------------------------
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
-        if not self._rewindable:
-            raise io.UnsupportedOperation("seek")
         if whence != io.SEEK_SET or offset < 0:
             raise io.UnsupportedOperation("seek")
 
-        if offset > len(self._buffer):
-            to_read = offset - len(self._buffer)
-            while to_read > 0:
-                chunk = self._inner.read(to_read)
-                if not chunk:
-                    break
-                self._buffer.extend(chunk)
-                to_read -= len(chunk)
+        if offset > self._stream_pos:
+            self._advance_stream_to(offset)
 
-        self._pos = offset
+        self._pos = offset if offset <= self._stream_pos else self._stream_pos
         return self._pos
 
     def tell(self) -> int:
@@ -586,16 +623,9 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
         return False
 
     def seekable(self) -> bool:  # pragma: no cover - trivial
-        return self._rewindable
+        return self._recording
 
     # Control methods --------------------------------------------------
-    def rewind(self) -> None:
-        if not self._rewindable:
-            raise ValueError("Cannot rewind after disable_rewind")
-        self._pos = 0
-
-    def disable_rewind(self) -> None:
-        self._rewindable = False
 
     def close(self) -> None:  # pragma: no cover - simple delegation
         self._inner.close()
