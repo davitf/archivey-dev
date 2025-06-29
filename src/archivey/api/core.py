@@ -127,8 +127,8 @@ def open_archive(
     format = detect_archive_format(archive_path_normalized)
 
     if wrapper is not None:
-        wrapper.rewind()
-        wrapper.disable_rewind()
+        wrapper.seek(0)
+        wrapper.stop_recording()
     if format == ArchiveFormat.UNKNOWN:
         raise ArchiveNotSupportedError(
             f"Unknown archive format for {archive_path_normalized}"
@@ -189,8 +189,8 @@ def open_compressed_stream(
     format = detect_archive_format(archive_path_normalized)
 
     if wrapper is not None:
-        wrapper.rewind()
-        wrapper.disable_rewind()
+        wrapper.seek(0)
+        wrapper.stop_recording()
 
     if format not in SINGLE_FILE_COMPRESSED_FORMATS:
         raise ArchiveNotSupportedError(
