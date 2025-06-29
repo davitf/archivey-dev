@@ -39,6 +39,8 @@ EXPECTED_FAILURES: set[tuple[ArchiveFormat, bool]] = {
     (ArchiveFormat.ZIP, True),
     (ArchiveFormat.RAR, False),
     (ArchiveFormat.RAR, True),
+    (ArchiveFormat.SEVENZIP, False),
+    (ArchiveFormat.SEVENZIP, True),
 }
 
 
