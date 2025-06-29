@@ -24,7 +24,8 @@ from archivey.internal.base_reader import (
     _build_filter,
     _build_member_included_func,
 )
-from archivey.internal.io_helpers import ErrorIOStream
+from archivey.internal.io_helpers import ErrorIOStream, is_seekable
+from archivey.internal.utils import is_stream
 
 if TYPE_CHECKING:
     import py7zr
@@ -57,6 +58,7 @@ from archivey.api.exceptions import (
     ArchiveEncryptedError,
     ArchiveEOFError,
     ArchiveError,
+    ArchiveStreamNotSeekableError,
     PackageNotInstalledError,
 )
 from archivey.api.types import (
@@ -334,6 +336,10 @@ class SevenZipReader(BaseArchiveReader):
             members_list_supported=True,
             pwd=pwd,
         )
+        if is_stream(self.path_or_stream) and not is_seekable(self.path_or_stream):
+            raise ArchiveStreamNotSeekableError(
+                "7-Zip archives do not support non-seekable streams"
+            )
         self._format_info: ArchiveInfo | None = None
         self._streaming_only = streaming_only
 
