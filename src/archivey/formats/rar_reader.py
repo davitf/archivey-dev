@@ -742,20 +742,10 @@ class RarReader(BaseArchiveReader):
     def _open_member(
         self,
         member: ArchiveMember,
-        *,
         pwd: Optional[str | bytes] = None,
         for_iteration: bool = False,
     ) -> BinaryIO:
-        if member.is_link and member.link_target is None:
-            link_target = self._get_link_target(
-                cast(RarInfo, member.raw_info),
-                pwd=pwd if pwd is not None else self.get_archive_password(),
-            )
-            if link_target is None:
-                raise ArchiveEncryptedError(
-                    f"Cannot read link target for {member.filename}"
-                )
-            member.link_target = link_target
+        assert member.type == MemberType.FILE
 
         if member.encrypted:
             pwd_check = verify_rar5_password(
@@ -766,11 +756,6 @@ class RarReader(BaseArchiveReader):
                 raise ArchiveEncryptedError(
                     f"Wrong password specified for {member.filename}"
                 )
-
-        if member.type == MemberType.DIR:
-            raise ValueError(
-                f"Cannot open directories in RAR archives: {member.filename}"
-            )
 
         try:
             return ExceptionTranslatingIO(

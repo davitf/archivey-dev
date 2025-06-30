@@ -107,9 +107,9 @@ class BaseArchiveReader(ArchiveReader):
         self,
         format: ArchiveFormat,
         archive_path: BinaryIO | str | bytes | os.PathLike,
+        pwd: bytes | str | None,
         streaming_only: bool,
         members_list_supported: bool,
-        pwd: bytes | str | None = None,
     ):
         """
         Initialize the BaseArchiveReader.
@@ -117,6 +117,7 @@ class BaseArchiveReader(ArchiveReader):
         Args:
             format: The ArchiveFormat enum value for this archive type.
             archive_path: Path to the archive file or a file-like object.
+            pwd: Default password for the archive.
             streaming_only: If True, the archive is treated as supporting only
                 sequential, forward-only streaming access. This means methods
                 like `open()` (for random access) and `extract()` will be
@@ -132,7 +133,6 @@ class BaseArchiveReader(ArchiveReader):
                 `iter_members_for_registration()` early. If False, obtaining a
                 full member list via `get_members()` might require iterating
                 through a significant portion of the archive if not already done.
-            pwd: Optional default password for the archive.
         """
         super().__init__(archive_path, format)
         self.config: ArchiveyConfig = get_default_config()
@@ -519,7 +519,6 @@ class BaseArchiveReader(ArchiveReader):
     def _open_internal(
         self,
         member_or_filename: ArchiveMember | str,
-        *,
         pwd: bytes | str | None,
         for_iteration: bool,
     ) -> BinaryIO:
@@ -528,7 +527,11 @@ class BaseArchiveReader(ArchiveReader):
             member, pwd=pwd, for_iteration=for_iteration
         )
         final_member, _ = self._resolve_member_to_open(member)
-        return self._open_member(final_member, pwd=pwd, for_iteration=for_iteration)
+        return self._open_member(
+            final_member,
+            pwd=pwd if pwd is not None else self.get_archive_password(),
+            for_iteration=for_iteration,
+        )
 
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None

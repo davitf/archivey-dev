@@ -78,9 +78,8 @@ class ZipReader(BaseArchiveReader):
 
     def __init__(
         self,
-        archive_path: BinaryIO | str | bytes | os.PathLike,
         format: ArchiveFormat,
-        *,
+        archive_path: BinaryIO | str | bytes | os.PathLike,
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
     ):
@@ -90,9 +89,9 @@ class ZipReader(BaseArchiveReader):
         super().__init__(
             format=format,
             archive_path=archive_path,
+            pwd=pwd,
             streaming_only=streaming_only,
             members_list_supported=True,
-            pwd=pwd,
         )
 
         if is_stream(self.path_or_stream) and not is_seekable(self.path_or_stream):
@@ -174,9 +173,8 @@ class ZipReader(BaseArchiveReader):
     def _open_member(
         self,
         member: ArchiveMember,
-        *,
-        pwd: Optional[bytes | str] = None,
-        for_iteration: bool = False,
+        pwd: Optional[bytes | str],
+        for_iteration: bool,
     ) -> BinaryIO:
         assert self._archive is not None
 

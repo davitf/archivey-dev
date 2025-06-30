@@ -24,14 +24,24 @@ class FolderReader(BaseArchiveReader):
 
     def __init__(
         self,
-        archive_path: str | bytes | os.PathLike,
+        format: ArchiveFormat,
+        archive_path: BinaryIO | str | bytes | os.PathLike,
+        pwd: bytes | str | None = None,
+        streaming_only: bool = False,
     ):
         super().__init__(
             ArchiveFormat.FOLDER,
             archive_path,
             streaming_only=False,
             members_list_supported=True,
+            pwd=None,
         )
+
+        if format != ArchiveFormat.FOLDER:
+            raise ValueError(f"Unsupported archive format: {format}")
+
+        if pwd is not None:
+            raise ValueError("Folders do not support password protection")
 
         if self.path_str is None:
             raise ValueError("FolderReader cannot be opened from a stream")

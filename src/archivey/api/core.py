@@ -145,19 +145,13 @@ def open_archive(
         config = get_default_config()
 
     with default_config(config):
-        if format == ArchiveFormat.FOLDER:
-            assert isinstance(archive_path_normalized, str), (
-                "FolderReader only supports string paths"
-            )
-            reader = FolderReader(archive_path_normalized)
-        else:
-            assert reader_class is not None
-            reader = reader_class(
-                format=format,
-                archive_path=archive_path_normalized,
-                pwd=pwd,
-                streaming_only=streaming_only,
-            )
+        assert reader_class is not None
+        reader = reader_class(
+            format=format,
+            archive_path=archive_path_normalized,
+            pwd=pwd,
+            streaming_only=streaming_only,
+        )
 
         if streaming_only:
             return StreamingOnlyArchiveReaderWrapper(reader)

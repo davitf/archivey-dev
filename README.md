@@ -31,7 +31,7 @@ If you'd rather manage dependencies yourself, install only the extras you need. 
 | Zstandard | | [`pyzstd`](https://pypi.org/project/pyzstd) (preferred) or [`zstandard`](https://pypi.org/project/zstandard) | |
 | LZ4 | | [`lz4`](https://pypi.org/project/lz4) | |
 
-## Basic usage
+## Usage
 
 These are the basic features of the library. For more details, see the **[User guide](docs/user_guide.md)** and **[API reference](docs/api/archivey/index.html)**.
 

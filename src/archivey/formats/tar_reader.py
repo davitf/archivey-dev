@@ -259,14 +259,7 @@ class TarReader(BaseArchiveReader):
                 )
             return stream
 
-        try:
-            return ExceptionTranslatingIO(_open_stream, _translate_tar_exception)
-
-        except tarfile.ReadError as e:
-            translated = _translate_tar_exception(e)
-            if translated is not None:
-                raise translated from e
-            raise
+        return ExceptionTranslatingIO(_open_stream, _translate_tar_exception)
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
