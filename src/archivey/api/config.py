@@ -33,6 +33,10 @@ class ArchiveyConfig:
     use_python_xz: bool = False
     use_zstandard: bool = False
 
+    # If True, allow opening ZIP archives from non-seekable streams by
+    # buffering them in memory.
+    use_streaming_zip: bool = False
+
     tar_check_integrity: bool = True
 
     sevenzip_read_link_targets_eagerly: bool = False
