@@ -202,11 +202,17 @@ class ZipReader(BaseArchiveReader):
         for_iteration: bool,
     ) -> BinaryIO:
         assert self._archive is not None
+        archive = self._archive
 
         def _open_stream() -> BinaryIO:
-            return self._archive.open(
-                cast(zipfile.ZipInfo, member.raw_info),
-                pwd=str_to_bytes(pwd if pwd is not None else self.get_archive_password()),
+            return cast(
+                BinaryIO,
+                archive.open(
+                    cast(zipfile.ZipInfo, member.raw_info),
+                    pwd=str_to_bytes(
+                        pwd if pwd is not None else self.get_archive_password()
+                    ),
+                ),
             )
 
         return ExceptionTranslatingIO(

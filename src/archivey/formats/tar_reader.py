@@ -132,9 +132,7 @@ class TarReader(BaseArchiveReader):
             self._exception_translator,
             archive_path=str(archive_path),
         )
-        logger.debug(
-            f"Tar opened: {self._archive} seekable={self._fileobj.seekable()}"
-        )
+        logger.debug(f"Tar opened: {self._archive} seekable={self._fileobj.seekable()}")
 
     def _close_archive(self) -> None:
         """Close the archive and release any resources."""
