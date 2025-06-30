@@ -1,6 +1,8 @@
-# archivey User Guide
+# Archivey User Guide
 
-This guide explains how to use the `archivey` library to work with various archive formats.
+This guide explains how to use the `archivey` library to work with a variety of archive formats. It builds on the examples in the README and walks through the most common operations.
+
+Archivey automatically detects the archive type and supports ZIP, TAR (and its compressed variants), RAR, 7z and several single-file compression formats.
 
 ## Opening an Archive
 
@@ -22,7 +24,7 @@ except ArchiveError as e:
 
 ```
 
-The `open_archive` function takes the path to the archive file as its primary argument. It can also accept an optional `config` object and `streaming_only` flag.
+`open_archive` takes the path to the archive file as its main argument and returns an `ArchiveReader` when the format is recognized. You can also pass an optional `config` object or set `streaming_only=True` to force sequential access.
 
 ## Opening a Compressed Stream
 
@@ -200,4 +202,4 @@ except ArchiveError as e:
     print(f"Error: {e}")
 ```
 
-This guide provides a basic overview. For more detailed information on specific classes and methods, please refer to the [API documentation](./api/archivey.html).
+This guide provides a basic overview of archivey in action. For more in-depth explanations, see the [Developer Guide](./developer_guide.md) and the [API documentation](./api/archivey.html).

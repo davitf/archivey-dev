@@ -164,7 +164,15 @@ def open_compressed_stream(
     *,
     config: ArchiveyConfig | None = None,
 ) -> BinaryIO:
-    """Open a single-file compressed stream and return the uncompressed stream."""
+    """Return a binary stream with the decompressed contents of ``archive_path``.
+
+    This helper autodetects the compression format and uses the same
+    :class:`ArchiveyConfig` options as :func:`open_archive`.
+
+    Raises ``FileNotFoundError`` if the path does not exist or
+    ``ArchiveNotSupportedError`` if the format is not a supported
+    single-file compression type.
+    """
 
     archive_path_normalized = _normalize_archive_path(archive_path)
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Extraction filter utilities."""
+
 import functools
 import logging
 import os

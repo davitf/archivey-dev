@@ -1,3 +1,5 @@
+"""Public type definitions and the ArchiveReader interface."""
+
 import abc
 import os
 import sys
@@ -449,13 +451,17 @@ class ArchiveReader(abc.ABC):
         path: str | os.PathLike | None = None,
         pwd: bytes | str | None = None,
     ) -> str | None:
-        """Extract a member to a path.
+        """Extract a single member to ``path`` and return the extracted file path.
 
         Args:
-            member: The member to extract
-            path: The path to extract to
-            pwd: Password to use for decryption, if needed and different from the one
-            used when opening the archive.
+            member: The member to extract.
+            path: Destination directory. Defaults to the current working directory.
+            pwd: Password for decryption if different from the one supplied when
+                opening the archive.
+
+        Returns:
+            The path to the extracted file or ``None`` for members that do not
+            produce a file on disk (e.g. directories).
         """
         pass
 
