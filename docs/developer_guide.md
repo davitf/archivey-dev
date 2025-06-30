@@ -21,6 +21,20 @@ For your reader to be called, you'll need to:
 *   create your reader class, see below;
 *   modify [`archivey.api.core.open_archive`](../src/archivey/api/core.py) to associate the archive format with your reader.
 
+## Configuration
+
+The `ArchiveyConfig` dataclass controls optional features when opening archives.
+Each flag either enables support for an optional dependency or tweaks extraction behavior.
+See the list below for a quick reference:
+
+- `use_rar_stream` – enable rarfile streaming mode
+- `use_single_file_stored_metadata` – speed up single-file archives
+- `use_rapidgzip`, `use_indexed_bzip2`, `use_python_xz`, `use_zstandard` – use these compressors if installed
+- `tar_check_integrity` – verify tar checksums
+- `sevenzip_read_link_targets_eagerly` – resolve 7z link targets immediately
+- `overwrite_mode` – choose how extraction handles existing files
+- `extraction_filter` – sanitize or skip paths during extraction
+
 
 ## Creating a new format reader
 

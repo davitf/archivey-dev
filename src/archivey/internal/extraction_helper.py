@@ -1,3 +1,9 @@
+"""Helper utilities for extracting files from an :class:`ArchiveReader`.
+
+Used internally by :class:`~archivey.internal.base_reader.BaseArchiveReader`.
+Refer to the developer guide if you need to customize extraction behavior.
+"""
+
 from __future__ import annotations
 
 import collections
@@ -29,6 +35,12 @@ def apply_member_metadata(member: ArchiveMember, target_path: str) -> None:
 
 
 class ExtractionHelper:
+    """Manage extraction of members for a reader.
+
+    Handles overwrite checks, keeps track of extracted files and can
+    stage deferred extractions. Mostly used by :class:`BaseArchiveReader`.
+    """
+
     def __init__(
         self,
         archive_reader: "ArchiveReader",
