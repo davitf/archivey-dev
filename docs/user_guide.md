@@ -1,6 +1,24 @@
 # archivey User Guide
 
-This guide explains how to use the `archivey` library to work with various archive formats.
+Welcome! This guide shows you how to use `archivey` with a variety of archive formats.
+
+## Basic Concepts
+
+Archivey aims to provide a single interface over many archive libraries.
+These libraries differ in how they access data, so a few terms come up often:
+
+- **Streaming vs random access** – Some formats (like ZIP) let you jump
+  straight to a file using an index. Others only support reading from the
+  start each time. `ArchiveReader.has_random_access()` tells you which mode an
+  opened archive supports.
+- **Solid archives** – Archives such as 7z and some RAR files may compress
+  everything into one big block. Reading a single member might require
+  decompressing earlier ones first, which can limit random access.
+- **Underlying libraries** – Archivey delegates to third-party packages. They
+  vary in their ability to seek or build indexes. For example `rarfile` can
+  randomly access non-solid RAR archives, while `py7zr` generally reads
+  sequentially. Archivey exposes these capabilities through the reader
+  methods.
 
 ## Opening an Archive
 
