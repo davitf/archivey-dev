@@ -95,6 +95,7 @@ def test_open_archive_nonseekable(
                 if member_stream is not None:
                     member_stream.read()
             assert has_member
+
     except (
         ArchiveStreamNotSeekableError
     ) as exc:  # pragma: no cover - environment dependent

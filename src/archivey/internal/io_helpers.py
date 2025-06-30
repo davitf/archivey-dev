@@ -532,64 +532,60 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
         """Stop storing new data into the rewind buffer."""
         self._recording = False
 
+    def _read_from_stream(self, n: int) -> bytes:
+        chunk = self._inner.read(n)
+        if self._recording:
+            self._buffer.extend(chunk)
+        self._stream_pos += len(chunk)
+        return chunk
+
     def _advance_stream_to(self, target: int) -> None:
         while self._stream_pos < target:
-            to_read = target - self._stream_pos
-            chunk = self._inner.read(to_read)
+            chunk = self._read_from_stream(target - self._stream_pos)
             if not chunk:
                 break
-            if self._recording:
-                self._buffer.extend(chunk)
-            self._stream_pos += len(chunk)
 
     # Basic IO methods -------------------------------------------------
     def read(self, n: int = -1) -> bytes:
+        endpos = self._pos + n
+        if n >= 0 and endpos <= len(self._buffer):
+            # The data is fully in the buffer, so we can return it directly.
+            data = bytes(self._buffer[self._pos : endpos])
+            self._pos += n
+            return data
+
         data = bytearray()
         remaining = n
 
         if self._pos < len(self._buffer):
-            to_take = (
-                len(self._buffer) - self._pos
-                if remaining == -1
-                else min(len(self._buffer) - self._pos, remaining)
-            )
-            data.extend(self._buffer[self._pos : self._pos + to_take])
-            self._pos += to_take
+            # Take the previously-read data from the buffer.
+            data.extend(self._buffer[self._pos :])
+            self._pos += len(data)
             if remaining != -1:
-                remaining -= to_take
-
-        if remaining == 0:
-            return bytes(data)
+                remaining -= len(data)
 
         if self._pos < self._stream_pos:
-            raise io.UnsupportedOperation("cannot read from non buffered region")
+            raise io.UnsupportedOperation(
+                "cannot read from non buffered region. "
+                f"pos={self._pos}, stream_pos={self._stream_pos}, buffer_size={len(self._buffer)}"
+            )
 
         if self._pos > self._stream_pos:
             self._advance_stream_to(self._pos)
-            if self._stream_pos < self._pos:
-                self._pos = self._stream_pos
-                return bytes(data)
 
-        if remaining == 0:
-            return bytes(data)
+        assert self._stream_pos == self._pos
 
         if remaining == -1:
             while True:
-                chunk = self._inner.read()
+                chunk = self._read_from_stream(-1)
                 if not chunk:
                     break
-                if self._recording:
-                    self._buffer.extend(chunk)
-                self._stream_pos += len(chunk)
                 self._pos += len(chunk)
                 data.extend(chunk)
             return bytes(data)
 
-        chunk = self._inner.read(remaining)
-        if chunk:
-            if self._recording:
-                self._buffer.extend(chunk)
-            self._stream_pos += len(chunk)
+        else:
+            chunk = self._read_from_stream(remaining)
             self._pos += len(chunk)
             data.extend(chunk)
 
@@ -603,8 +599,20 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
 
     # Seek/Tell --------------------------------------------------------
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
-        if whence != io.SEEK_SET or offset < 0:
-            raise io.UnsupportedOperation("seek")
+        if whence == io.SEEK_END:
+            raise io.UnsupportedOperation("seek to end")
+        if whence == io.SEEK_CUR:
+            offset = self._pos + offset
+        elif whence != io.SEEK_SET:
+            raise ValueError(f"Invalid whence: {whence}")
+
+        if offset < 0:
+            raise io.UnsupportedOperation("seek to negative position")
+
+        if offset >= len(self._buffer) and offset < self._stream_pos:
+            raise io.UnsupportedOperation(
+                f"seek into non-cached region: buf={len(self._buffer)}, offset={offset}, stream={self._stream_pos}"
+            )
 
         if offset > self._stream_pos:
             self._advance_stream_to(offset)

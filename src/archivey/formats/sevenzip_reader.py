@@ -337,6 +337,8 @@ class SevenZipReader(BaseArchiveReader):
             pwd=pwd,
         )
         if is_stream(self.path_or_stream) and not is_seekable(self.path_or_stream):
+            # SevenZipFile._real_get_contents() advances the stream to the second
+            # header in the file, so it doesn't work with non-seekable streams.
             raise ArchiveStreamNotSeekableError(
                 "7-Zip archives do not support non-seekable streams"
             )
