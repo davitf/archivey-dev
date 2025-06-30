@@ -105,6 +105,8 @@ def open_archive(
         ...     print("Error: Archive file not found.")
         ... except ArchiveError as e:
         ...     print(f"An archive error occurred: {e}")
+    
+    See the developer guide if you need to register your own reader class.
     """
     if pwd is not None and not isinstance(pwd, (str, bytes)):
         raise TypeError("Password must be a string or bytes")
@@ -164,7 +166,11 @@ def open_compressed_stream(
     *,
     config: ArchiveyConfig | None = None,
 ) -> BinaryIO:
-    """Open a single-file compressed stream and return the uncompressed stream."""
+    """Open a compressed file and return a stream with its uncompressed contents.
+
+    The format is detected automatically. Use :func:`open_archive` for archives
+    that contain multiple files.
+    """
 
     archive_path_normalized = _normalize_archive_path(archive_path)
 

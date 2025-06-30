@@ -24,7 +24,11 @@ class OverwriteMode(StrEnum):
 
 @dataclass
 class ArchiveyConfig:
-    """Configuration for :func:`archivey.open_archive`."""
+    """Configuration for :func:`archivey.open_archive`.
+
+    See the developer guide for a description of each option and when they are
+    used.
+    """
 
     use_rar_stream: bool = False
     use_single_file_stored_metadata: bool = False

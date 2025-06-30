@@ -5,11 +5,12 @@ This guide explains how to extend `archivey` by creating custom `ArchiveReader` 
 ## Overview
 
 The library's modules are organized into these packages:
-* [`archivey.api`](../src/archivey/api/) (public API functions, types and classes)
-* [`archivey.internal`](../src/archivey/internal/) (base classes and helpers)
-* [`archivey.formats`](../src/archivey/formats/) (format-specific readers)
 
-The library exposes an [`ArchiveReader`](../src/archivey/api/types.py) abstract base class for users with the public API. The actual format readers extend from the helper class [`BaseArchiveReader`](../src/archivey/internal/base_reader.py), which implements most of the public API by delegating to some simpler methods that the readers must implement. New readers will almost always want to inherit from `BaseArchiveReader`.
+- [`archivey.api`](../src/archivey/api/) – public API classes and helpers
+- [`archivey.internal`](../src/archivey/internal/) – base classes and utilities
+- [`archivey.formats`](../src/archivey/formats/) – format-specific readers
+
+Archivey exposes an [`ArchiveReader`](../src/archivey/api/types.py) abstract base class. Format readers generally extend [`BaseArchiveReader`](../src/archivey/internal/base_reader.py), which implements most of the high-level API so your class only needs to handle the format details.
 
 ## Registering Your Reader
 
