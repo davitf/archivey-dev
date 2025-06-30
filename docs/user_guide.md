@@ -1,6 +1,6 @@
 # archivey User Guide
 
-This guide explains how to use the `archivey` library to work with various archive formats.
+Welcome! This guide shows you how to use `archivey` with a variety of archive formats.
 
 ## Opening an Archive
 

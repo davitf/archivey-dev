@@ -1,6 +1,6 @@
 # Archivey
 
-Archivey is a library for reading the contents of many common archive formats. It provides a simple, unified interface on top of several builtin modules and external packages, and adds some features missing from them.
+Archivey helps you read many common archive formats through one consistent interface. It builds on Python's standard library (and a few optional extras) and fills in the gaps those libraries leave behind.
 
 
 ## Features
@@ -13,13 +13,11 @@ Archivey is a library for reading the contents of many common archive formats. I
 
 ## Installation
 
-Recommended:
+Install with pip:
 ```
 pip install archivey[optional]
 ```
-Or, if you don't want to add all dependencies to your project, add only the ones you need.
-
-RAR support relies on the `unrar` tool, which you'll need to install separately.
+If you'd rather manage dependencies yourself, install only the extras you need. RAR support requires the `unrar` tool to be available.
 
 | Format | Builtin module | Python package | System requirement |
 | --- | --- | --- | --- |
@@ -89,10 +87,9 @@ See the user guide for more options.
 
 ## Command line usage
 
-Archivey installs a small command line tool simply called `archivey`.
-You can also invoke it via `python -m archivey`.
-The CLI is primarily meant for testing or exploring the library rather than
-being a full-fledged archive management utility.
+Archivey comes with a small command line tool, also named `archivey`.
+You can run it directly or via `python -m archivey`.
+It's handy for quick checks and experiments rather than heavy-duty archive management.
 
 ```bash
 archivey my_archive.zip

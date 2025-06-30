@@ -1,6 +1,6 @@
 # archivey Developer Guide: Creating New ArchiveReaders
 
-This guide is for developers who want to extend `archivey` by adding support for new archive formats by creating custom `ArchiveReader` implementations.
+This guide explains how to extend `archivey` by creating custom `ArchiveReader` classes for new archive formats.
 
 ## Overview
 
@@ -138,4 +138,4 @@ Refer to the `ArchiveMember` class definition in `archivey.api.types` for all av
 
 Once your reader is implemented, you'll need to modify `archivey.api.core.open_archive` to detect the archive format and instantiate your reader. (Details of this registration process might evolve, check the current `open_archive` function).
 
-By following these guidelines, you can contribute robust and well-integrated support for new archive formats to `archivey`.
+By following these guidelines, you can add well-integrated support for new archive formats to `archivey`.
