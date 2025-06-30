@@ -1,67 +1,105 @@
 # archivey Developer Guide: Creating New ArchiveReaders
 
-This guide is for developers who want to extend `archivey` by adding support for new archive formats by creating custom `ArchiveReader` implementations.
+This guide explains how to extend `archivey` by creating custom `ArchiveReader` classes for new archive formats.
 
 ## Overview
 
-The core of `archivey`'s extensibility lies in the `ArchiveReader` abstract base class and its concrete helper class `BaseArchiveReader` (both defined in `archivey.internal.base_reader`). Most new readers will want to inherit from `BaseArchiveReader`.
+The library's modules are organized into these packages:
+* [`archivey.api`](../src/archivey/api/) (public API functions, types and classes)
+* [`archivey.internal`](../src/archivey/internal/) (base classes and helpers)
+* [`archivey.formats`](../src/archivey/formats/) (format-specific readers)
 
-Archivey's modules are organized into three packages:
-`archivey.api` (public API utilities like `open_archive`),
-`archivey.internal` (base classes and helpers, including `BaseArchiveReader`), and
-`archivey.formats` (format-specific readers).
+The library exposes an [`ArchiveReader`](../src/archivey/api/types.py) abstract base class for users with the public API. The actual format readers extend from the helper class [`BaseArchiveReader`](../src/archivey/internal/base_reader.py), which implements most of the public API by delegating to some simpler methods that the readers must implement. New readers will almost always want to inherit from `BaseArchiveReader`.
 
-## Key Steps to Create a New Reader
+## Registering Your Reader
 
-1.  **Create a New Class:**
-    *   Your new reader class should typically inherit from `archivey.internal.base_reader.BaseArchiveReader`.
-    *   Example: `class MyFormatReader(BaseArchiveReader):`
+For your reader to be called, you'll need to:
 
-2.  **Implement the Constructor (`__init__`)**:
-    *   Call the `super().__init__(...)` constructor with the correct parameters:
-    *   `super().__init__(format: ArchiveFormat, archive_path: BinaryIO | str | bytes | os.PathLike, streaming_only: bool, members_list_supported: bool, pwd: bytes | str | None = None)`
-        *   `format`: An enum value from `archivey.api.types.ArchiveFormat` representing the format your reader handles.
-        *   `archive_path`: The path to the archive file or a file-like object.
-        *   `streaming_only`: Set to `True` if the archive format or underlying library only supports sequential, forward-only access (e.g., a raw compressed stream). If `True`, methods like `open()` (for random access) and `extract()` will be disabled, and iteration might be a one-time operation. Set to `False` if random access to members is possible.
-        *   `members_list_supported`: Set to `True` if your reader can typically provide a complete list of archive members upfront (e.g., by reading a central directory like in ZIP files) without parsing the entire archive. If `False`, `get_members()` might require iterating through a significant portion of the archive if not already done.
-    *   Initialize any internal state or open resources specific to the archive format you are supporting (e.g., open the archive file using a third-party library).
+*   add the format(s) your reader handles to [archivey.api.ArchiveFormat](../src/archivey/api/types.py);
+*   detect archives of these formats by signature and/or filename, in [format_detection.py](../src/archivey/formats/format_detection.py);
+*   create your reader class, see below;
+*   modify [`archivey.api.core.open_archive`](../src/archivey/api/core.py) to associate the archive format with your reader.
 
-3.  **Implement `iter_members_for_registration(self) -> Iterator[ArchiveMember]` (Crucial Abstract Method):**
-    *   This is the most important method for `BaseArchiveReader`. It must be implemented to yield `archivey.api.types.ArchiveMember` objects one by one.
-    *   `BaseArchiveReader` calls this method to discover and register all members in the archive.
-    *   For each member in the archive, you need to:
-        *   Gather its metadata (filename, size, modification time, type, permissions, etc.) from the underlying archive library/format.
-        *   Create an `ArchiveMember` instance, populating its fields.
-        *   Store any library-specific, original member object in the `raw_info` field of the `ArchiveMember`. This can be crucial for `_open_member` to correctly identify the member for the underlying library.
-        *   `yield` this `ArchiveMember` instance.
-    *   Ensure you correctly map the archive format's member types (file, directory, symbolic link, hard link) to `archivey.api.types.MemberType`.
-    *   Populate `link_target` for symlinks and hardlinks if the format provides this information directly in the member's header. `BaseArchiveReader` will attempt to resolve the target member later based on the `link_target` string.
-    *   **Guarantees:** `BaseArchiveReader` handles the registration of yielded members. This iterator is generally consumed once to build the initial member list.
 
-4.  **Implement `get_archive_info(self) -> ArchiveInfo` (Abstract Method):**
-    *   This method **must** be implemented. It should return an `archivey.api.types.ArchiveInfo` object.
-    *   Populate it with information about the archive as a whole, such as:
-        *   `format`: The `ArchiveFormat` enum.
-        *   `is_solid`: Whether the archive is solid (True/False).
-        *   `comment`: Any archive-level comment.
-        *   `extra`: A dictionary for any other format-specific information (e.g., version).
+## Creating a new format reader
 
-5.  **Implement `_open_member(self, member: ArchiveMember, *, pwd: Optional[Union[bytes, str]] = None, for_iteration: bool = False) -> BinaryIO` (Abstract Method):**
-    *   This method **must** be implemented. (While `BaseArchiveReader` defines it as abstract, its direct usage might be bypassed if a reader is strictly `streaming_only` and only overrides `iter_members_with_io` without ever needing to open individual members through the base class's `open` or `extract` methods. However, for full compatibility and to support all base features, it should be implemented.)
-    *   It should open the specified archive member for reading and return a binary I/O stream (`BinaryIO`).
-    *   The `member` argument is an `ArchiveMember` object. Use `member.raw_info` to access the original library-specific member object if needed.
-    *   `pwd`: Handle password for encrypted members if applicable.
-    *   `for_iteration`: This boolean flag is a hint. If `True`, the open request is part of a sequential iteration (e.g., via `iter_members_with_io`). Subclasses can use this to optimize if opening for iteration is different or cheaper than a random access `open()` call.
-    *   **Important**: The returned stream **MUST** be wrapped with `archivey.internal.io_helpers.ExceptionTranslatingIO` (see section below) to ensure proper error handling.
-    *   **Guarantees:**
-        *   Called only for members where `member.is_file` is `True` (after link resolution).
-        *   `member.raw_info` (if populated by your `iter_members_for_registration`) is available.
-        *   In `streaming_only=True` mode with `for_iteration=True`: called for the member just yielded by `iter_members()`, before iteration proceeds, implying the underlying stream should be positioned for sequential read.
-        *   Streams returned via the public `BaseArchiveReader.open()` (which calls this method) are tracked and auto-closed by `BaseArchiveReader.close()`.
+It's probably easiest to understand what to do by looking at existing reader implementations. [ZipReader](../src/archivey/formats/zip_reader.py) may be a good starting point.
 
-6.  **Implement `_close_archive(self) -> None` (Abstract Method):**
-    *   This method **must** be implemented. Release any resources held by your reader (e.g., close file handles opened by the underlying library, cleanup temporary files). This is called by the public `close()` method.
-    *   **Guarantee:** Called at most once by the public `close()` method if the archive is not already closed.
+Your reader should implement a few required methods, and may also implement some optional ones in special cases. These are the required methods:
+
+
+### Constructor (`__init__`):
+
+Should accept the same parameters as other `ArchiveReader`s, so it can be called from [`open_archive`](../src/archivey/api/core.py):
+
+```python
+    def __init__(
+        self,
+        archive_path: BinaryIO | str | bytes | os.PathLike,
+        format: ArchiveFormat,
+        *,
+        pwd: bytes | str | None = None,
+        streaming_only: bool = False,
+    ):
+```
+
+*   `archive_path`: the path to the archive file, or a stream or file-like object.
+*   `format`: an enum value from `archivey.api.types.ArchiveFormat` with the detected archive format. It will be one of the format your reader handles.
+*   `pwd`: the password to use for encrypted members and/or archive headers.
+*   `streaming_only`: set to `True` if the archive is being opened only for sequential, forward-only access. If `True`, methods like `open()` (for random access) and `extract()` will be disabled, and iteration will be a one-time operation.
+
+The constructor should call the [`super().__init__(...)`](../src/archivey/internal/base_reader.py) constructor with the same parameters, plus another one:
+
+```python
+   super().__init__(format, archive_path, pwd, streaming_only, members_list_supported)
+```
+
+*   `members_list_supported`: set this to `True` if your reader can provide a complete list of archive members upfront (e.g., by reading a central directory like in ZIP files) without reading the entire archive. If `False` and if the file is opened in streaming-only mode, `get_members_if_available()` will not return a list of members until after the archive has been iterated through.
+
+The constructor should initialize any internal state or open resources specific to the archive format you are supporting (e.g., open the archive file using a third-party library).
+
+
+### `_close_archive(self) -> None`
+
+This method is called exactly once when the ArchiveReader is closed or destructed. It should release any resources held by the reader (e.g., close the archive object provided by the underlying library, cleanup temporary files).
+
+
+### `iter_members_for_registration(self) -> Iterator[ArchiveMember]`
+
+This method is called by `BaseArchiveReader` to discover and register all members in the archive. It should be implemented to yield [`archivey.api.types.ArchiveMember`](../src/archivey/api/types.py) objects one by one, from the members in the archive. It will be iterated through only once as the members are needed, so you can use an iterator from the inner library if available.
+
+For each member in the archive, you need to convert the metadata (filename, size, modification time, type, permissions, etc.) read from the underlying archive library/format, and create an `ArchiveMember` instance with the appropriate field values. Typically you'll store the library-specific, original member object in the `raw_info` field of the `ArchiveMember`. Don't set `_archive_id` or `_member_id`, they'll be set by `BaseArchiveReader`.
+
+Pay special attention to the modification time field. Some archive formats store member times as UTC timestamps, others using the local timezone, some may even contain both. You should set the `mtime_with_tz` field to a `datetime.datetime` object with the timezone set if known (likely UTC), or without a timezone if it's in local time.
+
+
+### `get_archive_info(self) -> ArchiveInfo`
+
+Return an [`archivey.api.types.ArchiveInfo`](../src/archivey/api/types.py) object with all archive-level metadata:
+
+*   `format`: the `ArchiveFormat` enum for this archive.
+*   `is_solid`: whether the archive is solid (`True` means that decompressing a specific member may require other members to be uncompressed first).
+*   please look at the `ArchiveInfo` class for other fields
+*   `extra`: A dictionary for any other format-specific information that doesn't have a dedicated field
+
+
+### `_open_member(self, member: ArchiveMember, *, pwd: Optional[Union[bytes, str]] = None, for_iteration: bool = False) -> BinaryIO`
+
+This method is called by `BaseArchiveReader` to open a specific archive member, when the user calls `open()`, or during iteration or extraction. It should return a binary I/O stream (`BinaryIO`) to read the member's contents. Ideally the reader should avoid loading the whole contents to memory at once, and decompress the data as it's read by the client.
+
+It is guaranteed to be called only for `MemberType.FILE` members (i.e. not directories or links). If the archive has been opened in `streaming_only` mode, it is guaranteed to be called only after the member has been yielded by `iter_members_for_registration` and before that iterator continues (but it is not guaranteed to be called for all files, and the stream is not guaranteed to be fully read), and is guaranteed to be closed before the iterator continues.
+
+Arguments:
+
+*   `member`: an `ArchiveMember` object previously yielded by `iter_members_for_registration`.
+*   `pwd`: password for encrypted members if applicable. If the user does not specify a file-specific password, this will default to the password passed in the constructor, if any.
+*   `for_iteration`: if `True`, the open request is part of a sequential iteration (e.g., via `iter_members_with_io`). When `streaming_only=True`, this is guaranteed to be `True`.
+
+Tips:
+
+*   As some archive formats (e.g. tar) may contain multiple members with the same file name, you should pass `member.raw_info` object to the underlying library if possible instead of the filename, to avoid opening a different member with the same name.
+*   The returned stream should be wrapped with `archivey.internal.io_helpers.ExceptionTranslatingIO` (see section below) to ensure proper error handling.
+
 
 ## Optional Methods to Override
 
@@ -69,23 +107,28 @@ While the above are essential, you might override other methods from `BaseArchiv
 
 *   **`_prepare_member_for_open(self, member: ArchiveMember, *, pwd: bytes | str | None, for_iteration: bool) -> ArchiveMember`**:
     *   This is a hook called by `BaseArchiveReader` just before it calls your `_open_member` method.
-    *   You can override this to perform tasks like fetching additional metadata required for opening, or decrypting member-specific headers, if not done during `iter_members_for_registration`.
-    *   The `for_iteration` flag has the same meaning as in `_open_member` and can be used here if preparation steps differ for sequential access.
-    *   The base implementation simply returns the member unmodified.
-    *   **Guarantee:** This method receives the `ArchiveMember` as initially resolved by `get_member()`. `_open_member` will then be called with the target of this member if it's a link (after internal resolution), or the same member if not a link.
+    *   The base implementation simply returns the member unmodified; you can override this to perform tasks like fetching additional metadata required for opening, or decrypting member-specific headers, if not done during `iter_members_for_registration`.
+    *   This method receives the `ArchiveMember` as initially resolved from the filename or iteration, which may be a `MemberType.LINK`. `_open_member` will then be called with the target of this member if it's a link (after internal resolution), or the same member if not a link.
+
 *   **`iter_members_with_io(...)`**:
-    *   The default implementation in `BaseArchiveReader` iterates using `self.iter_members()` (which relies on `iter_members_for_registration`) and then calls an internal open mechanism (which in turn uses your `_prepare_member_for_open` and `_open_member` methods with the `for_iteration=True` flag) for each member.
-    *   If your underlying library provides a more direct or efficient way to iterate through members and get their I/O streams simultaneously (especially for streaming formats or if it avoids repeated overhead), override this method.
-    *   **Important:** If overridden, you are responsible for correctly applying filtering logic based on the `members` and `filter` arguments. `BaseArchiveReader._build_filter` can be a useful utility for this.
+    *   The default implementation in `BaseArchiveReader` iterates using `self.iter_members()` (which relies on `iter_members_for_registration`) and then calls the internal open mechanism (which in turn uses your `_prepare_member_for_open` and `_open_member` methods with the `for_iteration=True` flag) for each member.
+    *   If your underlying library requires a different approach to iterate through members and get their I/O streams, you can override this method directly.
+    *   **Important:** If overridden, you are responsible for correctly applying filtering logic based on the `members` and `filter` arguments. `BaseArchiveReader._build_filter` can be a useful utility for this. Please look at existing implementations for details.
+
 *   **`_extract_pending_files(self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None)`**:
-    *   `BaseArchiveReader.extractall()` uses an `ExtractionHelper`. If the reader supports random access (`streaming_only=False`), it first identifies all files to extract and then calls `_extract_pending_files()`.
-    *   The default implementation of `_extract_pending_files()` iterates through pending files and calls the public `self.open()` for each, then streams data.
-    *   If your underlying library has a more optimized way to extract multiple files at once (e.g., `zipfile.ZipFile.extractall()`), override this method to use that more efficient approach.
-    *   **Note:** The `extractall` method in `BaseArchiveReader` handles overall filtering. If you override `_extract_pending_files` specifically, it receives a list of already filtered members to extract from the `extraction_helper`. If you were to override `extractall` itself, you'd need to manage filtering.
+    *   `BaseArchiveReader.extractall()` uses an `ExtractionHelper`. If the reader was opened for random access (`streaming_only=False`), the extraction first identifies all files to extract by applying any filters, handling directories and links, and then calls `_extract_pending_files()` with only the `MemberType.FILE` members that need to be extracted.
+    *   The default implementation of `_extract_pending_files()` simply calls the public `self.open()` method for each file and extracts it, sequentially. If your underlying library has a more optimized (e.g. multithreaded) way to extract multiple files at once (e.g., `zipfile.ZipFile.extractall()`), override this method to use that more efficient approach.
+    *   Your implementation should read pending extractions via `extraction_helper.get_pending_extractions()`, extract the files and then call `extraction_helper.process_file_extracted(member, extracted_file_path)`. See the implementation in [`SevenZipReader`](../src/archivey/formats/sevenzip_reader.py) for an example.
+    *   **Note:** The `extractall` method in `BaseArchiveReader` handles overall filtering. If you override `_extract_pending_files` specifically, it receives a list of already filtered members to extract from the `extraction_helper`. If you were to override `extractall` itself, you'd need to manage filtering and other details.
 
-## Exception Handling with `ExceptionTranslatingIO`
 
-When you return a file stream from `_open_member()` (or from a custom `iter_members_with_io` override), it's **mandatory** to wrap it with `archivey.internal.io_helpers.ExceptionTranslatingIO`. This ensures that exceptions raised by the underlying third-party library during stream operations (like `read()`, `seek()`) are translated into `archivey.api.exceptions.ArchiveError` subclasses.
+## Exception handling
+
+Libraries often have their own exception base classes, or raise builtin exceptions such as `OSError` when there's a problem with an archive. Archivey tries to guarantee that all exceptions raised due to archive issues are subclasses of [`archivey.api.exceptions.ArchiveError`](../src/archivey/api/exceptions.py), and so readers need to translate all exceptions raised by the libraries into them.
+
+When you return a file stream provided by an underlying library from `_open_member()` (or from a custom `iter_members_with_io` override), you should wrap it with `archivey.internal.io_helpers.ExceptionTranslatingIO`. This ensures that exceptions raised by the underlying third-party library during stream operations (like `read()`, `seek()`) are translated into `ArchiveError` subclasses.
+
+For this, you need to implement a translation function that receives any exception raised by the underlying library and returns an `ArchiveError`. Example:
 
 ```python
 from archivey.internal.io_helpers import ExceptionTranslatingIO # Corrected path
@@ -93,49 +136,37 @@ from archivey.api.exceptions import ArchiveCorruptedError, ArchiveIOError # Corr
 # Import specific exceptions from your third-party library
 from third_party_lib import ThirdPartyReadError, ThirdPartyCorruptError
 
-# Inside your _open_member() method:
-try:
-    raw_stream = self.underlying_library.open_member(member.raw_info) # Or however you get the stream
-except ThirdPartySomeOpenError as e: # Handle errors during the open call itself
-    raise ArchiveEncryptedError("Failed to open member, possibly encrypted") from e
+class MyReader(BaseArchiveReader):
+    ...
 
-def my_exception_translator(exc: Exception) -> Optional[ArchiveError]:
-    if isinstance(exc, ThirdPartyCorruptError):
-        return ArchiveCorruptedError(f"Archive data seems corrupted: {exc}")
-    elif isinstance(exc, ThirdPartyReadError):
-        return ArchiveIOError(f"I/O error while reading member: {exc}")
-    # Add more specific translations as needed
-    return None # Let other exceptions (or already ArchiveErrors) pass through
+    def _translate_exception(exc: Exception) -> Optional[ArchiveError]:
+        if isinstance(exc, ThirdPartyCorruptError):
+            return ArchiveCorruptedError(f"Archive data seems corrupted: {exc}")
+        elif isinstance(exc, ThirdPartyReadError):
+            return ArchiveIOError(f"I/O error while reading member: {exc}")
+        # Add more specific translations as needed
+        return None # Let other exceptions (or already ArchiveErrors) pass through
 
-return ExceptionTranslatingIO(raw_stream, my_exception_translator)
+    def _open_member(self, member: ArchiveMember, pwd: Optional[str | bytes] = None, for_iteration: bool = False):
+        ...
+        def _open_stream() -> IO[bytes]:
+            return underlying_library.open_member(member.raw_info)
+        
+        return ExceptionTranslatingIO(_open_stream, self._translate_exception, self.path_str, member.filename)
 ```
 
-**Key points for `ExceptionTranslatingIO`:**
+When opening an archive in your reader `__init__()`, an exception may also be raised. You may use the same translation function by wrapping your archive opening with [`run_with_exception_translation`](../src/archivey/internal/io_helpers.py).
+
+Be sure to add extensive tests of your format, especially of corrupted archives, wrong passwords and any other corner cases you can think of, so that you can be sure all possible exceptions are being caught.
+
+Tips:
 
 *   **Specificity:** Your `exception_translator` function should be as specific as possible. Catch known exceptions from the third-party library you are using and map them to appropriate `ArchiveError` subclasses (e.g., `ArchiveCorruptedError`, `ArchiveIOError`, `ArchiveEncryptedError`).
-*   **Avoid Generic `Exception`:** Do NOT just catch `Exception` and translate it. This can hide bugs or unexpected behavior.
-*   **Testing:** It's highly recommended to write tests that specifically trigger various error conditions in the underlying library to ensure your translator handles them correctly. This might involve creating corrupted or specially crafted archive files.
-*   **Return `None`:** If an exception occurs that your translator doesn't specifically handle (or if it's already an `ArchiveError`), return `None` from the translator. `ExceptionTranslatingIO` will then re-raise the original exception.
+*   **Avoid generic `Exception`:** It's fine to catch the base exception class from your library and raise a base `ArchiveError`, but you should *not* add a catch-all to convert any `Exception` that may be received, as it can hide code bugs or unexpected behavior. If the exception is unknown, return `None` to raise the original exception. (yes, this will result in exceptions raised in client code, but then we'll know about it and can hopefully add them to the list)
+*   **Testing:** It's highly recommended to write tests that specifically trigger various error conditions in the underlying library to ensure your translator handles them correctly. This might involve creating corrupted or specially crafted archive files, passing wrong passwords etc. See the Testing section below.
 
-## `ArchiveMember` Object
 
-The `archivey.api.types.ArchiveMember` class is used to represent individual entries within an archive. When implementing `iter_members_for_registration`, you'll construct these objects. Key fields to populate include:
+## Testing
 
-*   `filename: str`
-*   `file_size: int` (uncompressed size)
-*   `compress_size: int` (compressed size, if available)
-*   `mtime: datetime` (modification time)
-*   `type: MemberType` (e.g., `MemberType.FILE`, `MemberType.DIR`, `MemberType.SYMLINK`)
-*   `mode: Optional[int]` (file permissions)
-*   `link_target: Optional[str]` (for symlinks/hardlinks, the path they point to)
-*   `encrypted: bool`
-*   `raw_info: Any` (store the original member info object from the underlying library here; it's used by `ZipReader` for `_archive.open()`)
-*   Other fields like `crc32`, `compression_method`, `comment`, `create_system`, `extra`.
+TODO: fill this section
 
-Refer to the `ArchiveMember` class definition in `archivey.api.types` for all available fields.
-
-## Registering Your Reader
-
-Once your reader is implemented, you'll need to modify `archivey.api.core.open_archive` to detect the archive format and instantiate your reader. (Details of this registration process might evolve, check the current `open_archive` function).
-
-By following these guidelines, you can contribute robust and well-integrated support for new archive formats to `archivey`.
