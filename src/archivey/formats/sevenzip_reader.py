@@ -24,7 +24,11 @@ from archivey.internal.base_reader import (
     _build_filter,
     _build_member_included_func,
 )
-from archivey.internal.io_helpers import ErrorIOStream, is_seekable
+from archivey.internal.io_helpers import (
+    ErrorIOStream,
+    is_seekable,
+    run_with_exception_translation,
+)
 from archivey.internal.utils import is_stream
 
 if TYPE_CHECKING:
@@ -284,6 +288,32 @@ class SevenZipReader(BaseArchiveReader):
 
     _password_lock: Lock = Lock()
 
+    def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
+        if py7zr is not None:
+            if isinstance(e, py7zr.Bad7zFile):
+                return ArchiveCorruptedError("Invalid 7-Zip archive")
+            if isinstance(e, py7zr.PasswordRequired):
+                return ArchiveEncryptedError("Password required")
+            if isinstance(e, py7zr.exceptions.ArchiveError):
+                return ArchiveError(f"Error reading archive: {e}")
+        if isinstance(e, TypeError) and "Unknown field" in str(e):
+            return ArchiveCorruptedError("Corrupted header data or wrong password")
+        if isinstance(e, EOFError):
+            return ArchiveCorruptedError("Invalid 7-Zip archive")
+        if isinstance(e, lzma.LZMAError):
+            if "Corrupt input data" in str(e):
+                return ArchiveCorruptedError("Corrupted input data or wrong password")
+            return ArchiveCorruptedError("Invalid 7-Zip archive")
+        if isinstance(e, struct.error):
+            return ArchiveEOFError("Possibly truncated 7-Zip archive")
+        if isinstance(e, IndexError):
+            return ArchiveCorruptedError("Invalid 7-Zip archive")
+        if isinstance(e, io.UnsupportedOperation) and "seek" in str(e):
+            return ArchiveStreamNotSeekableError(
+                "7-Zip archives do not support non-seekable streams"
+            )
+        return None
+
     @contextmanager
     def _temporary_password(self, pwd: bytes | str | None):
         """Temporarily set the password for all folders in the archive."""
@@ -350,41 +380,14 @@ class SevenZipReader(BaseArchiveReader):
                 "py7zr package is not installed. Please install it to work with 7-Zip archives."
             )
 
-        try:
-            self._archive = py7zr.SevenZipFile(
-                archive_path, "r", password=bytes_to_str(pwd)
-            )
+        def _open_7z() -> py7zr.SevenZipFile:
+            return py7zr.SevenZipFile(archive_path, "r", password=bytes_to_str(pwd))
 
-        except py7zr.Bad7zFile as e:
-            raise ArchiveCorruptedError(f"Invalid 7-Zip archive {archive_path}") from e
-        except py7zr.PasswordRequired as e:
-            raise ArchiveEncryptedError(
-                f"7-Zip archive {archive_path} is encrypted"
-            ) from e
-        except TypeError as e:
-            if "Unknown field" in str(e):
-                raise ArchiveCorruptedError(
-                    f"Corrupted header data or wrong password for {archive_path}"
-                ) from e
-            else:
-                raise
-        except EOFError as e:
-            raise ArchiveCorruptedError(f"Invalid 7-Zip archive {archive_path}") from e
-        except lzma.LZMAError as e:
-            if "Corrupt input data" in str(e) and pwd is not None:
-                raise ArchiveEncryptedError(
-                    f"Corrupted header data or wrong password for {archive_path}"
-                ) from e
-            else:
-                raise ArchiveCorruptedError(
-                    f"Invalid 7-Zip archive {archive_path}"
-                ) from e
-        except struct.error as e:
-            raise ArchiveEOFError(
-                f"Possibly truncated 7-Zip archive {archive_path}"
-            ) from e
-        except IndexError as e:
-            raise ArchiveCorruptedError(f"Invalid 7-Zip archive {archive_path}") from e
+        self._archive = run_with_exception_translation(
+            _open_7z,
+            self._exception_translator,
+            archive_path=str(archive_path),
+        )
 
     def _close_archive(self) -> None:
         """Close the archive and release any resources."""
@@ -514,7 +517,7 @@ class SevenZipReader(BaseArchiveReader):
     ) -> BinaryIO:
         assert self._archive is not None
 
-        try:
+        def _open() -> BinaryIO:
             it = list(
                 self.iter_members_with_io(
                     members=[member], pwd=pwd, close_streams=False
@@ -528,16 +531,12 @@ class SevenZipReader(BaseArchiveReader):
                 stream.read()
             return stream
 
-        except py7zr.exceptions.ArchiveError as e:
-            raise ArchiveCorruptedError(f"Error reading member {member.filename}: {e}")
-        except py7zr.PasswordRequired as e:
-            raise ArchiveEncryptedError(
-                f"Password required to read member {member.filename}"
-            ) from e
-        except lzma.LZMAError as e:
-            raise ArchiveCorruptedError(
-                f"Error reading member {member.filename}: {e}"
-            ) from e
+        return run_with_exception_translation(
+            _open,
+            self._exception_translator,
+            archive_path=self.path_str,
+            member_name=member.filename,
+        )
 
     def _extract_members_iterator(
         self,
@@ -597,12 +596,11 @@ class SevenZipReader(BaseArchiveReader):
                 yield member_info, stream
 
             # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)
-        except (py7zr.exceptions.ArchiveError, lzma.LZMAError) as e:
-            raise ArchiveCorruptedError(f"Error reading archive: {e}") from e
-        except py7zr.exceptions.PasswordRequired as e:
-            raise ArchiveEncryptedError(
-                f"Password required to read archive: {e}"
-            ) from e
+        except Exception as e:
+            translated = self._exception_translator(e)
+            if translated is not None:
+                raise translated from e
+            raise
 
         finally:
             thread.join()
@@ -723,19 +721,16 @@ class SevenZipReader(BaseArchiveReader):
 
         member_obj = self.get_member(member)
 
-        try:
+        def _do_extract() -> None:
             with self._temporary_password(pwd):
                 self._archive.extract(path=path, targets=[member_obj.filename])
-        except py7zr.PasswordRequired as e:
-            raise ArchiveEncryptedError(
-                f"Password required to extract member {member_obj.filename}"
-            ) from e
-        except py7zr.Bad7zFile as e:
-            raise ArchiveCorruptedError(f"Invalid 7-Zip archive {self.path_str}") from e
-        except py7zr.exceptions.ArchiveError as e:
-            raise ArchiveError(
-                f"Error extracting member {member_obj.filename}: {e}"
-            ) from e
+
+        run_with_exception_translation(
+            _do_extract,
+            self._exception_translator,
+            archive_path=self.path_str,
+            member_name=member_obj.filename,
+        )
 
         return os.path.join(path or os.getcwd(), member_obj.filename)
 
@@ -761,23 +756,17 @@ class SevenZipReader(BaseArchiveReader):
         factory = ExtractWriterFactory(path, pending_extractions_to_member)
 
         logger.info(f"Extracting {paths_to_extract} to {path}")
-        try:
+        def _do_extract() -> None:
             with self._temporary_password(pwd):
                 self._archive.extract(
                     path, targets=paths_to_extract, recursive=False, factory=factory
                 )
-        except py7zr.PasswordRequired as e:
-            raise ArchiveEncryptedError(
-                f"Password required to extract archive {self.path_str}"
-            ) from e
-        except py7zr.Bad7zFile as e:
-            raise ArchiveCorruptedError(f"Invalid 7-Zip archive {self.path_str}") from e
-        except py7zr.exceptions.ArchiveError as e:
-            raise ArchiveError(f"Error extracting archive {self.path_str}: {e}") from e
-        except lzma.LZMAError as e:
-            raise ArchiveCorruptedError(
-                f"Error extracting archive {self.path_str}: {e}"
-            ) from e
+
+        run_with_exception_translation(
+            _do_extract,
+            self._exception_translator,
+            archive_path=self.path_str,
+        )
         logger.info("Extraction done")
 
         for member in pending_extractions:
