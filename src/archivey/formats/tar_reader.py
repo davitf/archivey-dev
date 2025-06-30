@@ -23,25 +23,26 @@ from archivey.internal.base_reader import (
     ArchiveMember,
     BaseArchiveReader,
 )
-from archivey.internal.io_helpers import ExceptionTranslatingIO
+from archivey.internal.io_helpers import (
+    ExceptionTranslatingIO,
+    run_with_exception_translation,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _translate_tar_exception(e: Exception) -> Optional[ArchiveError]:
-    if isinstance(e, tarfile.ReadError):
-        if "unexpected end of data" in str(e).lower():
-            exc = ArchiveEOFError("TAR archive is truncated")
-        else:
-            exc = ArchiveCorruptedError(f"Error reading TAR archive: {e}")
-        exc.__cause__ = e
-        return exc
-
-    return None
-
-
 class TarReader(BaseArchiveReader):
     """Reader for TAR archives and compressed TAR archives."""
+
+    def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
+        if isinstance(e, tarfile.ReadError):
+            if "unexpected end of data" in str(e).lower():
+                exc: ArchiveError = ArchiveEOFError("TAR archive is truncated")
+            else:
+                exc = ArchiveCorruptedError(f"Error reading TAR archive: {e}")
+            exc.__cause__ = e
+            return exc
+        return None
 
     def __init__(
         self,
@@ -116,22 +117,24 @@ class TarReader(BaseArchiveReader):
             raise ValueError(f"Unsupported archive format: {format}")
 
         open_mode = "r|" if streaming_only else "r:"
-        try:
+
+        def _open_tar() -> tarfile.TarFile:
             # Fail on any error.
-            self._archive = tarfile.open(
+            return tarfile.open(
                 name=archive_path if isinstance(archive_path, str) else None,
                 fileobj=self._fileobj,
                 mode=open_mode,
                 errorlevel=2,
             )
-            logger.debug(
-                f"Tar opened: {self._archive} seekable={self._fileobj.seekable()}"
-            )
-        except tarfile.ReadError as e:
-            translated = _translate_tar_exception(e)
-            if translated is not None:
-                raise translated from e
-            raise
+
+        self._archive = run_with_exception_translation(
+            _open_tar,
+            self._exception_translator,
+            archive_path=str(archive_path),
+        )
+        logger.debug(
+            f"Tar opened: {self._archive} seekable={self._fileobj.seekable()}"
+        )
 
     def _close_archive(self) -> None:
         """Close the archive and release any resources."""
@@ -259,7 +262,12 @@ class TarReader(BaseArchiveReader):
                 )
             return stream
 
-        return ExceptionTranslatingIO(_open_stream, _translate_tar_exception)
+        return ExceptionTranslatingIO(
+            _open_stream,
+            self._exception_translator,
+            archive_path=self.path_str,
+            member_name=member.filename,
+        )
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -297,8 +305,8 @@ class TarReader(BaseArchiveReader):
 
             if self.config.tar_check_integrity and tarinfo is not None:
                 self._check_tar_integrity(tarinfo)
-        except tarfile.ReadError as e:
-            translated = _translate_tar_exception(e)
+        except Exception as e:
+            translated = self._exception_translator(e)
             if translated is not None:
                 raise translated from e
             raise

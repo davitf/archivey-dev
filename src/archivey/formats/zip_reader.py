@@ -1,3 +1,4 @@
+import io
 import logging
 import os
 import stat
@@ -22,7 +23,11 @@ from archivey.api.types import (
 from archivey.internal.base_reader import (
     BaseArchiveReader,
 )
-from archivey.internal.io_helpers import ExceptionTranslatingIO, is_seekable
+from archivey.internal.io_helpers import (
+    ExceptionTranslatingIO,
+    is_seekable,
+    run_with_exception_translation,
+)
 from archivey.internal.utils import decode_bytes_with_fallback, is_stream, str_to_bytes
 
 # Encoding fallbacks used when decoding strings stored in the ZIP metadata.
@@ -76,6 +81,21 @@ def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
 class ZipReader(BaseArchiveReader):
     """Reader for ZIP archives."""
 
+    def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
+        if isinstance(e, zipfile.BadZipFile):
+            return ArchiveCorruptedError("Error reading ZIP archive")
+        if isinstance(e, RuntimeError) and "password required" in str(e).lower():
+            return ArchiveEncryptedError("Password required")
+        if isinstance(e, RuntimeError):
+            return ArchiveError(f"Error reading ZIP archive: {e}")
+        if isinstance(e, io.UnsupportedOperation) and (
+            "seek" in str(e) or "non" in str(e)
+        ):
+            return ArchiveStreamNotSeekableError(
+                "ZIP archives do not support non-seekable streams"
+            )
+        return None
+
     def __init__(
         self,
         format: ArchiveFormat,
@@ -100,11 +120,16 @@ class ZipReader(BaseArchiveReader):
             )
 
         self._format_info: ArchiveInfo | None = None
-        try:
+
+        def _open_zip() -> zipfile.ZipFile:
             # The typeshed definition of ZipFile is incorrect, it should allow byte streams.
-            self._archive = zipfile.ZipFile(archive_path, "r")  # type: ignore
-        except zipfile.BadZipFile as e:
-            raise ArchiveCorruptedError(f"Invalid ZIP archive {archive_path}") from e
+            return zipfile.ZipFile(archive_path, "r")  # type: ignore
+
+        self._archive = run_with_exception_translation(
+            _open_zip,
+            self._exception_translator,
+            archive_path=str(archive_path),
+        )
 
     def _close_archive(self) -> None:
         """Close the archive and release any resources."""
@@ -178,32 +203,18 @@ class ZipReader(BaseArchiveReader):
     ) -> BinaryIO:
         assert self._archive is not None
 
-        try:
-            stream = self._archive.open(
+        def _open_stream() -> BinaryIO:
+            return self._archive.open(
                 cast(zipfile.ZipInfo, member.raw_info),
-                pwd=str_to_bytes(
-                    pwd if pwd is not None else self.get_archive_password()
-                ),
+                pwd=str_to_bytes(pwd if pwd is not None else self.get_archive_password()),
             )
 
-            return ExceptionTranslatingIO(
-                stream,
-                lambda e: ArchiveCorruptedError(
-                    f"Error reading member {member.filename}: {e}"
-                )
-                if isinstance(e, zipfile.BadZipFile)
-                else None,
-            )
-        except RuntimeError as e:
-            if "password required" in str(e):
-                raise ArchiveEncryptedError(
-                    f"Member {member.filename} is encrypted"
-                ) from e
-            raise ArchiveError(f"Error reading member {member.filename}: {e}") from e
-        except zipfile.BadZipFile as e:
-            raise ArchiveCorruptedError(
-                f"Error reading member {member.filename}: {e}"
-            ) from e
+        return ExceptionTranslatingIO(
+            _open_stream,
+            self._exception_translator,
+            archive_path=self.path_str,
+            member_name=member.filename,
+        )
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format."""
