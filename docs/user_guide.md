@@ -107,6 +107,7 @@ config = ArchiveyConfig(
     use_rar_stream=True,
     use_rapidgzip=True,
     use_indexed_bzip2=True,
+    use_streaming_zip=True,
     overwrite_mode=OverwriteMode.OVERWRITE,
     extraction_filter=ExtractionFilter.TAR, # Example: use tar-like filtering
 )

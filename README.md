@@ -65,7 +65,11 @@ You can enable optional features by passing an `ArchiveyConfig` to `open_archive
 ```python
 from archivey import open_archive, ArchiveyConfig
 
-config = ArchiveyConfig(use_rar_stream=True, use_rapidgzip=True)
+config = ArchiveyConfig(
+    use_rar_stream=True,
+    use_rapidgzip=True,
+    use_streaming_zip=True,
+)
 with open_archive("file.rar", config=config) as archive:
     ...
 ```

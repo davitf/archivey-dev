@@ -1,3 +1,4 @@
+import io
 import logging
 import os
 import stat
@@ -91,14 +92,18 @@ class ZipReader(BaseArchiveReader):
         )
 
         if is_stream(self.path_or_stream) and not is_seekable(self.path_or_stream):
-            raise ArchiveStreamNotSeekableError(
-                "ZIP archives do not support non-seekable streams"
-            )
+            if streaming_only and self.config.use_streaming_zip:
+                data = self.path_or_stream.read()
+                self.path_or_stream = io.BytesIO(data)
+            else:
+                raise ArchiveStreamNotSeekableError(
+                    "ZIP archives do not support non-seekable streams"
+                )
 
         self._format_info: ArchiveInfo | None = None
         try:
             # The typeshed definition of ZipFile is incorrect, it should allow byte streams.
-            self._archive = zipfile.ZipFile(archive_path, "r")  # type: ignore
+            self._archive = zipfile.ZipFile(self.path_or_stream, "r")  # type: ignore
         except zipfile.BadZipFile as e:
             raise ArchiveCorruptedError(f"Invalid ZIP archive {archive_path}") from e
 
