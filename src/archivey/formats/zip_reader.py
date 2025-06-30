@@ -25,14 +25,19 @@ from archivey.internal.base_reader import (
 from archivey.internal.io_helpers import ExceptionTranslatingIO, is_seekable
 from archivey.internal.utils import decode_bytes_with_fallback, is_stream, str_to_bytes
 
-# TODO: check if this is correct
+# Encoding fallbacks used when decoding strings stored in the ZIP metadata.
 _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]
 
 logger = logging.getLogger(__name__)
 
 
 def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
-    """Get the timestamp from a ZipInfo object, handling extended timestamp fields."""
+    """Return the modification time stored in ``zip_info``.
+
+    Extended timestamp extra fields are used when available because the
+    standard ``ZipInfo.date_time`` field only stores timestamps with a two-second
+    granularity.
+    """
     main_modtime = datetime(*zip_info.date_time)
     if not zip_info.extra:
         return main_modtime
@@ -107,97 +112,64 @@ class ZipReader(BaseArchiveReader):
         self._archive.close()  # type: ignore
         self._archive = None
 
-    def get_archive_info(self) -> ArchiveInfo:
-        """Get detailed information about the archive's format.
+    def _zipinfo_to_archive_member(self, info: zipfile.ZipInfo) -> ArchiveMember:
+        """Convert ``ZipInfo`` to :class:`ArchiveMember`."""
+        mode = info.external_attr >> 16
+        is_dir = info.is_dir()
+        is_link = stat.S_ISLNK(mode)
 
-        Returns:
-            ArchiveInfo: Detailed format information
-        """
-        self.check_archive_open()
-        assert self._archive is not None
+        compression_method = (
+            {
+                zipfile.ZIP_STORED: "store",
+                zipfile.ZIP_DEFLATED: "deflate",
+                zipfile.ZIP_BZIP2: "bzip2",
+                zipfile.ZIP_LZMA: "lzma",
+            }.get(info.compress_type, "unknown")
+            if hasattr(info, "compress_type")
+            else None
+        )
 
-        if self._format_info is None:
-            self._format_info = ArchiveInfo(
-                format=self.format,
-                is_solid=False,  # ZIP archives are never solid
-                comment=decode_bytes_with_fallback(
-                    self._archive.comment, _ZIP_ENCODINGS
-                )
-                if self._archive.comment
-                else None,
-                extra={
-                    "is_encrypted": any(
-                        info.flag_bits & 0x1 for info in self._archive.infolist()
-                    ),
-                    # "zip_version": self._archive.version,
-                },
-            )
-        return self._format_info
+        return ArchiveMember(
+            filename=info.filename,
+            file_size=info.file_size,
+            compress_size=info.compress_size,
+            mtime_with_tz=get_zipinfo_timestamp(info),
+            type=MemberType.DIR
+            if is_dir
+            else MemberType.SYMLINK
+            if is_link
+            else MemberType.FILE,
+            mode=stat.S_IMODE(mode) if info.external_attr != 0 else None,
+            crc32=info.CRC if hasattr(info, "CRC") else None,
+            compression_method=compression_method,
+            comment=decode_bytes_with_fallback(info.comment, _ZIP_ENCODINGS)
+            if info.comment
+            else None,
+            encrypted=bool(info.flag_bits & 0x1),
+            create_system=CreateSystem(info.create_system)
+            if info.create_system in CreateSystem._value2member_map_
+            else CreateSystem.UNKNOWN,
+            extra={
+                "compress_type": info.compress_type,
+                "compress_size": info.compress_size,
+                "create_system": info.create_system,
+                "create_version": info.create_version,
+                "extract_version": info.extract_version,
+                "flag_bits": info.flag_bits,
+                "volume": info.volume,
+            },
+            raw_info=info,
+            link_target=self._read_link_target(info),
+        )
 
     def _read_link_target(self, info: zipfile.ZipInfo) -> str | None:
+        """Return the symlink target for ``info`` if it is a symlink."""
         assert self._archive is not None
 
-        # Zip archives store the link target as the contents of the file.
-        # TODO: do we need to handle the UTF8 flag or fallback encodings?
         if stat.S_ISLNK(info.external_attr >> 16):
             with self._archive.open(info.filename) as f:
                 return f.read().decode("utf-8")
         return None
-
-    def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
-        assert self._archive is not None
-
-        for info in self._archive.infolist():
-            is_dir = info.is_dir()
-            compression_method = (
-                {
-                    zipfile.ZIP_STORED: "store",
-                    zipfile.ZIP_DEFLATED: "deflate",
-                    zipfile.ZIP_BZIP2: "bzip2",
-                    zipfile.ZIP_LZMA: "lzma",
-                }.get(info.compress_type, "unknown")
-                if hasattr(info, "compress_type")
-                else None
-            )
-
-            mode = info.external_attr >> 16
-            is_link = stat.S_ISLNK(mode)
-
-            member = ArchiveMember(
-                filename=info.filename,
-                file_size=info.file_size,
-                compress_size=info.compress_size,
-                mtime_with_tz=get_zipinfo_timestamp(info),
-                type=MemberType.DIR
-                if is_dir
-                else MemberType.SYMLINK
-                if is_link
-                else MemberType.FILE,
-                mode=stat.S_IMODE(info.external_attr >> 16)
-                if hasattr(info, "external_attr") and info.external_attr != 0
-                else None,
-                crc32=info.CRC if hasattr(info, "CRC") else None,
-                compression_method=compression_method,
-                comment=decode_bytes_with_fallback(info.comment, _ZIP_ENCODINGS)
-                if info.comment
-                else None,
-                encrypted=bool(info.flag_bits & 0x1),
-                create_system=CreateSystem(info.create_system)
-                if info.create_system in CreateSystem._value2member_map_
-                else CreateSystem.UNKNOWN,
-                extra={
-                    "compress_type": info.compress_type,
-                    "compress_size": info.compress_size,
-                    "create_system": info.create_system,
-                    "create_version": info.create_version,
-                    "extract_version": info.extract_version,
-                    "flag_bits": info.flag_bits,
-                    "volume": info.volume,
-                },
-                raw_info=info,
-                link_target=self._read_link_target(info),
-            )
-            yield member
 
     def _open_member(
         self,
@@ -234,6 +206,34 @@ class ZipReader(BaseArchiveReader):
             raise ArchiveCorruptedError(
                 f"Error reading member {member.filename}: {e}"
             ) from e
+
+    def get_archive_info(self) -> ArchiveInfo:
+        """Get detailed information about the archive's format."""
+        self.check_archive_open()
+        assert self._archive is not None
+
+        if self._format_info is None:
+            self._format_info = ArchiveInfo(
+                format=self.format,
+                is_solid=False,  # ZIP archives are never solid
+                comment=decode_bytes_with_fallback(
+                    self._archive.comment, _ZIP_ENCODINGS
+                )
+                if self._archive.comment
+                else None,
+                extra={
+                    "is_encrypted": any(
+                        info.flag_bits & 0x1 for info in self._archive.infolist()
+                    ),
+                },
+            )
+        return self._format_info
+
+    def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
+        assert self._archive is not None
+
+        for info in self._archive.infolist():
+            yield self._zipinfo_to_archive_member(info)
 
     @classmethod
     def is_zip_file(cls, file: BinaryIO | str | os.PathLike) -> bool:
