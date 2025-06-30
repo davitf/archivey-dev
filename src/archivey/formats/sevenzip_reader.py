@@ -718,12 +718,13 @@ class SevenZipReader(BaseArchiveReader):
     ) -> str:
         self.check_archive_open()
         assert self._archive is not None
+        archive = self._archive
 
         member_obj = self.get_member(member)
 
         def _do_extract() -> None:
             with self._temporary_password(pwd):
-                self._archive.extract(path=path, targets=[member_obj.filename])
+                archive.extract(path=path, targets=[member_obj.filename])
 
         run_with_exception_translation(
             _do_extract,
@@ -741,6 +742,7 @@ class SevenZipReader(BaseArchiveReader):
         paths_to_extract = [member.filename for member in pending_extractions]
         # Perform a regular extraction
         assert self._archive is not None
+        archive = self._archive
 
         canonical_path = pathlib.Path(os.getcwd()).joinpath(path)
 
@@ -756,9 +758,10 @@ class SevenZipReader(BaseArchiveReader):
         factory = ExtractWriterFactory(path, pending_extractions_to_member)
 
         logger.info(f"Extracting {paths_to_extract} to {path}")
+
         def _do_extract() -> None:
             with self._temporary_password(pwd):
-                self._archive.extract(
+                archive.extract(
                     path, targets=paths_to_extract, recursive=False, factory=factory
                 )
 
