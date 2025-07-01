@@ -54,7 +54,7 @@ You can use filters when extracting to avoid security issues, similarly to [tarf
 from archivey import open_archive
 
 with open_archive("example.zip") as archive:
-    archive.extractall(path="/tmp/destpath", filter='data')
+    archive.extractall(path="/tmp/destpath", filter=ExtractionFilter.DATA)
 ```
 
 ### Random access
