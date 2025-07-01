@@ -18,6 +18,14 @@ from datetime import datetime
 from enum import IntEnum
 from typing import Any, Optional, Tuple
 
+# Hide internal implementation details from the generated documentation
+__pdoc__ = {
+    "ArchiveMember.__init__": False,
+    "ArchiveMember._member_id": False,
+    "ArchiveMember._archive_id": False,
+    "ArchiveMember._edited_by_filter": False,
+}
+
 
 class ArchiveFormat(StrEnum):
     """Supported compression formats."""
@@ -204,25 +212,35 @@ class ArchiveMember:
 
     @property
     def is_file(self) -> bool:
+        """True if the member is a regular file."""
         return self.type == MemberType.FILE
 
     @property
     def is_dir(self) -> bool:
+        """True if the member represents a directory."""
         return self.type == MemberType.DIR
 
     @property
     def is_link(self) -> bool:
+        """True if the member is a symbolic or hard link."""
         return self.type == MemberType.SYMLINK or self.type == MemberType.HARDLINK
 
     @property
     def is_other(self) -> bool:
+        """True if the member's type is not a file, directory or link."""
         return self.type == MemberType.OTHER
 
     @property
     def CRC(self) -> Optional[int]:
+        """Alias for :pyattr:`crc32` for zipfile compatibility."""
         return self.crc32
 
     def replace(self, **kwargs: Any) -> "ArchiveMember":
+        """Return a new instance with selected fields updated.
+
+        This is primarily used by extraction filters to create modified
+        versions of a member without mutating the original object.
+        """
         replaced = replace(self, **kwargs)
         replaced._edited_by_filter = True
         return replaced
