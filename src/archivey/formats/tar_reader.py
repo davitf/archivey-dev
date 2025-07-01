@@ -37,11 +37,10 @@ class TarReader(BaseArchiveReader):
     def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, tarfile.ReadError):
             if "unexpected end of data" in str(e).lower():
-                exc: ArchiveError = ArchiveEOFError("TAR archive is truncated")
+                return ArchiveEOFError("TAR archive is truncated")
             else:
-                exc = ArchiveCorruptedError(f"Error reading TAR archive: {e}")
-            exc.__cause__ = e
-            return exc
+                return ArchiveCorruptedError(f"Error reading TAR archive: {e}")
+
         return None
 
     def __init__(

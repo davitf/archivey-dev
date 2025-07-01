@@ -290,28 +290,37 @@ class SevenZipReader(BaseArchiveReader):
 
     def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
         if py7zr is not None:
+            # Archive open
             if isinstance(e, py7zr.Bad7zFile):
                 return ArchiveCorruptedError("Invalid 7-Zip archive")
+            # Archive open or member read
             if isinstance(e, py7zr.PasswordRequired):
                 return ArchiveEncryptedError("Password required")
+
+            # Member read
             if isinstance(e, py7zr.exceptions.ArchiveError):
                 return ArchiveError(f"Error reading archive: {e}")
+
+        # Archive open (corrupted data or wrong password when decrypting the header)
         if isinstance(e, TypeError) and "Unknown field" in str(e):
             return ArchiveCorruptedError("Corrupted header data or wrong password")
+
+        # Archive open
         if isinstance(e, EOFError):
-            return ArchiveCorruptedError("Invalid 7-Zip archive")
+            return ArchiveEOFError("Truncated 7-Zip archive")
+
+        # Archive open or member read
         if isinstance(e, lzma.LZMAError):
-            if "Corrupt input data" in str(e):
-                return ArchiveCorruptedError("Corrupted input data or wrong password")
-            return ArchiveCorruptedError("Invalid 7-Zip archive")
+            return ArchiveCorruptedError("Corrupted input data or wrong password")
+
+        # Archive open (truncated data while reading a struct)
         if isinstance(e, struct.error):
             return ArchiveEOFError("Possibly truncated 7-Zip archive")
+
+        # Archive open (invalid value in some field)
         if isinstance(e, IndexError):
             return ArchiveCorruptedError("Invalid 7-Zip archive")
-        if isinstance(e, io.UnsupportedOperation) and "seek" in str(e):
-            return ArchiveStreamNotSeekableError(
-                "7-Zip archives do not support non-seekable streams"
-            )
+
         return None
 
     @contextmanager

@@ -86,8 +86,8 @@ class ZipReader(BaseArchiveReader):
             return ArchiveCorruptedError("Error reading ZIP archive")
         if isinstance(e, RuntimeError) and "password required" in str(e).lower():
             return ArchiveEncryptedError("Password required")
-        if isinstance(e, RuntimeError):
-            return ArchiveError(f"Error reading ZIP archive: {e}")
+        if isinstance(e, RuntimeError) and "Bad password" in str(e):
+            return ArchiveEncryptedError("Wrong password specified")
         if isinstance(e, io.UnsupportedOperation) and (
             "seek" in str(e) or "non" in str(e)
         ):
