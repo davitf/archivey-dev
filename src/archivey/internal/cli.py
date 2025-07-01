@@ -12,11 +12,11 @@ from typing import IO, BinaryIO, Callable, Tuple, cast
 
 from tqdm import tqdm
 
+from archivey.api.archive_reader import ArchiveReader
 from archivey.api.config import ArchiveyConfig, OverwriteMode
 from archivey.api.core import open_archive
 from archivey.api.exceptions import ArchiveError
 from archivey.api.types import ArchiveMember, MemberType
-from archivey.internal.base_reader import ArchiveReader
 from archivey.internal.dependency_checker import (
     format_dependency_versions,
     get_dependency_versions,

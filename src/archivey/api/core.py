@@ -3,6 +3,7 @@
 import os
 from typing import BinaryIO
 
+from archivey.api.archive_reader import ArchiveReader
 from archivey.api.config import ArchiveyConfig, default_config, get_default_config
 from archivey.api.exceptions import ArchiveNotSupportedError
 from archivey.api.types import (
@@ -19,7 +20,6 @@ from archivey.formats.single_file_reader import SingleFileReader
 from archivey.formats.tar_reader import TarReader
 from archivey.formats.zip_reader import ZipReader
 from archivey.internal.base_reader import (
-    ArchiveReader,
     StreamingOnlyArchiveReaderWrapper,
 )
 from archivey.internal.io_helpers import RewindableNonSeekableStream, is_seekable

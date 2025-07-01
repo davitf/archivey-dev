@@ -10,6 +10,7 @@ from typing import BinaryIO, Callable, Collection, Iterator, List, Union, cast
 from uuid import uuid4
 from weakref import WeakSet
 
+from archivey.api.archive_reader import ArchiveReader
 from archivey.api.config import ArchiveyConfig, ExtractionFilter, get_default_config
 from archivey.api.exceptions import (
     ArchiveMemberCannotBeOpenedError,
@@ -20,7 +21,6 @@ from archivey.api.types import (
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
-    ArchiveReader,
     ExtractFilterFunc,
     IteratorFilterFunc,
     MemberType,

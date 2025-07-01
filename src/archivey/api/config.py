@@ -27,13 +27,13 @@ class ArchiveyConfig:
     """Configuration for :func:`archivey.open_archive`."""
 
     use_rapidgzip: bool = False
-    "Alternative library that can be used instead of the builtin modules to read gzip stream formats. Provides multithreaded decompression and improved random access support (i.e. supports jumping to arbitrary positions in the stream without (re-)decompressing the entire stream, which is particularly useful for accessing random members in compressed tar files)."
-    
+    "Alternative library that can be used instead of the builtin gzip module to read gzip streams. Provides multithreaded decompression and random access support (i.e. jumping to arbitrary positions in the stream without re-decompressing the entire stream), which is particularly useful for accessing random members in compressed tar files."
+
     use_indexed_bzip2: bool = False
-    "Alternative library that can be used instead of the builtin modules to read bzip2 stream formats. Provides multithreaded decompression and improved random access support."
-    
+    "Alternative library that can be used instead of the builtin bzip2 module to read bzip2 streams. Provides multithreaded decompression and random access support."
+
     use_python_xz: bool = False
-    "Alternative library that can be used instead of the builtin modules to read xz stream formats. Provides multithreaded decompression and improved random access support."
+    "Alternative library that can be used instead of the builtin xz module to read xz streams. Provides random access support."
 
     use_zstandard: bool = False
     "An alternative to pyzstd. Not as good at error reporting."

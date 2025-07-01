@@ -15,7 +15,7 @@ from archivey.api.exceptions import (
 from archivey.api.types import ArchiveMember, MemberType
 
 if TYPE_CHECKING:
-    from archivey.internal.base_reader import ArchiveReader
+    from archivey.api.archive_reader import ArchiveReader
 
 logger = logging.getLogger(__name__)
 
