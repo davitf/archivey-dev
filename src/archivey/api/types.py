@@ -106,10 +106,17 @@ class ArchiveInfo:
     """Detailed information about an archive's format."""
 
     format: ArchiveFormat
-    version: Optional[str] = None  # e.g. "4" for RAR4, "5" for RAR5
+    version: Optional[str] = None
+    """The version of the archive format. Format-dependent (e.g. "4" for RAR4, "5" for RAR5)."""
+
     is_solid: bool = False
+    """Whether the archive is solid, i.e. decompressing a member may require decompressing others before it."""
+
     extra: Optional[dict[str, Any]] = None
+    """Extra format-specific information about the archive."""
+
     comment: Optional[str] = None
+    """A comment associated with the archive. Supported by some formats."""
 
 
 @dataclass
@@ -117,25 +124,41 @@ class ArchiveMember:
     """Represents a file within an archive."""
 
     filename: str
+    """The name of the member. Directory names always end with a slash."""
+
     file_size: Optional[int]
+    """The size of the member's data in bytes, if known."""
+
     compress_size: Optional[int]
+    """The size of the member's compressed data in bytes, if known."""
+
     mtime_with_tz: Optional[datetime]
+    """The modification time of the member. May include a timezone (likely UTC) if the archive format uses global time, or be a naive datetime if the archive format uses local time."""
+
     type: MemberType
+    """The type of the member."""
 
     mode: Optional[int] = None
+    """Unix permissions of the member."""
+
     crc32: Optional[int] = None
-    compression_method: Optional[str] = None  # e.g. "deflate", "lzma", etc.
+    """The CRC32 checksum of the member's data, if known."""
+
+    compression_method: Optional[str] = None
+    """The compression method used for the member, if known. Format-dependent."""
+
     comment: Optional[str] = None
+    """A comment associated with the member. Supported by some formats."""
+
     create_system: Optional[CreateSystem] = None
-    encrypted: bool = False
+    """The operating system on which the member was created, if known."""
+
     extra: dict[str, Any] = field(default_factory=dict)
+    """Extra format-specific information about the member."""
+
     link_target: Optional[str] = None
+    """The target of the link, if the member is a symbolic or hard link. For hard links, this is the path of another file in the archive; for symbolic links, this is the target path relative to the directory containing the link. In some formats, the link target is stored in the member's data, and may not be available when getting the member list, and/or may be encrypted. In those cases, the link target will be filled when iterating through the archive."""
 
-    # The raw info from the archive reader
-    raw_info: Optional[Any] = None
-
-    # A unique identifier for this member within the archive. Used to distinguish members
-    # and preserve ordering, but not for direct indexing. Assigned by register_member().
     _member_id: Optional[int] = None
 
     # A flag indicating whether the member has been modified by a filter.
@@ -150,16 +173,16 @@ class ArchiveMember:
 
     @property
     def member_id(self) -> int:
+        """A unique identifier for this member within the archive. Increasing in archive order. Can be used to distinguish members with the same filena and preserve ordering."""
         if self._member_id is None:
             raise ValueError("Member index not yet set")
         return self._member_id
 
-    # A unique identifier for the archive. Used to distinguish between archives.
-    # Filled by register_member().
     _archive_id: Optional[str] = None
 
     @property
     def archive_id(self) -> str:
+        """A unique identifier for the archive. Used to distinguish between archives."""
         if self._archive_id is None:
             raise ValueError("Archive ID not yet set")
         return self._archive_id
@@ -167,7 +190,7 @@ class ArchiveMember:
     # Properties for zipfile compatibility (and others, as much as possible)
     @property
     def date_time(self) -> Optional[Tuple[int, int, int, int, int, int]]:
-        """Returns the date and time as a tuple."""
+        """Returns the date and time as a tuple of (year, month, day, hour, minute, second). For zipfile compatibility."""
         if self.mtime is None:
             return None
         return (
