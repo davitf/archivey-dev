@@ -1,3 +1,5 @@
+"""Helpers for checking versions of optional dependencies."""
+
 import shutil
 import subprocess
 import sys

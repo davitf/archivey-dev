@@ -24,7 +24,11 @@ class OverwriteMode(StrEnum):
 
 @dataclass
 class ArchiveyConfig:
-    """Configuration for :func:`archivey.open_archive`."""
+    """Configuration for :func:`archivey.open_archive`.
+
+    See the developer guide for a description of each option and when they are
+    used.
+    """
 
     use_rapidgzip: bool = False
     "Alternative library that can be used instead of the builtin modules to read gzip stream formats. Provides multithreaded decompression and improved random access support (i.e. supports jumping to arbitrary positions in the stream without (re-)decompressing the entire stream, which is particularly useful for accessing random members in compressed tar files)."

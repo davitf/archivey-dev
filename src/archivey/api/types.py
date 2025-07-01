@@ -247,6 +247,8 @@ class ArchiveReader(abc.ABC):
     This class provides a consistent way to interact with different archive
     formats. Subclasses must implement the abstract methods to provide
     format-specific functionality.
+
+    See the developer guide for an overview of how to implement your own reader.
     """
 
     path_or_stream: str | BinaryIO

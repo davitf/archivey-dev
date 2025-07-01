@@ -1,4 +1,8 @@
-"""Defines the abstract base classes and common functionality for archive readers."""
+"""Base classes and helpers for implementing custom :class:`ArchiveReader`s.
+
+See the developer guide for a walkthrough of how to subclass
+``BaseArchiveReader``.
+"""
 
 import abc
 import logging
@@ -94,13 +98,12 @@ def _build_filter(
 
 
 class BaseArchiveReader(ArchiveReader):
-    """
-    A base implementation of ArchiveReader providing common logic.
+    """Common logic for :class:`ArchiveReader` implementations.
 
-    This class handles member registration, link resolution, and default
-    implementations for some methods based on others. Developers creating
-    new readers will typically inherit from this class and implement the
-    abstract methods like `iter_members_for_registration`, `open`, and `close`.
+    This class registers members, resolves links and provides default
+    implementations for many methods. Subclass it when adding a new
+    archive format and implement the abstract hooks noted in the
+    developer guide.
     """
 
     def __init__(
@@ -856,13 +859,12 @@ class BaseArchiveReader(ArchiveReader):
 
 
 class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
-    """
-    A wrapper that restricts an ArchiveReader to streaming-only access.
+    """Internal wrapper enforcing streaming-only access.
 
-    This class takes an existing ArchiveReader and makes it behave as if it
-    does not support random access, by disabling methods like `open()`,
-    `extract()`, and `get_members()` (if it implies random access).
-    This is useful when `open_archive` is called with `streaming_only=True`.
+    It disables random-access features like :py:meth:`open` and
+    :py:meth:`get_members`. The wrapper is created automatically when
+    :func:`~archivey.api.core.open_archive` is called with ``streaming_only=True``.
+    See the developer guide for more details.
     """
 
     def __init__(self, reader: ArchiveReader):

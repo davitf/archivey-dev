@@ -5,11 +5,12 @@ This guide explains how to extend `archivey` by creating custom `ArchiveReader` 
 ## Overview
 
 The library's modules are organized into these packages:
-* [`archivey.api`](../src/archivey/api/) (public API functions, types and classes)
-* [`archivey.internal`](../src/archivey/internal/) (base classes and helpers)
-* [`archivey.formats`](../src/archivey/formats/) (format-specific readers)
 
-The library exposes an [`ArchiveReader`](../src/archivey/api/types.py) abstract base class for users with the public API. The actual format readers extend from the helper class [`BaseArchiveReader`](../src/archivey/internal/base_reader.py), which implements most of the public API by delegating to some simpler methods that the readers must implement. New readers will almost always want to inherit from `BaseArchiveReader`.
+- [`archivey.api`](../src/archivey/api/) – public API classes and helpers
+- [`archivey.internal`](../src/archivey/internal/) – base classes and utilities
+- [`archivey.formats`](../src/archivey/formats/) – format-specific readers
+
+Archivey exposes an [`ArchiveReader`](../src/archivey/api/types.py) abstract base class. Format readers generally extend [`BaseArchiveReader`](../src/archivey/internal/base_reader.py), which implements most of the high-level API so your class only needs to handle the format details.
 
 ## Registering Your Reader
 
@@ -19,6 +20,20 @@ For your reader to be called, you'll need to:
 *   detect archives of these formats by signature and/or filename, in [format_detection.py](../src/archivey/formats/format_detection.py);
 *   create your reader class, see below;
 *   modify [`archivey.api.core.open_archive`](../src/archivey/api/core.py) to associate the archive format with your reader.
+
+## Configuration
+
+The `ArchiveyConfig` dataclass controls optional features when opening archives.
+Each flag either enables support for an optional dependency or tweaks extraction behavior.
+See the list below for a quick reference:
+
+- `use_rar_stream` – enable rarfile streaming mode
+- `use_single_file_stored_metadata` – speed up single-file archives
+- `use_rapidgzip`, `use_indexed_bzip2`, `use_python_xz`, `use_zstandard` – use these compressors if installed
+- `tar_check_integrity` – verify tar checksums
+- `sevenzip_read_link_targets_eagerly` – resolve 7z link targets immediately
+- `overwrite_mode` – choose how extraction handles existing files
+- `extraction_filter` – sanitize or skip paths during extraction
 
 
 ## Creating a new format reader
