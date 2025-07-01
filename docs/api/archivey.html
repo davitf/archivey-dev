@@ -2057,22 +2057,32 @@ was provided, or the provided password was incorrect.</p>
 </span><span id="ArchiveyConfig-27"><a href="#ArchiveyConfig-27"><span class="linenos">27</span></a><span class="k">class</span><span class="w"> </span><span class="nc">ArchiveyConfig</span><span class="p">:</span>
 </span><span id="ArchiveyConfig-28"><a href="#ArchiveyConfig-28"><span class="linenos">28</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Configuration for :func:`archivey.open_archive`.&quot;&quot;&quot;</span>
 </span><span id="ArchiveyConfig-29"><a href="#ArchiveyConfig-29"><span class="linenos">29</span></a>
-</span><span id="ArchiveyConfig-30"><a href="#ArchiveyConfig-30"><span class="linenos">30</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Alternative library that can be used instead of the builtin modules to read gzip stream formats. Provides multithreaded decompression and improved random access support (i.e. supports jumping to arbitrary positions in the stream without (re-)decompressing the entire stream, which is particularly useful for accessing random members in compressed tar files).&quot;&quot;&quot;</span>
-</span><span id="ArchiveyConfig-31"><a href="#ArchiveyConfig-31"><span class="linenos">31</span></a>    <span class="n">use_rapidgzip</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-</span><span id="ArchiveyConfig-32"><a href="#ArchiveyConfig-32"><span class="linenos">32</span></a>    <span class="n">use_indexed_bzip2</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s2">&quot;Alternative library that can be used instead of the builtin modules to read bzip2 stream formats. Provides multithreaded decompression and improved random access support.&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
-</span><span id="ArchiveyConfig-33"><a href="#ArchiveyConfig-33"><span class="linenos">33</span></a>    <span class="n">use_python_xz</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s2">&quot;Alternative library that can be used instead of the builtin modules to read xz stream formats. Provides multithreaded decompression and improved random access support.&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
-</span><span id="ArchiveyConfig-34"><a href="#ArchiveyConfig-34"><span class="linenos">34</span></a>
-</span><span id="ArchiveyConfig-35"><a href="#ArchiveyConfig-35"><span class="linenos">35</span></a>    <span class="n">use_zstandard</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s2">&quot;An alternative to pyzstd. Not as good at error reporting.&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
-</span><span id="ArchiveyConfig-36"><a href="#ArchiveyConfig-36"><span class="linenos">36</span></a>
-</span><span id="ArchiveyConfig-37"><a href="#ArchiveyConfig-37"><span class="linenos">37</span></a>    <span class="n">use_rar_stream</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s2">&quot;If set, use an alternative approach instead of calling rarfile when iterating over RAR archive members. This supports decompressing multiple members in a solid archive by going through the archive only once, instead of once per member.&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="ArchiveyConfig-30"><a href="#ArchiveyConfig-30"><span class="linenos">30</span></a>    <span class="n">use_rapidgzip</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="ArchiveyConfig-31"><a href="#ArchiveyConfig-31"><span class="linenos">31</span></a>    <span class="s2">&quot;Alternative library that can be used instead of the builtin modules to read gzip stream formats. Provides multithreaded decompression and improved random access support (i.e. supports jumping to arbitrary positions in the stream without (re-)decompressing the entire stream, which is particularly useful for accessing random members in compressed tar files).&quot;</span>
+</span><span id="ArchiveyConfig-32"><a href="#ArchiveyConfig-32"><span class="linenos">32</span></a>    
+</span><span id="ArchiveyConfig-33"><a href="#ArchiveyConfig-33"><span class="linenos">33</span></a>    <span class="n">use_indexed_bzip2</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="ArchiveyConfig-34"><a href="#ArchiveyConfig-34"><span class="linenos">34</span></a>    <span class="s2">&quot;Alternative library that can be used instead of the builtin modules to read bzip2 stream formats. Provides multithreaded decompression and improved random access support.&quot;</span>
+</span><span id="ArchiveyConfig-35"><a href="#ArchiveyConfig-35"><span class="linenos">35</span></a>    
+</span><span id="ArchiveyConfig-36"><a href="#ArchiveyConfig-36"><span class="linenos">36</span></a>    <span class="n">use_python_xz</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="ArchiveyConfig-37"><a href="#ArchiveyConfig-37"><span class="linenos">37</span></a>    <span class="s2">&quot;Alternative library that can be used instead of the builtin modules to read xz stream formats. Provides multithreaded decompression and improved random access support.&quot;</span>
 </span><span id="ArchiveyConfig-38"><a href="#ArchiveyConfig-38"><span class="linenos">38</span></a>
-</span><span id="ArchiveyConfig-39"><a href="#ArchiveyConfig-39"><span class="linenos">39</span></a>    <span class="n">use_single_file_stored_metadata</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s2">&quot;If set, data stored in compressed stream headers is set in the ArchiveMember object for single-file compressed archives, instead of basing it only on the file itself. (filename and modification time for gzip archives only)&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
-</span><span id="ArchiveyConfig-40"><a href="#ArchiveyConfig-40"><span class="linenos">40</span></a>
-</span><span id="ArchiveyConfig-41"><a href="#ArchiveyConfig-41"><span class="linenos">41</span></a>    <span class="n">tar_check_integrity</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s2">&quot;If a tar archive is corrupted in a metadata section, tarfile simply stops reading further and acts as if the file has ended. If set, we perform a check that the tar archive has actually been read fully, and raise an error if it&#39;s actually corrupted.&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
-</span><span id="ArchiveyConfig-42"><a href="#ArchiveyConfig-42"><span class="linenos">42</span></a>
-</span><span id="ArchiveyConfig-43"><a href="#ArchiveyConfig-43"><span class="linenos">43</span></a>    <span class="n">overwrite_mode</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">OverwriteMode</span><span class="p">,</span> <span class="s2">&quot;What to do with existing files when extracting. OVERWRITE: overwrite existing files. SKIP: skip existing files. ERROR: raise an error if a file already exists, and stop extracting.&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">OverwriteMode</span><span class="o">.</span><span class="n">ERROR</span>
+</span><span id="ArchiveyConfig-39"><a href="#ArchiveyConfig-39"><span class="linenos">39</span></a>    <span class="n">use_zstandard</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="ArchiveyConfig-40"><a href="#ArchiveyConfig-40"><span class="linenos">40</span></a>    <span class="s2">&quot;An alternative to pyzstd. Not as good at error reporting.&quot;</span>
+</span><span id="ArchiveyConfig-41"><a href="#ArchiveyConfig-41"><span class="linenos">41</span></a>
+</span><span id="ArchiveyConfig-42"><a href="#ArchiveyConfig-42"><span class="linenos">42</span></a>    <span class="n">use_rar_stream</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="ArchiveyConfig-43"><a href="#ArchiveyConfig-43"><span class="linenos">43</span></a>    <span class="s2">&quot;If set, use an alternative approach instead of calling rarfile when iterating over RAR archive members. This supports decompressing multiple members in a solid archive by going through the archive only once, instead of once per member.&quot;</span>
 </span><span id="ArchiveyConfig-44"><a href="#ArchiveyConfig-44"><span class="linenos">44</span></a>
-</span><span id="ArchiveyConfig-45"><a href="#ArchiveyConfig-45"><span class="linenos">45</span></a>    <span class="n">extraction_filter</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">ExtractionFilter</span> <span class="o">|</span> <span class="n">FilterFunc</span><span class="p">,</span> <span class="s2">&quot;A filter function that can be used to filter members when iterating over an archive. It can be a function that takes an ArchiveMember and returns a possibly-modified ArchiveMember object, or None to skip the member.&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ExtractionFilter</span><span class="o">.</span><span class="n">DATA</span>
+</span><span id="ArchiveyConfig-45"><a href="#ArchiveyConfig-45"><span class="linenos">45</span></a>    <span class="n">use_single_file_stored_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="ArchiveyConfig-46"><a href="#ArchiveyConfig-46"><span class="linenos">46</span></a>    <span class="s2">&quot;If set, data stored in compressed stream headers is set in the ArchiveMember object for single-file compressed archives, instead of basing it only on the file itself. (filename and modification time for gzip archives only)&quot;</span>
+</span><span id="ArchiveyConfig-47"><a href="#ArchiveyConfig-47"><span class="linenos">47</span></a>
+</span><span id="ArchiveyConfig-48"><a href="#ArchiveyConfig-48"><span class="linenos">48</span></a>    <span class="n">tar_check_integrity</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="ArchiveyConfig-49"><a href="#ArchiveyConfig-49"><span class="linenos">49</span></a>    <span class="s2">&quot;If a tar archive is corrupted in a metadata section, tarfile simply stops reading further and acts as if the file has ended. If set, we perform a check that the tar archive has actually been read fully, and raise an error if it&#39;s actually corrupted.&quot;</span>
+</span><span id="ArchiveyConfig-50"><a href="#ArchiveyConfig-50"><span class="linenos">50</span></a>
+</span><span id="ArchiveyConfig-51"><a href="#ArchiveyConfig-51"><span class="linenos">51</span></a>    <span class="n">overwrite_mode</span><span class="p">:</span> <span class="n">OverwriteMode</span> <span class="o">=</span> <span class="n">OverwriteMode</span><span class="o">.</span><span class="n">ERROR</span>
+</span><span id="ArchiveyConfig-52"><a href="#ArchiveyConfig-52"><span class="linenos">52</span></a>    <span class="s2">&quot;What to do with existing files when extracting. OVERWRITE: overwrite existing files. SKIP: skip existing files. ERROR: raise an error if a file already exists, and stop extracting.&quot;</span>
+</span><span id="ArchiveyConfig-53"><a href="#ArchiveyConfig-53"><span class="linenos">53</span></a>
+</span><span id="ArchiveyConfig-54"><a href="#ArchiveyConfig-54"><span class="linenos">54</span></a>    <span class="n">extraction_filter</span><span class="p">:</span> <span class="n">ExtractionFilter</span> <span class="o">|</span> <span class="n">FilterFunc</span> <span class="o">=</span> <span class="n">ExtractionFilter</span><span class="o">.</span><span class="n">DATA</span>
+</span><span id="ArchiveyConfig-55"><a href="#ArchiveyConfig-55"><span class="linenos">55</span></a>    <span class="s2">&quot;A filter function that can be used to filter members when iterating over an archive. It can be a function that takes an ArchiveMember and returns a possibly-modified ArchiveMember object, or None to skip the member.&quot;</span>
 </span></pre></div>
 
 
@@ -2083,7 +2093,7 @@ was provided, or the provided password was incorrect.</p>
                             <div id="ArchiveyConfig.__init__" class="classattr">
                                 <div class="attr function">
             
-        <span class="name">ArchiveyConfig</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">use_rapidgzip</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">use_indexed_bzip2</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s1">&#39;Alternative library that can be used instead of the builtin modules to read bzip2 stream formats. Provides multithreaded decompression and improved random access support.&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">use_python_xz</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s1">&#39;Alternative library that can be used instead of the builtin modules to read xz stream formats. Provides multithreaded decompression and improved random access support.&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">use_zstandard</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s1">&#39;An alternative to pyzstd. Not as good at error reporting.&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">use_rar_stream</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s1">&#39;If set, use an alternative approach instead of calling rarfile when iterating over RAR archive members. This supports decompressing multiple members in a solid archive by going through the archive only once, instead of once per member.&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">use_single_file_stored_metadata</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s1">&#39;If set, data stored in compressed stream headers is set in the ArchiveMember object for single-file compressed archives, instead of basing it only on the file itself. (filename and modification time for gzip archives only)&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">tar_check_integrity</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="s2">&quot;If a tar archive is corrupted in a metadata section, tarfile simply stops reading further and acts as if the file has ended. If set, we perform a check that the tar archive has actually been read fully, and raise an error if it&#39;s actually corrupted.&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>,</span><span class="param">	<span class="n">overwrite_mode</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">archivey</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">OverwriteMode</span><span class="p">,</span> <span class="s1">&#39;What to do with existing files when extracting. OVERWRITE: overwrite existing files. SKIP: skip existing files. ERROR: raise an error if a file already exists, and stop extracting.&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">OverwriteMode</span><span class="o">.</span><span class="n">ERROR</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="o">&gt;</span>,</span><span class="param">	<span class="n">extraction_filter</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">archivey</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ExtractionFilter</span> <span class="o">|</span> <span class="n">archivey</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">FilterFunc</span><span class="p">,</span> <span class="s1">&#39;A filter function that can be used to filter members when iterating over an archive. It can be a function that takes an ArchiveMember and returns a possibly-modified ArchiveMember object, or None to skip the member.&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">ExtractionFilter</span><span class="o">.</span><span class="n">DATA</span><span class="p">:</span> <span class="s1">&#39;data&#39;</span><span class="o">&gt;</span></span>)</span>
+        <span class="name">ArchiveyConfig</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">use_rapidgzip</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">use_indexed_bzip2</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">use_python_xz</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">use_zstandard</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">use_rar_stream</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">use_single_file_stored_metadata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">tar_check_integrity</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>,</span><span class="param">	<span class="n">overwrite_mode</span><span class="p">:</span> <span class="n">archivey</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">OverwriteMode</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">OverwriteMode</span><span class="o">.</span><span class="n">ERROR</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="o">&gt;</span>,</span><span class="param">	<span class="n">extraction_filter</span><span class="p">:</span> <span class="n">archivey</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ExtractionFilter</span> <span class="o">|</span> <span class="n">archivey</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">FilterFunc</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">ExtractionFilter</span><span class="o">.</span><span class="n">DATA</span><span class="p">:</span> <span class="s1">&#39;data&#39;</span><span class="o">&gt;</span></span>)</span>
 
         
     </div>
@@ -2101,103 +2111,121 @@ was provided, or the provided password was incorrect.</p>
     </div>
     <a class="headerlink" href="#ArchiveyConfig.use_rapidgzip"></a>
     
-    
+            <div class="docstring"><p>Alternative library that can be used instead of the builtin modules to read gzip stream formats. Provides multithreaded decompression and improved random access support (i.e. supports jumping to arbitrary positions in the stream without (re-)decompressing the entire stream, which is particularly useful for accessing random members in compressed tar files).</p>
+</div>
+
 
                             </div>
                             <div id="ArchiveyConfig.use_indexed_bzip2" class="classattr">
                                 <div class="attr variable">
-            <span class="name">use_indexed_bzip2</span><span class="annotation">: Annotated[bool, &#39;Alternative library that can be used instead of the builtin modules to read bzip2 stream formats. Provides multithreaded decompression and improved random access support.&#39;]</span>        =
+            <span class="name">use_indexed_bzip2</span><span class="annotation">: bool</span>        =
 <span class="default_value">False</span>
 
         
     </div>
     <a class="headerlink" href="#ArchiveyConfig.use_indexed_bzip2"></a>
     
-    
+            <div class="docstring"><p>Alternative library that can be used instead of the builtin modules to read bzip2 stream formats. Provides multithreaded decompression and improved random access support.</p>
+</div>
+
 
                             </div>
                             <div id="ArchiveyConfig.use_python_xz" class="classattr">
                                 <div class="attr variable">
-            <span class="name">use_python_xz</span><span class="annotation">: Annotated[bool, &#39;Alternative library that can be used instead of the builtin modules to read xz stream formats. Provides multithreaded decompression and improved random access support.&#39;]</span>        =
+            <span class="name">use_python_xz</span><span class="annotation">: bool</span>        =
 <span class="default_value">False</span>
 
         
     </div>
     <a class="headerlink" href="#ArchiveyConfig.use_python_xz"></a>
     
-    
+            <div class="docstring"><p>Alternative library that can be used instead of the builtin modules to read xz stream formats. Provides multithreaded decompression and improved random access support.</p>
+</div>
+
 
                             </div>
                             <div id="ArchiveyConfig.use_zstandard" class="classattr">
                                 <div class="attr variable">
-            <span class="name">use_zstandard</span><span class="annotation">: Annotated[bool, &#39;An alternative to pyzstd. Not as good at error reporting.&#39;]</span>        =
+            <span class="name">use_zstandard</span><span class="annotation">: bool</span>        =
 <span class="default_value">False</span>
 
         
     </div>
     <a class="headerlink" href="#ArchiveyConfig.use_zstandard"></a>
     
-    
+            <div class="docstring"><p>An alternative to pyzstd. Not as good at error reporting.</p>
+</div>
+
 
                             </div>
                             <div id="ArchiveyConfig.use_rar_stream" class="classattr">
                                 <div class="attr variable">
-            <span class="name">use_rar_stream</span><span class="annotation">: Annotated[bool, &#39;If set, use an alternative approach instead of calling rarfile when iterating over RAR archive members. This supports decompressing multiple members in a solid archive by going through the archive only once, instead of once per member.&#39;]</span>        =
+            <span class="name">use_rar_stream</span><span class="annotation">: bool</span>        =
 <span class="default_value">False</span>
 
         
     </div>
     <a class="headerlink" href="#ArchiveyConfig.use_rar_stream"></a>
     
-    
+            <div class="docstring"><p>If set, use an alternative approach instead of calling rarfile when iterating over RAR archive members. This supports decompressing multiple members in a solid archive by going through the archive only once, instead of once per member.</p>
+</div>
+
 
                             </div>
                             <div id="ArchiveyConfig.use_single_file_stored_metadata" class="classattr">
                                 <div class="attr variable">
-            <span class="name">use_single_file_stored_metadata</span><span class="annotation">: Annotated[bool, &#39;If set, data stored in compressed stream headers is set in the ArchiveMember object for single-file compressed archives, instead of basing it only on the file itself. (filename and modification time for gzip archives only)&#39;]</span>        =
+            <span class="name">use_single_file_stored_metadata</span><span class="annotation">: bool</span>        =
 <span class="default_value">False</span>
 
         
     </div>
     <a class="headerlink" href="#ArchiveyConfig.use_single_file_stored_metadata"></a>
     
-    
+            <div class="docstring"><p>If set, data stored in compressed stream headers is set in the ArchiveMember object for single-file compressed archives, instead of basing it only on the file itself. (filename and modification time for gzip archives only)</p>
+</div>
+
 
                             </div>
                             <div id="ArchiveyConfig.tar_check_integrity" class="classattr">
                                 <div class="attr variable">
-            <span class="name">tar_check_integrity</span><span class="annotation">: Annotated[bool, &#34;If a tar archive is corrupted in a metadata section, tarfile simply stops reading further and acts as if the file has ended. If set, we perform a check that the tar archive has actually been read fully, and raise an error if it&#39;s actually corrupted.&#34;]</span>        =
+            <span class="name">tar_check_integrity</span><span class="annotation">: bool</span>        =
 <span class="default_value">True</span>
 
         
     </div>
     <a class="headerlink" href="#ArchiveyConfig.tar_check_integrity"></a>
     
-    
+            <div class="docstring"><p>If a tar archive is corrupted in a metadata section, tarfile simply stops reading further and acts as if the file has ended. If set, we perform a check that the tar archive has actually been read fully, and raise an error if it's actually corrupted.</p>
+</div>
+
 
                             </div>
                             <div id="ArchiveyConfig.overwrite_mode" class="classattr">
                                 <div class="attr variable">
-            <span class="name">overwrite_mode</span><span class="annotation">: Annotated[archivey.api.config.OverwriteMode, &#39;What to do with existing files when extracting. OVERWRITE: overwrite existing files. SKIP: skip existing files. ERROR: raise an error if a file already exists, and stop extracting.&#39;]</span>        =
+            <span class="name">overwrite_mode</span><span class="annotation">: archivey.api.config.OverwriteMode</span>        =
 <span class="default_value">&lt;OverwriteMode.ERROR: &#39;error&#39;&gt;</span>
 
         
     </div>
     <a class="headerlink" href="#ArchiveyConfig.overwrite_mode"></a>
     
-    
+            <div class="docstring"><p>What to do with existing files when extracting. OVERWRITE: overwrite existing files. SKIP: skip existing files. ERROR: raise an error if a file already exists, and stop extracting.</p>
+</div>
+
 
                             </div>
                             <div id="ArchiveyConfig.extraction_filter" class="classattr">
                                 <div class="attr variable">
-            <span class="name">extraction_filter</span><span class="annotation">: Annotated[archivey.api.types.ExtractionFilter | archivey.api.types.FilterFunc, &#39;A filter function that can be used to filter members when iterating over an archive. It can be a function that takes an ArchiveMember and returns a possibly-modified ArchiveMember object, or None to skip the member.&#39;]</span>        =
+            <span class="name">extraction_filter</span><span class="annotation">: archivey.api.types.ExtractionFilter | archivey.api.types.FilterFunc</span>        =
 <span class="default_value">&lt;ExtractionFilter.DATA: &#39;data&#39;&gt;</span>
 
         
     </div>
     <a class="headerlink" href="#ArchiveyConfig.extraction_filter"></a>
     
-    
+            <div class="docstring"><p>A filter function that can be used to filter members when iterating over an archive. It can be a function that takes an ArchiveMember and returns a possibly-modified ArchiveMember object, or None to skip the member.</p>
+</div>
+
 
                             </div>
                 </section>
@@ -2213,20 +2241,20 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#default_config"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="default_config-70"><a href="#default_config-70"><span class="linenos">70</span></a><span class="nd">@contextmanager</span>
-</span><span id="default_config-71"><a href="#default_config-71"><span class="linenos">71</span></a><span class="k">def</span><span class="w"> </span><span class="nf">default_config</span><span class="p">(</span><span class="n">config</span><span class="p">:</span> <span class="n">ArchiveyConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]):</span>
-</span><span id="default_config-72"><a href="#default_config-72"><span class="linenos">72</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Temporarily use ``config`` as the default configuration.&quot;&quot;&quot;</span>
-</span><span id="default_config-73"><a href="#default_config-73"><span class="linenos">73</span></a>    <span class="k">if</span> <span class="n">config</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="default_config-74"><a href="#default_config-74"><span class="linenos">74</span></a>        <span class="n">config</span> <span class="o">=</span> <span class="n">get_default_config</span><span class="p">()</span>
-</span><span id="default_config-75"><a href="#default_config-75"><span class="linenos">75</span></a>
-</span><span id="default_config-76"><a href="#default_config-76"><span class="linenos">76</span></a>    <span class="k">if</span> <span class="n">kwargs</span><span class="p">:</span>
-</span><span id="default_config-77"><a href="#default_config-77"><span class="linenos">77</span></a>        <span class="n">config</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-</span><span id="default_config-78"><a href="#default_config-78"><span class="linenos">78</span></a>
-</span><span id="default_config-79"><a href="#default_config-79"><span class="linenos">79</span></a>    <span class="n">token</span> <span class="o">=</span> <span class="n">_default_config_var</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-</span><span id="default_config-80"><a href="#default_config-80"><span class="linenos">80</span></a>    <span class="k">try</span><span class="p">:</span>
-</span><span id="default_config-81"><a href="#default_config-81"><span class="linenos">81</span></a>        <span class="k">yield</span>
-</span><span id="default_config-82"><a href="#default_config-82"><span class="linenos">82</span></a>    <span class="k">finally</span><span class="p">:</span>
-</span><span id="default_config-83"><a href="#default_config-83"><span class="linenos">83</span></a>        <span class="n">_default_config_var</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="default_config-80"><a href="#default_config-80"><span class="linenos">80</span></a><span class="nd">@contextmanager</span>
+</span><span id="default_config-81"><a href="#default_config-81"><span class="linenos">81</span></a><span class="k">def</span><span class="w"> </span><span class="nf">default_config</span><span class="p">(</span><span class="n">config</span><span class="p">:</span> <span class="n">ArchiveyConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]):</span>
+</span><span id="default_config-82"><a href="#default_config-82"><span class="linenos">82</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Temporarily use ``config`` as the default configuration.&quot;&quot;&quot;</span>
+</span><span id="default_config-83"><a href="#default_config-83"><span class="linenos">83</span></a>    <span class="k">if</span> <span class="n">config</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="default_config-84"><a href="#default_config-84"><span class="linenos">84</span></a>        <span class="n">config</span> <span class="o">=</span> <span class="n">get_default_config</span><span class="p">()</span>
+</span><span id="default_config-85"><a href="#default_config-85"><span class="linenos">85</span></a>
+</span><span id="default_config-86"><a href="#default_config-86"><span class="linenos">86</span></a>    <span class="k">if</span> <span class="n">kwargs</span><span class="p">:</span>
+</span><span id="default_config-87"><a href="#default_config-87"><span class="linenos">87</span></a>        <span class="n">config</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</span><span id="default_config-88"><a href="#default_config-88"><span class="linenos">88</span></a>
+</span><span id="default_config-89"><a href="#default_config-89"><span class="linenos">89</span></a>    <span class="n">token</span> <span class="o">=</span> <span class="n">_default_config_var</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="default_config-90"><a href="#default_config-90"><span class="linenos">90</span></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="default_config-91"><a href="#default_config-91"><span class="linenos">91</span></a>        <span class="k">yield</span>
+</span><span id="default_config-92"><a href="#default_config-92"><span class="linenos">92</span></a>    <span class="k">finally</span><span class="p">:</span>
+</span><span id="default_config-93"><a href="#default_config-93"><span class="linenos">93</span></a>        <span class="n">_default_config_var</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
 </span></pre></div>
 
 
@@ -2246,9 +2274,9 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#get_default_config"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="get_default_config-53"><a href="#get_default_config-53"><span class="linenos">53</span></a><span class="k">def</span><span class="w"> </span><span class="nf">get_default_config</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">ArchiveyConfig</span><span class="p">:</span>
-</span><span id="get_default_config-54"><a href="#get_default_config-54"><span class="linenos">54</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the current default configuration.&quot;&quot;&quot;</span>
-</span><span id="get_default_config-55"><a href="#get_default_config-55"><span class="linenos">55</span></a>    <span class="k">return</span> <span class="n">_default_config_var</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="get_default_config-63"><a href="#get_default_config-63"><span class="linenos">63</span></a><span class="k">def</span><span class="w"> </span><span class="nf">get_default_config</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">ArchiveyConfig</span><span class="p">:</span>
+</span><span id="get_default_config-64"><a href="#get_default_config-64"><span class="linenos">64</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the current default configuration.&quot;&quot;&quot;</span>
+</span><span id="get_default_config-65"><a href="#get_default_config-65"><span class="linenos">65</span></a>    <span class="k">return</span> <span class="n">_default_config_var</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
 </span></pre></div>
 
 
@@ -2268,9 +2296,9 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#set_default_config"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="set_default_config-58"><a href="#set_default_config-58"><span class="linenos">58</span></a><span class="k">def</span><span class="w"> </span><span class="nf">set_default_config</span><span class="p">(</span><span class="n">config</span><span class="p">:</span> <span class="n">ArchiveyConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="set_default_config-59"><a href="#set_default_config-59"><span class="linenos">59</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Set the default configuration for :func:`open_archive`.&quot;&quot;&quot;</span>
-</span><span id="set_default_config-60"><a href="#set_default_config-60"><span class="linenos">60</span></a>    <span class="n">_default_config_var</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="set_default_config-68"><a href="#set_default_config-68"><span class="linenos">68</span></a><span class="k">def</span><span class="w"> </span><span class="nf">set_default_config</span><span class="p">(</span><span class="n">config</span><span class="p">:</span> <span class="n">ArchiveyConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="set_default_config-69"><a href="#set_default_config-69"><span class="linenos">69</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Set the default configuration for :func:`open_archive`.&quot;&quot;&quot;</span>
+</span><span id="set_default_config-70"><a href="#set_default_config-70"><span class="linenos">70</span></a>    <span class="n">_default_config_var</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
 </span></pre></div>
 
 
