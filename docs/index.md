@@ -8,4 +8,4 @@ which is mainly intended for testing the library.
 
 - [User Guide](user_guide.md)
 - [Developer Guide](developer_guide.md)
-- [API Reference](api/archivey.html)
+- [API Reference](reference/archivey/index.html)

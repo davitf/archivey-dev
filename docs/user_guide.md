@@ -4,7 +4,7 @@ This guide explains how to use the `archivey` library to work with a variety of 
 
 ## Opening an Archive
 
-The main entry point to the library is the `open_archive` function:
+The main entry point to the library is the [`open_archive`][open_archive] function:
 
 ```python
 from archivey import open_archive
@@ -22,12 +22,12 @@ except ArchiveError as e:
 
 ```
 
-`open_archive` takes the path to an archive file as its main argument (or an IO stream) and returns an `ArchiveReader` when the format is recognized. You can also pass an optional `config` object or set `streaming_only=True` to force sequential access.
+`open_archive` takes the path to an archive file as its main argument (or an IO stream) and returns an [`ArchiveReader`][archive_reader] when the format is recognized. You can also pass an optional `config` object or set `streaming_only=True` to force sequential access.
 
 ## Opening a Compressed Stream
 
 Archivey can also handle single-file compressed formats such as gzip, bzip2, xz,
-zstd and lz4. Use `open_compressed_stream()` to obtain an uncompressed binary
+zstd and lz4. Use [`open_compressed_stream`][open_compressed_stream] to obtain an uncompressed binary
 stream:
 
 ```python
@@ -201,4 +201,8 @@ except ArchiveError as e:
     print(f"Error: {e}")
 ```
 
-This guide provides a basic overview. For more detailed information on specific classes and methods, please refer to the [API documentation](./api/archivey.html).
+This guide provides a basic overview. For more detailed information on specific classes and methods, please refer to the [API documentation](reference/archivey/index.html).
+
+[open_archive]: reference/archivey/api/core/index.html#open_archive
+[open_compressed_stream]: reference/archivey/api/core/index.html#open_compressed_stream
+[archive_reader]: reference/archivey/api/types/index.html#archivereader

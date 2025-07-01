@@ -1,14 +1,16 @@
 #!/bin/sh
-# Script to generate API documentation using pdoc
+# Script to generate documentation using portray
 
-# Ensure the output directory exists
-mkdir -p docs/api
+OUTPUT_DIR="docs/api"
+mkdir -p "$OUTPUT_DIR"
 
-# Run pdoc
-# Adjust the module path if your package structure is different
-# This assumes your main package 'archivey' is under 'src/'
-# Modern versions of pdoc no longer use the --html flag, so we
-# simply specify the output directory with -o.
-pdoc -o docs/api src/archivey
+# Generate docs with portray. PYTHONPATH ensures the src layout is found.
+if command -v portray >/dev/null 2>&1; then
+    CMD=portray
+else
+    CMD="python3 -m portray"
+fi
 
-echo "API documentation generated in docs/api"
+PYTHONPATH=src $CMD as_html -o "$OUTPUT_DIR" -m archivey
+
+echo "Documentation generated in $OUTPUT_DIR"

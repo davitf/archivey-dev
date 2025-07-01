@@ -43,7 +43,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.11.11",
     "tox>=4.0.0",
-    "pdoc>=14.0.0", # I'm assuming ^ is not supported by Hatch, so I'm using >=
+    "portray>=1.8.0",
     "pytest-parallel>=0.1.1",
     # Required to make pytest-parallel work with current pytest version, see
     # https://github.com/kevlened/pytest-parallel/issues/118
@@ -69,7 +69,7 @@ dependencies = [
     "pytest-cov>=5.0.0",
     "ruff>=0.11.11",
     "tox>=4.0.0",
-    "pdoc>=14.0.0",
+    "portray>=1.8.0",
 ]
 features = ["optional"]
 
