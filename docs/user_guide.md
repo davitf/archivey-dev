@@ -1,6 +1,6 @@
-# archivey User Guide
+# Archivey user guide
 
-This guide explains how to use the `archivey` library to work with various archive formats.
+This guide explains how to use the `archivey` library to work with a variety of archive formats.
 
 ## Opening an Archive
 
@@ -22,7 +22,7 @@ except ArchiveError as e:
 
 ```
 
-The `open_archive` function takes the path to the archive file as its primary argument. It can also accept an optional `config` object and `streaming_only` flag.
+`open_archive` takes the path to an archive file as its main argument (or an IO stream) and returns an `ArchiveReader` when the format is recognized. You can also pass an optional `config` object or set `streaming_only=True` to force sequential access.
 
 ## Opening a Compressed Stream
 
@@ -114,6 +114,7 @@ config = ArchiveyConfig(
 with open_archive("file.rar", config=config) as archive:
     ...
 ```
+
 
 Fields on `ArchiveyConfig` enable support for optional dependencies such as
 `rapidgzip`, `indexed_bzip2`, `python-xz` and `zstandard`. Each flag requires the
