@@ -167,6 +167,9 @@ class ArchiveMember:
     link_target: Optional[str] = None
     """The target of the link, if the member is a symbolic or hard link. For hard links, this is the path of another file in the archive; for symbolic links, this is the target path relative to the directory containing the link. In some formats, the link target is stored in the member's data, and may not be available when getting the member list, and/or may be encrypted. In those cases, the link target will be filled when iterating through the archive."""
 
+    raw_info: Optional[Any] = None
+    """The raw info object returned by the archive reader."""
+
     _member_id: Optional[int] = None
 
     # A flag indicating whether the member has been modified by a filter.
