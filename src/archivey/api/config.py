@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Configuration helpers for Archivey."""
+
 import contextvars
 import sys
 from contextlib import contextmanager
