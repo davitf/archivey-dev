@@ -1,9 +1,9 @@
 site_name: Archivey
 nav:
   - Home: index.md
-  - User Guide: user_guide.md
-  - Developer Guide: developer_guide.md
-  - API Reference: api.md
+  - User guide: user_guide.md
+  - Developer guide: developer_guide.md
+  - API reference: api.md
 plugins:
   - search
   - mkdocstrings:

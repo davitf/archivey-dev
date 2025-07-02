@@ -1,3 +1,4 @@
+from archivey.api.archive_reader import ArchiveReader
 from archivey.api.config import (
     ArchiveyConfig,
     default_config,
@@ -29,8 +30,25 @@ from archivey.api.types import (
 )
 
 __all__ = [
+    # Core
     "open_archive",
     "open_compressed_stream",
+    "ArchiveReader",
+    "ArchiveInfo",
+    "ArchiveMember",
+
+    # Enums
+    "ArchiveFormat",
+    "MemberType",
+    "CreateSystem",
+
+    # Config
+    "ArchiveyConfig",
+    "default_config",
+    "get_default_config",
+    "set_default_config",
+
+    # Exceptions
     "ArchiveError",
     "ArchiveFormatError",
     "ArchiveCorruptedError",
@@ -38,15 +56,8 @@ __all__ = [
     "ArchiveEOFError",
     "ArchiveMemberNotFoundError",
     "ArchiveNotSupportedError",
-    "ArchiveMember",
-    "ArchiveInfo",
-    "ArchiveFormat",
-    "MemberType",
-    "CreateSystem",
-    "ArchiveyConfig",
-    "default_config",
-    "get_default_config",
-    "set_default_config",
+
+    # Filters
     "create_filter",
     "data_filter",
     "tar_filter",
