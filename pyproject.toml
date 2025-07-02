@@ -49,6 +49,7 @@ dev = [
     # https://github.com/kevlened/pytest-parallel/issues/118
     "py>=1.11.0",
     "mkdocs>=1.5.3",
+    "mkdocs-pdoc-plugin @ git+https://github.com/spirali/mkdocs-pdoc-plugin",
 ]
 
 [tool.pytest.ini_options]
