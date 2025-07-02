@@ -47,7 +47,8 @@ dev = [
     "pytest-parallel>=0.1.1",
     # Required to make pytest-parallel work with current pytest version, see
     # https://github.com/kevlened/pytest-parallel/issues/118
-    "py>=1.11.0",  
+    "py>=1.11.0",
+    "mkdocs>=1.5.3",
 ]
 
 [tool.pytest.ini_options]

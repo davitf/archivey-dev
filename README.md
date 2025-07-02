@@ -2,10 +2,13 @@
 
 Archivey is a library for reading many common archive formats through a simple, consistent interface. It uses several builtin modules and optional external packages for handling different formats, and also adds some features that are missing from them.
 
+The full documentation is kept under [`docs/`](docs/) and published via MkDocs.
+
 ## Features
 
 - Automatic file format detection
-- Support for ZIP, TAR (including compressed tar variants), RAR and 7z files, and single-file compressed formats
+- Support for ZIP, TAR (including `.tar.gz`, `.tar.bz2`, etc.), RAR and 7z archives
+- Support for single-file compressed formats like gzip, bzip2, xz, zstd and lz4
 - Optimized streaming access reading of archive members
 - Consistent handling of symlinks, file times, permissions, and passwords
 - Consistent exception hierarchy
@@ -91,11 +94,21 @@ with open_archive("example.zip", streaming_only=True) as archive:
 You can enable optional features and libraries by passing an `ArchiveyConfig` to `open_archive` and `open_compressed_stream`.
 
 ```python
-from archivey import open_archive, ArchiveyConfig
+from archivey import (
+    open_archive,
+    ArchiveyConfig,
+    ExtractionFilter,
+    OverwriteMode,
+)
 
-config = ArchiveyConfig(use_rar_stream=True, use_rapidgzip=True)
+config = ArchiveyConfig(
+    use_rar_stream=True,
+    use_rapidgzip=True,
+    overwrite_mode=OverwriteMode.SKIP,
+    extraction_filter=ExtractionFilter.TAR,
+)
 with open_archive("file.rar", config=config) as archive:
-    ...
+    archive.extractall("out_dir")
 ```
 
 ### Command line usage
@@ -136,3 +149,4 @@ For more detailed information on using and extending `archivey`, please refer to
 *   Archive writing support
 *   Bug: ZIP filename decoding can be wrong in some cases (see [sample archive](tests/test_archives_external/encoding_infozip_jules.zip))
 *   Split the [IO wrappers](src/archivey/internal/io_helpers.py) into a separate library, as it seems to be generally useful
+*   Improve hard link handling and add tests for RAR4 and duplicate filenames

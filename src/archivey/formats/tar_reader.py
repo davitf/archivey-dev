@@ -302,7 +302,7 @@ class TarReader(BaseArchiveReader):
 
             if self.config.tar_check_integrity and tarinfo is not None:
                 self._check_tar_integrity(tarinfo)
-        except Exception as e:
+        except (tarfile.TarError, OSError) as e:
             translated = self._exception_translator(e)
             if translated is not None:
                 raise translated from e
