@@ -573,11 +573,15 @@ class SevenZipReader(BaseArchiveReader):
                 with self._temporary_password(pwd):
                     self._archive.extract(targets=extract_targets, factory=factory)
                     factory.finish()
-            except Exception as e:
-                # Here we do want to catch all exceptions, not just ArchiveError
-                # subclasses, as any exception raised in this thread would be silently
-                # ignored. We send them through the queue so that the main thread
-                # doesn't wait forever, and can treat and/or re-raise them.
+            except (
+                ArchiveError,
+                py7zr.exceptions.ArchiveError,
+                py7zr.PasswordRequired,
+                lzma.LZMAError,
+                OSError,
+                EOFError,
+                struct.error,
+            ) as e:
                 q.put(e)
 
         thread = Thread(target=extractor)
@@ -605,7 +609,15 @@ class SevenZipReader(BaseArchiveReader):
                 yield member_info, stream
 
             # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)
-        except Exception as e:
+        except (
+            ArchiveError,
+            py7zr.exceptions.ArchiveError,
+            py7zr.PasswordRequired,
+            lzma.LZMAError,
+            OSError,
+            EOFError,
+            struct.error,
+        ) as e:
             translated = self._exception_translator(e)
             if translated is not None:
                 raise translated from e

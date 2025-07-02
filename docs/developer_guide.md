@@ -168,5 +168,26 @@ Tips:
 
 ## Testing
 
-TODO: fill this section
+To run the full test suite use the same command as in CI:
+
+```bash
+uv run --extra optional pytest
+```
+
+You can run a subset of tests with the `-k` option, e.g. to run only ZIP related
+tests:
+
+```bash
+uv run --extra optional pytest -k .zip
+```
+
+Sample archives used by the tests are versioned in `tests/test_archives`.  If
+you add new archives or change them, regenerate the files with:
+
+```bash
+uv run --extra optional python -m tests.create_archives [pattern]
+```
+
+Omit the optional pattern to rebuild all archives.  RAR tests require the
+`unrar` tool.  If it's missing those tests will fail and can be ignored.
 
