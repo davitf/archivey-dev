@@ -191,3 +191,19 @@ uv run --extra optional python -m tests.create_archives [pattern]
 Omit the optional pattern to rebuild all archives.  RAR tests require the
 `unrar` tool.  If it's missing those tests will fail and can be ignored.
 
+## Building the documentation
+
+The API reference is generated with [pdoc](https://pdoc.dev) and then
+assembled into a static site using [MkDocs](https://www.mkdocs.org).
+Run the provided script to rebuild everything:
+
+```bash
+sh docs/generate_api_docs.sh
+```
+
+It copies the project `README.md` to `docs/index.md`, runs pdoc to
+create HTML under `docs/api`, and finally builds the MkDocs site into the
+`site/` directory.  Ensure the optional development dependencies are
+installed (e.g. `pip install -e .[dev]`) so the `mkdocs-pdoc-plugin` is
+available.
+
