@@ -116,10 +116,16 @@
                                 <a class="variable" href="#ArchiveMember.create_system">create_system</a>
                         </li>
                         <li>
+                                <a class="variable" href="#ArchiveMember.encrypted">encrypted</a>
+                        </li>
+                        <li>
                                 <a class="variable" href="#ArchiveMember.extra">extra</a>
                         </li>
                         <li>
                                 <a class="variable" href="#ArchiveMember.link_target">link_target</a>
+                        </li>
+                        <li>
+                                <a class="variable" href="#ArchiveMember.raw_info">raw_info</a>
                         </li>
                         <li>
                                 <a class="variable" href="#ArchiveMember.mtime">mtime</a>
@@ -944,89 +950,97 @@ was provided, or the provided password was incorrect.</p>
 </span><span id="ArchiveMember-162"><a href="#ArchiveMember-162"><span class="linenos">162</span></a>    <span class="n">create_system</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">CreateSystem</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="ArchiveMember-163"><a href="#ArchiveMember-163"><span class="linenos">163</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;The operating system on which the member was created, if known.&quot;&quot;&quot;</span>
 </span><span id="ArchiveMember-164"><a href="#ArchiveMember-164"><span class="linenos">164</span></a>
-</span><span id="ArchiveMember-165"><a href="#ArchiveMember-165"><span class="linenos">165</span></a>    <span class="n">extra</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
-</span><span id="ArchiveMember-166"><a href="#ArchiveMember-166"><span class="linenos">166</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Extra format-specific information about the member.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-165"><a href="#ArchiveMember-165"><span class="linenos">165</span></a>    <span class="n">encrypted</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="ArchiveMember-166"><a href="#ArchiveMember-166"><span class="linenos">166</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether the member&#39;s data is encrypted, if known.&quot;&quot;&quot;</span>
 </span><span id="ArchiveMember-167"><a href="#ArchiveMember-167"><span class="linenos">167</span></a>
-</span><span id="ArchiveMember-168"><a href="#ArchiveMember-168"><span class="linenos">168</span></a>    <span class="n">link_target</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="ArchiveMember-169"><a href="#ArchiveMember-169"><span class="linenos">169</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;The target of the link, if the member is a symbolic or hard link. For hard links, this is the path of another file in the archive; for symbolic links, this is the target path relative to the directory containing the link. In some formats, the link target is stored in the member&#39;s data, and may not be available when getting the member list, and/or may be encrypted. In those cases, the link target will be filled when iterating through the archive.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-168"><a href="#ArchiveMember-168"><span class="linenos">168</span></a>    <span class="n">extra</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+</span><span id="ArchiveMember-169"><a href="#ArchiveMember-169"><span class="linenos">169</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Extra format-specific information about the member.&quot;&quot;&quot;</span>
 </span><span id="ArchiveMember-170"><a href="#ArchiveMember-170"><span class="linenos">170</span></a>
-</span><span id="ArchiveMember-171"><a href="#ArchiveMember-171"><span class="linenos">171</span></a>    <span class="n">_member_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="ArchiveMember-172"><a href="#ArchiveMember-172"><span class="linenos">172</span></a>
-</span><span id="ArchiveMember-173"><a href="#ArchiveMember-173"><span class="linenos">173</span></a>    <span class="c1"># A flag indicating whether the member has been modified by a filter.</span>
-</span><span id="ArchiveMember-174"><a href="#ArchiveMember-174"><span class="linenos">174</span></a>    <span class="n">_edited_by_filter</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-</span><span id="ArchiveMember-175"><a href="#ArchiveMember-175"><span class="linenos">175</span></a>
-</span><span id="ArchiveMember-176"><a href="#ArchiveMember-176"><span class="linenos">176</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember-177"><a href="#ArchiveMember-177"><span class="linenos">177</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">mtime</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">datetime</span><span class="p">]:</span>
-</span><span id="ArchiveMember-178"><a href="#ArchiveMember-178"><span class="linenos">178</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the mtime as a datetime object without timezone information.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember-179"><a href="#ArchiveMember-179"><span class="linenos">179</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime_with_tz</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="ArchiveMember-180"><a href="#ArchiveMember-180"><span class="linenos">180</span></a>            <span class="k">return</span> <span class="kc">None</span>
-</span><span id="ArchiveMember-181"><a href="#ArchiveMember-181"><span class="linenos">181</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime_with_tz</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-</span><span id="ArchiveMember-182"><a href="#ArchiveMember-182"><span class="linenos">182</span></a>
-</span><span id="ArchiveMember-183"><a href="#ArchiveMember-183"><span class="linenos">183</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember-184"><a href="#ArchiveMember-184"><span class="linenos">184</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">member_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-</span><span id="ArchiveMember-185"><a href="#ArchiveMember-185"><span class="linenos">185</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;A unique identifier for this member within the archive. Increasing in archive order. Can be used to distinguish members with the same filena and preserve ordering.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember-186"><a href="#ArchiveMember-186"><span class="linenos">186</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_member_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="ArchiveMember-187"><a href="#ArchiveMember-187"><span class="linenos">187</span></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Member index not yet set&quot;</span><span class="p">)</span>
-</span><span id="ArchiveMember-188"><a href="#ArchiveMember-188"><span class="linenos">188</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_member_id</span>
-</span><span id="ArchiveMember-189"><a href="#ArchiveMember-189"><span class="linenos">189</span></a>
-</span><span id="ArchiveMember-190"><a href="#ArchiveMember-190"><span class="linenos">190</span></a>    <span class="n">_archive_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="ArchiveMember-191"><a href="#ArchiveMember-191"><span class="linenos">191</span></a>
-</span><span id="ArchiveMember-192"><a href="#ArchiveMember-192"><span class="linenos">192</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember-193"><a href="#ArchiveMember-193"><span class="linenos">193</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">archive_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="ArchiveMember-194"><a href="#ArchiveMember-194"><span class="linenos">194</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;A unique identifier for the archive. Used to distinguish between archives.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember-195"><a href="#ArchiveMember-195"><span class="linenos">195</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_archive_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="ArchiveMember-196"><a href="#ArchiveMember-196"><span class="linenos">196</span></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Archive ID not yet set&quot;</span><span class="p">)</span>
-</span><span id="ArchiveMember-197"><a href="#ArchiveMember-197"><span class="linenos">197</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_archive_id</span>
-</span><span id="ArchiveMember-198"><a href="#ArchiveMember-198"><span class="linenos">198</span></a>
-</span><span id="ArchiveMember-199"><a href="#ArchiveMember-199"><span class="linenos">199</span></a>    <span class="c1"># Properties for zipfile compatibility (and others, as much as possible)</span>
-</span><span id="ArchiveMember-200"><a href="#ArchiveMember-200"><span class="linenos">200</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember-201"><a href="#ArchiveMember-201"><span class="linenos">201</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">date_time</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
-</span><span id="ArchiveMember-202"><a href="#ArchiveMember-202"><span class="linenos">202</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the date and time as a tuple of (year, month, day, hour, minute, second). For zipfile compatibility.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember-203"><a href="#ArchiveMember-203"><span class="linenos">203</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="ArchiveMember-204"><a href="#ArchiveMember-204"><span class="linenos">204</span></a>            <span class="k">return</span> <span class="kc">None</span>
-</span><span id="ArchiveMember-205"><a href="#ArchiveMember-205"><span class="linenos">205</span></a>        <span class="k">return</span> <span class="p">(</span>
-</span><span id="ArchiveMember-206"><a href="#ArchiveMember-206"><span class="linenos">206</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">year</span><span class="p">,</span>
-</span><span id="ArchiveMember-207"><a href="#ArchiveMember-207"><span class="linenos">207</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">month</span><span class="p">,</span>
-</span><span id="ArchiveMember-208"><a href="#ArchiveMember-208"><span class="linenos">208</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">day</span><span class="p">,</span>
-</span><span id="ArchiveMember-209"><a href="#ArchiveMember-209"><span class="linenos">209</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">hour</span><span class="p">,</span>
-</span><span id="ArchiveMember-210"><a href="#ArchiveMember-210"><span class="linenos">210</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">minute</span><span class="p">,</span>
-</span><span id="ArchiveMember-211"><a href="#ArchiveMember-211"><span class="linenos">211</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">second</span><span class="p">,</span>
-</span><span id="ArchiveMember-212"><a href="#ArchiveMember-212"><span class="linenos">212</span></a>        <span class="p">)</span>
-</span><span id="ArchiveMember-213"><a href="#ArchiveMember-213"><span class="linenos">213</span></a>
-</span><span id="ArchiveMember-214"><a href="#ArchiveMember-214"><span class="linenos">214</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember-215"><a href="#ArchiveMember-215"><span class="linenos">215</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_file</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="ArchiveMember-216"><a href="#ArchiveMember-216"><span class="linenos">216</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if the member is a regular file.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember-217"><a href="#ArchiveMember-217"><span class="linenos">217</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">FILE</span>
-</span><span id="ArchiveMember-218"><a href="#ArchiveMember-218"><span class="linenos">218</span></a>
-</span><span id="ArchiveMember-219"><a href="#ArchiveMember-219"><span class="linenos">219</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember-220"><a href="#ArchiveMember-220"><span class="linenos">220</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_dir</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="ArchiveMember-221"><a href="#ArchiveMember-221"><span class="linenos">221</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if the member represents a directory.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember-222"><a href="#ArchiveMember-222"><span class="linenos">222</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">DIR</span>
-</span><span id="ArchiveMember-223"><a href="#ArchiveMember-223"><span class="linenos">223</span></a>
-</span><span id="ArchiveMember-224"><a href="#ArchiveMember-224"><span class="linenos">224</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember-225"><a href="#ArchiveMember-225"><span class="linenos">225</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_link</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="ArchiveMember-226"><a href="#ArchiveMember-226"><span class="linenos">226</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if the member is a symbolic or hard link.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember-227"><a href="#ArchiveMember-227"><span class="linenos">227</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">SYMLINK</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">HARDLINK</span>
-</span><span id="ArchiveMember-228"><a href="#ArchiveMember-228"><span class="linenos">228</span></a>
-</span><span id="ArchiveMember-229"><a href="#ArchiveMember-229"><span class="linenos">229</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember-230"><a href="#ArchiveMember-230"><span class="linenos">230</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_other</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="ArchiveMember-231"><a href="#ArchiveMember-231"><span class="linenos">231</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if the member&#39;s type is not a file, directory or link.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember-232"><a href="#ArchiveMember-232"><span class="linenos">232</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">OTHER</span>
-</span><span id="ArchiveMember-233"><a href="#ArchiveMember-233"><span class="linenos">233</span></a>
-</span><span id="ArchiveMember-234"><a href="#ArchiveMember-234"><span class="linenos">234</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember-235"><a href="#ArchiveMember-235"><span class="linenos">235</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">CRC</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
-</span><span id="ArchiveMember-236"><a href="#ArchiveMember-236"><span class="linenos">236</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Alias for :pyattr:`crc32` for zipfile compatibility.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember-237"><a href="#ArchiveMember-237"><span class="linenos">237</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">crc32</span>
-</span><span id="ArchiveMember-238"><a href="#ArchiveMember-238"><span class="linenos">238</span></a>
-</span><span id="ArchiveMember-239"><a href="#ArchiveMember-239"><span class="linenos">239</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">replace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ArchiveMember&quot;</span><span class="p">:</span>
-</span><span id="ArchiveMember-240"><a href="#ArchiveMember-240"><span class="linenos">240</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a new instance with selected fields updated.</span>
+</span><span id="ArchiveMember-171"><a href="#ArchiveMember-171"><span class="linenos">171</span></a>    <span class="n">link_target</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="ArchiveMember-172"><a href="#ArchiveMember-172"><span class="linenos">172</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;The target of the link, if the member is a symbolic or hard link. For hard links, this is the path of another file in the archive; for symbolic links, this is the target path relative to the directory containing the link. In some formats, the link target is stored in the member&#39;s data, and may not be available when getting the member list, and/or may be encrypted. In those cases, the link target will be filled when iterating through the archive.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-173"><a href="#ArchiveMember-173"><span class="linenos">173</span></a>
+</span><span id="ArchiveMember-174"><a href="#ArchiveMember-174"><span class="linenos">174</span></a>    <span class="n">raw_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="ArchiveMember-175"><a href="#ArchiveMember-175"><span class="linenos">175</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;The raw info object returned by the archive reader.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-176"><a href="#ArchiveMember-176"><span class="linenos">176</span></a>
+</span><span id="ArchiveMember-177"><a href="#ArchiveMember-177"><span class="linenos">177</span></a>    <span class="n">_member_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="ArchiveMember-178"><a href="#ArchiveMember-178"><span class="linenos">178</span></a>
+</span><span id="ArchiveMember-179"><a href="#ArchiveMember-179"><span class="linenos">179</span></a>    <span class="c1"># A flag indicating whether the member has been modified by a filter.</span>
+</span><span id="ArchiveMember-180"><a href="#ArchiveMember-180"><span class="linenos">180</span></a>    <span class="n">_edited_by_filter</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="ArchiveMember-181"><a href="#ArchiveMember-181"><span class="linenos">181</span></a>
+</span><span id="ArchiveMember-182"><a href="#ArchiveMember-182"><span class="linenos">182</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember-183"><a href="#ArchiveMember-183"><span class="linenos">183</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">mtime</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">datetime</span><span class="p">]:</span>
+</span><span id="ArchiveMember-184"><a href="#ArchiveMember-184"><span class="linenos">184</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience alias for :pyattr:`mtime_with_tz` without timezone information.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-185"><a href="#ArchiveMember-185"><span class="linenos">185</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime_with_tz</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="ArchiveMember-186"><a href="#ArchiveMember-186"><span class="linenos">186</span></a>            <span class="k">return</span> <span class="kc">None</span>
+</span><span id="ArchiveMember-187"><a href="#ArchiveMember-187"><span class="linenos">187</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime_with_tz</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</span><span id="ArchiveMember-188"><a href="#ArchiveMember-188"><span class="linenos">188</span></a>
+</span><span id="ArchiveMember-189"><a href="#ArchiveMember-189"><span class="linenos">189</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember-190"><a href="#ArchiveMember-190"><span class="linenos">190</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">member_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span><span id="ArchiveMember-191"><a href="#ArchiveMember-191"><span class="linenos">191</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;A unique identifier for this member within the archive. Increasing in archive order. Can be used to distinguish members with the same filena and preserve ordering.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-192"><a href="#ArchiveMember-192"><span class="linenos">192</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_member_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="ArchiveMember-193"><a href="#ArchiveMember-193"><span class="linenos">193</span></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Member index not yet set&quot;</span><span class="p">)</span>
+</span><span id="ArchiveMember-194"><a href="#ArchiveMember-194"><span class="linenos">194</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_member_id</span>
+</span><span id="ArchiveMember-195"><a href="#ArchiveMember-195"><span class="linenos">195</span></a>
+</span><span id="ArchiveMember-196"><a href="#ArchiveMember-196"><span class="linenos">196</span></a>    <span class="n">_archive_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="ArchiveMember-197"><a href="#ArchiveMember-197"><span class="linenos">197</span></a>
+</span><span id="ArchiveMember-198"><a href="#ArchiveMember-198"><span class="linenos">198</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember-199"><a href="#ArchiveMember-199"><span class="linenos">199</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">archive_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="ArchiveMember-200"><a href="#ArchiveMember-200"><span class="linenos">200</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;A unique identifier for the archive. Used to distinguish between archives.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-201"><a href="#ArchiveMember-201"><span class="linenos">201</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_archive_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="ArchiveMember-202"><a href="#ArchiveMember-202"><span class="linenos">202</span></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Archive ID not yet set&quot;</span><span class="p">)</span>
+</span><span id="ArchiveMember-203"><a href="#ArchiveMember-203"><span class="linenos">203</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_archive_id</span>
+</span><span id="ArchiveMember-204"><a href="#ArchiveMember-204"><span class="linenos">204</span></a>
+</span><span id="ArchiveMember-205"><a href="#ArchiveMember-205"><span class="linenos">205</span></a>    <span class="c1"># Properties for zipfile compatibility (and others, as much as possible)</span>
+</span><span id="ArchiveMember-206"><a href="#ArchiveMember-206"><span class="linenos">206</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember-207"><a href="#ArchiveMember-207"><span class="linenos">207</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">date_time</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+</span><span id="ArchiveMember-208"><a href="#ArchiveMember-208"><span class="linenos">208</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the date and time as a tuple of (year, month, day, hour, minute, second).</span>
+</span><span id="ArchiveMember-209"><a href="#ArchiveMember-209"><span class="linenos">209</span></a>
+</span><span id="ArchiveMember-210"><a href="#ArchiveMember-210"><span class="linenos">210</span></a><span class="sd">        This accessor is provided for :mod:`zipfile` compatibility.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-211"><a href="#ArchiveMember-211"><span class="linenos">211</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="ArchiveMember-212"><a href="#ArchiveMember-212"><span class="linenos">212</span></a>            <span class="k">return</span> <span class="kc">None</span>
+</span><span id="ArchiveMember-213"><a href="#ArchiveMember-213"><span class="linenos">213</span></a>        <span class="k">return</span> <span class="p">(</span>
+</span><span id="ArchiveMember-214"><a href="#ArchiveMember-214"><span class="linenos">214</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">year</span><span class="p">,</span>
+</span><span id="ArchiveMember-215"><a href="#ArchiveMember-215"><span class="linenos">215</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">month</span><span class="p">,</span>
+</span><span id="ArchiveMember-216"><a href="#ArchiveMember-216"><span class="linenos">216</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">day</span><span class="p">,</span>
+</span><span id="ArchiveMember-217"><a href="#ArchiveMember-217"><span class="linenos">217</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">hour</span><span class="p">,</span>
+</span><span id="ArchiveMember-218"><a href="#ArchiveMember-218"><span class="linenos">218</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">minute</span><span class="p">,</span>
+</span><span id="ArchiveMember-219"><a href="#ArchiveMember-219"><span class="linenos">219</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">second</span><span class="p">,</span>
+</span><span id="ArchiveMember-220"><a href="#ArchiveMember-220"><span class="linenos">220</span></a>        <span class="p">)</span>
+</span><span id="ArchiveMember-221"><a href="#ArchiveMember-221"><span class="linenos">221</span></a>
+</span><span id="ArchiveMember-222"><a href="#ArchiveMember-222"><span class="linenos">222</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember-223"><a href="#ArchiveMember-223"><span class="linenos">223</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_file</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="ArchiveMember-224"><a href="#ArchiveMember-224"><span class="linenos">224</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience property returning ``True`` if the member is a regular file.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-225"><a href="#ArchiveMember-225"><span class="linenos">225</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">FILE</span>
+</span><span id="ArchiveMember-226"><a href="#ArchiveMember-226"><span class="linenos">226</span></a>
+</span><span id="ArchiveMember-227"><a href="#ArchiveMember-227"><span class="linenos">227</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember-228"><a href="#ArchiveMember-228"><span class="linenos">228</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_dir</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="ArchiveMember-229"><a href="#ArchiveMember-229"><span class="linenos">229</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience property returning ``True`` if the member represents a directory.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-230"><a href="#ArchiveMember-230"><span class="linenos">230</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">DIR</span>
+</span><span id="ArchiveMember-231"><a href="#ArchiveMember-231"><span class="linenos">231</span></a>
+</span><span id="ArchiveMember-232"><a href="#ArchiveMember-232"><span class="linenos">232</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember-233"><a href="#ArchiveMember-233"><span class="linenos">233</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_link</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="ArchiveMember-234"><a href="#ArchiveMember-234"><span class="linenos">234</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience property returning ``True`` if the member is a symbolic or hard link.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-235"><a href="#ArchiveMember-235"><span class="linenos">235</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">SYMLINK</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">HARDLINK</span>
+</span><span id="ArchiveMember-236"><a href="#ArchiveMember-236"><span class="linenos">236</span></a>
+</span><span id="ArchiveMember-237"><a href="#ArchiveMember-237"><span class="linenos">237</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember-238"><a href="#ArchiveMember-238"><span class="linenos">238</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_other</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="ArchiveMember-239"><a href="#ArchiveMember-239"><span class="linenos">239</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience property returning ``True`` if the member&#39;s type is neither file, directory nor link.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-240"><a href="#ArchiveMember-240"><span class="linenos">240</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">OTHER</span>
 </span><span id="ArchiveMember-241"><a href="#ArchiveMember-241"><span class="linenos">241</span></a>
-</span><span id="ArchiveMember-242"><a href="#ArchiveMember-242"><span class="linenos">242</span></a><span class="sd">        This is primarily used by extraction filters to create modified</span>
-</span><span id="ArchiveMember-243"><a href="#ArchiveMember-243"><span class="linenos">243</span></a><span class="sd">        versions of a member without mutating the original object.</span>
-</span><span id="ArchiveMember-244"><a href="#ArchiveMember-244"><span class="linenos">244</span></a><span class="sd">        &quot;&quot;&quot;</span>
-</span><span id="ArchiveMember-245"><a href="#ArchiveMember-245"><span class="linenos">245</span></a>        <span class="n">replaced</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-</span><span id="ArchiveMember-246"><a href="#ArchiveMember-246"><span class="linenos">246</span></a>        <span class="n">replaced</span><span class="o">.</span><span class="n">_edited_by_filter</span> <span class="o">=</span> <span class="kc">True</span>
-</span><span id="ArchiveMember-247"><a href="#ArchiveMember-247"><span class="linenos">247</span></a>        <span class="k">return</span> <span class="n">replaced</span>
+</span><span id="ArchiveMember-242"><a href="#ArchiveMember-242"><span class="linenos">242</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember-243"><a href="#ArchiveMember-243"><span class="linenos">243</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">CRC</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+</span><span id="ArchiveMember-244"><a href="#ArchiveMember-244"><span class="linenos">244</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Alias for :pyattr:`crc32` for zipfile compatibility.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-245"><a href="#ArchiveMember-245"><span class="linenos">245</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">crc32</span>
+</span><span id="ArchiveMember-246"><a href="#ArchiveMember-246"><span class="linenos">246</span></a>
+</span><span id="ArchiveMember-247"><a href="#ArchiveMember-247"><span class="linenos">247</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">replace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ArchiveMember&quot;</span><span class="p">:</span>
+</span><span id="ArchiveMember-248"><a href="#ArchiveMember-248"><span class="linenos">248</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a new instance with selected fields updated.</span>
+</span><span id="ArchiveMember-249"><a href="#ArchiveMember-249"><span class="linenos">249</span></a>
+</span><span id="ArchiveMember-250"><a href="#ArchiveMember-250"><span class="linenos">250</span></a><span class="sd">        This is primarily used by extraction filters to create modified</span>
+</span><span id="ArchiveMember-251"><a href="#ArchiveMember-251"><span class="linenos">251</span></a><span class="sd">        versions of a member without mutating the original object.</span>
+</span><span id="ArchiveMember-252"><a href="#ArchiveMember-252"><span class="linenos">252</span></a><span class="sd">        &quot;&quot;&quot;</span>
+</span><span id="ArchiveMember-253"><a href="#ArchiveMember-253"><span class="linenos">253</span></a>        <span class="n">replaced</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</span><span id="ArchiveMember-254"><a href="#ArchiveMember-254"><span class="linenos">254</span></a>        <span class="n">replaced</span><span class="o">.</span><span class="n">_edited_by_filter</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="ArchiveMember-255"><a href="#ArchiveMember-255"><span class="linenos">255</span></a>        <span class="k">return</span> <span class="n">replaced</span>
 </span></pre></div>
 
 
@@ -1036,7 +1050,7 @@ was provided, or the provided password was incorrect.</p>
 
                                 <div class="attr function">
             
-        <span class="name">ArchiveMember</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">filename</span><span class="p">:</span> <span class="nb">str</span>,</span><span class="param">	<span class="n">file_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>,</span><span class="param">	<span class="n">compress_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>,</span><span class="param">	<span class="n">mtime_with_tz</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">]</span>,</span><span class="param">	<span class="nb">type</span><span class="p">:</span> <span class="n"><a href="#MemberType">MemberType</a></span>,</span><span class="param">	<span class="n">mode</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">crc32</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">compression_method</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">comment</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">create_system</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n"><a href="#CreateSystem">CreateSystem</a></span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">extra</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">factory</span><span class="o">&gt;</span>,</span><span class="param">	<span class="n">link_target</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">_member_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">_edited_by_filter</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">_archive_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></span>)</span>
+        <span class="name">ArchiveMember</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">filename</span><span class="p">:</span> <span class="nb">str</span>,</span><span class="param">	<span class="n">file_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>,</span><span class="param">	<span class="n">compress_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>,</span><span class="param">	<span class="n">mtime_with_tz</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">]</span>,</span><span class="param">	<span class="nb">type</span><span class="p">:</span> <span class="n"><a href="#MemberType">MemberType</a></span>,</span><span class="param">	<span class="n">mode</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">crc32</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">compression_method</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">comment</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">create_system</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n"><a href="#CreateSystem">CreateSystem</a></span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">encrypted</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">extra</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">factory</span><span class="o">&gt;</span>,</span><span class="param">	<span class="n">link_target</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">raw_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">_member_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>,</span><span class="param">	<span class="n">_edited_by_filter</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>,</span><span class="param">	<span class="n">_archive_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></span>)</span>
 
         
     </div>
@@ -1179,6 +1193,20 @@ was provided, or the provided password was incorrect.</p>
 
 
                             </div>
+                            <div id="ArchiveMember.encrypted" class="classattr">
+                                <div class="attr variable">
+            <span class="name">encrypted</span><span class="annotation">: bool</span>        =
+<span class="default_value">False</span>
+
+        
+    </div>
+    <a class="headerlink" href="#ArchiveMember.encrypted"></a>
+    
+            <div class="docstring"><p>Whether the member's data is encrypted, if known.</p>
+</div>
+
+
+                            </div>
                             <div id="ArchiveMember.extra" class="classattr">
                                 <div class="attr variable">
             <span class="name">extra</span><span class="annotation">: dict[str, typing.Any]</span>
@@ -1206,6 +1234,20 @@ was provided, or the provided password was incorrect.</p>
 
 
                             </div>
+                            <div id="ArchiveMember.raw_info" class="classattr">
+                                <div class="attr variable">
+            <span class="name">raw_info</span><span class="annotation">: Optional[Any]</span>        =
+<span class="default_value">None</span>
+
+        
+    </div>
+    <a class="headerlink" href="#ArchiveMember.raw_info"></a>
+    
+            <div class="docstring"><p>The raw info object returned by the archive reader.</p>
+</div>
+
+
+                            </div>
                             <div id="ArchiveMember.mtime" class="classattr">
                                         <input id="ArchiveMember.mtime-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr variable">
@@ -1215,16 +1257,16 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#ArchiveMember.mtime"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.mtime-176"><a href="#ArchiveMember.mtime-176"><span class="linenos">176</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember.mtime-177"><a href="#ArchiveMember.mtime-177"><span class="linenos">177</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">mtime</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">datetime</span><span class="p">]:</span>
-</span><span id="ArchiveMember.mtime-178"><a href="#ArchiveMember.mtime-178"><span class="linenos">178</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the mtime as a datetime object without timezone information.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember.mtime-179"><a href="#ArchiveMember.mtime-179"><span class="linenos">179</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime_with_tz</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="ArchiveMember.mtime-180"><a href="#ArchiveMember.mtime-180"><span class="linenos">180</span></a>            <span class="k">return</span> <span class="kc">None</span>
-</span><span id="ArchiveMember.mtime-181"><a href="#ArchiveMember.mtime-181"><span class="linenos">181</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime_with_tz</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.mtime-182"><a href="#ArchiveMember.mtime-182"><span class="linenos">182</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember.mtime-183"><a href="#ArchiveMember.mtime-183"><span class="linenos">183</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">mtime</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">datetime</span><span class="p">]:</span>
+</span><span id="ArchiveMember.mtime-184"><a href="#ArchiveMember.mtime-184"><span class="linenos">184</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience alias for :pyattr:`mtime_with_tz` without timezone information.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember.mtime-185"><a href="#ArchiveMember.mtime-185"><span class="linenos">185</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime_with_tz</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="ArchiveMember.mtime-186"><a href="#ArchiveMember.mtime-186"><span class="linenos">186</span></a>            <span class="k">return</span> <span class="kc">None</span>
+</span><span id="ArchiveMember.mtime-187"><a href="#ArchiveMember.mtime-187"><span class="linenos">187</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime_with_tz</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></pre></div>
 
 
-            <div class="docstring"><p>Returns the mtime as a datetime object without timezone information.</p>
+            <div class="docstring"><p>Convenience alias for :pyattr:<code><a href="#ArchiveMember.mtime_with_tz">mtime_with_tz</a></code> without timezone information.</p>
 </div>
 
 
@@ -1238,12 +1280,12 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#ArchiveMember.member_id"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.member_id-183"><a href="#ArchiveMember.member_id-183"><span class="linenos">183</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember.member_id-184"><a href="#ArchiveMember.member_id-184"><span class="linenos">184</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">member_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-</span><span id="ArchiveMember.member_id-185"><a href="#ArchiveMember.member_id-185"><span class="linenos">185</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;A unique identifier for this member within the archive. Increasing in archive order. Can be used to distinguish members with the same filena and preserve ordering.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember.member_id-186"><a href="#ArchiveMember.member_id-186"><span class="linenos">186</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_member_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="ArchiveMember.member_id-187"><a href="#ArchiveMember.member_id-187"><span class="linenos">187</span></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Member index not yet set&quot;</span><span class="p">)</span>
-</span><span id="ArchiveMember.member_id-188"><a href="#ArchiveMember.member_id-188"><span class="linenos">188</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_member_id</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.member_id-189"><a href="#ArchiveMember.member_id-189"><span class="linenos">189</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember.member_id-190"><a href="#ArchiveMember.member_id-190"><span class="linenos">190</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">member_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span><span id="ArchiveMember.member_id-191"><a href="#ArchiveMember.member_id-191"><span class="linenos">191</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;A unique identifier for this member within the archive. Increasing in archive order. Can be used to distinguish members with the same filena and preserve ordering.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember.member_id-192"><a href="#ArchiveMember.member_id-192"><span class="linenos">192</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_member_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="ArchiveMember.member_id-193"><a href="#ArchiveMember.member_id-193"><span class="linenos">193</span></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Member index not yet set&quot;</span><span class="p">)</span>
+</span><span id="ArchiveMember.member_id-194"><a href="#ArchiveMember.member_id-194"><span class="linenos">194</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_member_id</span>
 </span></pre></div>
 
 
@@ -1261,12 +1303,12 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#ArchiveMember.archive_id"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.archive_id-192"><a href="#ArchiveMember.archive_id-192"><span class="linenos">192</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember.archive_id-193"><a href="#ArchiveMember.archive_id-193"><span class="linenos">193</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">archive_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="ArchiveMember.archive_id-194"><a href="#ArchiveMember.archive_id-194"><span class="linenos">194</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;A unique identifier for the archive. Used to distinguish between archives.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember.archive_id-195"><a href="#ArchiveMember.archive_id-195"><span class="linenos">195</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_archive_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="ArchiveMember.archive_id-196"><a href="#ArchiveMember.archive_id-196"><span class="linenos">196</span></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Archive ID not yet set&quot;</span><span class="p">)</span>
-</span><span id="ArchiveMember.archive_id-197"><a href="#ArchiveMember.archive_id-197"><span class="linenos">197</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_archive_id</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.archive_id-198"><a href="#ArchiveMember.archive_id-198"><span class="linenos">198</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember.archive_id-199"><a href="#ArchiveMember.archive_id-199"><span class="linenos">199</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">archive_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="ArchiveMember.archive_id-200"><a href="#ArchiveMember.archive_id-200"><span class="linenos">200</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;A unique identifier for the archive. Used to distinguish between archives.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember.archive_id-201"><a href="#ArchiveMember.archive_id-201"><span class="linenos">201</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_archive_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="ArchiveMember.archive_id-202"><a href="#ArchiveMember.archive_id-202"><span class="linenos">202</span></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Archive ID not yet set&quot;</span><span class="p">)</span>
+</span><span id="ArchiveMember.archive_id-203"><a href="#ArchiveMember.archive_id-203"><span class="linenos">203</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_archive_id</span>
 </span></pre></div>
 
 
@@ -1284,23 +1326,27 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#ArchiveMember.date_time"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.date_time-200"><a href="#ArchiveMember.date_time-200"><span class="linenos">200</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember.date_time-201"><a href="#ArchiveMember.date_time-201"><span class="linenos">201</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">date_time</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
-</span><span id="ArchiveMember.date_time-202"><a href="#ArchiveMember.date_time-202"><span class="linenos">202</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the date and time as a tuple of (year, month, day, hour, minute, second). For zipfile compatibility.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember.date_time-203"><a href="#ArchiveMember.date_time-203"><span class="linenos">203</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="ArchiveMember.date_time-204"><a href="#ArchiveMember.date_time-204"><span class="linenos">204</span></a>            <span class="k">return</span> <span class="kc">None</span>
-</span><span id="ArchiveMember.date_time-205"><a href="#ArchiveMember.date_time-205"><span class="linenos">205</span></a>        <span class="k">return</span> <span class="p">(</span>
-</span><span id="ArchiveMember.date_time-206"><a href="#ArchiveMember.date_time-206"><span class="linenos">206</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">year</span><span class="p">,</span>
-</span><span id="ArchiveMember.date_time-207"><a href="#ArchiveMember.date_time-207"><span class="linenos">207</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">month</span><span class="p">,</span>
-</span><span id="ArchiveMember.date_time-208"><a href="#ArchiveMember.date_time-208"><span class="linenos">208</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">day</span><span class="p">,</span>
-</span><span id="ArchiveMember.date_time-209"><a href="#ArchiveMember.date_time-209"><span class="linenos">209</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">hour</span><span class="p">,</span>
-</span><span id="ArchiveMember.date_time-210"><a href="#ArchiveMember.date_time-210"><span class="linenos">210</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">minute</span><span class="p">,</span>
-</span><span id="ArchiveMember.date_time-211"><a href="#ArchiveMember.date_time-211"><span class="linenos">211</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">second</span><span class="p">,</span>
-</span><span id="ArchiveMember.date_time-212"><a href="#ArchiveMember.date_time-212"><span class="linenos">212</span></a>        <span class="p">)</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.date_time-206"><a href="#ArchiveMember.date_time-206"><span class="linenos">206</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember.date_time-207"><a href="#ArchiveMember.date_time-207"><span class="linenos">207</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">date_time</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+</span><span id="ArchiveMember.date_time-208"><a href="#ArchiveMember.date_time-208"><span class="linenos">208</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the date and time as a tuple of (year, month, day, hour, minute, second).</span>
+</span><span id="ArchiveMember.date_time-209"><a href="#ArchiveMember.date_time-209"><span class="linenos">209</span></a>
+</span><span id="ArchiveMember.date_time-210"><a href="#ArchiveMember.date_time-210"><span class="linenos">210</span></a><span class="sd">        This accessor is provided for :mod:`zipfile` compatibility.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember.date_time-211"><a href="#ArchiveMember.date_time-211"><span class="linenos">211</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="ArchiveMember.date_time-212"><a href="#ArchiveMember.date_time-212"><span class="linenos">212</span></a>            <span class="k">return</span> <span class="kc">None</span>
+</span><span id="ArchiveMember.date_time-213"><a href="#ArchiveMember.date_time-213"><span class="linenos">213</span></a>        <span class="k">return</span> <span class="p">(</span>
+</span><span id="ArchiveMember.date_time-214"><a href="#ArchiveMember.date_time-214"><span class="linenos">214</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">year</span><span class="p">,</span>
+</span><span id="ArchiveMember.date_time-215"><a href="#ArchiveMember.date_time-215"><span class="linenos">215</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">month</span><span class="p">,</span>
+</span><span id="ArchiveMember.date_time-216"><a href="#ArchiveMember.date_time-216"><span class="linenos">216</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">day</span><span class="p">,</span>
+</span><span id="ArchiveMember.date_time-217"><a href="#ArchiveMember.date_time-217"><span class="linenos">217</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">hour</span><span class="p">,</span>
+</span><span id="ArchiveMember.date_time-218"><a href="#ArchiveMember.date_time-218"><span class="linenos">218</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">minute</span><span class="p">,</span>
+</span><span id="ArchiveMember.date_time-219"><a href="#ArchiveMember.date_time-219"><span class="linenos">219</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">mtime</span><span class="o">.</span><span class="n">second</span><span class="p">,</span>
+</span><span id="ArchiveMember.date_time-220"><a href="#ArchiveMember.date_time-220"><span class="linenos">220</span></a>        <span class="p">)</span>
 </span></pre></div>
 
 
-            <div class="docstring"><p>Returns the date and time as a tuple of (year, month, day, hour, minute, second). For zipfile compatibility.</p>
+            <div class="docstring"><p>Returns the date and time as a tuple of (year, month, day, hour, minute, second).</p>
+
+<p>This accessor is provided for <code>zipfile</code> compatibility.</p>
 </div>
 
 
@@ -1314,14 +1360,14 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#ArchiveMember.is_file"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.is_file-214"><a href="#ArchiveMember.is_file-214"><span class="linenos">214</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember.is_file-215"><a href="#ArchiveMember.is_file-215"><span class="linenos">215</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_file</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="ArchiveMember.is_file-216"><a href="#ArchiveMember.is_file-216"><span class="linenos">216</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if the member is a regular file.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember.is_file-217"><a href="#ArchiveMember.is_file-217"><span class="linenos">217</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">FILE</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.is_file-222"><a href="#ArchiveMember.is_file-222"><span class="linenos">222</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember.is_file-223"><a href="#ArchiveMember.is_file-223"><span class="linenos">223</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_file</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="ArchiveMember.is_file-224"><a href="#ArchiveMember.is_file-224"><span class="linenos">224</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience property returning ``True`` if the member is a regular file.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember.is_file-225"><a href="#ArchiveMember.is_file-225"><span class="linenos">225</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">FILE</span>
 </span></pre></div>
 
 
-            <div class="docstring"><p>True if the member is a regular file.</p>
+            <div class="docstring"><p>Convenience property returning <code>True</code> if the member is a regular file.</p>
 </div>
 
 
@@ -1335,14 +1381,14 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#ArchiveMember.is_dir"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.is_dir-219"><a href="#ArchiveMember.is_dir-219"><span class="linenos">219</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember.is_dir-220"><a href="#ArchiveMember.is_dir-220"><span class="linenos">220</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_dir</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="ArchiveMember.is_dir-221"><a href="#ArchiveMember.is_dir-221"><span class="linenos">221</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if the member represents a directory.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember.is_dir-222"><a href="#ArchiveMember.is_dir-222"><span class="linenos">222</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">DIR</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.is_dir-227"><a href="#ArchiveMember.is_dir-227"><span class="linenos">227</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember.is_dir-228"><a href="#ArchiveMember.is_dir-228"><span class="linenos">228</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_dir</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="ArchiveMember.is_dir-229"><a href="#ArchiveMember.is_dir-229"><span class="linenos">229</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience property returning ``True`` if the member represents a directory.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember.is_dir-230"><a href="#ArchiveMember.is_dir-230"><span class="linenos">230</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">DIR</span>
 </span></pre></div>
 
 
-            <div class="docstring"><p>True if the member represents a directory.</p>
+            <div class="docstring"><p>Convenience property returning <code>True</code> if the member represents a directory.</p>
 </div>
 
 
@@ -1356,14 +1402,14 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#ArchiveMember.is_link"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.is_link-224"><a href="#ArchiveMember.is_link-224"><span class="linenos">224</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember.is_link-225"><a href="#ArchiveMember.is_link-225"><span class="linenos">225</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_link</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="ArchiveMember.is_link-226"><a href="#ArchiveMember.is_link-226"><span class="linenos">226</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if the member is a symbolic or hard link.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember.is_link-227"><a href="#ArchiveMember.is_link-227"><span class="linenos">227</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">SYMLINK</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">HARDLINK</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.is_link-232"><a href="#ArchiveMember.is_link-232"><span class="linenos">232</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember.is_link-233"><a href="#ArchiveMember.is_link-233"><span class="linenos">233</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_link</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="ArchiveMember.is_link-234"><a href="#ArchiveMember.is_link-234"><span class="linenos">234</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience property returning ``True`` if the member is a symbolic or hard link.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember.is_link-235"><a href="#ArchiveMember.is_link-235"><span class="linenos">235</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">SYMLINK</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">HARDLINK</span>
 </span></pre></div>
 
 
-            <div class="docstring"><p>True if the member is a symbolic or hard link.</p>
+            <div class="docstring"><p>Convenience property returning <code>True</code> if the member is a symbolic or hard link.</p>
 </div>
 
 
@@ -1377,14 +1423,14 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#ArchiveMember.is_other"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.is_other-229"><a href="#ArchiveMember.is_other-229"><span class="linenos">229</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember.is_other-230"><a href="#ArchiveMember.is_other-230"><span class="linenos">230</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_other</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="ArchiveMember.is_other-231"><a href="#ArchiveMember.is_other-231"><span class="linenos">231</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;True if the member&#39;s type is not a file, directory or link.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember.is_other-232"><a href="#ArchiveMember.is_other-232"><span class="linenos">232</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">OTHER</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.is_other-237"><a href="#ArchiveMember.is_other-237"><span class="linenos">237</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember.is_other-238"><a href="#ArchiveMember.is_other-238"><span class="linenos">238</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">is_other</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="ArchiveMember.is_other-239"><a href="#ArchiveMember.is_other-239"><span class="linenos">239</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience property returning ``True`` if the member&#39;s type is neither file, directory nor link.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember.is_other-240"><a href="#ArchiveMember.is_other-240"><span class="linenos">240</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MemberType</span><span class="o">.</span><span class="n">OTHER</span>
 </span></pre></div>
 
 
-            <div class="docstring"><p>True if the member's type is not a file, directory or link.</p>
+            <div class="docstring"><p>Convenience property returning <code>True</code> if the member's type is neither file, directory nor link.</p>
 </div>
 
 
@@ -1398,10 +1444,10 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#ArchiveMember.CRC"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.CRC-234"><a href="#ArchiveMember.CRC-234"><span class="linenos">234</span></a>    <span class="nd">@property</span>
-</span><span id="ArchiveMember.CRC-235"><a href="#ArchiveMember.CRC-235"><span class="linenos">235</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">CRC</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
-</span><span id="ArchiveMember.CRC-236"><a href="#ArchiveMember.CRC-236"><span class="linenos">236</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Alias for :pyattr:`crc32` for zipfile compatibility.&quot;&quot;&quot;</span>
-</span><span id="ArchiveMember.CRC-237"><a href="#ArchiveMember.CRC-237"><span class="linenos">237</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">crc32</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.CRC-242"><a href="#ArchiveMember.CRC-242"><span class="linenos">242</span></a>    <span class="nd">@property</span>
+</span><span id="ArchiveMember.CRC-243"><a href="#ArchiveMember.CRC-243"><span class="linenos">243</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">CRC</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+</span><span id="ArchiveMember.CRC-244"><a href="#ArchiveMember.CRC-244"><span class="linenos">244</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Alias for :pyattr:`crc32` for zipfile compatibility.&quot;&quot;&quot;</span>
+</span><span id="ArchiveMember.CRC-245"><a href="#ArchiveMember.CRC-245"><span class="linenos">245</span></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">crc32</span>
 </span></pre></div>
 
 
@@ -1421,15 +1467,15 @@ was provided, or the provided password was incorrect.</p>
 
     </div>
     <a class="headerlink" href="#ArchiveMember.replace"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.replace-239"><a href="#ArchiveMember.replace-239"><span class="linenos">239</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">replace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ArchiveMember&quot;</span><span class="p">:</span>
-</span><span id="ArchiveMember.replace-240"><a href="#ArchiveMember.replace-240"><span class="linenos">240</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a new instance with selected fields updated.</span>
-</span><span id="ArchiveMember.replace-241"><a href="#ArchiveMember.replace-241"><span class="linenos">241</span></a>
-</span><span id="ArchiveMember.replace-242"><a href="#ArchiveMember.replace-242"><span class="linenos">242</span></a><span class="sd">        This is primarily used by extraction filters to create modified</span>
-</span><span id="ArchiveMember.replace-243"><a href="#ArchiveMember.replace-243"><span class="linenos">243</span></a><span class="sd">        versions of a member without mutating the original object.</span>
-</span><span id="ArchiveMember.replace-244"><a href="#ArchiveMember.replace-244"><span class="linenos">244</span></a><span class="sd">        &quot;&quot;&quot;</span>
-</span><span id="ArchiveMember.replace-245"><a href="#ArchiveMember.replace-245"><span class="linenos">245</span></a>        <span class="n">replaced</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-</span><span id="ArchiveMember.replace-246"><a href="#ArchiveMember.replace-246"><span class="linenos">246</span></a>        <span class="n">replaced</span><span class="o">.</span><span class="n">_edited_by_filter</span> <span class="o">=</span> <span class="kc">True</span>
-</span><span id="ArchiveMember.replace-247"><a href="#ArchiveMember.replace-247"><span class="linenos">247</span></a>        <span class="k">return</span> <span class="n">replaced</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="ArchiveMember.replace-247"><a href="#ArchiveMember.replace-247"><span class="linenos">247</span></a>    <span class="k">def</span><span class="w"> </span><span class="nf">replace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ArchiveMember&quot;</span><span class="p">:</span>
+</span><span id="ArchiveMember.replace-248"><a href="#ArchiveMember.replace-248"><span class="linenos">248</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a new instance with selected fields updated.</span>
+</span><span id="ArchiveMember.replace-249"><a href="#ArchiveMember.replace-249"><span class="linenos">249</span></a>
+</span><span id="ArchiveMember.replace-250"><a href="#ArchiveMember.replace-250"><span class="linenos">250</span></a><span class="sd">        This is primarily used by extraction filters to create modified</span>
+</span><span id="ArchiveMember.replace-251"><a href="#ArchiveMember.replace-251"><span class="linenos">251</span></a><span class="sd">        versions of a member without mutating the original object.</span>
+</span><span id="ArchiveMember.replace-252"><a href="#ArchiveMember.replace-252"><span class="linenos">252</span></a><span class="sd">        &quot;&quot;&quot;</span>
+</span><span id="ArchiveMember.replace-253"><a href="#ArchiveMember.replace-253"><span class="linenos">253</span></a>        <span class="n">replaced</span> <span class="o">=</span> <span class="n">replace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</span><span id="ArchiveMember.replace-254"><a href="#ArchiveMember.replace-254"><span class="linenos">254</span></a>        <span class="n">replaced</span><span class="o">.</span><span class="n">_edited_by_filter</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="ArchiveMember.replace-255"><a href="#ArchiveMember.replace-255"><span class="linenos">255</span></a>        <span class="k">return</span> <span class="n">replaced</span>
 </span></pre></div>
 
 

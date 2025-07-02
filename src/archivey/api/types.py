@@ -161,6 +161,9 @@ class ArchiveMember:
     create_system: Optional[CreateSystem] = None
     """The operating system on which the member was created, if known."""
 
+    encrypted: bool = False
+    """Whether the member's data is encrypted, if known."""
+
     extra: dict[str, Any] = field(default_factory=dict)
     """Extra format-specific information about the member."""
 
@@ -177,7 +180,7 @@ class ArchiveMember:
 
     @property
     def mtime(self) -> Optional[datetime]:
-        """Returns the mtime as a datetime object without timezone information."""
+        """Convenience alias for :pyattr:`mtime_with_tz` without timezone information."""
         if self.mtime_with_tz is None:
             return None
         return self.mtime_with_tz.replace(tzinfo=None)
@@ -201,7 +204,9 @@ class ArchiveMember:
     # Properties for zipfile compatibility (and others, as much as possible)
     @property
     def date_time(self) -> Optional[Tuple[int, int, int, int, int, int]]:
-        """Returns the date and time as a tuple of (year, month, day, hour, minute, second). For zipfile compatibility."""
+        """Returns the date and time as a tuple of (year, month, day, hour, minute, second).
+
+        This accessor is provided for :mod:`zipfile` compatibility."""
         if self.mtime is None:
             return None
         return (
@@ -215,22 +220,22 @@ class ArchiveMember:
 
     @property
     def is_file(self) -> bool:
-        """True if the member is a regular file."""
+        """Convenience property returning ``True`` if the member is a regular file."""
         return self.type == MemberType.FILE
 
     @property
     def is_dir(self) -> bool:
-        """True if the member represents a directory."""
+        """Convenience property returning ``True`` if the member represents a directory."""
         return self.type == MemberType.DIR
 
     @property
     def is_link(self) -> bool:
-        """True if the member is a symbolic or hard link."""
+        """Convenience property returning ``True`` if the member is a symbolic or hard link."""
         return self.type == MemberType.SYMLINK or self.type == MemberType.HARDLINK
 
     @property
     def is_other(self) -> bool:
-        """True if the member's type is not a file, directory or link."""
+        """Convenience property returning ``True`` if the member's type is neither file, directory nor link."""
         return self.type == MemberType.OTHER
 
     @property
