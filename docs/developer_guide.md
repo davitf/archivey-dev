@@ -1,6 +1,6 @@
 # archivey Developer Guide: Creating New ArchiveReaders
 
-This guide explains how to extend `archivey` by creating custom [`ArchiveReader`](pdoc:archivey.api.archive_reader.ArchiveReader) classes for new archive formats.
+This guide explains how to extend `archivey` by creating custom [`ArchiveReader`][archivey.api.archive_reader.ArchiveReader] classes for new archive formats.
 
 ## Overview
 
@@ -9,7 +9,7 @@ The library's modules are organized into these packages:
 * [`archivey.internal`](../src/archivey/internal/) (base classes and helpers)
 * [`archivey.formats`](../src/archivey/formats/) (format-specific readers)
 
-The library exposes an [`ArchiveReader`](pdoc:archivey.api.archive_reader.ArchiveReader) abstract base class for users with the public API. The actual format readers extend from the helper class [`BaseArchiveReader`](pdoc:archivey.internal.base_reader.BaseArchiveReader), which implements most of the public API by delegating to some simpler methods that the readers must implement. New readers will almost always want to inherit from `BaseArchiveReader`.
+The library exposes an [`ArchiveReader`][archivey.api.archive_reader.ArchiveReader] abstract base class for users with the public API. The actual format readers extend from the helper class [`BaseArchiveReader`][archivey.internal.base_reader.BaseArchiveReader], which implements most of the public API by delegating to some simpler methods that the readers must implement. New readers will almost always want to inherit from `BaseArchiveReader`.
 
 ## Registering Your Reader
 
@@ -18,7 +18,7 @@ For your reader to be called, you'll need to:
 *   add the format(s) your reader handles to [archivey.api.ArchiveFormat](../src/archivey/api/types.py);
 *   detect archives of these formats by signature and/or filename, in [format_detection.py](../src/archivey/formats/format_detection.py);
 *   create your reader class, see below;
-*   modify [`open_archive`](pdoc:archivey.api.core.open_archive) to associate the archive format with your reader.
+*   modify [`open_archive`][archivey.api.core.open_archive] to associate the archive format with your reader.
 
 
 ## Creating a new format reader
@@ -30,7 +30,7 @@ Your reader should implement a few required methods, and may also implement some
 
 ### Constructor (`__init__`):
 
-Should accept the same parameters as other `ArchiveReader`s, so it can be called from [`open_archive`](pdoc:archivey.api.core.open_archive):
+Should accept the same parameters as other `ArchiveReader`s, so it can be called from [`open_archive`][archivey.api.core.open_archive]:
 
 ```python
     def __init__(
@@ -193,17 +193,15 @@ Omit the optional pattern to rebuild all archives.  RAR tests require the
 
 ## Building the documentation
 
-The API reference is generated with [pdoc](https://pdoc.dev) and then
-assembled into a static site using [MkDocs](https://www.mkdocs.org).
-Run the provided script to rebuild everything:
+The API documentation is generated dynamically using
+[mkdocstrings](https://mkdocstrings.github.io/) and assembled into a
+static site with [MkDocs](https://www.mkdocs.org). Run Hatch to build
+everything:
 
 ```bash
-sh docs/generate_api_docs.sh
+hatch run docs
 ```
-
-It copies the project `README.md` to `docs/index.md`, runs pdoc to
-create HTML under `docs/api`, and finally builds the MkDocs site into the
-`site/` directory.  Ensure the optional development dependencies are
-installed (e.g. `pip install -e .[dev]`) so the `mkdocs-pdoc-plugin` is
-available.
+This copies the project `README.md` to `docs/index.md` and then
+builds the MkDocs site (into `site/`). Ensure the optional development
+dependencies are installed (e.g. `pip install -e .[dev]`).
 

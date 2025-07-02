@@ -43,13 +43,13 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.11.11",
     "tox>=4.0.0",
-    "pdoc>=14.0.0", # I'm assuming ^ is not supported by Hatch, so I'm using >=
+    "mkdocstrings[python]>=0.25.0",
+    "mkdocs-autorefs>=1.0.1",
     "pytest-parallel>=0.1.1",
     # Required to make pytest-parallel work with current pytest version, see
     # https://github.com/kevlened/pytest-parallel/issues/118
     "py>=1.11.0",
     "mkdocs>=1.5.3",
-    "mkdocs-pdoc-plugin @ git+https://github.com/spirali/mkdocs-pdoc-plugin",
 ]
 
 [tool.pytest.ini_options]
@@ -71,7 +71,8 @@ dependencies = [
     "pytest-cov>=5.0.0",
     "ruff>=0.11.11",
     "tox>=4.0.0",
-    "pdoc>=14.0.0",
+    "mkdocstrings[python]>=0.25.0",
+    "mkdocs-autorefs>=1.0.1",
 ]
 features = ["optional"]
 
