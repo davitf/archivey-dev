@@ -187,7 +187,11 @@ class ArchiveMember:
 
     @property
     def member_id(self) -> int:
-        """A unique identifier for this member within the archive. Increasing in archive order. Can be used to distinguish members with the same filena and preserve ordering."""
+        """A unique identifier for this member within the archive.
+
+        Increasing in archive order, this can be used to distinguish
+        members with the same filename and preserve ordering.
+        """
         if self._member_id is None:
             raise ValueError("Member index not yet set")
         return self._member_id
