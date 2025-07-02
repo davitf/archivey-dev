@@ -36,7 +36,7 @@ If you'd rather manage dependencies yourself, install only the extras you need. 
 
 ## Usage
 
-These are the basic features of the library. For more details, see the **[User guide](docs/user_guide.md)** and **[API reference](docs/api/archivey/index.html)**.
+These are the basic features of the library. For more details, see the **[User guide](docs/user_guide.md)** and **[API reference](docs/api.md)**.
 
 ### Single-file compressed streams
 
@@ -147,6 +147,6 @@ For more detailed information on using and extending `archivey`, please refer to
 *   Support [builtin Zstandard](https://docs.python.org/3.14/whatsnew/3.14.html#whatsnew314-pep784) in Python 3.14
 *   Auto-select libraries or implementations to use based on what is installed and/or required features
 *   Archive writing support
-*   Bug: ZIP filename decoding can be wrong in some cases (see [sample archive](tests/test_archives_external/encoding_infozip_jules.zip))
-*   Split the [IO wrappers](src/archivey/internal/io_helpers.py) into a separate library, as it seems to be generally useful
+*   Bug: ZIP filename decoding can be wrong in some cases (see sample archive `tests/test_archives_external/encoding_infozip_jules.zip`)
+*   Split the IO wrappers (`src/archivey/internal/io_helpers.py`) into a separate library, as it seems to be generally useful
 *   Improve hard link handling and add tests for RAR4 and duplicate filenames

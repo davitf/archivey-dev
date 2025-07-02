@@ -22,7 +22,7 @@ except ArchiveError as e:
 
 ```
 
-`[open_archive][archivey.api.core.open_archive]` takes the path to an archive file (or an IO stream) and returns an [`ArchiveReader`][archivey.api.archive_reader.ArchiveReader] when the format is recognized. You can also pass an optional `config` object or set `streaming_only=True` to force sequential access.
+`[open_archive][archivey.api.core.open_archive]` takes the path to an archive file (or an IO stream) and returns an `archivey.api.archive_reader.ArchiveReader` when the format is recognized. You can also pass an optional `config` object or set `streaming_only=True` to force sequential access.
 
 ## Opening a Compressed Stream
 
