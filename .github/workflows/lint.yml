@@ -41,3 +41,6 @@ jobs:
       - name: Run Pyright
         run: |
           npx pyright . 
+
+      - name: Check API documentation consistency
+        run: python scripts/check_api_doc.py
