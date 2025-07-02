@@ -80,6 +80,7 @@ features = ["optional"]
 lint = "ruff check --fix . && ruff format . && npx pyright ."
 test = "uv run pytest --workers auto {args}"
 docs = "sh docs/generate_api_docs.sh"
+pyrefly = "uvx pyrefly check"
 
 [tool.ruff]
 target-version = "py310"
@@ -94,3 +95,9 @@ exclude_also = [
 
 [tool.hatch.version]
 path = "src/archivey/__init__.py"
+
+[tool.pyrefly]
+search-path = ["src"]
+project-includes = ["src"]
+project-excludes = []
+site-package-path = [".venv/lib/python3.13/site-packages"]
