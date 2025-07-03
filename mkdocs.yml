@@ -10,4 +10,10 @@ plugins:
       handlers:
         python:
           paths: [src]
+          options:
+            heading_level: 3
+            show_source: false
   - autorefs
+theme:
+  name: readthedocs
+  navigation_depth: 3

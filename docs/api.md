@@ -1,59 +1,54 @@
 # API Reference
 
-# API Reference
-
 ## Core
 
-::: archivey.open_archive
-
-::: archivey.open_compressed_stream
-
-::: archivey.ArchiveReader
-
-::: archivey.ArchiveInfo
-
-::: archivey.ArchiveMember
+::: archivey
+    options:
+      members:
+      - open_archive
+      - open_compressed_stream
+      - ArchiveReader
+      - ArchiveInfo
+      - ArchiveMember
 
 ## Enums
 
-::: archivey.ArchiveFormat
-
-::: archivey.MemberType
-
-::: archivey.CreateSystem
+::: archivey
+    options:
+      members:
+      - ArchiveFormat
+      - MemberType
+      - CreateSystem
 
 ## Configuration
 
-::: archivey.ArchiveyConfig
-
-::: archivey.default_config
-
-::: archivey.get_default_config
-
-::: archivey.set_default_config
+::: archivey
+    options:
+      members:
+      - ArchiveyConfig
+      - default_config
+      - get_default_config
+      - set_default_config
 
 ## Exceptions
 
-::: archivey.ArchiveError
-
-::: archivey.ArchiveFormatError
-
-::: archivey.ArchiveCorruptedError
-
-::: archivey.ArchiveEncryptedError
-
-::: archivey.ArchiveEOFError
-
-::: archivey.ArchiveMemberNotFoundError
-
-::: archivey.ArchiveNotSupportedError
+::: archivey
+    options:
+      members:
+      - ArchiveError
+      - ArchiveFormatError
+      - ArchiveCorruptedError
+      - ArchiveEncryptedError
+      - ArchiveEOFError
+      - ArchiveMemberNotFoundError
+      - ArchiveNotSupportedError
 
 ## Filters
 
-::: archivey.create_filter
-
-::: archivey.data_filter
-
-::: archivey.tar_filter
-
-::: archivey.fully_trusted
+::: archivey
+    options:
+      members:
+      - create_filter
+      - data_filter
+      - tar_filter
+      - fully_trusted
