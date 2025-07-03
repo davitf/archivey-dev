@@ -102,10 +102,12 @@ class BinaryIOWrapper(io.IOBase, BinaryIO):
     def close(self):
         if hasattr(self._raw, "close"):
             return self._raw.close()  # type: ignore
+        return None
 
     def flush(self):
         if hasattr(self._raw, "flush"):
             return self._raw.flush()  # type: ignore
+        return None
 
     def readable(self):
         try:
@@ -592,10 +594,9 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
                 data.extend(chunk)
             return bytes(data)
 
-        else:
-            chunk = self._read_from_stream(remaining)
-            self._pos += len(chunk)
-            data.extend(chunk)
+        chunk = self._read_from_stream(remaining)
+        self._pos += len(chunk)
+        data.extend(chunk)
 
         return bytes(data)
 

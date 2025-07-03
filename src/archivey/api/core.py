@@ -32,9 +32,9 @@ def _normalize_archive_path(
         return archive_path  # type: ignore[return-value]
     if isinstance(archive_path, os.PathLike):
         return str(archive_path)
-    elif isinstance(archive_path, bytes):
+    if isinstance(archive_path, bytes):
         return archive_path.decode("utf-8")
-    elif isinstance(archive_path, str):
+    if isinstance(archive_path, str):
         return archive_path
 
     raise TypeError(f"Invalid archive path type: {type(archive_path)} {archive_path}")
@@ -118,11 +118,12 @@ def open_archive(
         wrapper = RewindableNonSeekableStream(archive_path_normalized)
         archive_path_normalized = wrapper
 
-    if isinstance(archive_path_normalized, str):
-        if not os.path.exists(archive_path_normalized):
-            raise FileNotFoundError(
-                f"Archive file not found: {archive_path_normalized}"
-            )
+    if isinstance(archive_path_normalized, str) and not os.path.exists(
+        archive_path_normalized
+    ):
+        raise FileNotFoundError(
+            f"Archive file not found: {archive_path_normalized}"
+        )
 
     format = detect_archive_format(archive_path_normalized)
 
@@ -155,8 +156,7 @@ def open_archive(
 
         if streaming_only:
             return StreamingOnlyArchiveReaderWrapper(reader)
-        else:
-            return reader
+        return reader
 
 
 def open_compressed_stream(

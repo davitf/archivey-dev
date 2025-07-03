@@ -89,11 +89,11 @@ def detect_archive_format_by_signature(
         if os.path.isdir(path_or_file):
             return ArchiveFormat.FOLDER
 
-        f = open(path_or_file, "rb")
+        f = open(path_or_file, "rb")  # noqa: SIM115
         close_after = True
 
     elif hasattr(path_or_file, "read") and hasattr(path_or_file, "seek"):
-        f = cast(IO[bytes], path_or_file)
+        f = cast("IO[bytes]", path_or_file)
         # We can't check is_dir on a stream, assume it's not a folder for streams
         close_after = False
     else:
@@ -117,7 +117,7 @@ def detect_archive_format_by_signature(
         if detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT:
             assert detected_format is not None
             with open_stream(
-                detected_format, cast(BinaryIO, f), get_default_config()
+                detected_format, cast("BinaryIO", f), get_default_config()
             ) as decompressed_stream:
                 if tarfile.is_tarfile(decompressed_stream):
                     detected_format = COMPRESSION_FORMAT_TO_TAR_FORMAT[detected_format]
@@ -236,7 +236,7 @@ def detect_archive_format(filename: str | IO[bytes] | os.PathLike) -> ArchiveFor
             format_by_filename,
         )
         return format_by_filename
-    elif format_by_filename == ArchiveFormat.UNKNOWN:
+    if format_by_filename == ArchiveFormat.UNKNOWN:
         logger.warning(
             "%s: Unknown extension. Detected %s", filename, format_by_signature
         )

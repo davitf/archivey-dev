@@ -55,6 +55,7 @@ else:
         WriterFactory = object  # type: ignore[misc,assignment]
 
 
+import contextlib
 from contextlib import contextmanager
 
 from archivey.api.exceptions import (
@@ -224,7 +225,7 @@ class ExtractFileWriter(BasePy7zIOWriter):
         self.full_path = full_path
         os.makedirs(os.path.dirname(self.full_path), exist_ok=True)
 
-        self.file = open(self.full_path, "wb")
+        self.file = open(self.full_path, "wb")  # noqa: SIM115
 
     def write(self, b: Union[bytes, bytearray]) -> int:
         self.file.write(b)
@@ -265,10 +266,10 @@ class ExtractWriterFactory(WriterFactory):
         if member is None:
             logger.error("Member %s not found", fname)
             return py7zr.io.NullIO()
-        elif member.is_link:
+        if member.is_link:
             logger.debug("Extracting link %s", fname)
             return ExtractLinkWriter(member)
-        elif not member.is_file:
+        if not member.is_file:
             logger.debug("Ignoring non-file member %s", fname)
             return py7zr.io.NullIO()
 
@@ -425,11 +426,9 @@ class SevenZipReader(BaseArchiveReader):
             # members.  Replicate py7zr's naming logic to build this mapping.
 
             count = name_counters[file.filename]
-            if count == 0:
-                extract_filename = file.filename
-            else:
-                extract_filename = f"{file.filename}_{count - 1}"
-
+            extract_filename = (
+                file.filename if count == 0 else f"{file.filename}_{count - 1}"
+            )
             name_counters[file.filename] += 1
 
             # 7z format doesn't include the trailing slash for directories, so we need
@@ -497,20 +496,18 @@ class SevenZipReader(BaseArchiveReader):
         self, member: ArchiveMember, *, pwd: bytes | str | None, for_iteration: bool
     ) -> ArchiveMember:
         if pwd is not None and member.is_link and member.link_target is None:
-            try:
-                list(
-                    self.iter_members_with_io(
-                        members=[member], pwd=pwd, close_streams=False
-                    )
-                )
-            except (
+            with contextlib.suppress(
                 ArchiveError,
                 py7zr.exceptions.ArchiveError,
                 py7zr.PasswordRequired,
                 lzma.LZMAError,
                 OSError,
             ):
-                pass
+                list(
+                    self.iter_members_with_io(
+                        members=[member], pwd=pwd, close_streams=False
+                    )
+                )
             if member.link_target is None:
                 raise ArchiveEncryptedError(
                     f"Cannot read link target for {member.filename}"
@@ -535,7 +532,7 @@ class SevenZipReader(BaseArchiveReader):
             assert len(it) == 1, (
                 f"Expected exactly one member, got {len(it)}. {member.filename}"
             )
-            stream = cast(StreamingFile.Reader, it[0][1])
+            stream = cast("StreamingFile.Reader", it[0][1])
             if isinstance(stream, ErrorIOStream):
                 stream.read()
             return stream
@@ -557,7 +554,7 @@ class SevenZipReader(BaseArchiveReader):
         }
         # The original filenames in the raw infos.
         extract_targets = [
-            cast(ArchiveFile, member.raw_info).filename for member in members
+            cast("ArchiveFile", member.raw_info).filename for member in members
         ]
 
         # Allow the queue to carry tuples, exceptions, or None

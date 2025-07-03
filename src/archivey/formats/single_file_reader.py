@@ -229,10 +229,9 @@ class SingleFileReader(BaseArchiveReader):
             base_name = os.path.basename(self.path_str)
             base_no_ext, ext = os.path.splitext(base_name)
             # Check if the extension is a known compressed format
-            if ext.lower() in EXTENSION_TO_FORMAT:
-                member_name = base_no_ext
-            else:
-                member_name = base_name + ".uncompressed"
+            member_name = (
+                base_no_ext if ext.lower() in EXTENSION_TO_FORMAT else base_name + ".uncompressed"
+            )
 
             mtime = datetime.fromtimestamp(
                 os.path.getmtime(self.path_str), tz=timezone.utc
@@ -297,7 +296,6 @@ class SingleFileReader(BaseArchiveReader):
         if self.fileobj is None:
             return open_stream(self.format, self.path_or_stream, self.config)
 
-        else:
-            fileobj = self.fileobj
-            self.fileobj = None
-            return fileobj
+        fileobj = self.fileobj
+        self.fileobj = None
+        return fileobj

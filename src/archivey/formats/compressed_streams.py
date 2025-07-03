@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 def _translate_gzip_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, gzip.BadGzipFile):
         return ArchiveCorruptedError(f"Error reading GZIP archive: {repr(e)}")
-    elif isinstance(e, EOFError):
+    if isinstance(e, EOFError):
         return ArchiveEOFError(f"GZIP file is truncated: {repr(e)}")
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
@@ -74,10 +74,10 @@ def _translate_gzip_exception(e: Exception) -> Optional[ArchiveError]:
 def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
     def _open() -> IO[bytes]:
         if isinstance(path, (str, bytes, os.PathLike)):
-            gz = gzip.open(path, mode="rb")
+            gz = gzip.open(path, mode="rb")  # noqa: SIM115
             underlying_seekable = True
         else:
-            gz = gzip.GzipFile(fileobj=path, mode="rb")
+            gz = gzip.GzipFile(fileobj=path, mode="rb")  # noqa: SIM115
             underlying_seekable = is_seekable(path)
 
         if not underlying_seekable:
@@ -95,15 +95,13 @@ def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
 
 def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
     exc_text = str(e)
-    if isinstance(e, RuntimeError) and "IsalInflateWrapper" in exc_text:
+    if isinstance(e, RuntimeError) and "IsalInflateWrapper" in exc_text or isinstance(e, ValueError) and "Mismatching CRC32" in exc_text:
         return ArchiveCorruptedError(f"Error reading RapidGZIP archive: {repr(e)}")
-    elif isinstance(e, ValueError) and "Mismatching CRC32" in exc_text:
-        return ArchiveCorruptedError(f"Error reading RapidGZIP archive: {repr(e)}")
-    elif isinstance(e, ValueError) and "Failed to detect a valid file format" in str(e):
+    if isinstance(e, ValueError) and "Failed to detect a valid file format" in str(e):
         # If we have opened a gzip stream, the magic bytes are there. So if the library
         # fails to detect a valid format, it's because the file is truncated.
         return ArchiveEOFError(f"Possibly truncated GZIP stream: {repr(e)}")
-    elif isinstance(e, ValueError) and "has no valid fileno" in exc_text:
+    if isinstance(e, ValueError) and "has no valid fileno" in exc_text:
         # Rapidgzip tries to look at the underlying stream's fileno if it's not
         # seekable.
         return ArchiveStreamNotSeekableError(
@@ -111,7 +109,7 @@ def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
         )
 
     # Found in rapidgzip 0.11.0
-    elif (
+    if (
         isinstance(e, ValueError)
         and "End of file encountered when trying to read zero-terminated string"
         in exc_text
@@ -130,7 +128,7 @@ def _translate_bz2_exception(e: Exception) -> Optional[ArchiveError]:
     exc_text = str(e)
     if isinstance(e, OSError) and "Invalid data stream" in exc_text:
         return ArchiveCorruptedError(f"BZ2 file is corrupted: {repr(e)}")
-    elif isinstance(e, EOFError):
+    if isinstance(e, EOFError):
         return ArchiveEOFError(f"BZ2 file is truncated: {repr(e)}")
     # elif isinstance(e, ValueError):
     #     return ArchiveFormatError("No valid BZ2 stream found")
@@ -143,13 +141,9 @@ def open_bzip2_stream(path: str | BinaryIO) -> BinaryIO:
 
 def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
     exc_text = str(e)
-    if isinstance(e, RuntimeError) and "Calculated CRC" in exc_text:
+    if isinstance(e, RuntimeError) and "Calculated CRC" in exc_text or isinstance(e, RuntimeError) and exc_text == "std::exception" or isinstance(e, ValueError) and "[BZip2 block data]" in exc_text:
         return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {repr(e)}")
-    elif isinstance(e, RuntimeError) and exc_text == "std::exception":
-        return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {repr(e)}")
-    elif isinstance(e, ValueError) and "[BZip2 block data]" in exc_text:
-        return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {repr(e)}")
-    elif isinstance(e, ValueError) and "has no valid fileno" in exc_text:
+    if isinstance(e, ValueError) and "has no valid fileno" in exc_text:
         # Indexed BZIP2 tries to look at the underlying stream's fileno if it's not
         # seekable.
         return ArchiveStreamNotSeekableError(
@@ -168,7 +162,7 @@ def open_indexed_bzip2_stream(path: str | BinaryIO) -> BinaryIO:
 def _translate_lzma_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, lzma.LZMAError):
         return ArchiveCorruptedError(f"Error reading LZMA archive: {repr(e)}")
-    elif isinstance(e, EOFError):
+    if isinstance(e, EOFError):
         return ArchiveEOFError(f"LZMA file is truncated: {repr(e)}")
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
@@ -184,7 +178,7 @@ def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
     logger.debug("TRANSLATING XZ EXCEPTION", exc_info=e)
     if isinstance(e, xz.XZError):
         return ArchiveCorruptedError(f"Error reading XZ archive: {repr(e)}")
-    elif isinstance(e, ValueError) and "filename is not seekable" in str(e):
+    if isinstance(e, ValueError) and "filename is not seekable" in str(e):
         return ArchiveStreamNotSeekableError(
             "Python XZ does not support non-seekable streams"
         )
@@ -276,7 +270,7 @@ def open_zstandard_stream(path: str | BinaryIO) -> BinaryIO:
 def _translate_pyzstd_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, pyzstd.ZstdError):
         return ArchiveCorruptedError(f"Error reading Zstandard archive: {repr(e)}")
-    elif isinstance(e, EOFError):
+    if isinstance(e, EOFError):
         return ArchiveEOFError(f"Zstandard file is truncated: {repr(e)}")
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
@@ -294,7 +288,7 @@ def open_pyzstd_stream(path: str | BinaryIO) -> BinaryIO:
 def _translate_lz4_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, RuntimeError) and str(e).startswith("LZ4"):
         return ArchiveCorruptedError(f"Error reading LZ4 archive: {repr(e)}")
-    elif isinstance(e, EOFError):
+    if isinstance(e, EOFError):
         return ArchiveEOFError(f"LZ4 file is truncated: {repr(e)}")
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
@@ -306,7 +300,7 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
         ) from None  # pragma: no cover -- lz4 is installed for main tests
 
     return ExceptionTranslatingIO(
-        lambda: ensure_binaryio(cast(lz4.frame.LZ4FrameFile, lz4.frame.open(path))),
+        lambda: ensure_binaryio(cast("lz4.frame.LZ4FrameFile", lz4.frame.open(path))),
         _translate_lz4_exception,
     )
 
@@ -317,28 +311,24 @@ def open_stream(
     if format == ArchiveFormat.GZIP:
         if config.use_rapidgzip:
             return open_rapidgzip_stream(path_or_stream)
-        else:
-            return open_gzip_stream(path_or_stream)
+        return open_gzip_stream(path_or_stream)
 
-    elif format == ArchiveFormat.BZIP2:
+    if format == ArchiveFormat.BZIP2:
         if config.use_indexed_bzip2:
             return open_indexed_bzip2_stream(path_or_stream)
-        else:
-            return open_bzip2_stream(path_or_stream)
+        return open_bzip2_stream(path_or_stream)
 
-    elif format == ArchiveFormat.XZ:
+    if format == ArchiveFormat.XZ:
         if config.use_python_xz:
             return open_python_xz_stream(path_or_stream)
-        else:
-            return open_lzma_stream(path_or_stream)
+        return open_lzma_stream(path_or_stream)
 
-    elif format == ArchiveFormat.LZ4:
+    if format == ArchiveFormat.LZ4:
         return open_lz4_stream(path_or_stream)
 
-    elif format == ArchiveFormat.ZSTD:
+    if format == ArchiveFormat.ZSTD:
         if config.use_zstandard:
             return open_zstandard_stream(path_or_stream)
-        else:
-            return open_pyzstd_stream(path_or_stream)
+        return open_pyzstd_stream(path_or_stream)
 
     raise ValueError(f"Unsupported archive format: {format}")  # pragma: no cover

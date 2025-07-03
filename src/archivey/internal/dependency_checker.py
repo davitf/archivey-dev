@@ -1,3 +1,4 @@
+import contextlib
 import shutil
 import subprocess
 import sys
@@ -49,10 +50,8 @@ def get_dependency_versions() -> DependencyVersions:
         ("python-xz", "python_xz_version"),
         ("pyzstd", "pyzstd_version"),
     ]:
-        try:
+        with contextlib.suppress(PackageNotFoundError):
             setattr(versions, attr, version(package))
-        except PackageNotFoundError:
-            pass
 
     # Check if the unrar command is available
     unrar_path = shutil.which("unrar")

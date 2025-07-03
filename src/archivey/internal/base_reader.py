@@ -39,7 +39,7 @@ def _build_member_included_func(
 ) -> Callable[[ArchiveMember], bool]:
     if members is None:
         return lambda _: True
-    elif callable(members):
+    if callable(members):
         return members
 
     filenames: set[str] = set()
@@ -78,9 +78,9 @@ def _build_filter(
             return None
 
         if dest_path is None:
-            filtered = cast(IteratorFilterFunc, filter_func)(member)
+            filtered = cast("IteratorFilterFunc", filter_func)(member)
         else:
-            filtered = cast(ExtractFilterFunc, filter_func)(member, dest_path)
+            filtered = cast("ExtractFilterFunc", filter_func)(member, dest_path)
 
         # Check the filtered still refers to the same member
         if filtered is not None and filtered.member_id != member.member_id:
@@ -714,10 +714,7 @@ class BaseArchiveReader(ArchiveReader):
         """
         self.check_archive_open()
 
-        if path is None:
-            path = os.getcwd()
-        else:
-            path = str(path)
+        path = os.getcwd() if path is None else str(path)
 
         filter_func = _build_filter(
             members, filter or self.config.extraction_filter, path
@@ -819,10 +816,7 @@ class BaseArchiveReader(ArchiveReader):
         self.check_archive_open()
         self.check_not_streaming_only("extract()")
 
-        if path is None:
-            path = os.getcwd()
-        else:
-            path = str(path)
+        path = os.getcwd() if path is None else str(path)
 
         member = self.get_member(member_or_filename)
         extraction_helper = ExtractionHelper(

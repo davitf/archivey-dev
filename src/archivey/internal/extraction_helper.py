@@ -275,10 +275,9 @@ class ExtractionHelper:
                 self.pending_files_to_extract_by_id[member.member_id] = member
 
                 return True
-            else:
-                logger.error("Link target not set for %s", member.filename)
-                self.failed_extractions.append(member)
-                return False
+            logger.error("Link target not set for %s", member.filename)
+            self.failed_extractions.append(member)
+            return False
 
         if member.type == MemberType.HARDLINK:
             # Hard links can only point to files in the same archive.
@@ -307,14 +306,13 @@ class ExtractionHelper:
                         target_member.member_id
                     ].append(member)
                     return True
-                else:
-                    logger.error(
-                        "Hardlink target %s was not extracted for %s",
-                        member.link_target,
-                        member.filename,
-                    )
-                    self.failed_extractions.append(member)
-                    return False
+                logger.error(
+                    "Hardlink target %s was not extracted for %s",
+                    member.link_target,
+                    member.filename,
+                )
+                self.failed_extractions.append(member)
+                return False
 
         elif member.type == MemberType.SYMLINK:
             symlink_dir = os.path.dirname(os.path.join(self.root_path, member.filename))
@@ -362,16 +360,15 @@ class ExtractionHelper:
         if member.is_dir:
             return self.create_directory(member, path)
 
-        elif member.is_file:
+        if member.is_file:
             return self.create_regular_file(member, stream, path)
 
-        elif member.is_link:
+        if member.is_link:
             return self.create_link(member, path)
 
-        else:
-            self.failed_extractions.append(member)
-            logger.error("Unexpected member type: %s", member.type)
-            return False
+        self.failed_extractions.append(member)
+        logger.error("Unexpected member type: %s", member.type)
+        return False
 
     # def process_external_extraction(self, member: ArchiveMember, rel_path: str) -> None:
     #     """Called for files that were extracted by an external library."""

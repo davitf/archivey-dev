@@ -95,10 +95,10 @@ def get_non_corrupted_filename(rarinfo: RarInfo) -> str | None:
     if not rarinfo.flags & rarfile.RAR_FILE_UNICODE:
         return rarinfo.filename
 
-    utf16_str = cast(str | None, rarinfo.filename)
+    utf16_str = cast("str | None", rarinfo.filename)
 
     try:
-        utf8_str = cast(bytes, rarinfo.orig_filename).decode("utf-8")
+        utf8_str = cast("bytes", rarinfo.orig_filename).decode("utf-8")
     except UnicodeDecodeError:
         return utf16_str
 
@@ -345,7 +345,7 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         self._crc_checked = True
 
         matches = check_rarinfo_crc(
-            cast(RarInfo, self._member.raw_info), self._member_pwd, self._actual_crc
+            cast("RarInfo", self._member.raw_info), self._member_pwd, self._actual_crc
         )
         if not matches:
             raise ArchiveCorruptedError(f"CRC mismatch in {self._filename}")
@@ -438,7 +438,7 @@ class RarStreamReader:
         pwd_bytes = str_to_bytes(self._pwd) if self._pwd is not None else None
         if (
             member.encrypted
-            and verify_rar5_password(pwd_bytes, cast(RarInfo, member.raw_info))
+            and verify_rar5_password(pwd_bytes, cast("RarInfo", member.raw_info))
             == PasswordCheckResult.INCORRECT
         ):
             # unrar silently skips encrypted files with incorrect passwords
@@ -597,12 +597,11 @@ class RarReader(BaseArchiveReader):
             # RAR5 stores timestamps in UTC, but RAR4 does not. rarfile already returns
             # mtimes with and without the timezone set correctly.
             return info.mtime
-        elif info.date_time is not None:
+        if info.date_time is not None:
             # For some reason (bug in rarfile?), directories in RAR4 archives have no mtime,
             # but they do have a date_time.
             return rarfile.to_datetime(info.date_time)
-        else:
-            return None
+        return None
 
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         assert self._archive is not None
@@ -705,19 +704,19 @@ class RarReader(BaseArchiveReader):
     def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, rarfile.BadRarFile):
             return ArchiveCorruptedError("Error reading RAR archive")
-        elif isinstance(e, rarfile.RarWrongPassword):
+        if isinstance(e, rarfile.RarWrongPassword):
             return ArchiveEncryptedError("Wrong password specified")
-        elif isinstance(e, rarfile.PasswordRequired):
+        if isinstance(e, rarfile.PasswordRequired):
             return ArchiveEncryptedError("Password required")
-        elif isinstance(e, rarfile.NotRarFile):
+        if isinstance(e, rarfile.NotRarFile):
             return ArchiveCorruptedError("Not a RAR archive")
-        elif isinstance(e, rarfile.NeedFirstVolume):
+        if isinstance(e, rarfile.NeedFirstVolume):
             return ArchiveError("Need first volume of multi-volume RAR archive")
-        elif isinstance(e, rarfile.NoCrypto):
+        if isinstance(e, rarfile.NoCrypto):
             return PackageNotInstalledError("cryptography package is not installed")
-        elif isinstance(e, rarfile.Error):
+        if isinstance(e, rarfile.Error):
             return ArchiveError("Unknown error reading RAR archive")
-        elif isinstance(e, io.UnsupportedOperation) and (
+        if isinstance(e, io.UnsupportedOperation) and (
             "seek" in str(e) or "non buffered" in str(e)
         ):
             return ArchiveStreamNotSeekableError(
@@ -730,7 +729,7 @@ class RarReader(BaseArchiveReader):
     ) -> ArchiveMember:
         if pwd is not None and member.is_link and member.link_target is None:
             link_target = self._get_link_target(
-                cast(RarInfo, member.raw_info),
+                cast("RarInfo", member.raw_info),
                 pwd=pwd,
             )
             if link_target is not None:
@@ -752,7 +751,7 @@ class RarReader(BaseArchiveReader):
         if member.encrypted:
             pwd_check = verify_rar5_password(
                 str_to_bytes(pwd if pwd is not None else self.get_archive_password()),
-                cast(RarInfo, member.raw_info),
+                cast("RarInfo", member.raw_info),
             )
             if pwd_check == PasswordCheckResult.INCORRECT:
                 raise ArchiveEncryptedError(
@@ -763,7 +762,7 @@ class RarReader(BaseArchiveReader):
             return ExceptionTranslatingIO(
                 lambda: ensure_binaryio(
                     cast(
-                        IO[bytes],
+                        "IO[bytes]",
                         ensure_not_none(self._archive).open(
                             member.raw_info, pwd=bytes_to_str(pwd)
                         ),

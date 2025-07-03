@@ -71,14 +71,13 @@ def _sanitize_link_target(
         _check_target_inside_archive_root(rel_target, dest_path, "Symlink target")
         return link_target
 
-    else:
-        # Hardlink targets are relative to the hardlink's own directory. Check that
-        # the target is inside the archive root.
-        _check_target_inside_archive_root(link_target, dest_path, "Hardlink target")
+    # Hardlink targets are relative to the hardlink's own directory. Check that
+    # the target is inside the archive root.
+    _check_target_inside_archive_root(link_target, dest_path, "Hardlink target")
 
-        # Return the link target unchanged, as it refers to another member
-        # in the archive and should be an exact match to its name.
-        return member.link_target
+    # Return the link target unchanged, as it refers to another member
+    # in the archive and should be an exact match to its name.
+    return member.link_target
 
 
 def _get_filtered_member(

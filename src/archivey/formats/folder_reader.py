@@ -57,9 +57,9 @@ class FolderReader(BaseArchiveReader):
         """Determines the MemberType from a path and its lstat result."""
         if stat.S_ISDIR(lstat_result.st_mode):
             return MemberType.DIR
-        elif stat.S_ISLNK(lstat_result.st_mode):
+        if stat.S_ISLNK(lstat_result.st_mode):
             return MemberType.SYMLINK
-        elif stat.S_ISREG(lstat_result.st_mode):
+        if stat.S_ISREG(lstat_result.st_mode):
             return MemberType.FILE
         return MemberType.OTHER
 
@@ -164,15 +164,14 @@ class FolderReader(BaseArchiveReader):
             if (
                 self.path_str not in resolved_full_path.parents
                 and resolved_full_path != self.path_str
+                and not str(resolved_full_path).startswith(str(self.path_str))
             ):
                 # This check needs to be careful. If archive_path is /foo/bar and resolved_full_path is /foo/bar/file.txt
                 # then archive_path is in resolved_full_path.parents.
                 # If archive_path is /foo/bar and resolved_full_path is /foo/baz/file.txt (due to symlink or ..) this is bad.
-                # A more robust check:
-                if not str(resolved_full_path).startswith(str(self.path_str)):
-                    raise ArchiveMemberNotFoundError(
-                        f"Access to member '{member.filename}' outside archive root is denied."
-                    )
+                raise ArchiveMemberNotFoundError(
+                    f"Access to member '{member.filename}' outside archive root is denied."
+                )
 
         except OSError as e:  # e.g. broken symlink during resolve()
             raise ArchiveMemberNotFoundError(

@@ -93,10 +93,11 @@ def process_member(
                 if stream is None:
                     stream = stream_to_close = archive.open(member, pwd=pwd)
                 crc32, sha256 = get_member_checksums(stream)
-                if member.crc32 is not None and member.crc32 != crc32:
-                    crc_error = f" != {member.crc32:08x}"
-                else:
-                    crc_error = ""
+                crc_error = (
+                    f" != {member.crc32:08x}"
+                    if member.crc32 is not None and member.crc32 != crc32
+                    else ""
+                )
                 sha = sha256[:16]
                 crc_display = f"{crc32:08x}{crc_error}"
             else:
@@ -261,7 +262,7 @@ def main(argv: list[str] | None = None) -> None:
             ):
                 f = original_open(file, mode, *oargs, **okwargs)
                 stats = stats_per_file.setdefault(path, IOStats())
-                return StatsIO(cast(IO[bytes], f), stats)
+                return StatsIO(cast("IO[bytes]", f), stats)
             return original_open(file, mode, *oargs, **okwargs)
 
         builtins.open = patched_open
