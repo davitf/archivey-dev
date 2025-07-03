@@ -139,14 +139,18 @@ For more detailed information on using and extending `archivey`, please refer to
 
 ## Future plans
 
-*   [UNIX compress format](https://en.wikipedia.org/wiki/Compress_(software)) (`.Z`)
-*   [ar archives](https://en.wikipedia.org/wiki/Ar_(Unix)) (`.ar`, `.deb`)
-*   [ISO images](https://en.wikipedia.org/wiki/Optical_disc_image) (`.iso`)
+Some things on my radar for future versions. Feel free to pick some to contribute!
+
+*   Archive format support: [ar archives](https://en.wikipedia.org/wiki/Ar_(Unix)) (`.ar`, `.deb`), [ISO images](https://en.wikipedia.org/wiki/Optical_disc_image) (`.iso`)
+*   Compression format support: [UNIX compress format](https://en.wikipedia.org/wiki/Compress_(software)) (`.Z`), [Brotli](https://en.wikipedia.org/wiki/Brotli)
 *   Add [libarchive](https://pypi.org/project/libarchive/) as a backend, see what it allows us to do
-*   Support non-seeking access to ZIP archives (similar approach to [`stream-unzip`](http://pypi.org/project/stream-unzip))
-*   Support [builtin Zstandard](https://docs.python.org/3.14/whatsnew/3.14.html#whatsnew314-pep784) in Python 3.14
+*   Opening self-extracting (SFX) RAR and 7z archives
+*   Non-seeking access to ZIP archives (similar approach to [`stream-unzip`](http://pypi.org/project/stream-unzip))
+*   Use [builtin Zstandard](https://docs.python.org/3.14/whatsnew/3.14.html#whatsnew314-pep784) in Python 3.14
 *   Auto-select libraries or implementations to use based on what is installed and/or required features
 *   Archive writing support
 *   Bug: ZIP filename decoding can be wrong in some cases (see sample archive `tests/test_archives_external/encoding_infozip_jules.zip`)
 *   Split the IO wrappers (`src/archivey/internal/io_helpers.py`) into a separate library, as it seems to be generally useful
-*   Improve hard link handling and add tests for RAR4 and duplicate filenames
+*   Test under Windows / Mac
+*   Add additional metadata fields (uid, gid, Windows permissions)
+*   Add Pathlib-compatible wrapper that allows accessing files inside archives
