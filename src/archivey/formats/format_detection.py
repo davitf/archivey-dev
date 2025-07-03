@@ -98,7 +98,7 @@ def detect_archive_format_by_signature(
         close_after = False
     else:
         # Not a path and not a stream
-        logger.warning(f"{path_or_file}: Not a path or stream")
+        logger.warning("%s: Not a path or stream", path_or_file)
         return ArchiveFormat.UNKNOWN
 
     try:
@@ -147,7 +147,7 @@ def detect_archive_format_by_signature(
         elif hasattr(f, "seek"):
             f.seek(0)
         else:
-            logger.warning(f"{path_or_file}: Not a path or stream")
+            logger.warning("%s: Not a path or stream", path_or_file)
 
 
 EXTENSION_TO_FORMAT = {
@@ -226,16 +226,20 @@ def detect_archive_format(filename: str | IO[bytes] | os.PathLike) -> ArchiveFor
         format_by_filename == ArchiveFormat.UNKNOWN
         and format_by_signature == ArchiveFormat.UNKNOWN
     ):
-        logger.warning(f"{filename}: Can't detect format by signature or filename")
+        logger.warning("%s: Can't detect format by signature or filename", filename)
         return ArchiveFormat.UNKNOWN
 
     if format_by_signature == ArchiveFormat.UNKNOWN:
         logger.warning(
-            f"{filename}: Couldn't detect format by signature. Assuming {format_by_filename}"
+            "%s: Couldn't detect format by signature. Assuming %s",
+            filename,
+            format_by_filename,
         )
         return format_by_filename
     elif format_by_filename == ArchiveFormat.UNKNOWN:
-        logger.warning(f"{filename}: Unknown extension. Detected {format_by_signature}")
+        logger.warning(
+            "%s: Unknown extension. Detected %s", filename, format_by_signature
+        )
     elif format_by_signature != format_by_filename:
         logger.warning(
             f"{filename}: Extension indicates {format_by_filename}, but detected ({format_by_signature})"

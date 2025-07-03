@@ -280,7 +280,7 @@ def check_rarinfo_crc(
         return computed_crc == rarinfo.CRC
 
     if password is None:
-        logger.warning(f"No password specified for checking {rarinfo.filename}")
+        logger.warning("No password specified for checking %s", rarinfo.filename)
         return False
 
     converted = convert_crc_to_encrypted(
@@ -413,7 +413,9 @@ class RarStreamReader:
             password_args = ["-p" + bytes_to_str(self._pwd)] if self._pwd else ["-p-"]
             cmd = [unrar_path, "p", "-inul", *password_args, self.archive_path]
             logger.debug(
-                f"Opening RAR archive {self.archive_path} with command: {' '.join(cmd)}"
+                "Opening RAR archive %s with command: %s",
+                self.archive_path,
+                " ".join(cmd),
             )
             self._proc = subprocess.Popen(
                 cmd,

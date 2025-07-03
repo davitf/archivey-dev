@@ -116,7 +116,7 @@ def _get_filtered_member(
     except FilterError as e:
         if raise_on_error:
             raise
-        logger.warning(f"Filter error for {member.filename}: {e}")
+        logger.warning("Filter error for %s: %s", member.filename, e)
         return None
 
 

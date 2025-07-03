@@ -78,16 +78,24 @@ class ExtractionHelper:
             # earlier version overwrite a later one.
             if self.extracted_members_by_path[path].member_id > member.member_id:
                 logger.info(
-                    f"Skipping {member.type.value} {path} as it's a later version of the same file"
+                    "Skipping %s %s as it's a later version of the same file",
+                    member.type.value,
+                    path,
                 )
                 return False
 
             logger.info(
-                f"Overwriting existing {member.type.value} {path} as it was created during this extraction"
+                "Overwriting existing %s %s as it was created during this extraction",
+                member.type.value,
+                path,
             )
 
         elif self.overwrite_mode == OverwriteMode.SKIP:
-            logger.info(f"Skipping existing {member.type.value} {path}")
+            logger.info(
+                "Skipping existing %s %s",
+                member.type.value,
+                path,
+            )
             self.failed_extractions.append(member)
             return False
 
@@ -108,7 +116,7 @@ class ExtractionHelper:
                 f"Cannot create {member.type.value} {path} as it already exists as a dir"
             )
 
-        logger.info(f"Removing existing file {path}")
+        logger.info("Removing existing file %s", path)
         os.remove(path)
 
         return True
@@ -126,7 +134,10 @@ class ExtractionHelper:
     ) -> None:
         """Called for files that had a delayed extraction."""
         logger.info(
-            f"Processing external extraction of {member.filename} [{member.member_id}] to {extracted_path}",
+            "Processing external extraction of %s [%s] to %s",
+            member.filename,
+            member.member_id,
+            extracted_path,
             stack_info=True,
         )
         if member.is_link:
@@ -134,7 +145,9 @@ class ExtractionHelper:
 
         if extracted_path is None:
             logger.error(
-                f"No extracted path for {member.filename} [{member.member_id}]"
+                "No extracted path for %s [%s]",
+                member.filename,
+                member.member_id,
             )
             self.failed_extractions.append(member)
             return
@@ -143,7 +156,8 @@ class ExtractionHelper:
         if not targets:
             # We were not expecting this file to be extracted. TODO: should we delete it?
             logger.error(
-                f"Unexpected file {member.filename} was extracted by an external library"
+                "Unexpected file %s was extracted by an external library",
+                member.filename,
             )
             return
 
@@ -152,7 +166,10 @@ class ExtractionHelper:
         self.can_move_file = True
         for target in targets:
             logger.info(
-                f"  Processing target {target.filename} [{target.member_id}] (member [{member.member_id}])"
+                "  Processing target %s [%s] (member [%s])",
+                target.filename,
+                target.member_id,
+                member.member_id,
             )
             # TODO: handle exceptions
 
@@ -168,7 +185,8 @@ class ExtractionHelper:
 
                 if os.path.realpath(target_path) == os.path.realpath(extracted_path):
                     logger.info(
-                        f"  File {target.filename} is already in the expected location"
+                        "  File %s is already in the expected location",
+                        target.filename,
                     )
                     with self._lock:
                         self.can_move_file = False
@@ -176,7 +194,9 @@ class ExtractionHelper:
                 else:
                     with self._lock:
                         logger.info(
-                            f"  Moving file from {extracted_path} to {target_path}"
+                            "  Moving file from %s to %s",
+                            extracted_path,
+                            target_path,
                         )
                         if not self.check_overwrites(member, target_path):
                             continue
@@ -188,7 +208,10 @@ class ExtractionHelper:
             else:
                 # Create a hardlink to the first target.
                 logger.info(
-                    f"  Creating hardlink for {target.filename} [{target.member_id}] (member [{member.member_id}])"
+                    "  Creating hardlink for %s [%s] (member [%s])",
+                    target.filename,
+                    target.member_id,
+                    member.member_id,
                 )
                 try:
                     with self._lock:
@@ -203,7 +226,8 @@ class ExtractionHelper:
                     # os.link failed, so we need to create a copy as a regular file.
                     # The list of exceptions was taken from tarfile.py.
                     logger.info(
-                        f"Creating hardlink for {target.filename} failed, copying the file instead"
+                        "Creating hardlink for %s failed, copying the file instead",
+                        target.filename,
                     )
                     shutil.copyfile(extracted_path, target_path)
 
@@ -236,19 +260,23 @@ class ExtractionHelper:
 
     def create_link(self, member: ArchiveMember, member_path: str) -> bool:
         logger.error(
-            f"Creating link {member.filename} to {member.link_target} , path={member_path}"
+            "Creating link %s to %s , path=%s",
+            member.filename,
+            member.link_target,
+            member_path,
         )
         if member.link_target is None:
             # The link target may not have been read yet (possible for 7z archives)
             if self.can_process_pending_extractions:
                 logger.info(
-                    f"Link target not set for {member.filename}, storing for later extraction"
+                    "Link target not set for %s, storing for later extraction",
+                    member.filename,
                 )
                 self.pending_files_to_extract_by_id[member.member_id] = member
 
                 return True
             else:
-                logger.error(f"Link target not set for {member.filename}")
+                logger.error("Link target not set for %s", member.filename)
                 self.failed_extractions.append(member)
                 return False
 
@@ -268,7 +296,9 @@ class ExtractionHelper:
                 # extraction if possible.
                 if self.can_process_pending_extractions:
                     logger.info(
-                        f"Storing hardlink {member.filename} for later extraction as its target {target_member.filename} was not extracted"
+                        "Storing hardlink %s for later extraction as its target %s was not extracted",
+                        member.filename,
+                        target_member.filename,
                     )
                     self.pending_files_to_extract_by_id[target_member.member_id] = (
                         target_member
@@ -279,7 +309,9 @@ class ExtractionHelper:
                     return True
                 else:
                     logger.error(
-                        f"Hardlink target {member.link_target} was not extracted for {member.filename}"
+                        "Hardlink target %s was not extracted for %s",
+                        member.link_target,
+                        member.filename,
                     )
                     self.failed_extractions.append(member)
                     return False
@@ -297,7 +329,7 @@ class ExtractionHelper:
             # .tar files can contain links to themselves, which is not a problem,
             # but we can't remove the previous file in this case as there would be
             # nowhere to point to.
-            logger.info(f"Skipping {member.type.value} to self: {member.filename}")
+            logger.info("Skipping %s to self: %s", member.type.value, member.filename)
             return True
 
         if not self.check_overwrites(member, member_path):
@@ -320,7 +352,11 @@ class ExtractionHelper:
     def extract_member(self, member: ArchiveMember, stream: BinaryIO | None) -> bool:
         path = self.get_output_path(member)
         logger.info(
-            f"Extracting {member.filename} [{member.member_id}] to {path}, stream: {stream is not None}"
+            "Extracting %s [%s] to %s, stream: %s",
+            member.filename,
+            member.member_id,
+            path,
+            stream is not None,
         )
 
         if member.is_dir:
@@ -334,7 +370,7 @@ class ExtractionHelper:
 
         else:
             self.failed_extractions.append(member)
-            logger.error(f"Unexpected member type: {member.type}")
+            logger.error("Unexpected member type: %s", member.type)
             return False
 
     # def process_external_extraction(self, member: ArchiveMember, rel_path: str) -> None:
@@ -344,7 +380,11 @@ class ExtractionHelper:
 
     def get_pending_extractions(self) -> list[ArchiveMember]:
         logger.info(
-            f"Getting pending extractions: {', '.join(f'{k}: {v.filename} ({v.type.value})' for k, v in self.pending_files_to_extract_by_id.items())}"
+            "Getting pending extractions: %s",
+            ", ".join(
+                f"{k}: {v.filename} ({v.type.value})"
+                for k, v in self.pending_files_to_extract_by_id.items()
+            ),
         )
         return list(self.pending_files_to_extract_by_id.values())
 

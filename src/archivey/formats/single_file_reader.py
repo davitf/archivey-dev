@@ -65,7 +65,9 @@ def read_gzip_metadata(
                 mtime_timestamp, tz=timezone.utc
             )
             logger.info(
-                f"GZIP metadata: mtime_timestamp={mtime_timestamp}, mtime={extra_fields['mtime']}"
+                "GZIP metadata: mtime_timestamp=%s, mtime=%s",
+                mtime_timestamp,
+                extra_fields["mtime"],
             )
             if use_stored_metadata:
                 member.mtime_with_tz = extra_fields["mtime"]
@@ -136,20 +138,22 @@ XZ_STREAM_HEADER_MAGIC = b"\xfd7zXZ\x00"
 
 
 def read_xz_metadata(path: str, member: ArchiveMember):
-    logger.info(f"Reading XZ metadata for {path}")
+    logger.info("Reading XZ metadata for %s", path)
     with open(path, "rb") as f:
         f.seek(-12, 2)  # Footer is always 12 bytes
         footer = f.read(12)
 
         if footer[-2:] != XZ_MAGIC_FOOTER:
-            logger.warning(f"Invalid XZ footer, file possibly truncated: {path}")
+            logger.warning("Invalid XZ footer, file possibly truncated: %s", path)
             return
 
         # Backward Size (first 4 bytes) tells how far back the Index is, in 4-byte units minus 1
         backward_size_field = struct.unpack("<I", footer[4:8])[0]
         index_size = (backward_size_field + 1) * 4
         logger.info(
-            f"XZ metadata: index_size={index_size}, backward_size_field={backward_size_field}"
+            "XZ metadata: index_size=%s, backward_size_field=%s",
+            index_size,
+            backward_size_field,
         )
 
         f.seek(-12 - index_size, 2)
@@ -157,7 +161,7 @@ def read_xz_metadata(path: str, member: ArchiveMember):
 
         # Skip index indicator byte and reserved bits (first byte)
         if index_data[0] != 0x00:
-            logger.warning(f"Invalid XZ footer, file possibly corrupted: {path}")
+            logger.warning("Invalid XZ footer, file possibly corrupted: %s", path)
             return
 
         # Next 2–10 bytes are variable-length field counts and sizes
