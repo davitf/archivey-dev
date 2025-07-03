@@ -161,18 +161,15 @@ class FolderReader(BaseArchiveReader):
         # to prevent potential directory traversal issues if member_name contains '..'
         try:
             resolved_full_path = full_path.resolve()
-            if (
-                self.path_str not in resolved_full_path.parents
-                and resolved_full_path != self.path_str
-            ):
-                # This check needs to be careful. If archive_path is /foo/bar and resolved_full_path is /foo/bar/file.txt
-                # then archive_path is in resolved_full_path.parents.
-                # If archive_path is /foo/bar and resolved_full_path is /foo/baz/file.txt (due to symlink or ..) this is bad.
-                # A more robust check:
-                if not str(resolved_full_path).startswith(str(self.path_str)):
-                    raise ArchiveMemberNotFoundError(
-                        f"Access to member '{member.filename}' outside archive root is denied."
-                    )
+            archive_root = Path(self.path_str).resolve()
+
+            # Verify the resolved path stays within the archive root. Using
+            # pathlib's ``is_relative_to`` avoids issues with string prefix
+            # comparisons and correctly handles symlinks and ``..`` segments.
+            if not resolved_full_path.is_relative_to(archive_root):
+                raise ArchiveMemberNotFoundError(
+                    f"Access to member '{member.filename}' outside archive root is denied."
+                )
 
         except OSError as e:  # e.g. broken symlink during resolve()
             raise ArchiveMemberNotFoundError(
