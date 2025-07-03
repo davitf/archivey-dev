@@ -168,6 +168,7 @@ class ArchiveFormatFeatures:
     comment_corrupts_unicode_non_bmp_chars: bool = False
     mtime_with_tz: bool = False
     link_targets_in_header: bool = True
+    replace_backslash_with_slash: bool = False
 
 
 DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
@@ -279,6 +280,7 @@ SEVENZIP_PY7ZR = ArchiveCreationInfo(
         duplicate_files=True,
         mtime_with_tz=True,
         link_targets_in_header=False,
+        replace_backslash_with_slash=True,
     ),
 )
 SEVENZIP_7ZCMD = ArchiveCreationInfo(
@@ -290,6 +292,10 @@ SEVENZIP_7ZCMD = ArchiveCreationInfo(
         archive_comment=True,
         mtime_with_tz=True,
         link_targets_in_header=False,
+        # This is not a limitation in 7z, but a behavior of py7zr: it replaces
+        # backslashes with slashes in the file names
+        # (see FilesInfo::_read_name in py7zr/archiveinfo.py)
+        replace_backslash_with_slash=True,
     ),
 )
 
@@ -313,6 +319,7 @@ RAR4_CMD = ArchiveCreationInfo(
         comment_corrupts_unicode_non_bmp_chars=True,
         mtime_with_tz=False,
         link_targets_in_header=False,
+        replace_backslash_with_slash=True,
     ),
 )
 
@@ -653,6 +660,7 @@ SYMLINKS_FILES = [
     Dir("subdir/", 3),
     Symlink("subdir/link_to_file1.txt", 4, "../file1.txt", contents=b"Hello, world!"),
     Symlink("subdir_link", 5, "subdir", link_target_type=MemberType.DIR),
+    Symlink("subdir_link_with_slash", 5, "subdir/", link_target_type=MemberType.DIR),
 ]
 
 SYMLINK_LOOP_FILES = [
@@ -765,6 +773,7 @@ SANITIZE_FILES_WITHOUT_ABSOLUTE_PATHS = [
     Symlink("subdir/good_link.txt", 5, "../good.txt", contents=b"good"),
     Symlink("link_abs", 6, "/etc/passwd", contents=None),
     Symlink("link_outside", 7, "../escape.txt", contents=None),
+    File("backslash/..\\good.txt", 10, b"not the same as good.txt"),
 ]
 
 # Files with potentially unsafe names or permissions for filter testing
@@ -776,6 +785,7 @@ SANITIZE_FILES_WITHOUT_HARDLINKS = [
     Symlink("subdir/good_link.txt", 5, "../good.txt", contents=b"good"),
     Symlink("link_abs", 6, "/etc/passwd", contents=None),
     Symlink("link_outside", 7, "../escape.txt", contents=None),
+    File("backslash/..\\good.txt", 10, b"not the same as good.txt"),
 ]
 
 
@@ -791,6 +801,7 @@ SANITIZE_FILES_FULL = [
     Symlink("link_outside", 7, "../escape.txt", contents=None),
     Hardlink("hardlink_absfile", 8, "/absfile.txt", contents=b"abs"),
     Hardlink("hardlink_outside", 9, "../outside.txt", contents=b"outside"),
+    File("backslash/..\\good.txt", 10, b"not the same as good.txt"),
 ]
 
 SINGLE_LARGE_FILE = File(
@@ -1167,7 +1178,6 @@ DUPLICATE_FILES_ARCHIVES = filter_archives(
 SANITIZE_ARCHIVES = filter_archives(
     SAMPLE_ARCHIVES,
     prefixes=["sanitize"],
-    extensions=["tar"],
 )
 
 LARGE_ARCHIVES = filter_archives(

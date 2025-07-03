@@ -183,8 +183,11 @@ def check_iter_members(
     )
 
     for sample_file in sample_archive.contents.files:
+        filename = sample_file.name
+        if features.replace_backslash_with_slash:
+            filename = filename.replace("\\", "/")
         if features.dir_entries or sample_file.type != MemberType.DIR:
-            expected_files_by_filename[sample_file.name].append(sample_file)
+            expected_files_by_filename[filename].append(sample_file)
 
     # expected_filenames = set(expected_files_by_filename.keys())
 
@@ -501,9 +504,7 @@ def test_read_zip_and_7z_archives_with_password_in_constructor(
     filter_archives(SAMPLE_ARCHIVES, extensions=["7z"]),
     ids=lambda x: x.filename,
 )
-def test_read_sevenzip_py7zr_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
-):
+def test_read_7z_archives(sample_archive: SampleArchive, sample_archive_path: str):
     check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 

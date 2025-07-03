@@ -152,6 +152,8 @@ class FolderReader(BaseArchiveReader):
         os_specific_member_path = member.filename.replace("/", os.sep)
         full_path = self.path / os_specific_member_path
 
+        logger.info("full_path: %s", full_path)
+
         if not full_path.exists():
             raise ArchiveMemberNotFoundError(
                 f"Member not found: {member.filename} (resolved to {full_path})"
@@ -159,9 +161,14 @@ class FolderReader(BaseArchiveReader):
 
         # It's good practice to ensure the resolved path is still within the archive root
         # to prevent potential directory traversal issues if member_name contains '..'
+        # TODO: this check may not actually be needed, as this method
+        # only opens files, not symlinks. Double-check this.
         try:
             resolved_full_path = full_path.resolve()
             archive_root = self.path
+
+            logger.info("resolved_full_path: %s", resolved_full_path)
+            logger.info("archive_root: %s", archive_root)
 
             # Verify the resolved path stays within the archive root. Using
             # pathlib's ``is_relative_to`` avoids issues with string prefix

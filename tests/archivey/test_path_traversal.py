@@ -1,5 +1,6 @@
-import pytest
 from pathlib import Path
+
+import pytest
 
 from archivey import open_archive
 from archivey.api.exceptions import (
@@ -7,13 +8,19 @@ from archivey.api.exceptions import (
     ArchiveMemberNotFoundError,
 )
 from archivey.api.types import ArchiveFormat
-from tests.archivey.sample_archives import SAMPLE_ARCHIVES, filter_archives, SampleArchive
+from tests.archivey.sample_archives import (
+    SAMPLE_ARCHIVES,
+    SampleArchive,
+    filter_archives,
+)
 from tests.archivey.testing_utils import skip_if_package_missing
 
 SANITIZE_ALL_ARCHIVES = filter_archives(SAMPLE_ARCHIVES, prefixes=["sanitize"])
 
 
-@pytest.mark.parametrize("sample_archive", SANITIZE_ALL_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.parametrize(
+    "sample_archive", SANITIZE_ALL_ARCHIVES, ids=lambda a: a.filename
+)
 def test_open_symlink_outside(sample_archive: SampleArchive, sample_archive_path: str):
     """Opening a symlink that points outside the archive should fail."""
     skip_if_package_missing(sample_archive.creation_info.format, None)
@@ -32,4 +39,3 @@ def test_open_symlink_outside(sample_archive: SampleArchive, sample_archive_path
             (ArchiveMemberCannotBeOpenedError, ArchiveMemberNotFoundError)
         ):
             archive.open(member)
-

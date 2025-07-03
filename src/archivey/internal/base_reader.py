@@ -183,6 +183,7 @@ class BaseArchiveReader(ArchiveReader):
         self, member: ArchiveMember, visited_ids: set[int]
     ) -> ArchiveMember | None:
         assert member.is_link, "member should be a link"
+        logger.info("resolving link: %s", member.filename)
 
         # member_id should be set if it came from self.get_members() or iteration
         if member.member_id is None:
@@ -237,6 +238,11 @@ class BaseArchiveReader(ArchiveReader):
             normalized_link_target = posixpath.normpath(
                 posixpath.join(posixpath.dirname(member.filename), link_target_str)
             )
+            logger.info("normalized_link_target: %s", normalized_link_target)
+            logger.info(
+                "normalized_path_to_last_member: %s",
+                self._normalized_path_to_last_member,
+            )
             target_member = self._normalized_path_to_last_member.get(
                 normalized_link_target
             )
@@ -281,13 +287,28 @@ class BaseArchiveReader(ArchiveReader):
             members_with_filename.append(member)
             members_with_filename.sort(key=lambda m: m.member_id)
 
-        normalized_path = posixpath.normpath(member.filename)
+        normalized_path = member.filename  # posixpath.normpath(member.filename)
+        # normalized_path = posixpath.normpath(member.filename)
+        logger.info(
+            "registering member: normpath: %s -> %s", member.filename, normalized_path
+        )
         if (
             normalized_path not in self._normalized_path_to_last_member
             or self._normalized_path_to_last_member[normalized_path].member_id
             < member.member_id
         ):
             self._normalized_path_to_last_member[normalized_path] = member
+
+        # If the member is a directory, also register the path without the trailing slash
+        # so we can resolve links to directories.
+        if normalized_path.endswith("/"):
+            normalized_path = normalized_path[:-1]
+            if (
+                normalized_path not in self._normalized_path_to_last_member
+                or self._normalized_path_to_last_member[normalized_path].member_id
+                < member.member_id
+            ):
+                self._normalized_path_to_last_member[normalized_path] = member
 
         # Link resolution is now handled by the public resolve_link method when needed,
         # not automatically during registration.

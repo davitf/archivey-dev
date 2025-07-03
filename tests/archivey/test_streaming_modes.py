@@ -313,10 +313,14 @@ def test_resolve_link_symlink_without_target(
                 continue
 
             if sample_archive.creation_info.features.link_targets_in_header:
-                assert member.link_target is not None
+                assert member.link_target is not None, (
+                    f"{sample_file.name=} {member.filename=} {member.link_target=}"
+                )
 
             if member.link_target is None:
-                assert resolved is None
+                assert resolved is None, (
+                    f"{sample_file.name=} {member.filename=} {member.link_target=} {resolved=}"
+                )
             else:
                 assert resolved is not None
                 logger.info(f"{member.filename=} {member.link_target=} {resolved=}")
