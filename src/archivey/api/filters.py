@@ -5,8 +5,7 @@ import logging
 import os
 import posixpath
 
-# TODO: create a custom filter error class that inherits from FilterError and ArchiveError
-from tarfile import FilterError
+from archivey.api.exceptions import ArchiveFilterError
 
 from archivey.api.config import ExtractionFilter
 from archivey.api.types import (
@@ -20,6 +19,7 @@ __all__ = [
     "create_filter",
     "tar_filter",
     "data_filter",
+    "ArchiveFilterError",
 ]
 
 logger = logging.getLogger(__name__)
@@ -29,16 +29,22 @@ def _check_target_inside_archive_root(
     target_path: str, dest_path: str | None, target_type_str: str
 ) -> None:
     if os.path.isabs(target_path):
-        raise FilterError(f"Absolute {target_type_str} not allowed: {target_path}")
+        raise ArchiveFilterError(
+            f"Absolute {target_type_str} not allowed: {target_path}"
+        )
 
     if target_path.startswith("..") or "/../" in target_path:
-        raise FilterError(f"{target_type_str} outside archive root: {target_path}")
+        raise ArchiveFilterError(
+            f"{target_type_str} outside archive root: {target_path}"
+        )
 
     if dest_path is not None:
         dest_real = os.path.realpath(dest_path)
         target_real = os.path.realpath(os.path.join(dest_real, target_path))
         if os.path.commonpath([dest_real, target_real]) != dest_real:
-            raise FilterError(f"{target_type_str} outside destination: {target_path}")
+            raise ArchiveFilterError(
+                f"{target_type_str} outside destination: {target_path}"
+            )
 
 
 def _sanitize_name(
@@ -115,7 +121,7 @@ def _get_filtered_member(
 
         return member.replace(**new_attrs)
 
-    except FilterError as e:
+    except ArchiveFilterError as e:
         if raise_on_error:
             raise
         logger.warning("Filter error for %s: %s", member.filename, e)
