@@ -6,7 +6,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-from .types import ExtractionFilter, FilterFunc
+from archivey.types.enums import ExtractionFilter
+from archivey.types.aliases import FilterFunc
 
 if TYPE_CHECKING:
     from enum import StrEnum

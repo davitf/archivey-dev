@@ -6,12 +6,10 @@ import os
 import posixpath
 from tarfile import FilterError
 
-from archivey.api.config import ExtractionFilter
-from archivey.api.types import (
-    ArchiveMember,
-    FilterFunc,
-    MemberType,
-)
+from archivey.types.enums import ExtractionFilter, MemberType
+from archivey.types.data_classes import ArchiveMember
+from archivey.types.aliases import FilterFunc
+
 
 __all__ = [
     "fully_trusted",

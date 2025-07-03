@@ -3,10 +3,10 @@
 import os
 from typing import BinaryIO
 
-from archivey.api.archive_reader import ArchiveReader
-from archivey.api.config import ArchiveyConfig, default_config, get_default_config
-from archivey.api.exceptions import ArchiveNotSupportedError
-from archivey.api.types import (
+from archivey.core.reader import ArchiveReader
+from archivey.config.settings import ArchiveyConfig, default_config, get_default_config
+from archivey.exceptions.all import ArchiveNotSupportedError
+from archivey.types.enums import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
     ArchiveFormat,

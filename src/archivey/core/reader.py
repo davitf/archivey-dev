@@ -2,14 +2,9 @@ import abc
 import os
 from typing import BinaryIO, Callable, Collection, Iterator, List
 
-from archivey.api.types import (
-    ArchiveFormat,
-    ArchiveInfo,
-    ArchiveMember,
-    ExtractFilterFunc,
-    ExtractionFilter,
-    IteratorFilterFunc,
-)
+from archivey.types.data_classes import ArchiveInfo, ArchiveMember
+from archivey.types.enums import ArchiveFormat, ExtractionFilter
+from archivey.types.aliases import ExtractFilterFunc, IteratorFilterFunc
 from archivey.internal.utils import is_stream
 
 

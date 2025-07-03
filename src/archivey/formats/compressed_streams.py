@@ -5,8 +5,8 @@ import lzma
 import os
 from typing import IO, TYPE_CHECKING, BinaryIO, Optional, cast
 
-from archivey.api.config import ArchiveyConfig
-from archivey.api.types import ArchiveFormat
+from archivey.config.settings import ArchiveyConfig
+from archivey.types.enums import ArchiveFormat
 from archivey.internal.io_helpers import is_seekable
 from archivey.internal.utils import is_stream
 
@@ -51,7 +51,7 @@ else:
 
 import logging
 
-from archivey.api.exceptions import (
+from archivey.exceptions.all import (
     ArchiveCorruptedError,
     ArchiveEOFError,
     ArchiveError,

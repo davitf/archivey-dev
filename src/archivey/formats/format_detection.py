@@ -4,8 +4,8 @@ import tarfile
 import zipfile
 from typing import IO, TYPE_CHECKING, BinaryIO, cast
 
-from archivey.api.config import get_default_config
-from archivey.api.types import (
+from archivey.config.settings import get_default_config
+from archivey.types.enums import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
