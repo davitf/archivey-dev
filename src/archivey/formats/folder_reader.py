@@ -161,7 +161,7 @@ class FolderReader(BaseArchiveReader):
         # to prevent potential directory traversal issues if member_name contains '..'
         try:
             resolved_full_path = full_path.resolve()
-            archive_root = Path(self.path_str).resolve()
+            archive_root = self.path
 
             # Verify the resolved path stays within the archive root. Using
             # pathlib's ``is_relative_to`` avoids issues with string prefix
