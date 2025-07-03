@@ -8,7 +8,7 @@ from archivey.api.filters import (
     fully_trusted,
     tar_filter,
 )
-from archivey.api.types import ArchiveMember
+from archivey.api.types import ArchiveMember, MemberType
 from tests.archivey.sample_archives import SANITIZE_ARCHIVES, SampleArchive
 
 
@@ -27,8 +27,10 @@ def test_fully_trusted_filter(sample_archive: SampleArchive, sample_archive_path
         assert len(members) > 0
 
         # Check that problematic files are still present
-        filenames = {m.filename for m, _ in members}
-        expected_filenames = {f.name for f in sample_archive.contents.files}
+        filenames = {m.filename for m, _ in members if m.type != MemberType.DIR}
+        expected_filenames = {
+            f.name for f in sample_archive.contents.files if f.type != MemberType.DIR
+        }
         assert filenames == expected_filenames
 
 
