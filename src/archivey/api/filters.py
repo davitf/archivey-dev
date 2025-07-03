@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from typing import cast
 import logging
 import os
 import posixpath
@@ -92,7 +93,7 @@ def _get_filtered_member(
     raise_on_error: bool,
 ) -> ArchiveMember | None:
     try:
-        new_attrs = {}
+        new_attrs: dict[str, object] = {}
         if sanitize_names:
             name = _sanitize_name(member, dest_path)
             if name != member.filename:
@@ -128,13 +129,16 @@ def create_filter(
     sanitize_permissions: bool,
     raise_on_error: bool,
 ) -> FilterFunc:
-    return functools.partial(
-        _get_filtered_member,
-        for_data=for_data,
-        sanitize_names=sanitize_names,
-        sanitize_link_targets=sanitize_link_targets,
-        sanitize_permissions=sanitize_permissions,
-        raise_on_error=raise_on_error,
+    return cast(
+        FilterFunc,
+        functools.partial(
+            _get_filtered_member,
+            for_data=for_data,
+            sanitize_names=sanitize_names,
+            sanitize_link_targets=sanitize_link_targets,
+            sanitize_permissions=sanitize_permissions,
+            raise_on_error=raise_on_error,
+        ),
     )
 
 

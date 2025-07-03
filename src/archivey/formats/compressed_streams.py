@@ -3,7 +3,7 @@ import gzip
 import io
 import lzma
 import os
-from typing import IO, TYPE_CHECKING, BinaryIO, Optional, cast
+from typing import IO, TYPE_CHECKING, BinaryIO, Optional, Callable, cast
 
 from archivey.api.config import ArchiveyConfig
 from archivey.api.types import ArchiveFormat
@@ -138,7 +138,10 @@ def _translate_bz2_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 def open_bzip2_stream(path: str | BinaryIO) -> BinaryIO:
-    return ExceptionTranslatingIO(lambda: bz2.open(path), _translate_bz2_exception)
+    return ExceptionTranslatingIO(
+        lambda: cast(IO[bytes], bz2.open(path, mode="rb")),
+        _translate_bz2_exception,
+    )
 
 
 def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
@@ -197,8 +200,9 @@ def open_python_xz_stream(path: str | BinaryIO) -> BinaryIO:
             "python-xz package is not installed, required for XZ archives"
         ) from None  # pragma: no cover -- lz4 is installed for main tests
 
+    open_func = cast(Callable[[str | BinaryIO], IO[bytes]], xz.open)
     return ExceptionTranslatingIO(
-        lambda: ensure_binaryio(xz.open(path)), _translate_python_xz_exception
+        lambda: ensure_binaryio(open_func(path)), _translate_python_xz_exception
     )
 
 

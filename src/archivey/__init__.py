@@ -36,18 +36,15 @@ __all__ = [
     "ArchiveReader",
     "ArchiveInfo",
     "ArchiveMember",
-
     # Enums
     "ArchiveFormat",
     "MemberType",
     "CreateSystem",
-
     # Config
     "ArchiveyConfig",
     "default_config",
     "get_default_config",
     "set_default_config",
-
     # Exceptions
     "ArchiveError",
     "ArchiveFormatError",
@@ -56,7 +53,6 @@ __all__ = [
     "ArchiveEOFError",
     "ArchiveMemberNotFoundError",
     "ArchiveNotSupportedError",
-
     # Filters
     "create_filter",
     "data_filter",
