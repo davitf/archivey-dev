@@ -20,9 +20,16 @@ if not match:
 all_entries = re.findall(r'"([^"]+)"', match.group(1))
 all_set = set(all_entries)
 
-# 2. get ::: entries from the markdown
+# 2. get symbols documented in the markdown
 md_text = api_md.read_text()
-md_symbols = set(re.findall(r"::: archivey\.([\w_]+)", md_text))
+
+# New documentation format lists the exported symbols under a single
+# ``::: archivey`` block with ``members:`` entries.  Parse all ``-`` lines that
+# follow a ``members:`` section and collect the symbol names.
+members_blocks = re.findall(r"members:\n((?:\s+-\s+[\w_]+\n)+)", md_text)
+md_symbols: set[str] = set()
+for block in members_blocks:
+    md_symbols.update(re.findall(r"-\s+([\w_]+)", block))
 
 # 3. compare
 missing_in_md = all_set - md_symbols
