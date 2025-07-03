@@ -2,8 +2,8 @@ import pytest
 
 from archivey import open_archive
 from archivey.api.config import ExtractionFilter
+from archivey.api.exceptions import ArchiveFilterError
 from archivey.api.filters import (
-    FilterError,
     create_filter,
     fully_trusted,
     tar_filter,
@@ -54,7 +54,7 @@ def test_tar_filter(sample_archive: SampleArchive, sample_archive_path: str):
 
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(
-            FilterError,
+            ArchiveFilterError,
             match="(Absolute path not allowed|Path outside archive root|Symlink target outside archive root)",
         ):
             list(archive.iter_members_with_io(filter=tar_filter))
@@ -72,7 +72,7 @@ def test_data_filter(sample_archive: SampleArchive, sample_archive_path: str):
 
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(
-            FilterError,
+            ArchiveFilterError,
             match="(Absolute path not allowed|Path outside archive root|Symlink target outside archive root)",
         ):
             list(archive.iter_members_with_io(filter=ExtractionFilter.DATA))
@@ -133,7 +133,9 @@ def test_filter_without_name_sanitization(
 
     with open_archive(sample_archive_path) as archive:
         # Should still raise error due to link target sanitization
-        with pytest.raises(FilterError, match="Symlink target outside archive root"):
+        with pytest.raises(
+            ArchiveFilterError, match="Symlink target outside archive root"
+        ):
             list(archive.iter_members_with_io(filter=custom_filter))
 
 
@@ -159,13 +161,11 @@ def test_filter_without_link_target_sanitization(
 
     with open_archive(sample_archive_path) as archive:
         name_issues = any(
-            f.name.startswith("/")
-            or f.name.startswith("../")
-            or "/../" in f.name
+            f.name.startswith("/") or f.name.startswith("../") or "/../" in f.name
             for f in sample_archive.contents.files
         )
         if name_issues:
-            with pytest.raises(FilterError):
+            with pytest.raises(ArchiveFilterError):
                 list(archive.iter_members_with_io(filter=custom_filter))
         else:
             list(archive.iter_members_with_io(filter=custom_filter))
@@ -193,7 +193,7 @@ def test_filter_without_permission_sanitization(
 
     with open_archive(sample_archive_path) as archive:
         # Should still raise error due to name/link sanitization
-        with pytest.raises(FilterError):
+        with pytest.raises(ArchiveFilterError):
             list(archive.iter_members_with_io(filter=custom_filter))
 
 
@@ -278,7 +278,7 @@ def test_filter_error_messages(sample_archive: SampleArchive, sample_archive_pat
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
     with open_archive(sample_archive_path) as archive:
-        with pytest.raises(FilterError) as exc_info:
+        with pytest.raises(ArchiveFilterError) as exc_info:
             list(archive.iter_members_with_io(filter=tar_filter))
 
         error_msg = str(exc_info.value)
@@ -287,6 +287,41 @@ def test_filter_error_messages(sample_archive: SampleArchive, sample_archive_pat
             or "Path outside archive root" in error_msg
             or "Symlink target outside archive root" in error_msg
         )
+
+
+ERROR_CASES = [
+    ("../outside.txt", "Path outside archive root"),
+    ("link_outside", "Symlink target outside archive root"),
+    ("hardlink_outside", "Hardlink target outside archive root"),
+]
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    SANITIZE_ARCHIVES,
+    ids=lambda x: x.filename,
+)
+@pytest.mark.parametrize(
+    ("member_name", "pattern"),
+    ERROR_CASES,
+    ids=[c[0] for c in ERROR_CASES],
+)
+def test_tar_filter_individual_errors(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    member_name: str,
+    pattern: str,
+):
+    """Ensure tar_filter raises the correct error for each problematic member."""
+
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    if member_name not in {f.name for f in sample_archive.contents.files}:
+        pytest.skip(f"{member_name} not present in {sample_archive.filename}")
+
+    with open_archive(sample_archive_path) as archive:
+        with pytest.raises(ArchiveFilterError, match=pattern):
+            list(archive.iter_members_with_io(members=[member_name], filter=tar_filter))
 
 
 @pytest.mark.parametrize(
@@ -308,7 +343,7 @@ def test_filter_with_dest_path(sample_archive: SampleArchive, sample_archive_pat
     )
 
     with open_archive(sample_archive_path) as archive:
-        with pytest.raises(FilterError):
+        with pytest.raises(ArchiveFilterError):
             list(archive.iter_members_with_io(filter=custom_filter))
 
 

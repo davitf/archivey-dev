@@ -110,3 +110,9 @@ class ArchiveStreamNotSeekableError(ArchiveError):
     """Raised when a stream is not seekable and it's not supported by the archive format or library."""
 
     pass
+
+
+class ArchiveFilterError(ArchiveError):
+    """Raised when a filter rejects a member due to unsafe properties."""
+
+    pass
