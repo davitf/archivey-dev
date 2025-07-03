@@ -4,6 +4,8 @@ import functools
 import logging
 import os
 import posixpath
+
+# TODO: create a custom filter error class that inherits from FilterError and ArchiveError
 from tarfile import FilterError
 
 from archivey.api.config import ExtractionFilter
