@@ -10,6 +10,7 @@ from archivey.api.filters import (
 )
 from archivey.api.types import ArchiveMember, MemberType
 from tests.archivey.sample_archives import SANITIZE_ARCHIVES, SampleArchive
+from tests.archivey.testing_utils import skip_if_package_missing
 
 
 @pytest.mark.parametrize(
@@ -19,6 +20,8 @@ from tests.archivey.sample_archives import SANITIZE_ARCHIVES, SampleArchive
 )
 def test_fully_trusted_filter(sample_archive: SampleArchive, sample_archive_path: str):
     """Test the fully_trusted filter allows everything."""
+
+    skip_if_package_missing(sample_archive.creation_info.format, None)
 
     with open_archive(sample_archive_path) as archive:
         members = list(archive.iter_members_with_io(filter=fully_trusted))
@@ -47,6 +50,8 @@ def test_fully_trusted_filter(sample_archive: SampleArchive, sample_archive_path
 def test_tar_filter(sample_archive: SampleArchive, sample_archive_path: str):
     """Test the tar_filter raises errors on unsafe content."""
 
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(
             FilterError,
@@ -62,6 +67,8 @@ def test_tar_filter(sample_archive: SampleArchive, sample_archive_path: str):
 )
 def test_data_filter(sample_archive: SampleArchive, sample_archive_path: str):
     """Test the data_filter raises errors on unsafe content."""
+
+    skip_if_package_missing(sample_archive.creation_info.format, None)
 
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(
@@ -80,6 +87,8 @@ def test_filter_with_raise_on_error_false(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
     """Test filter that logs warnings instead of raising errors."""
+
+    skip_if_package_missing(sample_archive.creation_info.format, None)
 
     custom_filter = create_filter(
         for_data=False,
@@ -112,6 +121,8 @@ def test_filter_without_name_sanitization(
 ):
     """Test filter that doesn't sanitize names."""
 
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
     custom_filter = create_filter(
         for_data=False,
         sanitize_names=False,
@@ -135,6 +146,8 @@ def test_filter_without_link_target_sanitization(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
     """Test filter that doesn't sanitize link targets."""
+
+    skip_if_package_missing(sample_archive.creation_info.format, None)
 
     custom_filter = create_filter(
         for_data=False,
@@ -168,6 +181,8 @@ def test_filter_without_permission_sanitization(
 ):
     """Test filter that doesn't sanitize permissions."""
 
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
     custom_filter = create_filter(
         for_data=False,
         sanitize_names=True,
@@ -191,6 +206,8 @@ def test_data_filter_with_permission_changes(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
     """Test data filter that changes permissions for files."""
+
+    skip_if_package_missing(sample_archive.creation_info.format, None)
 
     data_filter_custom = create_filter(
         for_data=True,
@@ -222,6 +239,8 @@ def test_data_filter_with_permission_changes(
 )
 def test_filter_combinations(sample_archive: SampleArchive, sample_archive_path: str):
     # Test minimal filtering
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
     minimal_filter = create_filter(
         for_data=False,
         sanitize_names=False,
@@ -256,6 +275,8 @@ def test_filter_combinations(sample_archive: SampleArchive, sample_archive_path:
 def test_filter_error_messages(sample_archive: SampleArchive, sample_archive_path: str):
     """Test that filter errors have meaningful messages."""
 
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(FilterError) as exc_info:
             list(archive.iter_members_with_io(filter=tar_filter))
@@ -275,6 +296,8 @@ def test_filter_error_messages(sample_archive: SampleArchive, sample_archive_pat
 )
 def test_filter_with_dest_path(sample_archive: SampleArchive, sample_archive_path: str):
     """Test filter behavior with destination path specified."""
+
+    skip_if_package_missing(sample_archive.creation_info.format, None)
 
     custom_filter = create_filter(
         for_data=False,
@@ -296,6 +319,8 @@ def test_filter_with_dest_path(sample_archive: SampleArchive, sample_archive_pat
 )
 def test_broken_filter(sample_archive: SampleArchive, sample_archive_path: str):
     """Test that a broken filter raises an error."""
+
+    skip_if_package_missing(sample_archive.creation_info.format, None)
 
     first_member: ArchiveMember | None = None
 
