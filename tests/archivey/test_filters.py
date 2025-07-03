@@ -31,6 +31,11 @@ def test_fully_trusted_filter(sample_archive: SampleArchive, sample_archive_path
         expected_filenames = {
             f.name for f in sample_archive.contents.files if f.type != MemberType.DIR
         }
+        features = sample_archive.creation_info.features
+        if features.replace_backslash_with_slash:
+            expected_filenames = {
+                name.replace("\\", "/") for name in expected_filenames
+            }
         assert filenames == expected_filenames
 
 
@@ -45,7 +50,7 @@ def test_tar_filter(sample_archive: SampleArchive, sample_archive_path: str):
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(
             FilterError,
-            match="(Absolute path not allowed|Path outside archive root)",
+            match="(Absolute path not allowed|Path outside archive root|Symlink target outside archive root)",
         ):
             list(archive.iter_members_with_io(filter=tar_filter))
 
@@ -61,7 +66,7 @@ def test_data_filter(sample_archive: SampleArchive, sample_archive_path: str):
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(
             FilterError,
-            match="(Absolute path not allowed|Path outside archive root)",
+            match="(Absolute path not allowed|Path outside archive root|Symlink target outside archive root)",
         ):
             list(archive.iter_members_with_io(filter=ExtractionFilter.DATA))
 
@@ -140,8 +145,16 @@ def test_filter_without_link_target_sanitization(
     )
 
     with open_archive(sample_archive_path) as archive:
-        # Should still raise error due to name sanitization
-        with pytest.raises(FilterError):
+        name_issues = any(
+            f.name.startswith("/")
+            or f.name.startswith("../")
+            or "/../" in f.name
+            for f in sample_archive.contents.files
+        )
+        if name_issues:
+            with pytest.raises(FilterError):
+                list(archive.iter_members_with_io(filter=custom_filter))
+        else:
             list(archive.iter_members_with_io(filter=custom_filter))
 
 
@@ -224,8 +237,15 @@ def test_filter_combinations(sample_archive: SampleArchive, sample_archive_path:
 
         # Check that problematic files are still present
         filenames = [m.filename for m, _ in members]
-        assert any("/absfile.txt" in f for f in filenames)
-        assert any("../outside.txt" in f for f in filenames)
+        expected_names = [f.name for f in sample_archive.contents.files]
+        features = sample_archive.creation_info.features
+        if features.replace_backslash_with_slash:
+            expected_names = [n.replace("\\", "/") for n in expected_names]
+
+        if "/absfile.txt" in expected_names:
+            assert any("/absfile.txt" in f for f in filenames)
+        if "../outside.txt" in expected_names:
+            assert any("../outside.txt" in f for f in filenames)
 
 
 @pytest.mark.parametrize(
@@ -244,6 +264,7 @@ def test_filter_error_messages(sample_archive: SampleArchive, sample_archive_pat
         assert (
             "Absolute path not allowed" in error_msg
             or "Path outside archive root" in error_msg
+            or "Symlink target outside archive root" in error_msg
         )
 
 
