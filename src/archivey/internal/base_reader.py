@@ -270,7 +270,11 @@ class BaseArchiveReader(ArchiveReader):
         member._member_id = len(self._members)
         self._members.append(member)
 
-        logger.debug(f"Registering member {member.filename} ({member.member_id})")
+        logger.debug(
+            "Registering member %s (%s)",
+            member.filename,
+            member.member_id,
+        )
 
         members_with_filename = self._filename_to_members[member.filename]
         if member not in members_with_filename:
@@ -595,10 +599,10 @@ class BaseArchiveReader(ArchiveReader):
         )
 
         for member in self.iter_members():
-            logger.debug(f"iter_members_with_io member: {member}")
+            logger.debug("iter_members_with_io member: %s", member)
             filtered_member = filter_func(member)
             if filtered_member is None:
-                logger.debug(f"skipping {member.filename}")
+                logger.debug("skipping %s", member.filename)
                 continue
 
             try:
@@ -687,7 +691,7 @@ class BaseArchiveReader(ArchiveReader):
         extraction_helper: ExtractionHelper,
     ):
         for member, stream in self.iter_members_with_io(filter=filter_func, pwd=pwd):
-            logger.debug(f"Writing member {member.filename}")
+            logger.debug("Writing member %s", member.filename)
             extraction_helper.extract_member(member, stream)
             if stream:
                 stream.close()
@@ -751,7 +755,10 @@ class BaseArchiveReader(ArchiveReader):
 
         if member.is_link:
             logger.debug(
-                f"Resolving link target for {member.filename} {member.type} {member.member_id}"
+                "Resolving link target for %s %s %s",
+                member.filename,
+                member.type,
+                member.member_id,
             )
 
             # If the user is opening a link, open the target member instead.
@@ -762,11 +769,18 @@ class BaseArchiveReader(ArchiveReader):
                 )
             final_member = resolved_target
             logger.debug(
-                f"Resolved link {member.filename} to {final_member.filename} (ID: {final_member.member_id})"
+                "Resolved link %s to %s (ID: %s)",
+                member.filename,
+                final_member.filename,
+                final_member.member_id,
             )
 
         logger.debug(
-            f"Final member: orig {filename} {member.member_id} {final_member.filename} {final_member.type}"
+            "Final member: orig %s %s %s %s",
+            filename,
+            member.member_id,
+            final_member.filename,
+            final_member.type,
         )
         if not final_member.is_file:
             if final_member is not member:

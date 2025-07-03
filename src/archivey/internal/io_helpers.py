@@ -33,7 +33,7 @@ def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
         # In the tarfile case specifically, _Stream actually does have a seek() method,
         # but calling seek() on the stream returned by tarfile will raise an exception,
         # as it's wrapped in a BufferedReader which calls seekable() when doing a seek().
-        logger.debug(f"Stream {stream} does not have a seekable method: {e}")
+        logger.debug("Stream %s does not have a seekable method: %s", stream, e)
         return False
 
 
@@ -222,7 +222,11 @@ def run_with_exception_translation(
         if translated is not None:
             translated.archive_path = archive_path
             translated.member_name = member_name
-            logger.debug(f"Translated exception: {repr(e)} -> {repr(translated)}")
+            logger.debug(
+                "Translated exception: %r -> %r",
+                e,
+                translated,
+            )
             raise translated from e
         raise e
 
@@ -278,12 +282,16 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         if translated is not None:
             translated.archive_path = self.archive_path
             translated.member_name = self.member_name
-            logger.debug(f"Translated exception: {repr(e)} -> {repr(translated)}")
+            logger.debug(
+                "Translated exception: %r -> %r",
+                e,
+                translated,
+            )
 
             raise translated from e
 
         if not isinstance(e, ArchiveError):
-            logger.error(f"Unknown exception when reading IO: {e}", exc_info=e)
+            logger.error("Unknown exception when reading IO: %s", e, exc_info=e)
         raise e
 
     def read(self, n: int = -1) -> bytes:

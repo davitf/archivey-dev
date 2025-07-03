@@ -231,7 +231,7 @@ class ExtractFileWriter(BasePy7zIOWriter):
         return len(b)
 
     def close(self):
-        logger.debug(f"Closing file writer for {self.full_path}")
+        logger.debug("Closing file writer for %s", self.full_path)
         self.file.close()
 
 
@@ -263,13 +263,13 @@ class ExtractWriterFactory(WriterFactory):
     def create(self, fname: str) -> Py7zIO:
         member = self._extract_filename_to_member.get(fname)
         if member is None:
-            logger.error(f"Member {fname} not found")
+            logger.error("Member %s not found", fname)
             return py7zr.io.NullIO()
         elif member.is_link:
-            logger.debug(f"Extracting link {fname}")
+            logger.debug("Extracting link %s", fname)
             return ExtractLinkWriter(member)
         elif not member.is_file:
-            logger.debug(f"Ignoring non-file member {fname}")
+            logger.debug("Ignoring non-file member %s", fname)
             return py7zr.io.NullIO()
 
         full_path = os.path.join(self._path, fname)
@@ -279,7 +279,7 @@ class ExtractWriterFactory(WriterFactory):
         self.member_id_to_outfile[member.member_id] = full_path
         self.outfiles.add(full_path)
 
-        logger.debug(f"Creating writer for {fname}, path={full_path}")
+        logger.debug("Creating writer for %s, path=%s", fname, full_path)
         return ExtractFileWriter(full_path)
 
 
@@ -487,7 +487,7 @@ class SevenZipReader(BaseArchiveReader):
                 ):
                     member.link_target = stream.read().decode("utf-8")
             except ArchiveError as e:
-                logger.error(f"Error resolving links: {e}")
+                logger.error("Error resolving links: %s", e)
                 # Skip the links that failed to resolve, they'll just have an empty
                 # link target.
 
@@ -583,7 +583,10 @@ class SevenZipReader(BaseArchiveReader):
         thread = Thread(target=extractor)
         thread.start()
 
-        logger.debug(f"iter_members_iterator: starting -- targets: {extract_targets}")
+        logger.debug(
+            "iter_members_iterator: starting -- targets: %s",
+            extract_targets,
+        )
         try:
             while True:
                 item = q.get()
@@ -596,7 +599,9 @@ class SevenZipReader(BaseArchiveReader):
 
                 if fname not in extract_filename_to_member:
                     logger.warning(
-                        f"fname not in extract_filename_to_member: {fname} (names: {extract_filename_to_member.keys()})"
+                        "fname not in extract_filename_to_member: %s (names: %s)",
+                        fname,
+                        extract_filename_to_member.keys(),
                     )
                     continue
 
@@ -707,7 +712,7 @@ class SevenZipReader(BaseArchiveReader):
                     if close_streams:
                         stream.close()
         except ArchiveError as e:
-            logger.error(f"Error in iter_members_with_io: {e}", exc_info=True)
+            logger.error("Error in iter_members_with_io: %s", e, exc_info=True)
             # Yield any remaining members that were not extracted, with the error.
             for member in pending_files_by_id.values():
                 yield member, ErrorIOStream(e)
@@ -766,7 +771,7 @@ class SevenZipReader(BaseArchiveReader):
         }
         factory = ExtractWriterFactory(path, pending_extractions_to_member)
 
-        logger.info(f"Extracting {paths_to_extract} to {path}")
+        logger.info("Extracting %s to %s", paths_to_extract, path)
 
         def _do_extract() -> None:
             with self._temporary_password(pwd):

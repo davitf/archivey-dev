@@ -112,7 +112,7 @@ class FolderReader(BaseArchiveReader):
             except OSError:
                 link_target = "Error reading link target"
 
-        logger.info(f"filename: {filename} member_type: {member_type}")
+        logger.info("filename: %s member_type: %s", filename, member_type)
         return ArchiveMember(
             filename=filename,
             file_size=stat_result.st_size,

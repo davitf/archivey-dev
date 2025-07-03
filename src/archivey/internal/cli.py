@@ -324,13 +324,16 @@ def main(argv: list[str] | None = None) -> None:
                         )
         except ArchiveError as e:
             print(f"Error processing {archive_path}: {e}")
-            logger.error(f"Error processing {archive_path}", exc_info=True)
+            logger.error("Error processing %s", archive_path, exc_info=True)
         if args.track_io:
             abs_path = os.path.abspath(archive_path)
             stats = stats_per_file.get(abs_path)
             if stats is not None:
                 logger.info(
-                    f"IO stats for {archive_path}: {stats.bytes_read} bytes read, {stats.seek_calls} seeks"
+                    "IO stats for %s: %s bytes read, %s seeks",
+                    archive_path,
+                    stats.bytes_read,
+                    stats.seek_calls,
                 )
 
     if args.track_io:

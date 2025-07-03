@@ -76,7 +76,12 @@ class TarReader(BaseArchiveReader):
         self._fileobj: BinaryIO | None = None
         self._close_fileobj: bool
 
-        logger.debug(f"TarReader init: {archive_path} {format} {streaming_only}")
+        logger.debug(
+            "TarReader init: %s %s %s",
+            archive_path,
+            format,
+            streaming_only,
+        )
 
         if format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
             self.compression_method = TAR_FORMAT_TO_COMPRESSION_FORMAT[format]
@@ -85,7 +90,9 @@ class TarReader(BaseArchiveReader):
             )
             self._close_fileobj = True
             logger.debug(
-                f"Compressed tar opened: {self._fileobj} seekable={self._fileobj.seekable()}"
+                "Compressed tar opened: %s seekable=%s",
+                self._fileobj,
+                self._fileobj.seekable(),
             )
 
             # if streaming_only and not self._fileobj.seekable():
@@ -131,7 +138,11 @@ class TarReader(BaseArchiveReader):
             self._exception_translator,
             archive_path=str(archive_path),
         )
-        logger.debug(f"Tar opened: {self._archive} seekable={self._fileobj.seekable()}")
+        logger.debug(
+            "Tar opened: %s seekable=%s",
+            self._archive,
+            self._fileobj.seekable(),
+        )
 
     def _close_archive(self) -> None:
         """Close the archive and release any resources."""
