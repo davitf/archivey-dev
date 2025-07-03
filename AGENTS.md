@@ -1,76 +1,45 @@
 # Developer Notes
 
-This project follows a **src layout**. The Python package lives in
-`src/archivey` and tests are under the `tests` directory.  Test archives live in
-`tests/test_archives` and helper scripts are in `tests/create_archives.py`.
+Please read `docs/developer_guide.md` for complete contributor guidelines.
+The project uses a **src layout** with code under `src/archivey` and tests
+under `tests/`.  Sample archives live in `tests/test_archives`.
 
-Tox configurations are provided to run the suite against multiple Python
-versions and dependency sets (`tox -e <env>`).  Continuous integration executes
-these tox environments via the workflow in `.github/workflows/tox-tests.yml`.
+## Quick commands
 
-To help development, install **uv** and **hatch**. Also install the **unrar** tool:
+Install [uv](https://github.com/astral-sh/uv) and [hatch](https://github.com/pypa/hatch)
+for running tests and building docs.  RAR tests require the optional
+`unrar` tool.
 
-```bash
-pip install uv hatch
-sudo apt-get install -y unrar
-```
-
-If you can't install unrar, the RAR-related tests may fail; just ignore them.
-
-## Running the tests
-
-To run the tests:
+Run the test suite:
 
 ```bash
 uv run --extra optional pytest
 ```
 
-To run a specific test or a subset of tests, pass `-k` with a pattern. For
-example, to run only tests related to zip archives:
+Regenerate sample archives:
 
 ```bash
-uv run --extra optional pytest -k .zip
+uv run --extra optional python -m tests.create_archives [pattern]
 ```
 
-## Updating test files
+Build the documentation site:
 
 ```bash
-uv run --extra optional python -m tests.create_archives [file_pattern]
+hatch run docs
 ```
 
-E.g. to update only zip archives:
-
-```bash
-uv run --extra optional python -m tests.create_archives "*.zip"
-```
-
-If no file_pattern is specified, all the files will be created.
-
-
-## Repository layout
-
-- `src/archivey` – implementation modules (readers, CLI, helpers).
-- `tests` – pytest suite.
-  - `archivey` – test utilities and main test file.
-  - `test_archives` – sample archives used by the tests.
-  - `test_archives_external` – external archives for specific scenarios.
-- `pyproject.toml` – project metadata and tooling configuration.
-- `tox.ini` – defines tox environments used in CI.
-- `.github/workflows/tox-tests.yml` - defines Github actions for running the tox tests.
-
-A command line script that can be used to test if the modules are working is:
+A simple CLI can inspect archive files:
 
 ```bash
 uv run --extra optional python -m archivey.cli [archive_files]
 ```
 
-It will print the contents of the archive, as read by the corresponding ArchiveReader,
-along with the file hashes (computed by reading the archive members).
+It prints the detected format, lists members and displays their hashes.
 
+## Exception handling
 
-## Best practices
-
-- All exceptions raised by libraries should be wrapped in an exception defined in
-`src/archivey/exceptions.py`. NEVER catch `Exception` as it may hide code bugs; catch
-only the base exception of each library, or specific builtin exceptions that they raise.
-
+Wrap exceptions from third‑party libraries in subclasses of
+`archivey.api.exceptions.ArchiveError`.  Avoid catching generic
+`Exception`; catch the specific library base class or builtin
+exceptions instead.  See the *Exception handling* section in the
+developer guide for details.

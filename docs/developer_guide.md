@@ -11,6 +11,13 @@ The library's modules are organized into these packages:
 
 The library exposes an `archivey.api.archive_reader.ArchiveReader` abstract base class for users with the public API. The actual format readers extend from the helper class `archivey.internal.base_reader.BaseArchiveReader`, which implements most of the public API by delegating to some simpler methods that the readers must implement. New readers will almost always want to inherit from `BaseArchiveReader`.
 
+## Repository layout
+
+- `src/archivey` – library implementation modules
+- `tests` – pytest suite with sample archives in `tests/test_archives`
+- `docs` – documentation sources, including this guide
+- `scripts` – helper utilities
+
 ## Registering Your Reader
 
 For your reader to be called, you'll need to:
@@ -204,4 +211,14 @@ hatch run docs
 This copies the project `README.md` to `docs/index.md` and then
 builds the MkDocs site (into `site/`). Ensure the optional development
 dependencies are installed (e.g. `pip install -e .[dev]`).
+
+## Command-line helper
+
+For quick manual inspection of archives you can run the bundled CLI:
+
+```bash
+uv run --extra optional python -m archivey.cli <archive_files>
+```
+
+It prints the detected format and lists the members with their hashes.
 
