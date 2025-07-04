@@ -271,7 +271,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         if callable(inner):
             try:
                 self._inner = inner()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 # Here we do want to catch all exceptions, not just ArchiveError
                 # subclasses, as the translation is intended exactly to convert
                 # any exception raised by the underlying library into an ArchiveError.
@@ -303,7 +303,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
             raise ValueError("I/O operation on closed file.")
         try:
             return self._inner.read(n)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._translate_exception(e)
 
     def _readinto_with_fallback(self, b: bytearray | memoryview) -> int:
@@ -318,13 +318,13 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     def readinto(self, b: bytearray | memoryview) -> int:
         try:
             return self._readinto_with_fallback(b)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._translate_exception(e)
 
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
         try:
             return self._inner.seek(offset, whence)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._translate_exception(e)
 
     def tell(self) -> int:
@@ -342,13 +342,13 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
     def write(self, b: Any) -> int:
         try:
             return self._inner.write(b)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._translate_exception(e)
 
     def writelines(self, lines: Any) -> None:
         try:
             self._inner.writelines(lines)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._translate_exception(e)
 
     def close(self) -> None:
@@ -361,7 +361,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
 
         try:
             self._inner.close()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._translate_exception(e)
         super().close()
 

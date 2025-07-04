@@ -573,7 +573,7 @@ class SevenZipReader(BaseArchiveReader):
                 with self._temporary_password(pwd):
                     self._archive.extract(targets=extract_targets, factory=factory)
                     factory.finish()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 # Here we do want to catch all exceptions, not just ArchiveError
                 # subclasses, as any exception raised in this thread would be silently
                 # ignored. We send them through the queue so that the main thread

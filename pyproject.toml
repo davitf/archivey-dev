@@ -94,6 +94,9 @@ lint.extend-select = [
 #    "SIM",      # Common simplification rules
     "TID",      # Some good import practices
     "TC",       # Enforce importing certain types in a TYPE_CHECKING block
+#    "PTH",      # Use pathlib instead of os.path
+#    "A",   # detect shadowed builtins
+    "BLE", # disallow catch-all exceptions
 ]
 
 [tool.coverage.report]
