@@ -37,6 +37,25 @@ def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
         return False
 
 
+def read_exact(stream: IO[bytes], n: int) -> bytes:
+    """Read exactly ``n`` bytes from ``stream``.
+
+    Continues reading until ``n`` bytes are returned or raises ``EOFError``
+    if the stream ends prematurely.
+    """
+
+    if n < 0:
+        raise ValueError("n must be non-negative")
+
+    data = bytearray()
+    while len(data) < n:
+        chunk = stream.read(n - len(data))
+        if not chunk:
+            raise EOFError(f"Expected {n} bytes, got {len(data)}")
+        data.extend(chunk)
+    return bytes(data)
+
+
 @runtime_checkable
 class ReadableBinaryStream(Protocol):
     def read(self, n: int = -1, /) -> bytes: ...
@@ -156,6 +175,15 @@ def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
         f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper"
     )
     return BinaryIOWrapper(obj)
+
+
+def ensure_buffered_io(obj: BinaryIO) -> BinaryIO:
+    """Return ``obj`` wrapped in :class:`io.BufferedReader` if needed."""
+
+    if isinstance(obj, io.BufferedReader):
+        return obj
+
+    return io.BufferedReader(obj)
 
 
 # def ensure_bufferedio(obj: Any) -> BinaryIO:
