@@ -1,6 +1,7 @@
 import copy
 import os
 import random
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -818,41 +819,34 @@ DUPLICATE_FILES = [
 ]
 
 
-def build_archive_infos() -> list[SampleArchive]:
+def build_archive_infos(
+    contents: ArchiveContents,
+    format_infos: list[ArchiveCreationInfo],
+) -> list[SampleArchive]:
     """Build all ArchiveInfo objects from the definitions."""
     archives = []
-    for contents, format_infos in ARCHIVE_DEFINITIONS:
-        for format_info in format_infos:
-            filename = f"{contents.file_basename}__{format_info.file_suffix}"
-            archive_info = SampleArchive(
-                filename=filename,
-                contents=contents,
-                creation_info=format_info,
-                skip_test=filename in SKIP_TEST_FILENAMES,
-            )
-
-            if any(
-                MARKER_FILENAME_BASED_ON_ARCHIVE_NAME in a.name
-                for a in archive_info.contents.files
-            ):
-                archive_info.contents = copy.deepcopy(archive_info.contents)
-                for file in archive_info.contents.files:
-                    if file.name == MARKER_FILENAME_BASED_ON_ARCHIVE_NAME:
-                        archive_name_without_ext = os.path.splitext(
-                            archive_info.filename
-                        )[0]
-                        file.name = archive_name_without_ext
-
-            archives.append(archive_info)
-
-    # Verify all skip test filenames were created
-    created_filenames = {a.filename for a in archives}
-    missing_skip_tests = SKIP_TEST_FILENAMES - created_filenames
-    if missing_skip_tests:
-        raise ValueError(
-            f"Some skip test filenames were not created: {missing_skip_tests}. Created filenames: {created_filenames}"
+    for format_info in format_infos:
+        filename = f"{contents.file_basename}__{format_info.file_suffix}"
+        archive_info = SampleArchive(
+            filename=filename,
+            contents=contents,
+            creation_info=format_info,
+            skip_test=filename in SKIP_TEST_FILENAMES,
         )
 
+        if any(
+            MARKER_FILENAME_BASED_ON_ARCHIVE_NAME in a.name
+            for a in archive_info.contents.files
+        ):
+            archive_info.contents = copy.deepcopy(archive_info.contents)
+            for file in archive_info.contents.files:
+                if file.name == MARKER_FILENAME_BASED_ON_ARCHIVE_NAME:
+                    archive_name_without_ext = os.path.splitext(archive_info.filename)[
+                        0
+                    ]
+                    file.name = archive_name_without_ext
+
+        archives.append(archive_info)
     return archives
 
 
@@ -891,75 +885,72 @@ def filter_archives(
     return filtered
 
 
-# Archive definitions
-ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
-    (
-        ArchiveContents(
-            file_basename="basic_nonsolid",
-            files=BASIC_FILES,
-        ),
-        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
+BASIC_ARCHIVES = build_archive_infos(
+    ArchiveContents(
+        file_basename="basic_nonsolid",
+        files=BASIC_FILES,
     ),
-    (
-        ArchiveContents(
-            file_basename="basic_solid",
-            files=BASIC_FILES,
-            solid=True,
-        ),
-        RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
+    ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
+) + build_archive_infos(
+    ArchiveContents(
+        file_basename="basic_solid",
+        files=BASIC_FILES,
+        solid=True,
     ),
-    (
-        ArchiveContents(
-            file_basename="comment",
-            files=COMMENT_FILES,
-            archive_comment="This is a\nmulti-line comment",
-        ),
-        ZIP_FORMATS + RAR_FORMATS,
+    RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
+)
+
+COMMENT_ARCHIVES = build_archive_infos(
+    ArchiveContents(
+        file_basename="comment",
+        files=COMMENT_FILES,
+        archive_comment="This is a\nmulti-line comment",
     ),
-    (
+    ZIP_FORMATS + RAR_FORMATS,
+)
+
+ENCRYPTION_ARCHIVES = (
+    build_archive_infos(
         ArchiveContents(
             file_basename="encryption",
             files=ENCRYPTION_SINGLE_PASSWORD_FILES,
             solid=False,
         ),
-        # Zipfile library doesn't support writing encrypted archives.
         [ZIP_INFOZIP] + RAR_FORMATS + SEVENZIP_FORMATS,
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="encryption_several_passwords",
             files=ENCRYPTION_SEVERAL_PASSWORDS_FILES,
             solid=False,
         ),
-        # Zipfile library doesn't support writing encrypted archives.
         [ZIP_INFOZIP] + RAR_FORMATS + SEVENZIP_FORMATS,
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="encryption_with_plain",
             files=ENCRYPTION_ENCRYPTED_AND_PLAIN_FILES,
             solid=False,
         ),
-        # Zipfile library doesn't support writing encrypted archives.
         [ZIP_INFOZIP] + RAR_FORMATS + SEVENZIP_FORMATS,
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="encryption_solid",
             files=ENCRYPTION_SINGLE_PASSWORD_FILES,
             solid=True,
         ),
         RAR_FORMATS + SEVENZIP_FORMATS,
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="encrypted_header",
             files=BASIC_FILES,
             header_password="header_password",
         ),
         RAR_FORMATS + SEVENZIP_FORMATS,
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="encrypted_header_solid",
             files=BASIC_FILES,
@@ -967,244 +958,188 @@ ARCHIVE_DEFINITIONS: list[tuple[ArchiveContents, list[ArchiveCreationInfo]]] = [
             header_password="header_password",
         ),
         RAR_FORMATS + SEVENZIP_FORMATS,
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="encryption_with_symlinks",
             files=ENCRYPTION_SEVERAL_PASSWORDS_AND_SYMLINKS_FILES,
             solid=False,
         ),
         RAR_FORMATS + [SEVENZIP_7ZCMD],
+    )
+)
+
+SYMLINK_ARCHIVES = build_archive_infos(
+    ArchiveContents(
+        file_basename="symlinks",
+        files=SYMLINKS_FILES,
+        solid=False,
     ),
-    (
-        ArchiveContents(
-            file_basename="symlinks",
-            files=SYMLINKS_FILES,
-            solid=False,
-        ),
-        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
+    ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
+) + build_archive_infos(
+    ArchiveContents(
+        file_basename="symlinks_solid",
+        files=SYMLINKS_FILES,
+        solid=True,
     ),
-    (
-        ArchiveContents(
-            file_basename="symlinks_solid",
-            files=SYMLINKS_FILES,
-            solid=True,
-        ),
-        RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
-    ),
-    (
+    RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
+)
+
+HARDLINK_ARCHIVES = (
+    build_archive_infos(
         ArchiveContents(
             file_basename="hardlinks_nonsolid",
             files=HARDLINKS_FILES,
         ),
         [RAR_CMD],  # RAR4 does not support hardlinks
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="hardlinks_solid",
             files=HARDLINKS_FILES,
             solid=True,
         ),
         [RAR_CMD] + BASIC_TAR_FORMATS,
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="hardlinks_folder_format",
             files=HARDLINKS_FILES_FOR_FOLDER_FORMAT,
         ),
         [FOLDER_FORMAT],
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="hardlinks_with_duplicate_files",
             files=HARDLINKS_WITH_DUPLICATE_FILES,
         ),
         [TAR_PLAIN_TARFILE],  # , TAR_GZ_TARFILE],
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="hardlinks_recursive_and_broken",
             files=HARDLINKS_RECURSIVE_AND_BROKEN,
         ),
         [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
+    )
+)
+
+ENCODING_ARCHIVES = build_archive_infos(
+    ArchiveContents(
+        file_basename="encoding",
+        files=ENCODING_FILES,
     ),
-    (
-        ArchiveContents(
-            file_basename="encoding",
-            files=ENCODING_FILES,
-        ),
-        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
+    ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT] + BASIC_TAR_FORMATS,
+) + build_archive_infos(
+    ArchiveContents(
+        file_basename="encoding_comment",
+        files=ENCODING_FILES,
+        archive_comment="Comentário em português 😀",
     ),
-    (
-        ArchiveContents(
-            file_basename="encoding",
-            files=ENCODING_FILES,
-            solid=True,
-        ),
-        BASIC_TAR_FORMATS,
+    ZIP_FORMATS + RAR_FORMATS,
+)
+
+
+COMPRESSION_METHODS_ARCHIVES = build_archive_infos(
+    ArchiveContents(
+        file_basename="compression_methods",
+        files=COMPRESSION_METHODS_FILES,
     ),
-    (
-        ArchiveContents(
-            file_basename="encoding_comment",
-            files=ENCODING_FILES,
-            archive_comment="Comentário em português 😀",
-        ),
-        ZIP_FORMATS + RAR_FORMATS,
+    ZIP_FORMATS,
+) + build_archive_infos(
+    ArchiveContents(
+        file_basename="compression_methods_lzma",
+        files=COMPRESSION_METHOD_FILES_LZMA,
     ),
-    (
-        ArchiveContents(
-            file_basename="compression_methods",
-            files=COMPRESSION_METHODS_FILES,
-        ),
-        ZIP_FORMATS,
+    [ZIP_ZIPFILE_STORE],  # Infozip doesn't support lzma
+)
+
+SINGLE_FILE_ARCHIVES = build_archive_infos(
+    ArchiveContents(
+        file_basename="single_file_with_metadata",
+        files=[SINGLE_FILE_INFO_FIXED_FILENAME_AND_MTIME],
     ),
-    (
-        ArchiveContents(
-            file_basename="compression_methods_lzma",
-            files=COMPRESSION_METHOD_FILES_LZMA,
-        ),
-        [ZIP_ZIPFILE_STORE],  # Infozip doesn't support lzma
+    [GZIP_CMD_PRESERVE_METADATA],
+) + build_archive_infos(
+    ArchiveContents(
+        file_basename="single_file",
+        files=[SINGLE_FILE_INFO_NO_METADATA],
     ),
-    (
-        ArchiveContents(
-            file_basename="single_file_with_metadata",
-            files=[SINGLE_FILE_INFO_FIXED_FILENAME_AND_MTIME],
-        ),
-        [GZIP_CMD_PRESERVE_METADATA],
+    ALL_SINGLE_FILE_FORMATS,
+)
+
+PERMISSIONS_ARCHIVES = build_archive_infos(
+    ArchiveContents(
+        file_basename="permissions",
+        files=TEST_PERMISSIONS_FILES,
     ),
-    (
-        ArchiveContents(
-            file_basename="single_file",
-            files=[SINGLE_FILE_INFO_NO_METADATA],
-        ),
-        ALL_SINGLE_FILE_FORMATS,
-    ),
-    (
-        ArchiveContents(
-            file_basename="permissions",
-            files=TEST_PERMISSIONS_FILES,
-        ),
-        ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
-    ),
-    (
-        ArchiveContents(
-            file_basename="permissions_solid",
-            files=TEST_PERMISSIONS_FILES,
-            solid=True,
-        ),
-        BASIC_TAR_FORMATS,
-    ),
-    (
+    ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT] + BASIC_TAR_FORMATS,
+)
+
+LARGE_ARCHIVES = (
+    build_archive_infos(
         ArchiveContents(
             file_basename="large_files_nonsolid",
             files=LARGE_FILES,
         ),
         ZIP_RAR_7Z_FORMATS + [FOLDER_FORMAT],
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="large_files_solid",
             files=LARGE_FILES,
             solid=True,
         ),
         RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="large_single_file",
             files=[SINGLE_LARGE_FILE],
         ),
         ALL_SINGLE_FILE_FORMATS,
+    )
+)
+
+SYMLINK_LOOP_ARCHIVES = build_archive_infos(
+    ArchiveContents(
+        file_basename="symlink_loop",
+        files=SYMLINK_LOOP_FILES,
     ),
-    (
-        ArchiveContents(
-            file_basename="symlink_loop",
-            files=SYMLINK_LOOP_FILES,
-        ),
-        [ZIP_INFOZIP, TAR_PLAIN_TARFILE, FOLDER_FORMAT],
+    [ZIP_INFOZIP, TAR_PLAIN_TARFILE, FOLDER_FORMAT],
+)
+
+DUPLICATE_FILES_ARCHIVES = build_archive_infos(
+    ArchiveContents(
+        file_basename="duplicate_files",
+        files=DUPLICATE_FILES,
     ),
-    (
-        ArchiveContents(
-            file_basename="duplicate_files",
-            files=DUPLICATE_FILES,
-        ),
-        ZIP_RAR_7Z_FORMATS + [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
-    ),
-    (
+    ZIP_RAR_7Z_FORMATS + [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
+)
+
+SANITIZE_ARCHIVES = (
+    build_archive_infos(
         ArchiveContents(
             file_basename="sanitize",
             files=SANITIZE_FILES_FULL,
         ),
         [TAR_PLAIN_TARFILE, TAR_GZ_TARFILE],
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="sanitize",
             files=SANITIZE_FILES_WITHOUT_HARDLINKS,
         ),
         [ZIP_ZIPFILE_STORE],
-    ),
-    (
+    )
+    + build_archive_infos(
         ArchiveContents(
             file_basename="sanitize",
             files=SANITIZE_FILES_WITHOUT_ABSOLUTE_PATHS,
         ),
         [FOLDER_FORMAT, SEVENZIP_7ZCMD] + RAR_FORMATS,
-    ),
-]
-
-# Build all archive infos
-SAMPLE_ARCHIVES = build_archive_infos()
-
-BASIC_ARCHIVES = filter_archives(
-    SAMPLE_ARCHIVES,
-    prefixes=["basic_nonsolid", "basic_solid"],
-    custom_filter=lambda x: x.creation_info.format != ArchiveFormat.ISO,
+    )
 )
-
-SYMLINK_ARCHIVES = filter_archives(
-    SAMPLE_ARCHIVES,
-    prefixes=["symlinks"],
-    custom_filter=lambda x: x.creation_info.format != ArchiveFormat.ISO,
-)
-
-DUPLICATE_FILES_ARCHIVES = filter_archives(
-    SAMPLE_ARCHIVES,
-    prefixes=["duplicate_files"],
-    custom_filter=lambda x: x.creation_info.format != ArchiveFormat.ISO,
-)
-
-SANITIZE_ARCHIVES = filter_archives(
-    SAMPLE_ARCHIVES,
-    prefixes=["sanitize"],
-)
-
-LARGE_ARCHIVES = filter_archives(
-    SAMPLE_ARCHIVES,
-    prefixes=["large_files_nonsolid", "large_files_solid", "large_single_file"],
-)
-
-
-# TODO: add tests and fixes for:
-#   - rar4 archives
-#   - hard links (tar and rar)
-#      - open() hard links should open the referenced file
-#   - duplicate files:
-#      - open(member) should open the correct file
-#      - open(filename) should open the last file with that name
-#   - filter function
-#      - open() with filtered members should work
-#   - encrypted files:
-#      passing password in constructor should work
-#      passing password in iter_members_with_io() should work
-#      passing password in open() should work
-#      passing wrong password in open() should raise an exception
-#      passing wrong password in iter_members_with_io() should raise an exception only if trying to read the stream
-
-
-# Currently failing with uncaught exception:
-#  archivey tests/test_archives/encryption_several_passwords__7zcmd.7z  --password password --hide-progress
-
 
 ALTERNATIVE_CONFIG = ArchiveyConfig(
     use_rapidgzip=True,
@@ -1223,3 +1158,59 @@ ALTERNATIVE_PACKAGES_FORMATS = (
     ArchiveFormat.TAR_XZ,
     ArchiveFormat.TAR_ZSTD,
 )
+
+SAMPLE_ARCHIVES = (
+    BASIC_ARCHIVES
+    + COMMENT_ARCHIVES
+    + ENCRYPTION_ARCHIVES
+    + SYMLINK_ARCHIVES
+    + HARDLINK_ARCHIVES
+    + ENCODING_ARCHIVES
+    + COMPRESSION_METHODS_ARCHIVES
+    + SINGLE_FILE_ARCHIVES
+    + PERMISSIONS_ARCHIVES
+    + LARGE_ARCHIVES
+    + SYMLINK_LOOP_ARCHIVES
+    + DUPLICATE_FILES_ARCHIVES
+    + SANITIZE_ARCHIVES
+)
+
+# Verify all skip test filenames were created
+created_filenames = {a.filename for a in SAMPLE_ARCHIVES}
+missing_skip_tests = SKIP_TEST_FILENAMES - created_filenames
+if missing_skip_tests:
+    raise ValueError(
+        f"Some skip test filenames were not created: {missing_skip_tests}. Created filenames: {created_filenames}"
+    )
+
+
+if __name__ == "__main__":
+    # Check if the files in tests/test_archives matches the list in SAMPLE_ARCHIVES.
+
+    expected_files = {
+        a.filename
+        for a in SAMPLE_ARCHIVES
+        if a.creation_info.format != ArchiveFormat.FOLDER
+    }
+    existing_files = set(
+        os.listdir(os.path.join(DEFAULT_ARCHIVES_BASE_DIR, TEST_ARCHIVES_DIR))
+    )
+    missing_files = expected_files - existing_files
+    extra_files = existing_files - expected_files
+
+    if missing_files:
+        print(f"Files missing in {DEFAULT_ARCHIVES_BASE_DIR}/{TEST_ARCHIVES_DIR}:")
+        for filename in sorted(missing_files):
+            print(f"    {filename}")
+
+    if extra_files:
+        print(
+            f"Files in {DEFAULT_ARCHIVES_BASE_DIR}/{TEST_ARCHIVES_DIR} but not in SAMPLE_ARCHIVES:"
+        )
+        for filename in sorted(extra_files):
+            print(f"    {filename}")
+
+    if not missing_files and not extra_files:
+        print("All files match")
+    else:
+        sys.exit(1)
