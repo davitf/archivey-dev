@@ -37,6 +37,25 @@ def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
         return False
 
 
+def read_exact(stream: IO[bytes], n: int) -> bytes:
+    """Read exactly ``n`` bytes from ``stream``.
+
+    Continues reading until ``n`` bytes are returned or raises ``EOFError``
+    if the stream ends prematurely.
+    """
+
+    if n < 0:
+        raise ValueError("n must be non-negative")
+
+    data = bytearray()
+    while len(data) < n:
+        chunk = stream.read(n - len(data))
+        if not chunk:
+            raise EOFError(f"Expected {n} bytes, got {len(data)}")
+        data.extend(chunk)
+    return bytes(data)
+
+
 @runtime_checkable
 class ReadableBinaryStream(Protocol):
     def read(self, n: int = -1, /) -> bytes: ...

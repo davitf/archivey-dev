@@ -54,6 +54,7 @@ from archivey.internal.io_helpers import (
     ErrorIOStream,
     ExceptionTranslatingIO,
     ensure_binaryio,
+    read_exact,
     run_with_exception_translation,
 )
 from archivey.internal.utils import (
@@ -327,7 +328,7 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
                 return b""
 
             to_read = self._remaining if n < 0 else min(self._remaining, n)
-            data = self._stream.read(to_read)
+            data = read_exact(self._stream, to_read)
             if not data:
                 raise EOFError(f"Unexpected EOF while reading {self._filename}")
             self._remaining -= len(data)

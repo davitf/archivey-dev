@@ -5,6 +5,7 @@ import zipfile
 from typing import IO, TYPE_CHECKING, BinaryIO, cast
 
 from archivey.config import get_archivey_config
+from archivey.internal.io_helpers import read_exact
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
     SINGLE_FILE_COMPRESSED_FORMATS,
@@ -44,7 +45,7 @@ def _is_executable(stream: IO[bytes]) -> bool:
     }
 
     stream.seek(0)
-    header = stream.read(16)
+    header = read_exact(stream, 16)
     return any(header.startswith(magic) for magic in EXECUTABLE_MAGICS.values())
 
 
@@ -106,7 +107,7 @@ def detect_archive_format_by_signature(
         for magics, offset, fmt in SIGNATURES:
             bytes_to_read = max(len(magic) for magic in magics)
             f.seek(offset)
-            data = f.read(bytes_to_read)
+            data = read_exact(f, bytes_to_read)
             if any(data.startswith(magic) for magic in magics):
                 detected_format = fmt
                 break

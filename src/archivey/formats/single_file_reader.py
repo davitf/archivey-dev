@@ -11,6 +11,7 @@ from archivey.exceptions import (
 from archivey.formats.compressed_streams import open_stream
 from archivey.formats.format_detection import EXTENSION_TO_FORMAT
 from archivey.internal.base_reader import BaseArchiveReader
+from archivey.internal.io_helpers import read_exact
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     ArchiveFormat,
@@ -52,7 +53,7 @@ def read_gzip_metadata(
 
     with open(path, "rb") as f:
         # Read the fixed 10-byte GZIP header
-        header = f.read(10)
+        header = read_exact(f, 10)
         if len(header) != 10 or header[:2] != b"\x1f\x8b":
             raise ArchiveFormatError("Not a valid GZIP file")
 
@@ -85,8 +86,8 @@ def read_gzip_metadata(
         # Handle optional fields
         if flg & 0x04:  # FEXTRA
             # The extra field contains a 2-byte length and then the data
-            xlen = struct.unpack("<H", f.read(2))[0]
-            extra_fields["extra"] = f.read(xlen)  # Store raw extra field data
+            xlen = struct.unpack("<H", read_exact(f, 2))[0]
+            extra_fields["extra"] = read_exact(f, xlen)  # Store raw extra field data
 
         if flg & 0x08:  # FNAME
             # The filename is a null-terminated string
@@ -102,7 +103,7 @@ def read_gzip_metadata(
             extra_fields["comment"] = comment_bytes.decode("utf-8", errors="replace")
 
         if flg & 0x02:  # FHCRC
-            f.read(2)  # Skip CRC16
+            read_exact(f, 2)  # Skip CRC16
 
         if extra_fields:
             if member.extra is None:
@@ -111,7 +112,7 @@ def read_gzip_metadata(
 
         # Now seek to trailer and read CRC32 and ISIZE
         f.seek(-8, 2)
-        crc32, isize = struct.unpack("<II", f.read(8))
+        crc32, isize = struct.unpack("<II", read_exact(f, 8))
         member.crc32 = crc32
         member.file_size = isize
 
@@ -141,7 +142,7 @@ def read_xz_metadata(path: str, member: ArchiveMember):
     logger.info("Reading XZ metadata for %s", path)
     with open(path, "rb") as f:
         f.seek(-12, 2)  # Footer is always 12 bytes
-        footer = f.read(12)
+        footer = read_exact(f, 12)
 
         if footer[-2:] != XZ_MAGIC_FOOTER:
             logger.warning("Invalid XZ footer, file possibly truncated: %s", path)
@@ -157,7 +158,7 @@ def read_xz_metadata(path: str, member: ArchiveMember):
         )
 
         f.seek(-12 - index_size, 2)
-        index_data = f.read(index_size)
+        index_data = read_exact(f, index_size)
 
         # Skip index indicator byte and reserved bits (first byte)
         if index_data[0] != 0x00:
