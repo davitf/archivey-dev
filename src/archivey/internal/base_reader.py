@@ -11,7 +11,7 @@ from uuid import uuid4
 from weakref import WeakSet
 
 from archivey.archive_reader import ArchiveReader
-from archivey.config import ArchiveyConfig, ExtractionFilter, get_default_config
+from archivey.config import ArchiveyConfig, ExtractionFilter, get_archivey_config
 from archivey.exceptions import (
     ArchiveMemberCannotBeOpenedError,
     ArchiveMemberNotFoundError,
@@ -135,7 +135,7 @@ class BaseArchiveReader(ArchiveReader):
                 through a significant portion of the archive if not already done.
         """
         super().__init__(archive_path, format)
-        self.config: ArchiveyConfig = get_default_config()
+        self.config: ArchiveyConfig = get_archivey_config()
 
         if pwd is not None and isinstance(pwd, str):
             self._archive_password: bytes | None = pwd.encode("utf-8")

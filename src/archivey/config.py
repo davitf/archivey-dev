@@ -4,14 +4,16 @@ import contextvars
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict
 
 from .types import ExtractionFilter, FilterFunc
 
 if TYPE_CHECKING or sys.version_info >= (3, 11):
     from enum import StrEnum
+    from typing import Unpack
 else:
     from backports.strenum import StrEnum
+    from typing_extensions import Unpack
 
 
 class OverwriteMode(StrEnum):
@@ -52,39 +54,101 @@ class ArchiveyConfig:
     "A filter function that can be used to filter members when iterating over an archive. It can be a function that takes an ArchiveMember and returns a possibly-modified ArchiveMember object, or None to skip the member."
 
 
+# Allow both enum and string literals for StrEnum fields
+OverwriteModeLiteral: TypeAlias = Literal["overwrite", "skip", "error"]
+ExtractionFilterLiteral: TypeAlias = Literal["data", "tar", "fully_trusted"]
+
+
+# TypedDict for config field overrides - allows type checking of kwargs
+class ConfigOverrides(TypedDict, total=False):
+    use_rapidgzip: bool | None
+    use_indexed_bzip2: bool | None
+    use_python_xz: bool | None
+    use_zstandard: bool | None
+    use_rar_stream: bool | None
+    use_single_file_stored_metadata: bool | None
+    tar_check_integrity: bool | None
+    overwrite_mode: OverwriteMode | OverwriteModeLiteral | None
+    extraction_filter: ExtractionFilter | FilterFunc | ExtractionFilterLiteral | None
+
+
+def _convert_str_enum_literals(overrides: Any) -> dict[str, Any]:
+    """Convert string literals to their corresponding StrEnum values for ArchiveyConfig fields."""
+    # Map field names to their corresponding enum classes
+    enum_fields = {
+        "overwrite_mode": OverwriteMode,
+        "extraction_filter": ExtractionFilter,
+    }
+
+    converted = {}
+    for k, v in overrides.items():
+        if v is None:
+            continue
+        if k in enum_fields and isinstance(v, str):
+            try:
+                v = enum_fields[k](v)
+            except ValueError:
+                raise ValueError(f"Invalid {k} literal: {v!r}")
+        converted[k] = v
+    return converted
+
+
 _default_config_var: contextvars.ContextVar[ArchiveyConfig] = contextvars.ContextVar(
     "archivey_default_config", default=ArchiveyConfig()
 )
 
 
-def get_default_config() -> ArchiveyConfig:
+def get_archivey_config() -> ArchiveyConfig:
     """Return the current default configuration."""
     return _default_config_var.get()
 
 
-def set_default_config(config: ArchiveyConfig) -> None:
-    """Set the default configuration for :func:`open_archive`."""
+def set_archivey_config(config: ArchiveyConfig) -> None:
+    """Set the default configuration for :func:`open_archive` and :func:`open_compressed_stream`."""
     _default_config_var.set(config)
 
 
-def set_default_config_fields(**kwargs: dict[str, Any]) -> None:
-    """Set the default configuration for :func:`open_archive`."""
-    config = get_default_config()
-    config = replace(config, **kwargs)
-    set_default_config(config)
+def set_archivey_config_fields(
+    **overrides: Unpack[ConfigOverrides],
+) -> None:
+    """Set fields in the default configuration for :func:`open_archive` and :func:`open_compressed_stream`."""
+    config = get_archivey_config()
+    updates = _convert_str_enum_literals(overrides)
+    config = replace(config, **updates)
+    set_archivey_config(config)
 
 
 @contextmanager
-def default_config(config: ArchiveyConfig | None = None, **kwargs: dict[str, Any]):
-    """Temporarily use ``config`` as the default configuration."""
-    if config is None:
-        config = get_default_config()
+def archivey_config(
+    config: ArchiveyConfig | None = None,
+    **overrides: Unpack[ConfigOverrides],
+):
+    """Temporarily use ``config`` and/or override fields as the default configuration for :func:`open_archive` and :func:`open_compressed_stream`.
 
-    if kwargs:
-        config = replace(config, **kwargs)
+    Example:
+    ```python
+    with archivey_config(use_rapidgzip=True):
+        archive1 = open_archive("path/to/archive.zip")
+        archive2 = open_archive("path/to/archive.zip")
+        ...
+    ```
+    """
+    if config is None:
+        config = get_archivey_config()
+
+    updates = _convert_str_enum_literals(overrides)
+    if updates:
+        config = replace(config, **updates)
 
     token = _default_config_var.set(config)
     try:
         yield
     finally:
         _default_config_var.reset(token)
+
+
+if __name__ == "__main__":
+    with archivey_config(
+        use_rapidgzip=True, extraction_filter="data", overwrite_mode="skip"
+    ):
+        print(get_archivey_config())

@@ -4,7 +4,7 @@ import os
 from typing import BinaryIO
 
 from archivey.archive_reader import ArchiveReader
-from archivey.config import ArchiveyConfig, default_config, get_default_config
+from archivey.config import ArchiveyConfig, archivey_config, get_archivey_config
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.formats.compressed_streams import open_stream
 from archivey.formats.folder_reader import FolderReader
@@ -142,9 +142,9 @@ def open_archive(
     reader_class = _FORMAT_TO_READER.get(format)
 
     if config is None:
-        config = get_default_config()
+        config = get_archivey_config()
 
-    with default_config(config):
+    with archivey_config(config):
         assert reader_class is not None
         reader = reader_class(
             format=format,
@@ -191,7 +191,7 @@ def open_compressed_stream(
         )
 
     if config is None:
-        config = get_default_config()
+        config = get_archivey_config()
 
-    with default_config(config):
+    with archivey_config(config):
         return open_stream(format, archive_path_normalized, config)
