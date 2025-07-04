@@ -1,6 +1,5 @@
 """Core functionality for opening and interacting with archives."""
 
-import io
 import os
 from typing import BinaryIO
 
@@ -18,7 +17,11 @@ from archivey.formats.zip_reader import ZipReader
 from archivey.internal.base_reader import (
     StreamingOnlyArchiveReaderWrapper,
 )
-from archivey.internal.io_helpers import RewindableNonSeekableStream, is_seekable
+from archivey.internal.io_helpers import (
+    RewindableNonSeekableStream,
+    ensure_buffered_io,
+    is_seekable,
+)
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
@@ -30,9 +33,7 @@ def _normalize_archive_path(
     archive_path: BinaryIO | str | bytes | os.PathLike,
 ) -> BinaryIO | str:
     if hasattr(archive_path, "read"):
-        if not isinstance(archive_path, io.BufferedReader):
-            archive_path = io.BufferedReader(archive_path)  # type: ignore[arg-type]
-        return archive_path  # type: ignore[return-value]
+        return ensure_buffered_io(archive_path)  # type: ignore[return-value]
     if isinstance(archive_path, os.PathLike):
         return str(archive_path)
     if isinstance(archive_path, bytes):
