@@ -76,6 +76,7 @@ def ensure_not_none(x: T | None) -> T:
 def is_stream(x: Any) -> TypeGuard[BinaryIO]:
     if isinstance(x, io.IOBase):
         return True
-    if hasattr(x, "read"):
-        raise ValueError(f"Expected a stream, got this weird object: {type(x)} {x!r}")
+    read_attr = getattr(x, "read", None)
+    if callable(read_attr):
+        return True
     return False
