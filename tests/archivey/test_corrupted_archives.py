@@ -3,12 +3,12 @@ from venv import logger
 
 import pytest
 
-from archivey.api.core import open_archive
-from archivey.api.exceptions import (
+from archivey.core import open_archive
+from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
 )
-from archivey.api.types import (
+from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     ArchiveFormat,
 )

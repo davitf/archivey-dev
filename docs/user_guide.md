@@ -22,12 +22,12 @@ except ArchiveError as e:
 
 ```
 
-`[open_archive][archivey.api.core.open_archive]` takes the path to an archive file (or an IO stream) and returns an `archivey.api.archive_reader.ArchiveReader` when the format is recognized. You can also pass an optional `config` object or set `streaming_only=True` to force sequential access.
+`[open_archive][archivey.core.open_archive]` takes the path to an archive file (or an IO stream) and returns an `archivey.archive_reader.ArchiveReader` when the format is recognized. You can also pass an optional `config` object or set `streaming_only=True` to force sequential access.
 
 ## Opening a Compressed Stream
 
 Archivey can also handle single-file compressed formats such as gzip, bzip2, xz,
-zstd and lz4. Use `[open_compressed_stream][archivey.api.core.open_compressed_stream]` to obtain an uncompressed binary
+zstd and lz4. Use `[open_compressed_stream][archivey.core.open_compressed_stream]` to obtain an uncompressed binary
 stream:
 
 ```python

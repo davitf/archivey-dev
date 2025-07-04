@@ -7,12 +7,12 @@ from typing import Optional
 
 import pytest
 
-from archivey.api.config import ArchiveyConfig
-from archivey.api.core import open_archive
-from archivey.api.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
-from archivey.api.filters import create_filter
-from archivey.api.types import ArchiveMember, CreateSystem, MemberType
+from archivey.config import ArchiveyConfig
+from archivey.core import open_archive
+from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
+from archivey.filters import create_filter
 from archivey.internal.dependency_checker import get_dependency_versions
+from archivey.types import ArchiveMember, CreateSystem, MemberType
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,

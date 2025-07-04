@@ -10,14 +10,15 @@ from typing import BinaryIO, Callable, Collection, Iterator, List, Union, cast
 from uuid import uuid4
 from weakref import WeakSet
 
-from archivey.api.archive_reader import ArchiveReader
-from archivey.api.config import ArchiveyConfig, ExtractionFilter, get_default_config
-from archivey.api.exceptions import (
+from archivey.archive_reader import ArchiveReader
+from archivey.config import ArchiveyConfig, ExtractionFilter, get_default_config
+from archivey.exceptions import (
     ArchiveMemberCannotBeOpenedError,
     ArchiveMemberNotFoundError,
 )
-from archivey.api.filters import DEFAULT_FILTERS
-from archivey.api.types import (
+from archivey.filters import DEFAULT_FILTERS
+from archivey.internal.extraction_helper import ExtractionHelper
+from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
@@ -25,7 +26,6 @@ from archivey.api.types import (
     IteratorFilterFunc,
     MemberType,
 )
-from archivey.internal.extraction_helper import ExtractionHelper
 
 from .io_helpers import LazyOpenIO
 
@@ -496,7 +496,7 @@ class BaseArchiveReader(ArchiveReader):
         The returned stream **MUST** be wrapped with
         `archivey.internal.io_helpers.ExceptionTranslatingIO` to ensure that
         exceptions from the underlying archive library are converted into
-        `archivey.api.exceptions.ArchiveError` subclasses.
+        `archivey.exceptions.ArchiveError` subclasses.
 
         **Guarantees for Implementers:**
         - This method is guaranteed to be called only for members where

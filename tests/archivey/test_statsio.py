@@ -3,10 +3,10 @@ import logging
 
 import pytest
 
-from archivey.api.config import ArchiveyConfig
-from archivey.api.core import open_archive, open_compressed_stream
-from archivey.api.types import ArchiveFormat
+from archivey.config import ArchiveyConfig
+from archivey.core import open_archive, open_compressed_stream
 from archivey.internal.io_helpers import IOStats, StatsIO, ensure_binaryio
+from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,

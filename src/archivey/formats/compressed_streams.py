@@ -5,10 +5,10 @@ import lzma
 import os
 from typing import IO, TYPE_CHECKING, BinaryIO, Optional, cast
 
-from archivey.api.config import ArchiveyConfig
-from archivey.api.types import ArchiveFormat
+from archivey.config import ArchiveyConfig
 from archivey.internal.io_helpers import is_seekable
 from archivey.internal.utils import is_stream
+from archivey.types import ArchiveFormat
 
 if TYPE_CHECKING:
     import indexed_bzip2
@@ -51,7 +51,7 @@ else:
 
 import logging
 
-from archivey.api.exceptions import (
+from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
     ArchiveError,

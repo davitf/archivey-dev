@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from archivey.api.core import open_archive
-from archivey.api.types import MemberType
+from archivey.core import open_archive
+from archivey.types import MemberType
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     DUPLICATE_FILES_ARCHIVES,

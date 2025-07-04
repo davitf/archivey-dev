@@ -2,8 +2,8 @@ import io
 
 import pytest
 
-from archivey.api.core import open_archive
-from archivey.api.types import ArchiveFormat
+from archivey.core import open_archive
+from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import ALTERNATIVE_CONFIG, SAMPLE_ARCHIVES
 from tests.archivey.testing_utils import skip_if_package_missing
 

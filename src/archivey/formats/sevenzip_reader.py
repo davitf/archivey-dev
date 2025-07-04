@@ -18,7 +18,7 @@ from typing import (
     cast,
 )
 
-from archivey.api.config import ExtractionFilter
+from archivey.config import ExtractionFilter
 from archivey.internal.base_reader import (
     BaseArchiveReader,
     _build_filter,
@@ -57,7 +57,7 @@ else:
 
 from contextlib import contextmanager
 
-from archivey.api.exceptions import (
+from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveEOFError,
@@ -65,15 +65,15 @@ from archivey.api.exceptions import (
     ArchiveStreamNotSeekableError,
     PackageNotInstalledError,
 )
-from archivey.api.types import (
+from archivey.internal.extraction_helper import ExtractionHelper
+from archivey.internal.utils import bytes_to_str
+from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
     IteratorFilterFunc,
     MemberType,
 )
-from archivey.internal.extraction_helper import ExtractionHelper
-from archivey.internal.utils import bytes_to_str
 
 logger = logging.getLogger(__name__)
 

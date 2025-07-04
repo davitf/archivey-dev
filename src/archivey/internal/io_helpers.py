@@ -16,7 +16,7 @@ from typing import (
     runtime_checkable,
 )
 
-from archivey.api.exceptions import ArchiveError
+from archivey.exceptions import ArchiveError
 
 logger = logging.getLogger(__name__)
 
