@@ -38,8 +38,7 @@ class TarReader(BaseArchiveReader):
         if isinstance(e, tarfile.ReadError):
             if "unexpected end of data" in str(e).lower():
                 return ArchiveEOFError("TAR archive is truncated")
-            else:
-                return ArchiveCorruptedError(f"Error reading TAR archive: {e}")
+            return ArchiveCorruptedError(f"Error reading TAR archive: {e}")
 
         return None
 
@@ -259,7 +258,7 @@ class TarReader(BaseArchiveReader):
     ) -> BinaryIO:
         assert self._archive is not None
 
-        tarinfo = cast(tarfile.TarInfo, member.raw_info)
+        tarinfo = cast("tarfile.TarInfo", member.raw_info)
 
         def _open_stream() -> IO[bytes]:
             assert self._archive is not None

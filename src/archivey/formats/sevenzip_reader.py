@@ -265,10 +265,10 @@ class ExtractWriterFactory(WriterFactory):
         if member is None:
             logger.error("Member %s not found", fname)
             return py7zr.io.NullIO()
-        elif member.is_link:
+        if member.is_link:
             logger.debug("Extracting link %s", fname)
             return ExtractLinkWriter(member)
-        elif not member.is_file:
+        if not member.is_file:
             logger.debug("Ignoring non-file member %s", fname)
             return py7zr.io.NullIO()
 
@@ -535,7 +535,7 @@ class SevenZipReader(BaseArchiveReader):
             assert len(it) == 1, (
                 f"Expected exactly one member, got {len(it)}. {member.filename}"
             )
-            stream = cast(StreamingFile.Reader, it[0][1])
+            stream = cast("StreamingFile.Reader", it[0][1])
             if isinstance(stream, ErrorIOStream):
                 stream.read()
             return stream
@@ -557,7 +557,7 @@ class SevenZipReader(BaseArchiveReader):
         }
         # The original filenames in the raw infos.
         extract_targets = [
-            cast(ArchiveFile, member.raw_info).filename for member in members
+            cast("ArchiveFile", member.raw_info).filename for member in members
         ]
 
         # Allow the queue to carry tuples, exceptions, or None

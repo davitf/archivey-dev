@@ -57,9 +57,9 @@ class FolderReader(BaseArchiveReader):
         """Determines the MemberType from a path and its lstat result."""
         if stat.S_ISDIR(lstat_result.st_mode):
             return MemberType.DIR
-        elif stat.S_ISLNK(lstat_result.st_mode):
+        if stat.S_ISLNK(lstat_result.st_mode):
             return MemberType.SYMLINK
-        elif stat.S_ISREG(lstat_result.st_mode):
+        if stat.S_ISREG(lstat_result.st_mode):
             return MemberType.FILE
         return MemberType.OTHER
 

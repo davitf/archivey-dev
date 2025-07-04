@@ -516,10 +516,10 @@ def create_rar_archive_with_command_line(
     if os.path.exists(abs_archive_path):
         os.remove(abs_archive_path)
 
-    if contents.solid and len(set(f.password for f in contents.files)) > 1:
+    if contents.solid and len({f.password for f in contents.files}) > 1:
         raise ValueError("Solid archives do not support multiple passwords")
 
-    if contents.solid and len(set(f.compression_method for f in contents.files)) > 1:
+    if contents.solid and len({f.compression_method for f in contents.files}) > 1:
         raise ValueError("Solid archives do not support multiple compression methods")
 
     with tempfile.TemporaryDirectory() as tempdir:

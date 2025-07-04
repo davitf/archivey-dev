@@ -261,7 +261,7 @@ def main(argv: list[str] | None = None) -> None:
             ):
                 f = original_open(file, mode, *oargs, **okwargs)
                 stats = stats_per_file.setdefault(path, IOStats())
-                return StatsIO(cast(IO[bytes], f), stats)
+                return StatsIO(cast("IO[bytes]", f), stats)
             return original_open(file, mode, *oargs, **okwargs)
 
         builtins.open = patched_open

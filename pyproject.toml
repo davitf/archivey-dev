@@ -84,7 +84,17 @@ pyrefly = "uvx pyrefly check"
 
 [tool.ruff]
 target-version = "py310"
-lint.extend-select = ["I"]  # sort imports
+lint.extend-select = [
+    "I",        # sort imports
+    "F",        # Pyflakes rules
+    "C4",       # Catch incorrect use of comprehensions, dict, list, etc
+    "ISC",      # Good use of string concatenation
+    "ICN",      # Use common import conventions
+    "RET",      # Good return practices
+#    "SIM",      # Common simplification rules
+    "TID",      # Some good import practices
+    "TC",       # Enforce importing certain types in a TYPE_CHECKING block
+]
 
 [tool.coverage.report]
 exclude_also = [

@@ -220,8 +220,7 @@ class SampleArchive:
         name = self.get_archive_name(variant)
         if self.creation_info.generation_method == GenerationMethod.EXTERNAL:
             return os.path.join(base_dir, TEST_ARCHIVES_EXTERNAL_DIR, name)
-        else:
-            return os.path.join(base_dir, TEST_ARCHIVES_DIR, name)
+        return os.path.join(base_dir, TEST_ARCHIVES_DIR, name)
 
 
 # Generation method constants

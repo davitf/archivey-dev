@@ -297,7 +297,6 @@ class SingleFileReader(BaseArchiveReader):
         if self.fileobj is None:
             return open_stream(self.format, self.path_or_stream, self.config)
 
-        else:
-            fileobj = self.fileobj
-            self.fileobj = None
-            return fileobj
+        fileobj = self.fileobj
+        self.fileobj = None
+        return fileobj

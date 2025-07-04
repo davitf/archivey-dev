@@ -8,9 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from .types import ExtractionFilter, FilterFunc
 
-if TYPE_CHECKING:
-    from enum import StrEnum
-elif sys.version_info >= (3, 11):
+if TYPE_CHECKING or sys.version_info >= (3, 11):
     from enum import StrEnum
 else:
     from backports.strenum import StrEnum

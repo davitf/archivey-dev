@@ -209,9 +209,9 @@ class ZipReader(BaseArchiveReader):
 
         def _open_stream() -> BinaryIO:
             return cast(
-                BinaryIO,
+                "BinaryIO",
                 archive.open(
-                    cast(zipfile.ZipInfo, member.raw_info),
+                    cast("zipfile.ZipInfo", member.raw_info),
                     pwd=str_to_bytes(
                         pwd if pwd is not None else self.get_archive_password()
                     ),

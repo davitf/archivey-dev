@@ -42,16 +42,14 @@ def corrupt_archive(
         if size == 0:  # Cannot corrupt an empty file
             return
 
-        elif corruption_type == "single":
+        if corruption_type == "single":
             position_fraction = 0.5
             num_bytes = 1
-        elif corruption_type == "random":
-            position_fraction = 0.5
-            num_bytes = 128
-        elif corruption_type == "zeroes":
-            position_fraction = 0.5
-            num_bytes = 128
-        elif corruption_type == "ffs":
+        elif (
+            corruption_type == "random"
+            or corruption_type == "zeroes"
+            or corruption_type == "ffs"
+        ):
             position_fraction = 0.5
             num_bytes = 128
         else:
