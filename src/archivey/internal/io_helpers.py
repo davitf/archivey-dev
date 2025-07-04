@@ -180,8 +180,9 @@ def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
 def ensure_buffered_io(obj: BinaryIO) -> BinaryIO:
     """Return ``obj`` wrapped in :class:`io.BufferedReader` if needed."""
 
-    if isinstance(obj, io.BufferedIOBase):
+    if isinstance(obj, io.BufferedReader):
         return obj
+
     return io.BufferedReader(obj)
 
 
