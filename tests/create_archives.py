@@ -56,8 +56,8 @@ try:  # Optional dependency
 except ModuleNotFoundError:
     zstandard = None
 
-from archivey.api.exceptions import PackageNotInstalledError
-from archivey.api.types import (
+from archivey.exceptions import PackageNotInstalledError
+from archivey.types import (
     TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,
     MemberType,

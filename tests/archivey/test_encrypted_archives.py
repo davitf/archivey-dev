@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from archivey.api.core import open_archive
-from archivey.api.exceptions import ArchiveEncryptedError, ArchiveError
-from archivey.api.types import ArchiveFormat, MemberType
+from archivey.core import open_archive
+from archivey.exceptions import ArchiveEncryptedError, ArchiveError
+from archivey.types import ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     SampleArchive,

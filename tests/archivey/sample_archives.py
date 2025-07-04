@@ -9,8 +9,8 @@ from typing import Any, Callable, Optional
 
 # import lz4.frame
 # import zstandard
-from archivey.api.config import ArchiveyConfig
-from archivey.api.types import ArchiveFormat, MemberType
+from archivey.config import ArchiveyConfig
+from archivey.types import ArchiveFormat, MemberType
 
 
 class GenerationMethod(Enum):

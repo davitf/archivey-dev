@@ -2,7 +2,8 @@ import abc
 import os
 from typing import BinaryIO, Callable, Collection, Iterator, List
 
-from archivey.api.types import (
+from archivey.internal.utils import is_stream
+from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
@@ -10,7 +11,6 @@ from archivey.api.types import (
     ExtractionFilter,
     IteratorFilterFunc,
 )
-from archivey.internal.utils import is_stream
 
 
 class ArchiveReader(abc.ABC):

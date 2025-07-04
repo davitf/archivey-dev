@@ -1,12 +1,12 @@
-from archivey.api.archive_reader import ArchiveReader
-from archivey.api.config import (
+from archivey.archive_reader import ArchiveReader
+from archivey.config import (
     ArchiveyConfig,
     default_config,
     get_default_config,
     set_default_config,
 )
-from archivey.api.core import open_archive, open_compressed_stream
-from archivey.api.exceptions import (
+from archivey.core import open_archive, open_compressed_stream
+from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveEOFError,
@@ -15,13 +15,13 @@ from archivey.api.exceptions import (
     ArchiveMemberNotFoundError,
     ArchiveNotSupportedError,
 )
-from archivey.api.filters import (
+from archivey.filters import (
     create_filter,
     data_filter,
     fully_trusted,
     tar_filter,
 )
-from archivey.api.types import (
+from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,

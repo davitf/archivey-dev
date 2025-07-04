@@ -5,10 +5,13 @@ import struct
 from datetime import datetime, timezone
 from typing import BinaryIO, Iterator, List
 
-from archivey.api.exceptions import (
+from archivey.exceptions import (
     ArchiveFormatError,
 )
-from archivey.api.types import (
+from archivey.formats.compressed_streams import open_stream
+from archivey.formats.format_detection import EXTENSION_TO_FORMAT
+from archivey.internal.base_reader import BaseArchiveReader
+from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     ArchiveFormat,
     ArchiveInfo,
@@ -16,9 +19,6 @@ from archivey.api.types import (
     CreateSystem,
     MemberType,
 )
-from archivey.formats.compressed_streams import open_stream
-from archivey.formats.format_detection import EXTENSION_TO_FORMAT
-from archivey.internal.base_reader import BaseArchiveReader
 
 logger = logging.getLogger(__name__)
 

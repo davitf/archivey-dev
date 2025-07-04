@@ -3,11 +3,11 @@ import logging
 
 import pytest
 
-from archivey.api.config import ArchiveyConfig
-from archivey.api.core import open_archive, open_compressed_stream
-from archivey.api.exceptions import ArchiveStreamNotSeekableError
-from archivey.api.types import ArchiveFormat
+from archivey.config import ArchiveyConfig
+from archivey.core import open_archive, open_compressed_stream
+from archivey.exceptions import ArchiveStreamNotSeekableError
 from archivey.internal.io_helpers import ensure_binaryio
+from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     LARGE_ARCHIVES,

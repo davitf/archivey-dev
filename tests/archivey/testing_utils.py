@@ -8,13 +8,13 @@ from typing import TYPE_CHECKING, Optional
 
 import pytest
 
-from archivey.api.config import ArchiveyConfig
-from archivey.api.types import (
+from archivey.config import ArchiveyConfig
+from archivey.internal.dependency_checker import get_dependency_versions
+from archivey.types import (
     TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,
     MemberType,
 )
-from archivey.internal.dependency_checker import get_dependency_versions
 
 if TYPE_CHECKING:
     from tests.archivey.sample_archives import (

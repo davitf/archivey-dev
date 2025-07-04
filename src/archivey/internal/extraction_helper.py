@@ -7,15 +7,15 @@ import shutil
 import threading
 from typing import TYPE_CHECKING, BinaryIO
 
-from archivey.api.config import OverwriteMode
-from archivey.api.exceptions import (
+from archivey.config import OverwriteMode
+from archivey.exceptions import (
     ArchiveFileExistsError,
     ArchiveLinkTargetNotFoundError,
 )
-from archivey.api.types import ArchiveMember, MemberType
+from archivey.types import ArchiveMember, MemberType
 
 if TYPE_CHECKING:
-    from archivey.api.archive_reader import ArchiveReader
+    from archivey.archive_reader import ArchiveReader
 
 logger = logging.getLogger(__name__)
 

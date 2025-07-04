@@ -7,18 +7,11 @@ import zipfile
 from datetime import datetime, timezone
 from typing import BinaryIO, Iterator, Optional, cast
 
-from archivey.api.exceptions import (
+from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
     ArchiveError,
     ArchiveStreamNotSeekableError,
-)
-from archivey.api.types import (
-    ArchiveFormat,
-    ArchiveInfo,
-    ArchiveMember,
-    CreateSystem,
-    MemberType,
 )
 from archivey.internal.base_reader import (
     BaseArchiveReader,
@@ -29,6 +22,13 @@ from archivey.internal.io_helpers import (
     run_with_exception_translation,
 )
 from archivey.internal.utils import decode_bytes_with_fallback, is_stream, str_to_bytes
+from archivey.types import (
+    ArchiveFormat,
+    ArchiveInfo,
+    ArchiveMember,
+    CreateSystem,
+    MemberType,
+)
 
 # Encoding fallbacks used when decoding strings stored in the ZIP metadata.
 _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]

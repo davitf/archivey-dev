@@ -2,7 +2,7 @@ import struct
 import zipfile
 from datetime import datetime, timezone
 
-from archivey.api.core import open_archive
+from archivey.core import open_archive
 
 
 def test_zip_extra_field_before_timestamp(tmp_path) -> None:

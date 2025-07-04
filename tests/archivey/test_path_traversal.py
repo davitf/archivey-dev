@@ -3,11 +3,11 @@ from pathlib import Path
 import pytest
 
 from archivey import open_archive
-from archivey.api.exceptions import (
+from archivey.exceptions import (
     ArchiveMemberCannotBeOpenedError,
     ArchiveMemberNotFoundError,
 )
-from archivey.api.types import ArchiveFormat
+from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     SampleArchive,

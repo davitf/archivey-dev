@@ -1,24 +1,24 @@
 # Developer guide
 
-This guide explains how to extend `archivey` by creating custom `archivey.api.archive_reader.ArchiveReader` classes for new archive formats.
+This guide explains how to extend `archivey` by creating custom `archivey.archive_reader.ArchiveReader` classes for new archive formats.
 
 ## Overview
 
 The library's modules are organized into these packages:
-* `archivey.api` – public API functions, types and classes
+* `archivey.core` and related modules – public API functions, types and classes
 * `archivey.internal` – base classes and helpers
 * `archivey.formats` – format-specific readers
 
-The library exposes an `archivey.api.archive_reader.ArchiveReader` abstract base class for users with the public API. The actual format readers extend from the helper class `archivey.internal.base_reader.BaseArchiveReader`, which implements most of the public API by delegating to some simpler methods that the readers must implement. New readers will almost always want to inherit from `BaseArchiveReader`.
+The library exposes an `archivey.archive_reader.ArchiveReader` abstract base class for users with the public API. The actual format readers extend from the helper class `archivey.internal.base_reader.BaseArchiveReader`, which implements most of the public API by delegating to some simpler methods that the readers must implement. New readers will almost always want to inherit from `BaseArchiveReader`.
 
 ## Registering Your Reader
 
 For your reader to be called, you'll need to:
 
-*   add the format(s) your reader handles to `archivey.api.types.ArchiveFormat`;
+*   add the format(s) your reader handles to `archivey.types.ArchiveFormat`;
 *   detect archives of these formats by signature and/or filename, in `archivey.formats.format_detection`;
 *   create your reader class, see below;
-*   modify `archivey.api.core.open_archive` to associate the archive format with your reader.
+*   modify `archivey.core.open_archive` to associate the archive format with your reader.
 
 
 ## Creating a new format reader
@@ -30,7 +30,7 @@ Your reader should implement a few required methods, and may also implement some
 
 ### Constructor (`__init__`):
 
-Should accept the same parameters as other `ArchiveReader`s, so it can be called from `archivey.api.core.open_archive`:
+Should accept the same parameters as other `ArchiveReader`s, so it can be called from `archivey.core.open_archive`:
 
 ```python
     def __init__(
@@ -44,7 +44,7 @@ Should accept the same parameters as other `ArchiveReader`s, so it can be called
 ```
 
 *   `archive_path`: the path to the archive file, or a stream or file-like object.
-*   `format`: an enum value from `archivey.api.types.ArchiveFormat` with the detected archive format. It will be one of the format your reader handles.
+*   `format`: an enum value from `archivey.types.ArchiveFormat` with the detected archive format. It will be one of the format your reader handles.
 *   `pwd`: the password to use for encrypted members and/or archive headers.
 *   `streaming_only`: set to `True` if the archive is being opened only for sequential, forward-only access. If `True`, methods like `open()` (for random access) and `extract()` will be disabled, and iteration will be a one-time operation.
 
@@ -66,7 +66,7 @@ This method is called exactly once when the ArchiveReader is closed or destructe
 
 ### `iter_members_for_registration(self) -> Iterator[ArchiveMember]`
 
-This method is called by `BaseArchiveReader` to discover and register all members in the archive. It should be implemented to yield [`archivey.api.types.ArchiveMember`][] objects one by one, from the members in the archive. It will be iterated through only once as the members are needed, so you can use an iterator from the inner library if available.
+This method is called by `BaseArchiveReader` to discover and register all members in the archive. It should be implemented to yield [`archivey.types.ArchiveMember`][] objects one by one, from the members in the archive. It will be iterated through only once as the members are needed, so you can use an iterator from the inner library if available.
 
 For each member in the archive, you need to convert the metadata (filename, size, modification time, type, permissions, etc.) read from the underlying archive library/format, and create an `ArchiveMember` instance with the appropriate field values. Typically you'll store the library-specific, original member object in the `raw_info` field of the `ArchiveMember`. Don't set `_archive_id` or `_member_id`, they'll be set by `BaseArchiveReader`.
 
@@ -75,7 +75,7 @@ Pay special attention to the modification time field. Some archive formats store
 
 ### `get_archive_info(self) -> ArchiveInfo`
 
-Return an [`archivey.api.types.ArchiveInfo`][] object with all archive-level metadata:
+Return an [`archivey.types.ArchiveInfo`][] object with all archive-level metadata:
 
 *   `format`: the `ArchiveFormat` enum for this archive.
 *   `is_solid`: whether the archive is solid (`True` means that decompressing a specific member may require other members to be uncompressed first).
@@ -124,7 +124,7 @@ While the above are essential, you might override other methods from `BaseArchiv
 
 ## Exception handling
 
-Libraries often have their own exception base classes, or raise builtin exceptions such as `OSError` when there's a problem with an archive. Archivey tries to guarantee that all exceptions raised due to archive issues are subclasses of [`archivey.api.exceptions.ArchiveError`][], and so readers need to translate all exceptions raised by the libraries into them.
+Libraries often have their own exception base classes, or raise builtin exceptions such as `OSError` when there's a problem with an archive. Archivey tries to guarantee that all exceptions raised due to archive issues are subclasses of [`archivey.exceptions.ArchiveError`][], and so readers need to translate all exceptions raised by the libraries into them.
 
 When you return a file stream provided by an underlying library from `_open_member()` (or from a custom `iter_members_with_io` override), you should wrap it with `archivey.internal.io_helpers.ExceptionTranslatingIO`. This ensures that exceptions raised by the underlying third-party library during stream operations (like `read()`, `seek()`) are translated into `ArchiveError` subclasses.
 
@@ -132,7 +132,7 @@ For this, you need to implement a translation function that receives any excepti
 
 ```python
 from archivey.internal.io_helpers import ExceptionTranslatingIO # Corrected path
-from archivey.api.exceptions import ArchiveCorruptedError, ArchiveIOError # Corrected path
+from archivey.exceptions import ArchiveCorruptedError, ArchiveIOError # Corrected path
 # Import specific exceptions from your third-party library
 from third_party_lib import ThirdPartyReadError, ThirdPartyCorruptError
 
