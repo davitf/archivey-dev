@@ -5,9 +5,8 @@ import logging
 import os
 import posixpath
 
-from archivey.api.exceptions import ArchiveFilterError
-
 from archivey.api.config import ExtractionFilter
+from archivey.api.exceptions import ArchiveFilterError
 from archivey.api.types import (
     ArchiveMember,
     FilterFunc,
