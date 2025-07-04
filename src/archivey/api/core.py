@@ -1,7 +1,7 @@
 """Core functionality for opening and interacting with archives."""
 
 import os
-from typing import BinaryIO
+from typing import Any, BinaryIO, Callable, cast
 
 from archivey.api.archive_reader import ArchiveReader
 from archivey.api.config import ArchiveyConfig, default_config, get_default_config
@@ -19,9 +19,7 @@ from archivey.formats.sevenzip_reader import SevenZipReader
 from archivey.formats.single_file_reader import SingleFileReader
 from archivey.formats.tar_reader import TarReader
 from archivey.formats.zip_reader import ZipReader
-from archivey.internal.base_reader import (
-    StreamingOnlyArchiveReaderWrapper,
-)
+from archivey.internal.base_reader import StreamingOnlyArchiveReaderWrapper
 from archivey.internal.io_helpers import RewindableNonSeekableStream, is_seekable
 
 
@@ -40,7 +38,7 @@ def _normalize_archive_path(
     raise TypeError(f"Invalid archive path type: {type(archive_path)} {archive_path}")
 
 
-_FORMAT_TO_READER = {
+_FORMAT_TO_READER: dict[ArchiveFormat, type[Any]] = {
     ArchiveFormat.RAR: RarReader,
     ArchiveFormat.ZIP: ZipReader,
     ArchiveFormat.SEVENZIP: SevenZipReader,
@@ -139,7 +137,7 @@ def open_archive(
             f"Unsupported archive format: {format} (for {archive_path_normalized})"
         )
 
-    reader_class = _FORMAT_TO_READER.get(format)
+    reader_class = cast(Callable[..., ArchiveReader] | None, _FORMAT_TO_READER.get(format))
 
     if config is None:
         config = get_default_config()

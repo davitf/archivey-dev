@@ -395,8 +395,10 @@ class RarStreamReader:
         *,
         pwd: bytes | str | None = None,
     ):
-        self._pwd = bytes_to_str(pwd)
+        self._pwd: str | None = cast(str | None, bytes_to_str(pwd))
         self.archive_path = archive_path
+        self._proc: subprocess.Popen[bytes] | None = None
+        self._stream: BinaryIO | None = None
         self._open_unrar_stream()
         self._lock = threading.Lock()
         self._members = members
@@ -410,8 +412,8 @@ class RarStreamReader:
                 )
 
             # Open an unrar process that outputs the contents of all files in the archive to stdout.
-            password_args = ["-p" + bytes_to_str(self._pwd)] if self._pwd else ["-p-"]
-            cmd = [unrar_path, "p", "-inul", *password_args, self.archive_path]
+            password_args = ["-p" + cast(str, bytes_to_str(self._pwd))] if self._pwd else ["-p-"]
+            cmd = [unrar_path, "p", "-inul", *password_args, str(self.archive_path)]
             logger.debug(
                 "Opening RAR archive %s with command: %s",
                 self.archive_path,
@@ -421,10 +423,11 @@ class RarStreamReader:
                 cmd,
                 stdout=subprocess.PIPE,
                 bufsize=1024 * 1024,
+                text=False,
             )
             if self._proc.stdout is None:
                 raise RuntimeError("Could not open unrar output stream")
-            self._stream = self._proc.stdout
+            self._stream = cast(BinaryIO, self._proc.stdout)
 
         except (OSError, subprocess.SubprocessError) as e:
             raise ArchiveError(
@@ -434,6 +437,8 @@ class RarStreamReader:
     def _get_member_file(self, member: ArchiveMember) -> BinaryIO | None:
         if not member.is_file:
             return None
+
+        assert self._stream is not None
 
         pwd_bytes = str_to_bytes(self._pwd) if self._pwd is not None else None
         if (
@@ -449,9 +454,11 @@ class RarStreamReader:
         return RarStreamMemberFile(member, self._stream, self._lock, pwd=pwd_bytes)
 
     def close(self):
-        self._proc.terminate()
-        self._proc.wait()
-        self._stream.close()
+        if self._proc is not None:
+            self._proc.terminate()
+            self._proc.wait()
+        if self._stream is not None:
+            self._stream.close()
 
     def rar_stream_iterator(self) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """Reader for RAR archives using the solid stream reader.
@@ -541,7 +548,7 @@ class RarReader(BaseArchiveReader):
             return info.file_redir[2]
 
         try:
-            data = self._archive.read(info.filename, pwd=bytes_to_str(pwd))
+            data = self._archive.read(info.filename, pwd=cast(str | None, bytes_to_str(pwd)))
         except rarfile.PasswordRequired:
             logger.warning(
                 "Password required to read link target for %s", info.filename
@@ -751,7 +758,7 @@ class RarReader(BaseArchiveReader):
 
         if member.encrypted:
             pwd_check = verify_rar5_password(
-                str_to_bytes(pwd if pwd is not None else self.get_archive_password()),
+                cast(bytes | None, str_to_bytes(pwd if pwd is not None else self.get_archive_password())),
                 cast(RarInfo, member.raw_info),
             )
             if pwd_check == PasswordCheckResult.INCORRECT:

@@ -324,6 +324,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
             return self._inner.seek(offset, whence)
         except Exception as e:
             self._translate_exception(e)
+            raise AssertionError("unreachable")
 
     def tell(self) -> int:
         return self._inner.tell()
@@ -342,6 +343,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
             return self._inner.write(b)
         except Exception as e:
             self._translate_exception(e)
+            raise AssertionError("unreachable")
 
     def writelines(self, lines: Any) -> None:
         try:
