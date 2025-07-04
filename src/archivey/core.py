@@ -1,5 +1,6 @@
 """Core functionality for opening and interacting with archives."""
 
+import io
 import os
 from typing import BinaryIO
 
@@ -29,6 +30,8 @@ def _normalize_archive_path(
     archive_path: BinaryIO | str | bytes | os.PathLike,
 ) -> BinaryIO | str:
     if hasattr(archive_path, "read"):
+        if not isinstance(archive_path, io.BufferedReader):
+            archive_path = io.BufferedReader(archive_path)  # type: ignore[arg-type]
         return archive_path  # type: ignore[return-value]
     if isinstance(archive_path, os.PathLike):
         return str(archive_path)
