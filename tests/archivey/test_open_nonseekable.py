@@ -89,12 +89,16 @@ def test_open_archive_nonseekable(
 
     try:
         with open_archive(stream, streaming_only=True, config=config) as archive:
-            has_member = False
+            members = []
             for member, member_stream in archive.iter_members_with_io():
-                has_member = True
+                members.append(member)
                 if member_stream is not None:
                     member_stream.read()
-            assert has_member
+            # The file names may not match in case of single-file archives, as we take
+            # the name from the compressed file name which is not available when reading
+            # from a stream. But checking the number of members should ensure that
+            # we read all the members.
+            assert len(members) == len(sample_archive.contents.files)
 
     except (
         ArchiveStreamNotSeekableError
