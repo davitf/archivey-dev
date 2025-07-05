@@ -1,6 +1,7 @@
 """Defines the abstract base classes and common functionality for archive readers."""
 
 import abc
+from io import BufferedIOBase
 import logging
 import os
 import posixpath
@@ -487,7 +488,7 @@ class BaseArchiveReader(ArchiveReader):
         *,
         pwd: bytes | str | None = None,
         for_iteration: bool = False,
-    ) -> BinaryIO:
+    ) -> BufferedIOBase:
         """
         Open the given archive member and return a readable binary stream.
 
@@ -546,7 +547,7 @@ class BaseArchiveReader(ArchiveReader):
         member_or_filename: ArchiveMember | str,
         pwd: bytes | str | None,
         for_iteration: bool,
-    ) -> BinaryIO:
+    ) -> BufferedIOBase:
         member = self.get_member(member_or_filename)
         member = self._prepare_member_for_open(
             member, pwd=pwd, for_iteration=for_iteration
@@ -560,7 +561,7 @@ class BaseArchiveReader(ArchiveReader):
 
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
-    ) -> BinaryIO:
+    ) -> BufferedIOBase:
         """
         Open ``member_or_filename`` for random access reading.
 

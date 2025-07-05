@@ -41,6 +41,14 @@ def read_exact(stream: IO[bytes], n: int) -> bytes:
 
 def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
     """Check if a stream is seekable."""
+    # When we wrap a RewindableNonSeekableStream in a BufferedReader, we want to check
+    # if the inner stream is seekable, with the check below.
+    if isinstance(stream, io.BufferedReader):
+        return is_seekable(stream.raw)
+
+    if isinstance(stream, RewindableNonSeekableStream):
+        return stream.is_inner_stream_seekable()
+
     try:
         return stream.seekable() or False
     except AttributeError as e:
@@ -705,13 +713,16 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
         return False
 
     def seekable(self) -> bool:  # pragma: no cover - trivial
-        return True  # self._recording
+        return True
 
     # Control methods --------------------------------------------------
 
     def close(self) -> None:  # pragma: no cover - simple delegation
         self._inner.close()
         super().close()
+
+    def is_inner_stream_seekable(self) -> bool:
+        return is_seekable(self._inner)
 
     # Delegate unknown attributes -------------------------------------
     def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
