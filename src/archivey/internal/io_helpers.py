@@ -21,10 +21,28 @@ from archivey.exceptions import ArchiveError
 logger = logging.getLogger(__name__)
 
 
+def read_exact(stream: IO[bytes], n: int) -> bytes:
+    """Read exactly ``n`` bytes from ``stream``.
+    Continues reading until ``n`` bytes are returned or raises ``EOFError``
+    if the stream ends prematurely.
+    """
+
+    if n < 0:
+        raise ValueError("n must be non-negative")
+
+    data = bytearray()
+    while len(data) < n:
+        chunk = stream.read(n - len(data))
+        if not chunk:
+            break
+        data.extend(chunk)
+    return bytes(data)
+
+
 def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
     """Check if a stream is seekable."""
     try:
-        return stream.seekable()
+        return stream.seekable() or False
     except AttributeError as e:
         # Some streams (e.g. tarfile._Stream) don't have a seekable method, which seems
         # like a bug. Sometimes they are wrapped in other classes
@@ -50,7 +68,7 @@ class WritableBinaryStream(Protocol):
 BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream]
 
 
-class BinaryIOWrapper(io.IOBase, BinaryIO):
+class BinaryIOWrapper(io.RawIOBase, BinaryIO):
     """
     Wraps an object that doesn't match the BinaryIO protocol, adding any missing
     methods to make the type checker happy.
@@ -59,11 +77,14 @@ class BinaryIOWrapper(io.IOBase, BinaryIO):
     def __init__(self, raw: BinaryStreamLike):
         self._raw = raw
 
-    def read(self, size=-1, /):
-        if not hasattr(self._raw, "read"):
-            raise io.UnsupportedOperation("read not supported")
-        self.read = self._raw.read  # type: ignore
-        return self._raw.read(size)  # type: ignore
+    def read(self, size=-1, /) -> bytes | None:
+        if hasattr(self._raw, "read"):
+            data = self._raw.read(size)  # type: ignore
+            # If read succeeded, we can use it directly for future reads
+            self.read = self._raw.read  # type: ignore
+            return data
+
+        return super().read(size)
 
     def write(self, data, /):
         if not hasattr(self._raw, "write"):
@@ -71,38 +92,49 @@ class BinaryIOWrapper(io.IOBase, BinaryIO):
         self.write = self._raw.write  # type: ignore
         return self._raw.write(data)  # type: ignore
 
-    def _readinto_fallback(self, b: bytearray | memoryview, /) -> int:
+    def _readinto_from_read(self, b: bytearray | memoryview, /) -> int | None:
         data = self.read(len(b))
+        if data is None:
+            return None
         b[: len(data)] = data
         return len(data)
 
-    def readinto(self, b: bytearray | memoryview, /) -> int:
+    def readinto(self, b: bytearray | memoryview, /) -> int | None:
+        if not hasattr(self._raw, "readinto"):
+            self.readinto = self._readinto_from_read
+            return self._readinto_from_read(b)
+
         try:
             bytes_read = self._raw.readinto(b)  # type: ignore[attr-defined]
             # If readinto succeeded, we can use it for future reads
             self.readinto = self._raw.readinto  # type: ignore
             return bytes_read
-        except NotImplementedError:
+        except (NotImplementedError, io.UnsupportedOperation):
             # Some streams don't support readinto, so we fall back to read()
-            self.readinto = self._readinto_fallback
-            return self._readinto_fallback(b)
+            self.readinto = self._readinto_from_read
+            return self._readinto_from_read(b)
 
     def seek(self, offset, whence=io.SEEK_SET, /):
-        if not hasattr(self._raw, "seek"):
-            raise io.UnsupportedOperation("seek not supported")
-        self.seek = self._raw.seek  # type: ignore
-        return self._raw.seek(offset, whence)  # type: ignore
+        if hasattr(self._raw, "seek"):
+            pos = self._raw.seek(offset, whence)  # type: ignore
+            # If seek succeeded, we can use it for future seeks
+            self.seek = self._raw.seek  # type: ignore
+            return pos
+
+        raise io.UnsupportedOperation("seek")
 
     def tell(self, /):
-        if not hasattr(self._raw, "tell"):
-            raise io.UnsupportedOperation("tell not supported")
-        self.tell = self._raw.tell  # type: ignore
-        return self._raw.tell()  # type: ignore
+        if hasattr(self._raw, "tell"):
+            pos = self._raw.tell()  # type: ignore
+            # If tell succeeded, we can use it for future tells
+            self.tell = self._raw.tell  # type: ignore
+            return pos
+        raise io.UnsupportedOperation("tell")
 
     def close(self):
         if hasattr(self._raw, "close"):
-            return self._raw.close()  # type: ignore
-        return None
+            self._raw.close()  # type: ignore
+        super().close()
 
     def flush(self):
         if hasattr(self._raw, "flush"):
@@ -111,11 +143,29 @@ class BinaryIOWrapper(io.IOBase, BinaryIO):
 
     def readable(self):
         try:
-            return self._raw.readable()  # type: ignore
+            result = self._raw.readable()  # type: ignore
+            # The result can be None if the class just extended BinaryIO and didn't
+            # actually implement the method.
+            if result is not None:
+                return result
+
         except AttributeError:
-            return hasattr(self._raw, "read")  # type: ignore
+            pass
+
+        return hasattr(self._raw, "read") or hasattr(self._raw, "readinto")  # type: ignore
 
     def writable(self):
+        try:
+            result = self._raw.writable()  # type: ignore
+            # The result can be None if the class just extended BinaryIO and didn't
+            # actually implement the method.
+            if result is not None:
+                return result
+
+        except AttributeError:
+            pass
+
+        return hasattr(self._raw, "read") or hasattr(self._raw, "readinto")  # type: ignore
         try:
             return self._raw.writable()  # type: ignore
         except AttributeError:
@@ -125,7 +175,7 @@ class BinaryIOWrapper(io.IOBase, BinaryIO):
         return is_seekable(self._raw)  # type: ignore
 
 
-ALL_IO_METHODS = (
+ALL_IO_METHODS = {
     "read",
     "write",
     "seek",
@@ -133,7 +183,6 @@ ALL_IO_METHODS = (
     "__enter__",
     "__exit__",
     "close",
-    "closed",
     "flush",
     "readable",
     "writable",
@@ -143,39 +192,44 @@ ALL_IO_METHODS = (
     "readinto",
     "write",
     "writelines",
-)
+}
 
 
 def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
     """Some libraries return an object that doesn't match the BinaryIO protocol,
     so we need to ensure it does to make the type checker happy."""
-    if all(callable(getattr(obj, m, None)) for m in ALL_IO_METHODS):
+
+    existing_methods = {m for m in ALL_IO_METHODS if callable(getattr(obj, m, None))}
+    if existing_methods == ALL_IO_METHODS:
         return obj  # type: ignore
 
     logger.info(
-        f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper"
+        f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper. Missing methods: {ALL_IO_METHODS - existing_methods}"
     )
     return BinaryIOWrapper(obj)
 
 
-# def ensure_bufferedio(obj: Any) -> BinaryIO:
-#     bio = ensure_binaryio(obj)
+def ensure_bufferedio(obj: Any) -> io.BufferedIOBase:
+    if isinstance(obj, io.BufferedIOBase):
+        return obj
 
-#     if isinstance(bio, io.BufferedIOBase):
-#         return bio
+    if not isinstance(obj, io.RawIOBase):
+        obj = BinaryIOWrapper(obj)
 
-#     # Check if it supports read/write for bidirectional buffering
-#     has_read = hasattr(bio, "read") and callable(bio.read)
-#     has_write = hasattr(bio, "write") and callable(bio.write)
+    return io.BufferedReader(obj)
 
-#     if has_read and has_write:
-#         return io.BufferedRWPair(bio, bio)
-#     elif has_read:
-#         return io.BufferedReader(bio)
-#     elif has_write:
-#         return io.BufferedWriter(bio)
+    # # Check if it supports read/write for bidirectional buffering
+    # has_read = hasattr(bio, "read") and callable(bio.read)
+    # has_write = hasattr(bio, "write") and callable(bio.write)
 
-#     raise TypeError("ensure_binaryio returned an unbufferable object")
+    # if has_read and has_write:
+    #     return io.BufferedRWPair(bio, bio)
+    # elif has_read:
+    #     return io.BufferedReader(bio)
+    # elif has_write:
+    #     return io.BufferedWriter(bio)
+
+    # raise TypeError("ensure_binaryio returned an unbufferable object")
 
 
 class ErrorIOStream(io.RawIOBase, BinaryIO):
@@ -557,6 +611,13 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
 
     # Basic IO methods -------------------------------------------------
     def read(self, n: int = -1) -> bytes:
+        logger.debug(
+            "read(%d) from pos=%d, stream_pos=%d, buffer_size=%d",
+            n,
+            self._pos,
+            self._stream_pos,
+            len(self._buffer),
+        )
         endpos = self._pos + n
         if n >= 0 and endpos <= len(self._buffer):
             # The data is fully in the buffer, so we can return it directly.
@@ -575,6 +636,10 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
                 remaining -= len(data)
 
         if self._pos < self._stream_pos:
+            if len(data):
+                # We have read some data from the buffer, so we can return it.
+                return bytes(data)
+
             raise io.UnsupportedOperation(
                 "cannot read from non buffered region. "
                 f"pos={self._pos}, stream_pos={self._stream_pos}, buffer_size={len(self._buffer)}"
@@ -640,7 +705,7 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
         return False
 
     def seekable(self) -> bool:  # pragma: no cover - trivial
-        return self._recording
+        return True  # self._recording
 
     # Control methods --------------------------------------------------
 

@@ -3,7 +3,13 @@ from unittest.mock import Mock
 
 import pytest
 
-from archivey.internal.io_helpers import LazyOpenIO, RewindableNonSeekableStream
+from archivey.internal.io_helpers import (
+    BinaryIOWrapper,
+    LazyOpenIO,
+    RewindableNonSeekableStream,
+    ensure_binaryio,
+    ensure_bufferedio,
+)
 from tests.archivey.test_open_nonseekable import NonSeekableBytesIO
 
 
@@ -121,7 +127,7 @@ class TestRewindableNonSeekableStream:
 
         # Stop recording
         stream.stop_recording()
-        assert stream.seekable() is False
+        assert stream.seekable() is True  # We can still seek within the buffer
 
         # Can still read forward
         assert stream.read(6) == b"56789a"
@@ -132,6 +138,7 @@ class TestRewindableNonSeekableStream:
         assert stream.seek(0) == 0
         assert stream.read(2) == b"01"
         assert stream.read(2) == b"23"
+        assert stream.read(2) == b"4"  # Only one byte left in the buffer
         with pytest.raises(io.UnsupportedOperation):
             stream.read(2)
 
@@ -173,7 +180,7 @@ class TestRewindableNonSeekableStream:
         assert stream.seekable() is True
 
         stream.stop_recording()
-        assert stream.seekable() is False
+        assert stream.seekable() is True  # We can still seek within the buffer
 
     def test_close(self):
         """Test closing the stream."""
@@ -228,3 +235,89 @@ class TestRewindableNonSeekableStream:
 
         with pytest.raises(ValueError, match="I/O operation on closed file"):
             stream.read(5)
+
+    def test_wrap_in_buffered_reader(self):
+        """Test wrapping in a buffered reader."""
+        # This test is tricky because the BufferedReader will read more bytes than
+        # the amount we ask for, so it may ask for non-cached bytes from the stream.
+        # We should still be able to read all the cached region via the BufferedReader.
+
+        stream = create_stream()
+        buffered_stream = io.BufferedReader(stream, buffer_size=8)
+
+        assert (
+            buffered_stream.read(5) == b"01234"
+        )  # Should actually read 8 bytes from stream
+        assert buffered_stream.tell() == 5
+        assert stream.tell() == 8
+
+        stream.stop_recording()
+        assert buffered_stream.read(5) == b"56789"  # Should have read 8 more bytes
+        assert stream.tell() == 16
+
+        # This is the tricky part: BufferedReader will ask for 8 bytes starting at
+        # pos 4, but we only have bytes 0-8 in the stream buffer. We should be able to
+        # read all the cached region, but not the next 8 bytes.
+
+        buffered_stream.seek(4)
+        assert buffered_stream.read(4) == b"4567"
+
+        with pytest.raises(io.UnsupportedOperation):
+            buffered_stream.read(1)
+
+        buffered_stream.seek(4)
+        assert buffered_stream.read(3) == b"456"
+
+        buffered_stream.seek(4)
+        with pytest.raises(io.UnsupportedOperation):
+            buffered_stream.read(5)
+
+        with pytest.raises(io.UnsupportedOperation):
+            buffered_stream.seek(15)
+
+        # Seeking to the current position and reading the rest of the data (which is empty).
+        buffered_stream.seek(16)
+        assert buffered_stream.read() == b""
+
+
+class OnlyReadStream:
+    def __init__(self, data: bytes):
+        self._inner = io.BytesIO(data)
+
+    def read(self, size=-1):
+        return self._inner.read(size)
+
+
+def test_ensure_binaryio():
+    """Test ensure_binaryio function."""
+    stream = io.BytesIO(b"hello")
+    assert ensure_binaryio(stream) is stream
+
+    orig = OnlyReadStream(b"hello")
+    wrapped = ensure_binaryio(orig)
+    assert not wrapped.closed
+    assert isinstance(wrapped, BinaryIOWrapper)
+    assert wrapped.read(2) == b"he"
+    b = bytearray(10)
+    assert wrapped.readinto(b) == 3
+    assert b[:3] == b"llo"
+    assert wrapped.seekable() is False
+    assert wrapped.readable() is True
+    assert wrapped.writable() is False
+    with pytest.raises(io.UnsupportedOperation):
+        wrapped.write(b"hello")
+    with pytest.raises(io.UnsupportedOperation):
+        wrapped.seek(0)
+    with pytest.raises(io.UnsupportedOperation):
+        wrapped.tell()
+    wrapped.close()
+    assert wrapped.closed
+
+
+def test_ensure_bufferedio():
+    """Test ensure_bufferedio function."""
+    stream = OnlyReadStream(b"hello")
+    buffered = ensure_bufferedio(stream)
+    assert buffered is not stream
+    assert isinstance(buffered, io.BufferedReader)
+    assert buffered.read() == b"hello"

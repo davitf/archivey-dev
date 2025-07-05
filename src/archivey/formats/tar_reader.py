@@ -19,6 +19,7 @@ from archivey.internal.base_reader import (
 )
 from archivey.internal.io_helpers import (
     ExceptionTranslatingIO,
+    read_exact,
     run_with_exception_translation,
 )
 from archivey.types import (
@@ -220,7 +221,7 @@ class TarReader(BaseArchiveReader):
             remaining = next_member_offset - self._archive.fileobj.tell()  # type: ignore
 
             if remaining > 0:
-                data = self._fileobj.read(remaining)
+                data = read_exact(self._fileobj, remaining)
                 assert len(data) == remaining, (
                     f"Expected {remaining} bytes, got {len(data)}"
                 )
@@ -230,7 +231,7 @@ class TarReader(BaseArchiveReader):
                 return
 
         expected_zeroes = 512 * 2
-        data = self._fileobj.read(expected_zeroes)
+        data = read_exact(self._fileobj, expected_zeroes)
         if len(data) < expected_zeroes:
             raise ArchiveCorruptedError(
                 f"Missing data after last tarinfo: {len(data)} bytes"

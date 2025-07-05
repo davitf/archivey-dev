@@ -3,7 +3,7 @@ import gzip
 import io
 import lzma
 import os
-from typing import IO, TYPE_CHECKING, BinaryIO, Optional, cast
+from typing import TYPE_CHECKING, BinaryIO, Optional, cast
 
 from archivey.config import ArchiveyConfig
 from archivey.internal.io_helpers import is_seekable
@@ -72,7 +72,7 @@ def _translate_gzip_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
-    def _open() -> IO[bytes]:
+    def _open() -> BinaryIO:
         if isinstance(path, (str, bytes, os.PathLike)):
             gz = gzip.open(path, mode="rb")
             underlying_seekable = True
