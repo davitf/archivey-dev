@@ -38,6 +38,9 @@ class ArchiveyConfig:
     use_zstandard: bool = False
     "An alternative to pyzstd. Not as good at error reporting."
 
+    use_brotlicffi: bool = False
+    "An alternative to the brotli package."
+
     use_rar_stream: bool = False
     "If set, use an alternative approach instead of calling rarfile when iterating over RAR archive members. This supports decompressing multiple members in a solid archive by going through the archive only once, instead of once per member."
 
@@ -65,6 +68,7 @@ class ConfigOverrides(TypedDict, total=False):
     use_indexed_bzip2: bool | None
     use_python_xz: bool | None
     use_zstandard: bool | None
+    use_brotlicffi: bool | None
     use_rar_stream: bool | None
     use_single_file_stored_metadata: bool | None
     tar_check_integrity: bool | None
