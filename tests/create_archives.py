@@ -520,14 +520,26 @@ def create_single_file_compressed_archive_with_command_line(
         temp_file_path = os.path.join(tempdir, file_info.name)
         subprocess.run(["ls", "-l", temp_file_path])
 
-        # Run the compression command
-        subprocess.run(
-            [compression_cmd, *cmd_args, temp_file_path], check=True, cwd=tempdir
-        )
+        if shutil.which(compression_cmd) is None:
+            if compression_cmd == "brotli":
+                opener = SINGLE_FILE_LIBRARY_OPENERS[ArchiveFormat.BROTLI]
+                if opener is None:
+                    raise PackageNotInstalledError(
+                        "brotli or brotlicffi package is not installed"
+                    ) from None
+                with open(temp_file_path, "rb") as f, opener(abs_archive_path, "wb") as out:
+                    shutil.copyfileobj(f, out)
+            else:
+                raise PackageNotInstalledError(f"{compression_cmd} command not found")
+        else:
+            # Run the compression command
+            subprocess.run(
+                [compression_cmd, *cmd_args, temp_file_path], check=True, cwd=tempdir
+            )
 
-        # Get the compressed file path based on the command
-        compressed_file_on_temp = temp_file_path + os.path.splitext(archive_path)[1]
-        os.rename(compressed_file_on_temp, abs_archive_path)
+            # Get the compressed file path based on the command
+            compressed_file_on_temp = temp_file_path + os.path.splitext(archive_path)[1]
+            os.rename(compressed_file_on_temp, abs_archive_path)
 
         # Explicitly set the mtime of the archive file itself
         # os.utime(
