@@ -68,6 +68,8 @@ def _translate_gzip_exception(e: Exception) -> Optional[ArchiveError]:
         return ArchiveCorruptedError(f"Error reading GZIP archive: {repr(e)}")
     if isinstance(e, EOFError):
         return ArchiveEOFError(f"GZIP file is truncated: {repr(e)}")
+    if isinstance(e, io.UnsupportedOperation):
+        return ArchiveStreamNotSeekableError("rapidgzip does not support non-seekable streams")
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
@@ -117,6 +119,8 @@ def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
         in exc_text
     ):
         return ArchiveEOFError(f"Possibly truncated GZIP stream: {repr(e)}")
+    if isinstance(e, io.UnsupportedOperation):
+        return ArchiveStreamNotSeekableError("rapidgzip does not support non-seekable streams")
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
@@ -152,6 +156,10 @@ def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, ValueError) and "has no valid fileno" in exc_text:
         # Indexed BZIP2 tries to look at the underlying stream's fileno if it's not
         # seekable.
+        return ArchiveStreamNotSeekableError(
+            "Indexed BZIP2 does not support non-seekable streams"
+        )
+    if isinstance(e, io.UnsupportedOperation):
         return ArchiveStreamNotSeekableError(
             "Indexed BZIP2 does not support non-seekable streams"
         )

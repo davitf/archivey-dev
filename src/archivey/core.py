@@ -1,5 +1,6 @@
 """Core functionality for opening and interacting with archives."""
 
+import io
 import os
 from typing import BinaryIO
 
@@ -17,7 +18,11 @@ from archivey.formats.zip_reader import ZipReader
 from archivey.internal.base_reader import (
     StreamingOnlyArchiveReaderWrapper,
 )
-from archivey.internal.io_helpers import RewindableNonSeekableStream, is_seekable
+from archivey.internal.io_helpers import (
+    ConcatenationStream,
+    RecordableStream,
+    is_seekable,
+)
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
@@ -111,12 +116,13 @@ def open_archive(
 
     archive_path_normalized = _normalize_archive_path(archive_path)
 
-    wrapper: RewindableNonSeekableStream | None = None
+    recordable: RecordableStream | None = None
+    detect_target: BinaryIO | str = archive_path_normalized
     if not isinstance(archive_path_normalized, str) and not is_seekable(
         archive_path_normalized
     ):
-        wrapper = RewindableNonSeekableStream(archive_path_normalized)
-        archive_path_normalized = wrapper
+        recordable = RecordableStream(archive_path_normalized)
+        detect_target = recordable
 
     if isinstance(archive_path_normalized, str):
         if not os.path.exists(archive_path_normalized):
@@ -124,11 +130,14 @@ def open_archive(
                 f"Archive file not found: {archive_path_normalized}"
             )
 
-    format = detect_archive_format(archive_path_normalized)
+    format = detect_archive_format(detect_target)
 
-    if wrapper is not None:
-        wrapper.seek(0)
-        wrapper.stop_recording()
+    if recordable is not None:
+        recorded_data = recordable.get_all_data()
+        recordable.seek(len(recorded_data))
+        archive_path_normalized = ConcatenationStream(
+            [io.BytesIO(recorded_data), recordable]
+        )
     if format == ArchiveFormat.UNKNOWN:
         raise ArchiveNotSupportedError(
             f"Unknown archive format for {archive_path_normalized}"
@@ -167,23 +176,27 @@ def open_compressed_stream(
 
     archive_path_normalized = _normalize_archive_path(archive_path)
 
-    wrapper: RewindableNonSeekableStream | None = None
+    recordable: RecordableStream | None = None
+    detect_target: BinaryIO | str = archive_path_normalized
     if not isinstance(archive_path_normalized, str) and not is_seekable(
         archive_path_normalized
     ):
-        wrapper = RewindableNonSeekableStream(archive_path_normalized)
-        archive_path_normalized = wrapper
+        recordable = RecordableStream(archive_path_normalized)
+        detect_target = recordable
 
     if isinstance(archive_path_normalized, str) and not os.path.exists(
         archive_path_normalized
     ):
         raise FileNotFoundError(f"Archive file not found: {archive_path_normalized}")
 
-    format = detect_archive_format(archive_path_normalized)
+    format = detect_archive_format(detect_target)
 
-    if wrapper is not None:
-        wrapper.seek(0)
-        wrapper.stop_recording()
+    if recordable is not None:
+        recorded_data = recordable.get_all_data()
+        recordable.seek(len(recorded_data))
+        archive_path_normalized = ConcatenationStream(
+            [io.BytesIO(recorded_data), recordable]
+        )
 
     if format not in SINGLE_FILE_COMPRESSED_FORMATS:
         raise ArchiveNotSupportedError(

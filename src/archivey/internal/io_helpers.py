@@ -527,76 +527,47 @@ class StatsIO(io.RawIOBase, BinaryIO):
         return getattr(self._inner, item)
 
 
-class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
-    """Wrap a non-seekable stream that supports seeking via an internal buffer."""
+class RecordableStream(io.RawIOBase, BinaryIO):
+    """Wrap a stream, caching all data read from it."""
 
     def __init__(self, inner: IO[bytes]):
         super().__init__()
         self._inner = inner
         self._buffer = bytearray()
         self._pos = 0
-        self._stream_pos = 0
-        self._recording = True
 
-    def stop_recording(self) -> None:
-        """Stop storing new data into the rewind buffer."""
-        self._recording = False
-
-    def _read_from_stream(self, n: int) -> bytes:
-        chunk = self._inner.read(n)
-        if self._recording:
-            self._buffer.extend(chunk)
-        self._stream_pos += len(chunk)
-        return chunk
-
-    def _advance_stream_to(self, target: int) -> None:
-        while self._stream_pos < target:
-            chunk = self._read_from_stream(target - self._stream_pos)
-            if not chunk:
-                break
+    def get_all_data(self) -> bytes:
+        """Return all data read so far."""
+        return bytes(self._buffer)
 
     # Basic IO methods -------------------------------------------------
     def read(self, n: int = -1) -> bytes:
-        endpos = self._pos + n
-        if n >= 0 and endpos <= len(self._buffer):
-            # The data is fully in the buffer, so we can return it directly.
-            data = bytes(self._buffer[self._pos : endpos])
-            self._pos += n
-            return data
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
 
-        data = bytearray()
+        if n == -1:
+            data = self._buffer[self._pos :]
+            self._pos = len(self._buffer)
+            chunk = self._inner.read()
+            self._buffer.extend(chunk)
+            self._pos = len(self._buffer)
+            return bytes(data) + chunk
+
         remaining = n
+        data = bytearray()
 
-        if self._pos < len(self._buffer):
-            # Take the previously-read data from the buffer.
-            data.extend(self._buffer[self._pos :])
-            self._pos += len(data)
-            if remaining != -1:
-                remaining -= len(data)
+        available = len(self._buffer) - self._pos
+        if available > 0:
+            take = min(available, remaining)
+            data.extend(self._buffer[self._pos : self._pos + take])
+            self._pos += take
+            remaining -= take
 
-        if self._pos < self._stream_pos:
-            raise io.UnsupportedOperation(
-                "cannot read from non buffered region. "
-                f"pos={self._pos}, stream_pos={self._stream_pos}, buffer_size={len(self._buffer)}"
-            )
-
-        if self._pos > self._stream_pos:
-            self._advance_stream_to(self._pos)
-
-        assert self._stream_pos == self._pos
-
-        if remaining == -1:
-            while True:
-                chunk = self._read_from_stream(-1)
-                if not chunk:
-                    break
-                self._pos += len(chunk)
-                data.extend(chunk)
-            return bytes(data)
-
-        chunk = self._read_from_stream(remaining)
-        self._pos += len(chunk)
-        data.extend(chunk)
+        if remaining > 0:
+            chunk = self._inner.read(remaining)
+            self._buffer.extend(chunk)
+            self._pos += len(chunk)
+            data.extend(chunk)
 
         return bytes(data)
 
@@ -608,25 +579,25 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
 
     # Seek/Tell --------------------------------------------------------
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
-        if whence == io.SEEK_END:
-            raise io.UnsupportedOperation("seek to end")
         if whence == io.SEEK_CUR:
             offset = self._pos + offset
+        elif whence == io.SEEK_END:
+            offset = len(self._buffer) + offset
         elif whence != io.SEEK_SET:
             raise ValueError(f"Invalid whence: {whence}")
 
         if offset < 0:
-            raise io.UnsupportedOperation("seek to negative position")
+            raise io.UnsupportedOperation("seek outside recorded region")
+        while offset > len(self._buffer):
+            chunk = self._inner.read(offset - len(self._buffer))
+            if not chunk:
+                break
+            self._buffer.extend(chunk)
 
-        if offset >= len(self._buffer) and offset < self._stream_pos:
-            raise io.UnsupportedOperation(
-                f"seek into non-cached region: buf={len(self._buffer)}, offset={offset}, stream={self._stream_pos}"
-            )
+        if offset > len(self._buffer):
+            raise io.UnsupportedOperation("seek outside recorded region")
 
-        if offset > self._stream_pos:
-            self._advance_stream_to(offset)
-
-        self._pos = offset if offset <= self._stream_pos else self._stream_pos
+        self._pos = offset
         return self._pos
 
     def tell(self) -> int:
@@ -640,10 +611,9 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
         return False
 
     def seekable(self) -> bool:  # pragma: no cover - trivial
-        return self._recording
+        return True
 
     # Control methods --------------------------------------------------
-
     def close(self) -> None:  # pragma: no cover - simple delegation
         self._inner.close()
         super().close()
@@ -651,3 +621,61 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
     # Delegate unknown attributes -------------------------------------
     def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
         return getattr(self._inner, item)
+
+
+class ConcatenationStream(io.RawIOBase, BinaryIO):
+    """Concatenate multiple streams sequentially."""
+
+    def __init__(self, streams: list[IO[bytes]]):
+        super().__init__()
+        self._streams = streams
+        self._index = 0
+
+    # Basic IO methods -------------------------------------------------
+    def read(self, n: int = -1) -> bytes:
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+
+        data = bytearray()
+
+        while self._index < len(self._streams) and (n < 0 or len(data) < n):
+            stream = self._streams[self._index]
+            to_read = -1 if n < 0 else n - len(data)
+            chunk = stream.read(to_read)
+            if not chunk:
+                self._index += 1
+                continue
+            data.extend(chunk)
+
+        if n >= 0:
+            return bytes(data[:n])
+        return bytes(data)
+
+    def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
+        data = self.read(len(b))
+        n = len(data)
+        b[:n] = data
+        return n
+
+    # Properties -------------------------------------------------------
+    def readable(self) -> bool:  # pragma: no cover - trivial
+        return True
+
+    def writable(self) -> bool:  # pragma: no cover - trivial
+        return False
+
+    def seekable(self) -> bool:  # pragma: no cover - trivial
+        return False
+
+    def fileno(self) -> int:  # pragma: no cover - simple
+        raise OSError("fileno")
+
+    # Control methods --------------------------------------------------
+    def close(self) -> None:  # pragma: no cover - simple delegation
+        for stream in self._streams:
+            try:
+                stream.close()
+            except Exception:  # pragma: no cover - simple
+                pass
+        super().close()
+
