@@ -72,34 +72,6 @@ class WritableBinaryStream(Protocol):
     def write(self, data: bytes, /) -> int: ...
 
 
-@runtime_checkable
-class BinaryIOProtocol(Protocol):
-    """Runtime-checkable protocol for BinaryIO objects."""
-
-    @property
-    def closed(self, /) -> bool: ...
-
-    def read(self, n: int = -1, /) -> bytes: ...
-    def write(self, data: bytes, /) -> int: ...
-    def seek(self, offset: int, whence: int = io.SEEK_SET, /) -> int: ...
-    def tell(self, /) -> int: ...
-    def close(self, /) -> None: ...
-    def flush(self, /) -> None: ...
-    def readable(self, /) -> bool: ...
-    def writable(self, /) -> bool: ...
-    def seekable(self, /) -> bool: ...
-    def readinto(self, b: bytearray | memoryview, /) -> int: ...
-    def writelines(self, lines: list[bytes], /) -> None: ...
-    def __enter__(self, /) -> "BinaryIOProtocol": ...
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: Any,
-        /,
-    ) -> None: ...
-
-
 BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream]
 
 
@@ -223,16 +195,29 @@ ALL_IO_METHODS = {
     "writelines",
 }
 
+ALL_IO_PROPERTIES = {
+    "closed",
+}
 
-def is_stream(x: Any) -> TypeGuard[BinaryIO]:
+
+def is_stream(obj: Any) -> TypeGuard[BinaryIO]:
     """Check if an object matches the BinaryIO protocol."""
+
     # First check if it's a standard IOBase instance
     # if isinstance(x, io.IOBase):
     #     return True
-
-    # Then check if it matches our BinaryIO protocol
-    if isinstance(x, BinaryIOProtocol):
+    logger.info("Checking if %s is a stream", obj)
+    missing_methods = {m for m in ALL_IO_METHODS if not callable(getattr(obj, m, None))}
+    missing_properties = {p for p in ALL_IO_PROPERTIES if not hasattr(obj, p)}
+    if not missing_methods and not missing_properties:
         return True
+
+    logger.debug(
+        "Object %r does not match the BinaryIO protocol: missing methods %r, missing properties %r",
+        obj,
+        missing_methods,
+        missing_properties,
+    )
 
     # If it has a read method but doesn't match the protocol, it's a weird object
     # if hasattr(x, "read"):

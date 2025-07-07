@@ -1,14 +1,19 @@
 import io
+import tempfile
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 
+from archivey.internal import io_helpers
 from archivey.internal.io_helpers import (
     BinaryIOWrapper,
     LazyOpenIO,
     RewindableNonSeekableStream,
+    UncloseableStream,
     ensure_binaryio,
     ensure_bufferedio,
+    is_stream,
 )
 from tests.archivey.test_open_nonseekable import NonSeekableBytesIO
 
@@ -301,3 +306,40 @@ def test_ensure_bufferedio():
     assert buffered is not stream
     assert isinstance(buffered, io.BufferedReader)
     assert buffered.read() == b"hello"
+
+
+def test_is_stream(tmp_path: Path):
+    """Test is_stream function with BinaryIO."""
+    stream = OnlyReadStream(b"hello")
+    assert not is_stream(stream)
+    wrapped = ensure_binaryio(stream)
+    assert is_stream(wrapped)
+    buffered = ensure_bufferedio(wrapped)
+    assert isinstance(buffered, io.BufferedReader)  # Just checking for the test
+    assert is_stream(buffered)
+    uncloseable = io_helpers.ensure_uncloseable(buffered)
+    assert isinstance(uncloseable, UncloseableStream)  # Just checking for the test
+    assert is_stream(uncloseable)
+    assert uncloseable.read() == b"hello"
+
+    assert is_stream(io.BytesIO(b"hello"))
+
+    with open(tmp_path / "test.txt", "wb") as f:
+        assert is_stream(f)
+        f.write(b"hello")
+
+    with open(tmp_path / "test.txt", "rb") as f:
+        assert is_stream(f)
+        assert f.read() == b"hello"
+
+    # Check that files are considered streams
+    with tempfile.NamedTemporaryFile() as f:
+        f.write(b"hello")
+        f.seek(0)
+        assert is_stream(f)
+
+    assert not is_stream(None)
+    assert not is_stream(1)
+    assert not is_stream("hello")
+    assert not is_stream(b"hello")
+    assert not is_stream(io.StringIO("hello"))
