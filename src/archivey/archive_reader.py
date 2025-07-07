@@ -2,7 +2,7 @@ import abc
 import os
 from typing import BinaryIO, Callable, Collection, Iterator, List
 
-from archivey.internal.utils import is_stream
+from archivey.internal.io_helpers import is_stream
 from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,

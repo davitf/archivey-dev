@@ -2,9 +2,8 @@
 Utility functions for archivey.
 """
 
-import io
 import logging
-from typing import Any, BinaryIO, TypeGuard, TypeVar, overload
+from typing import TypeVar, overload
 
 
 @overload
@@ -71,11 +70,3 @@ def ensure_not_none(x: T | None) -> T:
     if x is None:
         raise ValueError("Expected non-None value")
     return x
-
-
-def is_stream(x: Any) -> TypeGuard[BinaryIO]:
-    if isinstance(x, io.IOBase):
-        return True
-    if hasattr(x, "read"):
-        raise ValueError(f"Expected a stream, got this weird object: {type(x)} {x!r}")
-    return False

@@ -54,12 +54,12 @@ from archivey.internal.io_helpers import (
     ErrorIOStream,
     ExceptionTranslatingIO,
     ensure_binaryio,
+    is_stream,
     run_with_exception_translation,
 )
 from archivey.internal.utils import (
     bytes_to_str,
     ensure_not_none,
-    is_stream,
     str_to_bytes,
 )
 from archivey.types import (

@@ -17,7 +17,12 @@ from archivey.formats.zip_reader import ZipReader
 from archivey.internal.base_reader import (
     StreamingOnlyArchiveReaderWrapper,
 )
-from archivey.internal.io_helpers import RewindableNonSeekableStream, ensure_bufferedio, is_seekable
+from archivey.internal.io_helpers import (
+    RewindableNonSeekableStream,
+    ensure_bufferedio,
+    is_seekable,
+    is_stream,
+)
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
@@ -117,15 +122,19 @@ def open_archive(
             wrapper = RewindableNonSeekableStream(archive_path_normalized)
             archive_path_normalized = wrapper
 
-        archive_path_normalized = ensure_bufferedio(archive_path_normalized)
-
     if isinstance(archive_path_normalized, str):
         if not os.path.exists(archive_path_normalized):
             raise FileNotFoundError(
                 f"Archive file not found: {archive_path_normalized}"
             )
 
+    if is_stream(archive_path_normalized):
+        assert not archive_path_normalized.closed
+
     format = detect_archive_format(archive_path_normalized)
+
+    if is_stream(archive_path_normalized):
+        assert not archive_path_normalized.closed
 
     if wrapper is not None:
         wrapper.seek(0)
@@ -144,6 +153,10 @@ def open_archive(
 
     if config is None:
         config = get_archivey_config()
+
+    if is_stream(archive_path_normalized):
+        assert not archive_path_normalized.closed
+        archive_path_normalized = ensure_bufferedio(archive_path_normalized)
 
     with archivey_config(config):
         assert reader_class is not None

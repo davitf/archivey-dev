@@ -19,9 +19,10 @@ from archivey.internal.base_reader import (
 from archivey.internal.io_helpers import (
     ExceptionTranslatingIO,
     is_seekable,
+    is_stream,
     run_with_exception_translation,
 )
-from archivey.internal.utils import decode_bytes_with_fallback, is_stream, str_to_bytes
+from archivey.internal.utils import decode_bytes_with_fallback, str_to_bytes
 from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,

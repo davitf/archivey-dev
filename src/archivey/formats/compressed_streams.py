@@ -6,8 +6,7 @@ import os
 from typing import TYPE_CHECKING, BinaryIO, Optional, cast
 
 from archivey.config import ArchiveyConfig
-from archivey.internal.io_helpers import is_seekable
-from archivey.internal.utils import is_stream
+from archivey.internal.io_helpers import ensure_bufferedio, is_seekable, is_stream
 from archivey.types import ArchiveFormat
 
 if TYPE_CHECKING:
@@ -77,7 +76,10 @@ def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
             gz = gzip.open(path, mode="rb")
             underlying_seekable = True
         else:
-            gz = gzip.GzipFile(fileobj=path, mode="rb")
+            assert not path.closed
+            gz = gzip.GzipFile(fileobj=ensure_bufferedio(path), mode="rb")
+            # gz = gzip.GzipFile(fileobj=path, mode="rb")
+            assert not path.closed
             underlying_seekable = is_seekable(path)
 
         if not underlying_seekable:
@@ -221,7 +223,7 @@ class ZstandardReopenOnBackwardsSeekIO(io.RawIOBase, BinaryIO):
 
     def seekable(self) -> bool:
         if is_stream(self._archive_path):
-            return self._archive_path.seekable()
+            return is_seekable(self._archive_path)
         return True
 
     def read(self, n: int = -1) -> bytes:
@@ -314,6 +316,9 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
 def open_stream(
     format: ArchiveFormat, path_or_stream: str | BinaryIO, config: ArchiveyConfig
 ) -> BinaryIO:
+    if is_stream(path_or_stream):
+        assert not path_or_stream.closed
+
     if format == ArchiveFormat.GZIP:
         if config.use_rapidgzip:
             return open_rapidgzip_stream(path_or_stream)

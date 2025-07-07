@@ -127,7 +127,7 @@ class TestRewindableNonSeekableStream:
 
         # Stop recording
         stream.stop_recording()
-        assert stream.seekable() is True  # We can still seek within the buffer
+        assert stream.seekable() is False  # We can't seek within the buffer anymore
 
         # Can still read forward
         assert stream.read(6) == b"56789a"
@@ -180,7 +180,7 @@ class TestRewindableNonSeekableStream:
         assert stream.seekable() is True
 
         stream.stop_recording()
-        assert stream.seekable() is True  # We can still seek within the buffer
+        assert stream.seekable() is False
 
     def test_close(self):
         """Test closing the stream."""
@@ -251,33 +251,13 @@ class TestRewindableNonSeekableStream:
         assert buffered_stream.tell() == 5
         assert stream.tell() == 8
 
+        assert buffered_stream.seekable() is True
         stream.stop_recording()
-        assert buffered_stream.read(5) == b"56789"  # Should have read 8 more bytes
-        assert stream.tell() == 16
 
-        # This is the tricky part: BufferedReader will ask for 8 bytes starting at
-        # pos 4, but we only have bytes 0-8 in the stream buffer. We should be able to
-        # read all the cached region, but not the next 8 bytes.
-
-        buffered_stream.seek(4)
-        assert buffered_stream.read(4) == b"4567"
-
-        with pytest.raises(io.UnsupportedOperation):
-            buffered_stream.read(1)
-
-        buffered_stream.seek(4)
-        assert buffered_stream.read(3) == b"456"
-
-        buffered_stream.seek(4)
-        with pytest.raises(io.UnsupportedOperation):
-            buffered_stream.read(5)
-
-        with pytest.raises(io.UnsupportedOperation):
-            buffered_stream.seek(15)
-
-        # Seeking to the current position and reading the rest of the data (which is empty).
-        buffered_stream.seek(16)
-        assert buffered_stream.read() == b""
+        assert buffered_stream.seekable() is False
+        assert buffered_stream.read(5) == b"56789"
+        assert stream.tell() == 16  # Should have read 8 more bytes
+        assert buffered_stream.tell() == 10
 
 
 class OnlyReadStream:

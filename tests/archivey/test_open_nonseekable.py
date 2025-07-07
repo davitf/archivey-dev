@@ -3,12 +3,12 @@ import logging
 
 import pytest
 
-from archivey.config import ArchiveyConfig
 from archivey.core import open_archive, open_compressed_stream
 from archivey.exceptions import ArchiveStreamNotSeekableError
 from archivey.internal.io_helpers import ensure_binaryio
 from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
+    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     LARGE_ARCHIVES,
     SampleArchive,
@@ -70,15 +70,7 @@ def test_open_archive_nonseekable(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
     """Ensure open_archive can read from non-seekable streams in streaming mode."""
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = None
+    config = ALTERNATIVE_CONFIG if alternative_packages else None
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
@@ -98,7 +90,7 @@ def test_open_archive_nonseekable(
             # the name from the compressed file name which is not available when reading
             # from a stream. But checking the number of members should ensure that
             # we read all the members.
-            assert len(members) == len(sample_archive.contents.files)
+            assert len(members) == len([f.name for f in sample_archive.contents.files])
 
     except (
         ArchiveStreamNotSeekableError
@@ -123,15 +115,7 @@ def test_open_archive_nonseekable(
 def test_open_compressed_stream_nonseekable(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = None
+    config = ALTERNATIVE_CONFIG if alternative_packages else None
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 

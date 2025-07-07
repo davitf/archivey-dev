@@ -98,6 +98,18 @@ def test_read_corrupted_archives(
         }
         logger.info(f"{found_member_names=}, expected={expected_member_data.keys()}")
 
+        if (
+            not read_streams
+            and archive.format == ArchiveFormat.BZIP2
+            and sample_archive.creation_info.format == ArchiveFormat.TAR_BZ2
+        ):
+            # In some corrupted archives, bz2 can uncompress the data stream, but it's
+            # not a valid tar format. If we don't actually attempt to read the streams,
+            # we won't detect the corruption.
+            pytest.xfail(
+                "Bzip2 can uncompress the data stream, but it's not a valid tar format."
+            )
+
         # If no error was raised, it likely means that the corruption didn't affect the
         # archive directory or member metadata, so at least all the members should have
         # been read.

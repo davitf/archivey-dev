@@ -27,9 +27,9 @@ from archivey.internal.base_reader import (
 from archivey.internal.io_helpers import (
     ErrorIOStream,
     is_seekable,
+    is_stream,
     run_with_exception_translation,
 )
-from archivey.internal.utils import is_stream
 
 if TYPE_CHECKING:
     import py7zr

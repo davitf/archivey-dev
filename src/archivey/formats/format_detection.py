@@ -5,10 +5,9 @@ import zipfile
 from typing import IO, TYPE_CHECKING, BinaryIO, cast
 
 from archivey.config import get_archivey_config
-from archivey.internal.io_helpers import read_exact
+from archivey.internal.io_helpers import UncloseableStream, is_seekable, read_exact
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
-    SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
     ArchiveFormat,
 )
@@ -50,9 +49,14 @@ def _is_executable(stream: IO[bytes]) -> bool:
 
 
 def is_uncompressed_tarfile(stream: IO[bytes]) -> bool:
-    stream.seek(257)
+    if is_seekable(stream):
+        stream.seek(257)
+    else:
+        read_exact(stream, 257)
+
     data = read_exact(stream, 5)
     return data == b"ustar"
+
 
 def detect_archive_format_by_signature(
     path_or_file: str | bytes | IO[bytes],
@@ -122,12 +126,14 @@ def detect_archive_format_by_signature(
         # Check if it is a compressed tar file
         if detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT:
             assert detected_format is not None
+            uncloseable_f = UncloseableStream(f)
             with open_stream(
-                detected_format, cast("BinaryIO", f), get_archivey_config()
+                detected_format, cast("BinaryIO", uncloseable_f), get_archivey_config()
             ) as decompressed_stream:
                 if is_uncompressed_tarfile(decompressed_stream):
                     detected_format = COMPRESSION_FORMAT_TO_TAR_FORMAT[detected_format]
 
+            assert not f.closed
             f.seek(0)
 
         if detected_format is not None:
@@ -221,12 +227,12 @@ def detect_archive_format(filename: str | IO[bytes] | os.PathLike) -> ArchiveFor
     # filename suggests a tar archive (e.g. .tar.gz), assume it's a tar file.
     # This avoids corrupted tar archives being misread as valid single-file
     # compressed files.
-    if (
-        format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT
-        and format_by_filename not in SINGLE_FILE_COMPRESSED_FORMATS
-        and format_by_filename != ArchiveFormat.UNKNOWN
-    ):
-        format_by_signature = COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]
+    # if (
+    #     format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT
+    #     and format_by_filename not in SINGLE_FILE_COMPRESSED_FORMATS
+    #     and format_by_filename != ArchiveFormat.UNKNOWN
+    # ):
+    #     format_by_signature = COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]
 
     if (
         format_by_filename == ArchiveFormat.UNKNOWN

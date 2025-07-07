@@ -19,6 +19,7 @@ from archivey.internal.base_reader import (
 )
 from archivey.internal.io_helpers import (
     ExceptionTranslatingIO,
+    is_seekable,
     read_exact,
     run_with_exception_translation,
 )
@@ -95,18 +96,7 @@ class TarReader(BaseArchiveReader):
                 self._fileobj.seekable(),
             )
 
-            # if streaming_only and not self._fileobj.seekable():
-            #     # Integrity checking requires seeking; disable it for non-seekable streams
-            #     self.config = replace(self.config, tar_check_integrity=False)
-
-            if not streaming_only and not self._fileobj.seekable():
-                if format == ArchiveFormat.TAR_ZSTD and self.config.use_zstandard:
-                    raise ArchiveError(
-                        "Tried to open a random-access tar.zstd file, but zstandard "
-                        "does not support seeking. Disable the use_zstandard config "
-                        "option."
-                    )
-
+            if not streaming_only and not is_seekable(self._fileobj):
                 raise ArchiveError(
                     f"Tried to open a random-access {format.value} file, but inner stream is not seekable ({self._fileobj})"
                 )
@@ -212,7 +202,7 @@ class TarReader(BaseArchiveReader):
             logger.warning("Cannot check tar integrity: file object is missing")
             return
 
-        if self._fileobj.seekable():
+        if is_seekable(self._fileobj):
             self._fileobj.seek(next_member_offset)
         else:
             # We should ideally use self._fileobj.tell() here, but it doesn't work
@@ -221,7 +211,9 @@ class TarReader(BaseArchiveReader):
             remaining = next_member_offset - self._archive.fileobj.tell()  # type: ignore
 
             if remaining > 0:
-                data = read_exact(self._fileobj, remaining)
+                data = read_exact(
+                    self._fileobj, remaining
+                )  # self._fileobj.read(remaining)
                 assert len(data) == remaining, (
                     f"Expected {remaining} bytes, got {len(data)}"
                 )
@@ -231,7 +223,9 @@ class TarReader(BaseArchiveReader):
                 return
 
         expected_zeroes = 512 * 2
-        data = read_exact(self._fileobj, expected_zeroes)
+        data = read_exact(
+            self._fileobj, expected_zeroes
+        )  # self._fileobj.read(expected_zeroes)
         if len(data) < expected_zeroes:
             raise ArchiveCorruptedError(
                 f"Missing data after last tarinfo: {len(data)} bytes"

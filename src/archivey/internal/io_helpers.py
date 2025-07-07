@@ -11,8 +11,10 @@ from typing import (
     NoReturn,
     Optional,
     Protocol,
+    TypeGuard,
     TypeVar,
     Union,
+    cast,
     runtime_checkable,
 )
 
@@ -22,10 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def read_exact(stream: IO[bytes], n: int) -> bytes:
-    """Read exactly ``n`` bytes from ``stream``.
-    Continues reading until ``n`` bytes are returned or raises ``EOFError``
-    if the stream ends prematurely.
-    """
+    """Read exactly ``n`` bytes, or all available bytes if the file ends."""
 
     if n < 0:
         raise ValueError("n must be non-negative")
@@ -71,6 +70,34 @@ class ReadableBinaryStream(Protocol):
 @runtime_checkable
 class WritableBinaryStream(Protocol):
     def write(self, data: bytes, /) -> int: ...
+
+
+@runtime_checkable
+class BinaryIOProtocol(Protocol):
+    """Runtime-checkable protocol for BinaryIO objects."""
+
+    @property
+    def closed(self, /) -> bool: ...
+
+    def read(self, n: int = -1, /) -> bytes: ...
+    def write(self, data: bytes, /) -> int: ...
+    def seek(self, offset: int, whence: int = io.SEEK_SET, /) -> int: ...
+    def tell(self, /) -> int: ...
+    def close(self, /) -> None: ...
+    def flush(self, /) -> None: ...
+    def readable(self, /) -> bool: ...
+    def writable(self, /) -> bool: ...
+    def seekable(self, /) -> bool: ...
+    def readinto(self, b: bytearray | memoryview, /) -> int: ...
+    def writelines(self, lines: list[bytes], /) -> None: ...
+    def __enter__(self, /) -> "BinaryIOProtocol": ...
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+        /,
+    ) -> None: ...
 
 
 BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream]
@@ -140,9 +167,9 @@ class BinaryIOWrapper(io.RawIOBase, BinaryIO):
         raise io.UnsupportedOperation("tell")
 
     def close(self):
+        super().close()
         if hasattr(self._raw, "close"):
             self._raw.close()  # type: ignore
-        super().close()
 
     def flush(self):
         if hasattr(self._raw, "flush"):
@@ -171,12 +198,6 @@ class BinaryIOWrapper(io.RawIOBase, BinaryIO):
                 return result
 
         except AttributeError:
-            pass
-
-        return hasattr(self._raw, "read") or hasattr(self._raw, "readinto")  # type: ignore
-        try:
-            return self._raw.writable()  # type: ignore
-        except AttributeError:
             return hasattr(self._raw, "write")  # type: ignore
 
     def seekable(self):
@@ -203,28 +224,95 @@ ALL_IO_METHODS = {
 }
 
 
+def is_stream(x: Any) -> TypeGuard[BinaryIO]:
+    """Check if an object matches the BinaryIO protocol."""
+    # First check if it's a standard IOBase instance
+    # if isinstance(x, io.IOBase):
+    #     return True
+
+    # Then check if it matches our BinaryIO protocol
+    if isinstance(x, BinaryIOProtocol):
+        return True
+
+    # If it has a read method but doesn't match the protocol, it's a weird object
+    # if hasattr(x, "read"):
+    #     raise ValueError(f"Expected a stream, got this weird object: {type(x)} {x!r}")
+
+    return False
+
+
+# FIX: UncloseableStream(BufferedReader(...)) is returning is_stream=False
+
+# class OnlyReadStream():
+#     def read(self, n: int = -1, /) -> bytes:
+#         return b"das"
+
+
 def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
     """Some libraries return an object that doesn't match the BinaryIO protocol,
     so we need to ensure it does to make the type checker happy."""
 
-    existing_methods = {m for m in ALL_IO_METHODS if callable(getattr(obj, m, None))}
-    if existing_methods == ALL_IO_METHODS:
-        return obj  # type: ignore
+    if is_stream(obj):
+        return obj
+
+    # existing_methods = {m for m in ALL_IO_METHODS if callable(getattr(obj, m, None))}
+    # if existing_methods == ALL_IO_METHODS:
+    #     return obj  # type: ignore
 
     logger.info(
-        f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper. Missing methods: {ALL_IO_METHODS - existing_methods}"
+        f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper."
     )
     return BinaryIOWrapper(obj)
 
 
-def ensure_bufferedio(obj: Any) -> io.BufferedIOBase:
+# # b = io.BytesIO(b"das")
+# b = OnlyReadStream()
+# print(is_stream(b))
+# bs = ensure_binaryio(b)
+# print(is_stream(bs))
+# print(bs.read())
+# exit()
+
+
+StreamT = TypeVar("StreamT", bound=BinaryStreamLike)
+
+
+class UncloseableStream:
+    def __init__(self, inner: BinaryStreamLike):
+        self._inner = inner
+
+    def close(self):
+        logger.error(
+            "Closing UncloseableStream, not closing inner stream %s",
+            self._inner,
+            stack_info=True,
+        )
+        pass
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self._inner, item)
+
+
+def ensure_uncloseable(obj: StreamT) -> StreamT:
+    """Return a stream that doesn't close the underlying stream when closed."""
+    if isinstance(obj, UncloseableStream):
+        return obj
+    return cast("StreamT", UncloseableStream(obj))
+
+
+def ensure_bufferedio(obj: BinaryStreamLike) -> io.BufferedIOBase:
     if isinstance(obj, io.BufferedIOBase):
         return obj
 
     if not isinstance(obj, io.RawIOBase):
         obj = BinaryIOWrapper(obj)
 
-    return io.BufferedReader(obj)
+    # BufferedReader closes the underlying stream when closed or deleted. If
+    # ensure_bufferedio is called to temporarily buffer a stream, we need to ensure
+    # that the underlying stream is not closed when the BufferedReader is closed or
+    # goes out of scope. The underlying stream will be closed when it's garbage
+    # collected anyway, so we don't need to worry about it leaking.
+    return io.BufferedReader(ensure_uncloseable(obj))
 
     # # Check if it supports read/write for bidirectional buffering
     # has_read = hasattr(bio, "read") and callable(bio.read)
@@ -414,6 +502,8 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
             self._translate_exception(e)
 
     def close(self) -> None:
+        # logger.error("Closing ExceptionTranslatingIO", stack_info=True)
+
         # If the object raised an exception during initialization, it might not have
         # an _inner attribute. But IOBase.__del__() will eventually be called and may
         # call close() here. If we don't check that the attribute exists, we'll get an
@@ -713,7 +803,7 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
         return False
 
     def seekable(self) -> bool:  # pragma: no cover - trivial
-        return True
+        return self._recording or is_seekable(self._inner)
 
     # Control methods --------------------------------------------------
 

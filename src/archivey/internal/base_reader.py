@@ -1,12 +1,12 @@
 """Defines the abstract base classes and common functionality for archive readers."""
 
 import abc
-from io import BufferedIOBase
 import logging
 import os
 import posixpath
 import threading
 from collections import defaultdict
+from io import BufferedIOBase
 from typing import BinaryIO, Callable, Collection, Iterator, List, Union, cast
 from uuid import uuid4
 from weakref import WeakSet
