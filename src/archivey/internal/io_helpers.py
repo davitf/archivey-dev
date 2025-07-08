@@ -582,7 +582,7 @@ class RecordableStream(io.RawIOBase, BinaryIO):
         if whence == io.SEEK_CUR:
             offset = self._pos + offset
         elif whence == io.SEEK_END:
-            offset = len(self._buffer) + offset
+            raise io.UnsupportedOperation("seek to end")
         elif whence != io.SEEK_SET:
             raise ValueError(f"Invalid whence: {whence}")
 

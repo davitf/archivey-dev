@@ -79,6 +79,11 @@ class TestRecordableStream:
         assert stream.tell() == 5
         assert stream.read(2) == DATA[5:7]
 
+    def test_seek_end_unsupported(self):
+        stream = create_stream()
+        with pytest.raises(io.UnsupportedOperation, match="seek to end"):
+            stream.seek(0, io.SEEK_END)
+
     def test_readinto(self):
         stream = create_stream()
         buf = bytearray(5)

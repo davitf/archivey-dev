@@ -136,7 +136,7 @@ def open_archive(
         recorded_data = recordable.get_all_data()
         recordable.seek(len(recorded_data))
         archive_path_normalized = ConcatenationStream(
-            [io.BytesIO(recorded_data), recordable]
+            [io.BytesIO(recorded_data), recordable._inner]
         )
     if format == ArchiveFormat.UNKNOWN:
         raise ArchiveNotSupportedError(
@@ -195,7 +195,7 @@ def open_compressed_stream(
         recorded_data = recordable.get_all_data()
         recordable.seek(len(recorded_data))
         archive_path_normalized = ConcatenationStream(
-            [io.BytesIO(recorded_data), recordable]
+            [io.BytesIO(recorded_data), recordable._inner]
         )
 
     if format not in SINGLE_FILE_COMPRESSED_FORMATS:
