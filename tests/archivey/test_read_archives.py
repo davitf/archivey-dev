@@ -247,11 +247,7 @@ def check_iter_members(
         ] = collections.defaultdict(list)
         all_non_dirs_in_archive = set()
 
-        logger.info(f"members_iter: {members_iter}")
         for member, stream in members_iter:
-            logger.info(
-                f"member: {member.filename} [{member.type}] [{member.member_id}] {stream=}"
-            )
 
             if skip_member_contents:
                 assert not member._edited_by_filter, (
@@ -288,7 +284,6 @@ def check_iter_members(
             if member.type != MemberType.DIR:
                 all_non_dirs_in_archive.add(filekey)
 
-        logger.info(f"all_contents_by_filename: {all_contents_by_filename}")
 
         # Check that all expected filenames are present in the archive.
         assert not set(expected_files_by_filename.keys()) - set(
@@ -319,7 +314,6 @@ def check_iter_members(
             actual_files.sort(key=lambda x: x[0].member_id)
 
             for i in range(len(expected_files)):
-                logger.info(f"Checking {filename} ({i})")
                 sample_file = expected_files[i]
                 member, contents = actual_files[i]
 
@@ -338,10 +332,7 @@ def check_iter_members(
                         assert stream.read() == sample_file.contents
                 else:
                     with pytest.raises((ValueError, ArchiveError)):
-                        stream = archive.open(member)
-                        logger.info(
-                            f"Unexpected open() success for {member=}; data={stream.read()}"
-                        )
+                        archive.open(member)
 
             # Check that opening the file by filename gives the most recent contents.
             sample_file = expected_files[-1]
@@ -382,9 +373,6 @@ logger = logging.getLogger(__name__)
 def test_read_tar_archives(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
-    logger.info(
-        f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
-    )
 
     config = ALTERNATIVE_CONFIG if alternative_packages else None
 
@@ -586,5 +574,4 @@ def test_read_hardlinks_archives(
     ids=lambda x: x.filename,
 )
 def test_read_folder_archives(sample_archive: SampleArchive, sample_archive_path: str):
-    logger.info(f"Testing {sample_archive.filename}; files at {sample_archive_path}")
     check_iter_members(sample_archive, archive_path=sample_archive_path)

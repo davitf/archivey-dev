@@ -483,7 +483,6 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
             self._translate_exception(e)
 
     def close(self) -> None:
-        # logger.error("Closing ExceptionTranslatingIO", stack_info=True)
 
         # If the object raised an exception during initialization, it might not have
         # an _inner attribute. But IOBase.__del__() will eventually be called and may

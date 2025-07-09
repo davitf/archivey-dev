@@ -141,9 +141,6 @@ def test_streaming_only_mode(
                 assert previous_stream.closed
                 with pytest.raises(ValueError):
                     data = previous_stream.read()
-                    logger.info(
-                        f"previous_stream.read() = {data[:20]} -- {previous_stream=}"
-                    )
 
             if m.is_link:
                 # The link target should have been filled before the member was yielded
@@ -323,7 +320,6 @@ def test_resolve_link_symlink_without_target(
                 )
             else:
                 assert resolved is not None
-                logger.info(f"{member.filename=} {member.link_target=} {resolved=}")
                 assert resolved.type in (MemberType.FILE, MemberType.DIR)
                 if resolved.type == MemberType.FILE:
                     with archive.open(resolved) as f:
