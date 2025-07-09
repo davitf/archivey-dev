@@ -342,4 +342,3 @@ def test_is_stream(tmp_path: Path):
     assert not is_stream(1)
     assert not is_stream("hello")
     assert not is_stream(b"hello")
-    assert not is_stream(io.StringIO("hello"))

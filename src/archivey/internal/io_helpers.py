@@ -40,6 +40,8 @@ class CloseableStream(Protocol):
 
 BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream, CloseableStream]
 
+StreamLikeOrSimilar = Union[BinaryStreamLike, io.IOBase, IO[bytes]]
+
 
 def read_exact(stream: ReadableBinaryStream, n: int) -> bytes:
     """Read exactly ``n`` bytes, or all available bytes if the file ends."""

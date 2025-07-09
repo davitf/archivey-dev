@@ -32,7 +32,7 @@ class FolderReader(BaseArchiveReader):
         super().__init__(
             ArchiveFormat.FOLDER,
             archive_path,
-            streaming_only=False,
+            streaming_only=streaming_only,
             members_list_supported=True,
             pwd=None,
         )

@@ -1,7 +1,7 @@
 """Core functionality for opening and interacting with archives."""
 
 import os
-from typing import BinaryIO
+from typing import BinaryIO, Callable
 
 from archivey.archive_reader import ArchiveReader
 from archivey.config import ArchiveyConfig, archivey_config, get_archivey_config
@@ -45,7 +45,7 @@ def _normalize_path_or_stream(
     raise TypeError(f"Invalid archive path type: {type(archive_path)} {archive_path}")
 
 
-_FORMAT_TO_READER: dict[ArchiveFormat, type[ArchiveReader]] = {
+_FORMAT_TO_READER: dict[ArchiveFormat, Callable[..., ArchiveReader]] = {
     ArchiveFormat.RAR: RarReader,
     ArchiveFormat.ZIP: ZipReader,
     ArchiveFormat.SEVENZIP: SevenZipReader,

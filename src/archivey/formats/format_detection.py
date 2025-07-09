@@ -5,7 +5,12 @@ import zipfile
 from typing import IO, TYPE_CHECKING, BinaryIO, cast
 
 from archivey.config import get_archivey_config
-from archivey.internal.io_helpers import UncloseableStream, is_seekable, read_exact
+from archivey.internal.io_helpers import (
+    StreamLikeOrSimilar,
+    UncloseableStream,
+    is_seekable,
+    read_exact,
+)
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
     TAR_COMPRESSED_FORMATS,
@@ -59,7 +64,7 @@ def is_uncompressed_tarfile(stream: IO[bytes]) -> bool:
 
 
 def detect_archive_format_by_signature(
-    path_or_file: str | bytes | IO[bytes],
+    path_or_file: str | bytes | StreamLikeOrSimilar,
 ) -> ArchiveFormat:
     # [signature, ...], offset, format
     SIGNATURES = [
@@ -209,7 +214,7 @@ logger = logging.getLogger(__name__)
 
 
 def detect_archive_format(
-    filename: str | IO[bytes] | BinaryIO | os.PathLike,
+    filename: str | os.PathLike | StreamLikeOrSimilar,
 ) -> ArchiveFormat:
     # Check if it's a directory first
     if isinstance(filename, os.PathLike):

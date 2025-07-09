@@ -29,8 +29,6 @@ class ArchiveReader(abc.ABC):
         self,
         archive_path: BinaryIO | str | bytes | os.PathLike,
         format: ArchiveFormat,
-        pwd: bytes | str | None,
-        streaming_only: bool,
     ):
         if is_stream(archive_path):
             self.path_str = None

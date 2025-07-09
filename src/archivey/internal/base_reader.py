@@ -146,7 +146,7 @@ class BaseArchiveReader(ArchiveReader):
                 full member list via `get_members()` might require iterating
                 through a significant portion of the archive if not already done.
         """
-        super().__init__(archive_path, format, pwd, streaming_only)
+        super().__init__(archive_path, format)
         self.config: ArchiveyConfig = get_archivey_config()
 
         if pwd is not None and isinstance(pwd, str):

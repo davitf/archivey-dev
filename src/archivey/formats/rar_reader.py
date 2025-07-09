@@ -54,6 +54,7 @@ from archivey.internal.io_helpers import (
     ErrorIOStream,
     ExceptionTranslatingIO,
     ensure_binaryio,
+    is_seekable,
     is_stream,
     run_with_exception_translation,
 )
@@ -500,6 +501,12 @@ class RarReader(BaseArchiveReader):
             members_list_supported=True,
             pwd=pwd,
         )
+
+        if is_stream(self.path_or_stream) and not is_seekable(self.path_or_stream):
+            raise ArchiveStreamNotSeekableError(
+                "RAR archives do not support non-seekable streams"
+            )
+
         self._format_info: Optional[ArchiveInfo] = None
 
         if rarfile is None:
@@ -508,7 +515,7 @@ class RarReader(BaseArchiveReader):
             )
 
         def open_rar_file():
-            r = rarfile.RarFile(archive_path, "r", pwd)
+            r = rarfile.RarFile(archive_path, "r", pwd, errors="strict")
             if pwd:
                 r.setpassword(pwd)
             return r
