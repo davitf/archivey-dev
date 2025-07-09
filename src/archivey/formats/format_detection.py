@@ -208,7 +208,9 @@ def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
 logger = logging.getLogger(__name__)
 
 
-def detect_archive_format(filename: str | IO[bytes] | os.PathLike) -> ArchiveFormat:
+def detect_archive_format(
+    filename: str | IO[bytes] | BinaryIO | os.PathLike,
+) -> ArchiveFormat:
     # Check if it's a directory first
     if isinstance(filename, os.PathLike):
         filename = str(filename)

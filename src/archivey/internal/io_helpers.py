@@ -23,7 +23,25 @@ from archivey.exceptions import ArchiveError
 logger = logging.getLogger(__name__)
 
 
-def read_exact(stream: IO[bytes], n: int) -> bytes:
+@runtime_checkable
+class ReadableBinaryStream(Protocol):
+    def read(self, n: int = -1, /) -> bytes: ...
+
+
+@runtime_checkable
+class WritableBinaryStream(Protocol):
+    def write(self, data: bytes, /) -> int: ...
+
+
+@runtime_checkable
+class CloseableStream(Protocol):
+    def close(self) -> None: ...
+
+
+BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream, CloseableStream]
+
+
+def read_exact(stream: ReadableBinaryStream, n: int) -> bytes:
     """Read exactly ``n`` bytes, or all available bytes if the file ends."""
 
     if n < 0:
@@ -38,7 +56,7 @@ def read_exact(stream: IO[bytes], n: int) -> bytes:
     return bytes(data)
 
 
-def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
+def is_seekable(stream: io.IOBase | IO[bytes] | BinaryStreamLike) -> bool:
     """Check if a stream is seekable."""
     # When we wrap a RewindableNonSeekableStream in a BufferedReader, we want to check
     # if the inner stream is seekable, with the check below.
@@ -49,7 +67,7 @@ def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
         return stream.is_inner_stream_seekable()
 
     try:
-        return stream.seekable() or False
+        return stream.seekable() or False  # type: ignore[attr-defined]
     except AttributeError as e:
         # Some streams (e.g. tarfile._Stream) don't have a seekable method, which seems
         # like a bug. Sometimes they are wrapped in other classes
@@ -60,19 +78,6 @@ def is_seekable(stream: io.IOBase | IO[bytes]) -> bool:
         # as it's wrapped in a BufferedReader which calls seekable() when doing a seek().
         logger.debug("Stream %s does not have a seekable method: %s", stream, e)
         return False
-
-
-@runtime_checkable
-class ReadableBinaryStream(Protocol):
-    def read(self, n: int = -1, /) -> bytes: ...
-
-
-@runtime_checkable
-class WritableBinaryStream(Protocol):
-    def write(self, data: bytes, /) -> int: ...
-
-
-BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream]
 
 
 class BinaryIOWrapper(io.RawIOBase, BinaryIO):
@@ -203,34 +208,32 @@ ALL_IO_PROPERTIES = {
 def is_stream(obj: Any) -> TypeGuard[BinaryIO]:
     """Check if an object matches the BinaryIO protocol."""
 
-    # First check if it's a standard IOBase instance
-    # if isinstance(x, io.IOBase):
-    #     return True
     logger.info("Checking if %s is a stream", obj)
+
+    # First check if it's a standard IOBase instance
+    is_iobase = isinstance(obj, io.IOBase)
+
     missing_methods = {m for m in ALL_IO_METHODS if not callable(getattr(obj, m, None))}
     missing_properties = {p for p in ALL_IO_PROPERTIES if not hasattr(obj, p)}
-    if not missing_methods and not missing_properties:
-        return True
+    has_all_interface = not missing_methods and not missing_properties
 
-    logger.debug(
-        "Object %r does not match the BinaryIO protocol: missing methods %r, missing properties %r",
-        obj,
-        missing_methods,
-        missing_properties,
-    )
+    if not has_all_interface:
+        logger.debug(
+            "Object %r does not match the BinaryIO protocol: missing methods %r, missing properties %r",
+            obj,
+            missing_methods,
+            missing_properties,
+        )
 
-    # If it has a read method but doesn't match the protocol, it's a weird object
-    # if hasattr(x, "read"):
-    #     raise ValueError(f"Expected a stream, got this weird object: {type(x)} {x!r}")
+    if is_iobase != has_all_interface:
+        logger.debug(
+            "Object %r : is_iobase=%r, has_all_interface=%r",
+            obj,
+            is_iobase,
+            has_all_interface,
+        )
 
-    return False
-
-
-# FIX: UncloseableStream(BufferedReader(...)) is returning is_stream=False
-
-# class OnlyReadStream():
-#     def read(self, n: int = -1, /) -> bytes:
-#         return b"das"
+    return is_iobase or has_all_interface
 
 
 def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
@@ -248,15 +251,6 @@ def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
         f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper."
     )
     return BinaryIOWrapper(obj)
-
-
-# # b = io.BytesIO(b"das")
-# b = OnlyReadStream()
-# print(is_stream(b))
-# bs = ensure_binaryio(b)
-# print(is_stream(bs))
-# print(bs.read())
-# exit()
 
 
 StreamT = TypeVar("StreamT", bound=BinaryStreamLike)
@@ -509,7 +503,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
         return f"ExceptionTranslatingIO({self._inner!r})"
 
 
-class LazyOpenIO(io.RawIOBase, BinaryIO):
+class LazyOpenIO(io.BufferedIOBase, BinaryIO):
     """
     An I/O stream wrapper that defers the actual opening of an underlying stream
     until the first I/O operation (e.g., read, seek) is attempted.
@@ -521,7 +515,7 @@ class LazyOpenIO(io.RawIOBase, BinaryIO):
 
     def __init__(
         self,
-        open_fn: Callable[..., IO[bytes]],
+        open_fn: Callable[..., io.BufferedIOBase],
         *args: Any,
         seekable: bool,
         **kwargs: Any,
@@ -542,10 +536,10 @@ class LazyOpenIO(io.RawIOBase, BinaryIO):
         self._open_fn = open_fn
         self._args = args
         self._kwargs = kwargs
-        self._inner: IO[bytes] | None = None
+        self._inner: io.BufferedIOBase | None = None
         self._seekable = seekable
 
-    def _ensure_open(self) -> IO[bytes]:
+    def _ensure_open(self) -> io.BufferedIOBase:
         if self.closed:
             raise ValueError("I/O operation on closed file.")
         if self._inner is None:
@@ -667,7 +661,7 @@ class StatsIO(io.RawIOBase, BinaryIO):
 class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
     """Wrap a non-seekable stream that supports seeking via an internal buffer."""
 
-    def __init__(self, inner: IO[bytes]):
+    def __init__(self, inner: ReadableBinaryStream):
         super().__init__()
         self._inner = inner
         self._buffer = bytearray()
@@ -793,7 +787,8 @@ class RewindableNonSeekableStream(io.RawIOBase, BinaryIO):
     # Control methods --------------------------------------------------
 
     def close(self) -> None:  # pragma: no cover - simple delegation
-        self._inner.close()
+        if isinstance(self._inner, CloseableStream):
+            self._inner.close()
         super().close()
 
     def is_inner_stream_seekable(self) -> bool:

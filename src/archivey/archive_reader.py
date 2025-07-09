@@ -26,7 +26,11 @@ class ArchiveReader(abc.ABC):
     path_str: str | None
 
     def __init__(
-        self, archive_path: BinaryIO | str | bytes | os.PathLike, format: ArchiveFormat
+        self,
+        archive_path: BinaryIO | str | bytes | os.PathLike,
+        format: ArchiveFormat,
+        pwd: bytes | str | None,
+        streaming_only: bool,
     ):
         if is_stream(archive_path):
             self.path_str = None

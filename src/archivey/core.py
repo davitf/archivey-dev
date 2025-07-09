@@ -14,15 +14,15 @@ from archivey.formats.sevenzip_reader import SevenZipReader
 from archivey.formats.single_file_reader import SingleFileReader
 from archivey.formats.tar_reader import TarReader
 from archivey.formats.zip_reader import ZipReader
-from archivey.internal.base_reader import (
-    StreamingOnlyArchiveReaderWrapper,
-)
 from archivey.internal.io_helpers import (
+    ReadableBinaryStream,
     RewindableNonSeekableStream,
+    ensure_binaryio,
     ensure_bufferedio,
     is_seekable,
     is_stream,
 )
+from archivey.internal.utils import ensure_not_none
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_COMPRESSED_FORMATS,
@@ -30,22 +30,22 @@ from archivey.types import (
 )
 
 
-def _normalize_archive_path(
-    archive_path: BinaryIO | str | bytes | os.PathLike,
-) -> BinaryIO | str:
-    if hasattr(archive_path, "read"):
-        return archive_path  # type: ignore[return-value]
+def _normalize_path_or_stream(
+    archive_path: ReadableBinaryStream | str | bytes | os.PathLike,
+) -> tuple[BinaryIO | None, str | None]:
+    if is_stream(archive_path):
+        return ensure_binaryio(archive_path), None
     if isinstance(archive_path, os.PathLike):
-        return str(archive_path)
+        return None, str(archive_path)
     if isinstance(archive_path, bytes):
-        return archive_path.decode("utf-8")
+        return None, archive_path.decode("utf-8")
     if isinstance(archive_path, str):
-        return archive_path
+        return None, archive_path
 
     raise TypeError(f"Invalid archive path type: {type(archive_path)} {archive_path}")
 
 
-_FORMAT_TO_READER = {
+_FORMAT_TO_READER: dict[ArchiveFormat, type[ArchiveReader]] = {
     ArchiveFormat.RAR: RarReader,
     ArchiveFormat.ZIP: ZipReader,
     ArchiveFormat.SEVENZIP: SevenZipReader,
@@ -61,7 +61,7 @@ for format in SINGLE_FILE_COMPRESSED_FORMATS:
 
 
 def open_archive(
-    archive_path: BinaryIO | str | bytes | os.PathLike,
+    path_or_stream: ReadableBinaryStream | str | bytes | os.PathLike,
     *,
     config: ArchiveyConfig | None = None,
     streaming_only: bool = False,
@@ -74,7 +74,7 @@ def open_archive(
     It is the main entry point for users of the archivey library.
 
     Args:
-        archive_path: Path to the archive file (e.g., "my_archive.zip", "data.tar.gz")
+        path_or_stream: Path to the archive file (e.g., "my_archive.zip", "data.tar.gz")
             or a binary file object containing the archive data.
         config: Optional ArchiveyConfig object to customize behavior. If None,
             default configuration is used.
@@ -114,39 +114,38 @@ def open_archive(
     if pwd is not None and not isinstance(pwd, (str, bytes)):
         raise TypeError("Password must be a string or bytes")
 
-    archive_path_normalized = _normalize_archive_path(archive_path)
+    stream, path = _normalize_path_or_stream(path_or_stream)
 
     wrapper: RewindableNonSeekableStream | None = None
-    if not isinstance(archive_path_normalized, str):
-        if not is_seekable(archive_path_normalized):
-            wrapper = RewindableNonSeekableStream(archive_path_normalized)
-            archive_path_normalized = wrapper
+    if stream is not None:
+        assert not stream.closed
+        stream = ensure_bufferedio(stream)
 
-    if isinstance(archive_path_normalized, str):
-        if not os.path.exists(archive_path_normalized):
-            raise FileNotFoundError(
-                f"Archive file not found: {archive_path_normalized}"
-            )
+        if not is_seekable(stream):
+            wrapper = RewindableNonSeekableStream(stream)
+            stream = wrapper
 
-    if is_stream(archive_path_normalized):
-        assert not archive_path_normalized.closed
+    if stream is None:
+        assert path is not None
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Archive file not found: {path}")
 
-    format = detect_archive_format(archive_path_normalized)
+    format = detect_archive_format(ensure_not_none(stream or path))
 
-    if is_stream(archive_path_normalized):
-        assert not archive_path_normalized.closed
+    if stream is not None:
+        assert not stream.closed
 
     if wrapper is not None:
         wrapper.seek(0)
         wrapper.stop_recording()
     if format == ArchiveFormat.UNKNOWN:
         raise ArchiveNotSupportedError(
-            f"Unknown archive format for {archive_path_normalized}"
+            f"Unknown archive format for {ensure_not_none(stream or path)}"
         )
 
     if format not in _FORMAT_TO_READER:
         raise ArchiveNotSupportedError(
-            f"Unsupported archive format: {format} (for {archive_path_normalized})"
+            f"Unsupported archive format: {format} (for {ensure_not_none(stream or path)})"
         )
 
     reader_class = _FORMAT_TO_READER.get(format)
@@ -154,46 +153,45 @@ def open_archive(
     if config is None:
         config = get_archivey_config()
 
-    if is_stream(archive_path_normalized):
-        assert not archive_path_normalized.closed
-        archive_path_normalized = ensure_bufferedio(archive_path_normalized)
+    if stream is not None:
+        assert not stream.closed
 
     with archivey_config(config):
         assert reader_class is not None
-        reader = reader_class(
+        return reader_class(
             format=format,
-            archive_path=archive_path_normalized,
+            archive_path=ensure_not_none(stream or path),
             pwd=pwd,
             streaming_only=streaming_only,
         )
 
-        if streaming_only:
-            return StreamingOnlyArchiveReaderWrapper(reader)
-        return reader
+        # if streaming_only:
+        #     return StreamingOnlyArchiveReaderWrapper(reader)
+        # return reader
 
 
 def open_compressed_stream(
-    archive_path: BinaryIO | str | bytes | os.PathLike,
+    path_or_stream: BinaryIO | str | bytes | os.PathLike,
     *,
     config: ArchiveyConfig | None = None,
 ) -> BinaryIO:
     """Open a single-file compressed stream and return the uncompressed stream."""
 
-    archive_path_normalized = _normalize_archive_path(archive_path)
+    stream, path = _normalize_path_or_stream(path_or_stream)
 
     wrapper: RewindableNonSeekableStream | None = None
-    if not isinstance(archive_path_normalized, str) and not is_seekable(
-        archive_path_normalized
-    ):
-        wrapper = RewindableNonSeekableStream(archive_path_normalized)
-        archive_path_normalized = wrapper
+    if stream is not None:
+        assert not stream.closed
+        if not is_seekable(stream):
+            wrapper = RewindableNonSeekableStream(stream)
+            stream = wrapper
 
-    if isinstance(archive_path_normalized, str) and not os.path.exists(
-        archive_path_normalized
-    ):
-        raise FileNotFoundError(f"Archive file not found: {archive_path_normalized}")
+    if stream is None:
+        assert path is not None
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Archive file not found: {path}")
 
-    format = detect_archive_format(archive_path_normalized)
+    format = detect_archive_format(ensure_not_none(stream or path))
 
     if wrapper is not None:
         wrapper.seek(0)
@@ -208,4 +206,4 @@ def open_compressed_stream(
         config = get_archivey_config()
 
     with archivey_config(config):
-        return open_stream(format, archive_path_normalized, config)
+        return open_stream(format, ensure_not_none(stream or path), config)

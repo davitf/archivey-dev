@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 import threading
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING
 
 from archivey.config import OverwriteMode
 from archivey.exceptions import (
@@ -16,6 +16,7 @@ from archivey.types import ArchiveMember, MemberType
 
 if TYPE_CHECKING:
     from archivey.archive_reader import ArchiveReader
+    from archivey.internal.io_helpers import ReadableBinaryStream
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +236,7 @@ class ExtractionHelper:
             self.extracted_path_by_source_id[target.member_id] = target_path
 
     def create_regular_file(
-        self, member: ArchiveMember, stream: BinaryIO | None, path: str
+        self, member: ArchiveMember, stream: ReadableBinaryStream | None, path: str
     ) -> bool:
         if not self.check_overwrites(member, path):
             return False
@@ -347,7 +348,9 @@ class ExtractionHelper:
         self.extracted_members_by_path[member_path] = member
         return True
 
-    def extract_member(self, member: ArchiveMember, stream: BinaryIO | None) -> bool:
+    def extract_member(
+        self, member: ArchiveMember, stream: ReadableBinaryStream | None
+    ) -> bool:
         path = self.get_output_path(member)
         logger.info(
             "Extracting %s [%s] to %s, stream: %s",
