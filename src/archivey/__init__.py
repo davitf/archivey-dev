@@ -11,6 +11,7 @@ from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
+    ExtractionFilter,
     MemberType,
 )
 
@@ -24,6 +25,7 @@ __all__ = [
     # Enums
     "ArchiveFormat",
     "MemberType",
+    "ExtractionFilter",
     # Config
     "ArchiveyConfig",
     "archivey_config",

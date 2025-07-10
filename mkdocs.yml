@@ -1,4 +1,5 @@
 site_name: Archivey
+site_url: https://davitf.github.io/archivey/
 nav:
   - Home: index.md
   - User guide: user_guide.md
@@ -11,9 +12,19 @@ plugins:
         python:
           paths: [src]
           options:
-            heading_level: 3
+            heading_level: 2
             show_source: false
+            show_root_heading: true
+            docstring_section_style: list
+            extensions:
+            - griffe_fieldz
+            - scripts/griffe_extensions.py
+
   - autorefs
 theme:
-  name: readthedocs
-  navigation_depth: 3
+  name: material
+  navigation_depth: 2
+
+markdown_extensions:
+  - toc:
+      toc_depth: 3

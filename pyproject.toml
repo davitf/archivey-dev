@@ -51,6 +51,8 @@ dev = [
     # https://github.com/kevlened/pytest-parallel/issues/118
     "py>=1.11.0",
     "mkdocs>=1.5.3",
+    "mkdocs-material>=9.6.15",
+    "griffe-fieldz>=0.2.1",
 ]
 
 [tool.pytest.ini_options]

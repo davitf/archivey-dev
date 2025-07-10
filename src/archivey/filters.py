@@ -1,3 +1,16 @@
+"""
+Custom filter functions for Archivey.
+
+You don't need to use this package if you just want to use the default filters.
+Just pass one of the :ref:`archivey.ExtractionFilter` values to the
+`iter_members_with_io` or `extractall` methods, or set it in the
+:ref:`archivey.ArchiveyConfig.extraction_filter` field.
+
+If you need a filter with custom options, you can use the `create_filter`
+function. Or you can create your own filter function by implementing the
+:ref:`archivey.FilterFunc` type.
+"""
+
 from __future__ import annotations
 
 import functools
@@ -12,14 +25,6 @@ from archivey.types import (
     FilterFunc,
     MemberType,
 )
-
-__all__ = [
-    "fully_trusted",
-    "create_filter",
-    "tar_filter",
-    "data_filter",
-    "ArchiveFilterError",
-]
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +139,18 @@ def create_filter(
     sanitize_permissions: bool,
     raise_on_error: bool,
 ) -> FilterFunc:
+    """Create a filter function with the given options.
+
+    The filter function can be passed to `iter_members_with_io` or `extractall`.
+
+    Args:
+        for_data: Whether the filter is for data members (files and directories).
+        sanitize_names: Whether to sanitize the names of members.
+        sanitize_link_targets: Whether to sanitize the link targets of members.
+        sanitize_permissions: Whether to sanitize the permissions of members.
+        raise_on_error: Whether to raise an error if a filter function returns None.
+
+    """
     return functools.partial(
         _get_filtered_member,
         for_data=for_data,

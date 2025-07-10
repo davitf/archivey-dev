@@ -1,4 +1,9 @@
-"""Defines custom exceptions used throughout the archivey library."""
+"""
+Custom exceptions raised by Archivey.
+
+The base `ArchiveError` can be accessed from the :mod:`archivey` module, but you
+can import more specific subtypes from here if you need to handle them specifically.
+"""
 
 
 # Common exceptions for all archive types

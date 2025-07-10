@@ -1,54 +1,12 @@
 # API Reference
 
-## Core
-
 ::: archivey
+
+:::archivey.types
     options:
-      members:
-      - open_archive
-      - open_compressed_stream
-      - ArchiveReader
-      - ArchiveInfo
-      - ArchiveMember
+      show_source: true
 
-## Enums
+:::archivey.exceptions
 
-::: archivey
-    options:
-      members:
-      - ArchiveFormat
-      - MemberType
-      - CreateSystem
+:::archivey.filters
 
-## Configuration
-
-::: archivey
-    options:
-      members:
-      - ArchiveyConfig
-      - default_config
-      - get_default_config
-      - set_default_config
-
-## Exceptions
-
-::: archivey
-    options:
-      members:
-      - ArchiveError
-      - ArchiveFormatError
-      - ArchiveCorruptedError
-      - ArchiveEncryptedError
-      - ArchiveEOFError
-      - ArchiveMemberNotFoundError
-      - ArchiveNotSupportedError
-
-## Filters
-
-::: archivey
-    options:
-      members:
-      - create_filter
-      - data_filter
-      - tar_filter
-      - fully_trusted
