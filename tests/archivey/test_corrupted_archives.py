@@ -24,6 +24,34 @@ from tests.create_corrupted_archives import corrupt_archive
 from tests.archivey.testing_utils import skip_if_package_missing
 
 
+def _prepare_corrupted_archive(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    tmp_path_factory: pytest.TempPathFactory,
+    corruption_type: str,
+) -> pathlib.Path:
+    """Return path to a corrupted version of the sample archive."""
+    path = pathlib.Path(
+        sample_archive.get_archive_path(variant=f"corrupted_{corruption_type}")
+    )
+    if path.exists():
+        return path
+
+    output_dir = tmp_path_factory.mktemp("generated_archives")
+    corrupted_archive_path = output_dir / sample_archive.get_archive_name(
+        variant=f"corrupted_{corruption_type}"
+    )
+    logger.info(
+        f"Creating corrupted archive {corrupted_archive_path} with corruption type {corruption_type}"
+    )
+    corrupt_archive(
+        pathlib.Path(sample_archive_path),
+        corrupted_archive_path,
+        corruption_type=corruption_type,
+    )
+    return corrupted_archive_path
+
+
 @pytest.mark.parametrize(
     "sample_archive",
     filter_archives(
@@ -72,24 +100,12 @@ def test_read_corrupted_archives(
     if sample_archive.creation_info.format == ArchiveFormat.FOLDER:
         pytest.skip("Folder archives cannot be corrupted")
 
-    path = pathlib.Path(
-        sample_archive.get_archive_path(variant=f"corrupted_{corruption_type}")
+    corrupted_archive_path = _prepare_corrupted_archive(
+        sample_archive,
+        sample_archive_path,
+        tmp_path_factory,
+        corruption_type,
     )
-    if path.exists():
-        corrupted_archive_path = path
-    else:
-        output_dir = tmp_path_factory.mktemp("generated_archives")
-        corrupted_archive_path = output_dir / sample_archive.get_archive_name(
-            variant=f"corrupted_{corruption_type}"
-        )
-        logger.info(
-            f"Creating corrupted archive {corrupted_archive_path} with corruption type {corruption_type}"
-        )
-        corrupt_archive(
-            pathlib.Path(sample_archive_path),
-            corrupted_archive_path,
-            corruption_type=corruption_type,
-        )
 
     try:
         found_member_names = []
