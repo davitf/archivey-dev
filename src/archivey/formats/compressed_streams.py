@@ -16,6 +16,8 @@ if TYPE_CHECKING:
     import rapidgzip
     import xz
     import zstandard
+    import brotlicffi
+    import brotli
 else:
     try:
         import lz4.frame
@@ -46,6 +48,16 @@ else:
         import xz
     except ImportError:
         xz = None
+
+    try:
+        import brotlicffi
+    except ImportError:
+        brotlicffi = None
+
+    try:
+        import brotli
+    except ImportError:
+        brotli = None
 
 
 import logging
@@ -321,6 +333,47 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
     )
 
 
+def _translate_brotli_exception(e: Exception) -> Optional[ArchiveError]:
+    if (
+        (brotlicffi is not None and isinstance(e, brotlicffi.Error))
+        or (brotli is not None and isinstance(e, brotli.error))
+    ):
+        return ArchiveCorruptedError(f"Error reading Brotli archive: {repr(e)}")
+    if isinstance(e, EOFError):
+        return ArchiveEOFError(f"Brotli file is truncated: {repr(e)}")
+    return None
+
+
+def _read_all_bytes(path_or_stream: str | BinaryIO) -> bytes:
+    if isinstance(path_or_stream, (str, bytes, os.PathLike)):
+        with open(path_or_stream, "rb") as f:
+            return f.read()
+    return path_or_stream.read()
+
+
+def open_brotli_stream(path: str | BinaryIO, use_brotlicffi: bool) -> BinaryIO:
+    if use_brotlicffi:
+        if brotlicffi is None:
+            raise PackageNotInstalledError(
+                "brotlicffi package is not installed, required for Brotli archives"
+            ) from None
+
+        return ExceptionTranslatingIO(
+            lambda: io.BytesIO(brotlicffi.decompress(_read_all_bytes(path))),
+            _translate_brotli_exception,
+        )
+
+    if brotli is None:
+        raise PackageNotInstalledError(
+            "brotli package is not installed, required for Brotli archives"
+        ) from None
+
+    return ExceptionTranslatingIO(
+        lambda: io.BytesIO(brotli.decompress(_read_all_bytes(path))),
+        _translate_brotli_exception,
+    )
+
+
 def open_stream(
     format: ArchiveFormat, path_or_stream: str | BinaryIO, config: ArchiveyConfig
 ) -> BinaryIO:
@@ -344,6 +397,9 @@ def open_stream(
 
     if format == ArchiveFormat.LZ4:
         return open_lz4_stream(path_or_stream)
+
+    if format == ArchiveFormat.BROTLI:
+        return open_brotli_stream(path_or_stream, config.use_brotlicffi)
 
     if format == ArchiveFormat.ZSTD:
         if config.use_zstandard:

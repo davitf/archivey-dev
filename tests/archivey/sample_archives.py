@@ -368,6 +368,12 @@ TAR_ZSTD_TARFILE = ArchiveCreationInfo(
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
+TAR_BROTLI = ArchiveCreationInfo(
+    file_suffix=".tar.br",
+    format=ArchiveFormat.TAR_BROTLI,
+    generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
+)
 
 # No need to test both tarfile and cmdline for the other formats, as there shouldn't
 # be significant differences that won't be caught by the gz format.
@@ -428,6 +434,13 @@ ZSTD_CMD = ArchiveCreationInfo(
     generation_method_options={"compression_cmd": "zstd"},
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
+BROTLI_CMD = ArchiveCreationInfo(
+    file_suffix="cmd.br",
+    format=ArchiveFormat.BROTLI,
+    generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
+    generation_method_options={"compression_cmd": "brotli"},
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
+)
 LZ4_CMD = ArchiveCreationInfo(
     file_suffix="cmd.lz4",
     format=ArchiveFormat.LZ4,
@@ -458,6 +471,12 @@ XZ_LIBRARY = ArchiveCreationInfo(
 ZSTD_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.zst",
     format=ArchiveFormat.ZSTD,
+    generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
+)
+BROTLI_LIBRARY = ArchiveCreationInfo(
+    file_suffix="lib.br",
+    format=ArchiveFormat.BROTLI,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
@@ -501,11 +520,13 @@ ALL_SINGLE_FILE_FORMATS = [
     BZIP2_CMD,
     XZ_CMD,
     ZSTD_CMD,
+    BROTLI_CMD,
     LZ4_CMD,
     GZIP_LIBRARY,
     BZIP2_LIBRARY,
     XZ_LIBRARY,
     ZSTD_LIBRARY,
+    BROTLI_LIBRARY,
     LZ4_LIBRARY,
 ]
 
@@ -516,12 +537,14 @@ BASIC_TAR_FORMATS = [
     TAR_GZ_TARFILE,
     TAR_ZSTD_CMD,
     TAR_ZSTD_TARFILE,
+    TAR_BROTLI,
 ]
 
 ALL_TAR_FORMATS = BASIC_TAR_FORMATS + [
     TAR_BZ2,
     TAR_XZ,
     TAR_LZ4,
+    TAR_BROTLI,
 ]
 
 ZIP_FORMATS = [
@@ -1146,6 +1169,7 @@ ALTERNATIVE_CONFIG = ArchiveyConfig(
     use_indexed_bzip2=True,
     use_python_xz=True,
     use_zstandard=True,
+    use_brotlicffi=True,
 )
 
 ALTERNATIVE_PACKAGES_FORMATS = (
@@ -1153,10 +1177,12 @@ ALTERNATIVE_PACKAGES_FORMATS = (
     ArchiveFormat.BZIP2,
     ArchiveFormat.XZ,
     ArchiveFormat.ZSTD,
+    ArchiveFormat.BROTLI,
     ArchiveFormat.TAR_GZ,
     ArchiveFormat.TAR_BZ2,
     ArchiveFormat.TAR_XZ,
     ArchiveFormat.TAR_ZSTD,
+    ArchiveFormat.TAR_BROTLI,
 )
 
 SAMPLE_ARCHIVES = (

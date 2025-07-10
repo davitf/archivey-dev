@@ -109,6 +109,10 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         pytest.importorskip("zstandard")
     elif format == ArchiveFormat.ZSTD:
         pytest.importorskip("pyzstd")
+    elif format == ArchiveFormat.BROTLI and config.use_brotlicffi:
+        pytest.importorskip("brotlicffi")
+    elif format == ArchiveFormat.BROTLI:
+        pytest.importorskip("brotli")
 
 
 def normalize_newlines(s: str | None) -> str | None:
