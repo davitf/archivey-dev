@@ -51,7 +51,7 @@ If no file_pattern is specified, all the files will be created.
 
 - `src/archivey` – implementation modules (readers, CLI, helpers).
 - `tests` – pytest suite.
-  - `archivey` – test utilities and main test file.
+  - `archivey` – conftest, test utilities and main test modules.
   - `test_archives` – sample archives used by the tests.
   - `test_archives_external` – external archives for specific scenarios.
 - `pyproject.toml` – project metadata and tooling configuration.

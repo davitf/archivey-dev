@@ -1,4 +1,5 @@
 import os
+import pathlib
 from venv import logger
 
 import pytest
@@ -19,6 +20,7 @@ from tests.archivey.sample_archives import (
     SampleArchive,
     filter_archives,
 )
+from tests.create_corrupted_archives import corrupt_archive
 from tests.archivey.testing_utils import skip_if_package_missing
 
 
@@ -30,25 +32,28 @@ from tests.archivey.testing_utils import skip_if_package_missing
     ),
     ids=lambda a: a.filename,
 )
+@pytest.mark.parametrize("corruption_type", ["random", "zeroes", "ffs"])
 @pytest.mark.parametrize("read_streams", [True, False], ids=["read", "noread"])
 @pytest.mark.parametrize(
     "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
 )
 def test_read_corrupted_archives(
     sample_archive: SampleArchive,
-    corrupted_archive_path: str,
+    sample_archive_path: str,
+    tmp_path_factory: pytest.TempPathFactory,
     read_streams: bool,
     alternative_packages: bool,
+    corruption_type: str,
 ):
     """Test that reading generally corrupted archives raises ArchiveCorruptedError.
 
     Args:
         sample_archive: The archive to test
-        corrupted_archive_path: Path to the corrupted archive
+        sample_archive_path: Path to the source archive
         corruption_type: Type of corruption applied:
-            - "header": Corruption near the start of the file
-            - "data": Corruption in the middle of the file
-            - "checksum": Corruption near the end of the file
+            - "random": Byte range replaced with random data
+            - "zeroes": Byte range replaced with zeros
+            - "ffs": Byte range replaced with 0xFF
     """
     if alternative_packages:
         if sample_archive.creation_info.format not in ALTERNATIVE_PACKAGES_FORMATS:
@@ -63,6 +68,28 @@ def test_read_corrupted_archives(
         ArchiveFormat.LZ4,
         ArchiveFormat.TAR,
     ]
+
+    if sample_archive.creation_info.format == ArchiveFormat.FOLDER:
+        pytest.skip("Folder archives cannot be corrupted")
+
+    path = pathlib.Path(
+        sample_archive.get_archive_path(variant=f"corrupted_{corruption_type}")
+    )
+    if path.exists():
+        corrupted_archive_path = path
+    else:
+        output_dir = tmp_path_factory.mktemp("generated_archives")
+        corrupted_archive_path = output_dir / sample_archive.get_archive_name(
+            variant=f"corrupted_{corruption_type}"
+        )
+        logger.info(
+            f"Creating corrupted archive {corrupted_archive_path} with corruption type {corruption_type}"
+        )
+        corrupt_archive(
+            pathlib.Path(sample_archive_path),
+            corrupted_archive_path,
+            corruption_type=corruption_type,
+        )
 
     try:
         found_member_names = []
