@@ -2,7 +2,7 @@
 
 This project follows a **src layout**. The Python package lives in
 `src/archivey` and tests are under the `tests` directory.  Test archives live in
-`tests/test_archives` and helper scripts are in `tests/create_archives.py`.
+`tests/test_archives` and helper scripts are in `tests/archivey/create_archives.py`.
 
 Tox configurations are provided to run the suite against multiple Python
 versions and dependency sets (`tox -e <env>`).  Continuous integration executes
@@ -35,13 +35,13 @@ uv run --extra optional pytest -k .zip
 ## Updating test files
 
 ```bash
-uv run --extra optional python -m tests.create_archives [file_pattern]
+uv run --extra optional python -m tests.archivey.create_archives [file_pattern]
 ```
 
 E.g. to update only zip archives:
 
 ```bash
-uv run --extra optional python -m tests.create_archives "*.zip"
+uv run --extra optional python -m tests.archivey.create_archives "*.zip"
 ```
 
 If no file_pattern is specified, all the files will be created.
