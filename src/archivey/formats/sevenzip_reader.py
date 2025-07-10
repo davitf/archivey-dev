@@ -183,7 +183,6 @@ class StreamingFile(BasePy7zIOWriter):
         self._closed = False
 
     def write(self, b: Union[bytes, bytearray]) -> int:
-        # logger.info(f"Writing to streaming file {self._fname}: {len(b)} bytes")
         if not self._started:
             self._started = True
             self._files_queue.put((self._fname, self._reader))
@@ -193,7 +192,6 @@ class StreamingFile(BasePy7zIOWriter):
         return len(b)
 
     def close(self):
-        # logger.info(f"Closing streaming file {self._fname}")
         if not self._closed:
             self._data_queue.put(None)
             self._closed = True
@@ -204,7 +202,6 @@ class StreamingFactory(WriterFactory):
         self._queue = q
 
     def create(self, fname: str) -> Py7zIO:
-        # logger.info(f"Creating streaming file {fname}")
         return StreamingFile(fname, self._queue)
 
     def yield_files(self) -> Iterator[tuple[str, BinaryIO]]:
@@ -212,7 +209,6 @@ class StreamingFactory(WriterFactory):
             item = self._queue.get()
             if item is None:
                 break
-            # logger.info(f"Yielding streaming file {item}")
             yield item
 
     def finish(self):
@@ -606,7 +602,6 @@ class SevenZipReader(BaseArchiveReader):
                     continue
 
                 member_info = extract_filename_to_member[fname]
-                # logger.info(f"fname: {fname}, member_info: {member_info}")
                 yield member_info, stream
 
             # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)

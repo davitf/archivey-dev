@@ -260,8 +260,6 @@ def convert_crc_to_encrypted(
     # Compute HMAC-SHA256 of the CRC using the hash key
     digest = hmac.new(hash_key, raw_crc, hashlib.sha256).digest()
 
-    # logger.debug(f"Digest: {password=} {salt=} crc={crc:08x} {raw_crc=} {digest.hex()}")
-
     # XOR the digest bytes into the CRC
     result = 0
     for i in struct.iter_unpack("<I", digest):

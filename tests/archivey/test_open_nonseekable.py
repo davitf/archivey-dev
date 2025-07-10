@@ -123,8 +123,6 @@ def test_open_compressed_stream_nonseekable(
         data = f.read()
 
     stream = ensure_binaryio(NonSeekableBytesIO(data))
-    # stream = BinaryIOWrapper(io.BytesIO(data))
-    # print(stream.fileno())
 
     try:
         with open_compressed_stream(stream, config=config) as f:
