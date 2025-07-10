@@ -65,9 +65,6 @@ def is_seekable(stream: io.IOBase | IO[bytes] | BinaryStreamLike) -> bool:
     if isinstance(stream, io.BufferedReader):
         return is_seekable(stream.raw)
 
-    # if isinstance(stream, RewindableNonSeekableStream):
-    #     return stream.is_inner_stream_seekable()
-
     try:
         return stream.seekable() or False  # type: ignore[attr-defined]
     except AttributeError as e:
@@ -245,10 +242,6 @@ def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
     if is_stream(obj):
         return obj
 
-    # existing_methods = {m for m in ALL_IO_METHODS if callable(getattr(obj, m, None))}
-    # if existing_methods == ALL_IO_METHODS:
-    #     return obj  # type: ignore
-
     logger.info(
         f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper."
     )
@@ -294,20 +287,6 @@ def ensure_bufferedio(obj: BinaryStreamLike) -> io.BufferedIOBase:
     # goes out of scope. The underlying stream will be closed when it's garbage
     # collected anyway, so we don't need to worry about it leaking.
     return io.BufferedReader(ensure_uncloseable(obj))
-    # return io.BufferedReader(obj)
-
-    # # Check if it supports read/write for bidirectional buffering
-    # has_read = hasattr(bio, "read") and callable(bio.read)
-    # has_write = hasattr(bio, "write") and callable(bio.write)
-
-    # if has_read and has_write:
-    #     return io.BufferedRWPair(bio, bio)
-    # elif has_read:
-    #     return io.BufferedReader(bio)
-    # elif has_write:
-    #     return io.BufferedWriter(bio)
-
-    # raise TypeError("ensure_binaryio returned an unbufferable object")
 
 
 class ErrorIOStream(io.RawIOBase, BinaryIO):
@@ -752,10 +731,6 @@ class RecordableStream(io.RawIOBase, BinaryIO):
             self._inner.close()  # type: ignore
         super().close()
 
-    # Delegate unknown attributes -------------------------------------
-    # def __getattr__(self, item: str) -> Any:  # pragma: no cover - simple
-    #     return getattr(self._inner, item)
-
 
 class ConcatenationStream(io.RawIOBase, BinaryIO):
     """Concatenate multiple streams sequentially."""
@@ -782,21 +757,6 @@ class ConcatenationStream(io.RawIOBase, BinaryIO):
         # All streams are exhausted.
         return b""
 
-        # data = bytearray()
-
-        # while self._index < len(self._streams) and (n < 0 or len(data) < n):
-        #     stream = self._streams[self._index]
-        #     to_read = -1 if n < 0 else n - len(data)
-        #     chunk = stream.read(to_read)
-        #     if not chunk:
-        #         self._index += 1
-        #         continue
-        #     data.extend(chunk)
-
-        # if n >= 0:
-        #     return bytes(data[:n])
-        # return bytes(data)
-
     def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
         data = self.read(len(b))
         n = len(data)
@@ -818,9 +778,4 @@ class ConcatenationStream(io.RawIOBase, BinaryIO):
 
     # Control methods --------------------------------------------------
     def close(self) -> None:  # pragma: no cover - simple delegation
-        # for stream in self._streams:
-        #     try:
-        #         stream.close()
-        #     except Exception:  # pragma: no cover - simple
-        #         pass
         super().close()
