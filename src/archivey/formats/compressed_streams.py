@@ -111,6 +111,10 @@ def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
         return ArchiveStreamNotSeekableError(
             "rapidgzip does not support non-seekable streams"
         )
+    if isinstance(e, io.UnsupportedOperation) and "seek" in exc_text:
+        return ArchiveStreamNotSeekableError(
+            "rapidgzip does not support non-seekable streams"
+        )
 
     # Found in rapidgzip 0.11.0
     if (
@@ -155,7 +159,11 @@ def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
         # Indexed BZIP2 tries to look at the underlying stream's fileno if it's not
         # seekable.
         return ArchiveStreamNotSeekableError(
-            "Indexed BZIP2 does not support non-seekable streams"
+            "indexed_bzip2 does not support non-seekable streams"
+        )
+    if isinstance(e, io.UnsupportedOperation) and "seek" in exc_text:
+        return ArchiveStreamNotSeekableError(
+            "indexed_bzip2 does not support non-seekable streams"
         )
     return None  # pragma: no cover -- all possible exceptions should have been handled
 

@@ -6,7 +6,7 @@ from typing import IO, TYPE_CHECKING, BinaryIO, cast
 
 from archivey.config import get_archivey_config
 from archivey.internal.io_helpers import (
-    StreamLikeOrSimilar,
+    ReadableStreamLikeOrSimilar,
     UncloseableStream,
     is_seekable,
     read_exact,
@@ -64,7 +64,7 @@ def is_uncompressed_tarfile(stream: IO[bytes]) -> bool:
 
 
 def detect_archive_format_by_signature(
-    path_or_file: str | bytes | StreamLikeOrSimilar,
+    path_or_file: str | bytes | ReadableStreamLikeOrSimilar,
 ) -> ArchiveFormat:
     # [signature, ...], offset, format
     SIGNATURES = [
@@ -214,7 +214,7 @@ logger = logging.getLogger(__name__)
 
 
 def detect_archive_format(
-    filename: str | os.PathLike | StreamLikeOrSimilar,
+    filename: str | os.PathLike | ReadableStreamLikeOrSimilar,
 ) -> ArchiveFormat:
     # Check if it's a directory first
     if isinstance(filename, os.PathLike):
