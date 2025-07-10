@@ -154,7 +154,6 @@ class BaseArchiveReader(ArchiveReader):
         else:
             self._archive_password: bytes | None = pwd
 
-        # self._member_id_to_member: dict[int, ArchiveMember] = {}
         self._members: list[ArchiveMember] = []
         self._filename_to_members: dict[str, list[ArchiveMember]] = defaultdict(list)
         self._normalized_path_to_last_member: dict[str, ArchiveMember] = {}
@@ -299,8 +298,7 @@ class BaseArchiveReader(ArchiveReader):
             members_with_filename.append(member)
             members_with_filename.sort(key=lambda m: m.member_id)
 
-        normalized_path = member.filename  # posixpath.normpath(member.filename)
-        # normalized_path = posixpath.normpath(member.filename)
+        normalized_path = member.filename
         logger.info(
             "registering member: normpath: %s -> %s", member.filename, normalized_path
         )
@@ -900,72 +898,3 @@ class BaseArchiveReader(ArchiveReader):
             self._filename_to_members = None  # type: ignore
             self._normalized_path_to_last_member = None  # type: ignore
             self._iterator_for_registration = None
-
-
-# class StreamingOnlyArchiveReaderWrapper(ArchiveReader):
-#     """
-#     A wrapper that restricts an ArchiveReader to streaming-only access.
-
-#     This class takes an existing ArchiveReader and makes it behave as if it
-#     does not support random access, by disabling methods like `open()`,
-#     `extract()`, and `get_members()` (if it implies random access).
-#     This is useful when `open_archive` is called with `streaming_only=True`.
-#     """
-
-#     def __init__(self, reader: ArchiveReader):
-#         super().__init__(reader.path_or_stream, reader.format, reader.pwd, reader.streaming_only)
-#         self.reader = reader
-#         self._streaming_iteration_started = False
-
-#     def close(self) -> None:
-#         self.reader.close()
-
-#     def get_members_if_available(self) -> List[ArchiveMember] | None:
-#         return self.reader.get_members_if_available()
-
-#     def iter_members_with_io(
-#         self, *args, **kwargs
-#     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
-#         if self._streaming_iteration_started:
-#             raise ValueError("Streaming-only archive can only be iterated once")
-#         self._streaming_iteration_started = True
-#         return self.reader.iter_members_with_io(*args, **kwargs)
-
-#     def get_archive_info(self) -> ArchiveInfo:
-#         return self.reader.get_archive_info()
-
-#     def has_random_access(self) -> bool:
-#         return False
-
-#     def extractall(self, *args, **kwargs) -> dict[str, ArchiveMember]:
-#         if self._streaming_iteration_started:
-#             raise ValueError("Streaming-only archive can only be iterated once")
-#         self._streaming_iteration_started = True
-#         return self.reader.extractall(*args, **kwargs)
-
-#     def get_member(self, member_or_filename: ArchiveMember | str) -> ArchiveMember:
-#         return self.reader.get_member(member_or_filename)
-
-#     # Unsupported methods for streaming-only readers
-
-#     def get_members(self) -> List[ArchiveMember]:
-#         raise ValueError(
-#             "Streaming-only archive reader does not support get_members()."
-#         )
-
-#     def open(
-#         self, member: ArchiveMember, *, pwd: bytes | str | None = None
-#     ) -> BinaryIO:
-#         raise ValueError("Streaming-only archive reader does not support open().")
-
-#     def extract(
-#         self,
-#         member_or_filename: ArchiveMember | str,
-#         path: str | None = None,
-#         pwd: bytes | str | None = None,
-#         preserve_links: bool = True,
-#     ) -> str | None:
-#         raise ValueError("Streaming-only archive reader does not support extract().")
-
-#     def resolve_link(self, member: ArchiveMember) -> ArchiveMember | None:
-#         return self.reader.resolve_link(member)

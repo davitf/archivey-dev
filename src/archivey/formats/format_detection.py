@@ -234,12 +234,6 @@ def detect_archive_format(
     # filename suggests a tar archive (e.g. .tar.gz), assume it's a tar file.
     # This avoids corrupted tar archives being misread as valid single-file
     # compressed files.
-    # if (
-    #     format_by_signature in COMPRESSION_FORMAT_TO_TAR_FORMAT
-    #     and format_by_filename not in SINGLE_FILE_COMPRESSED_FORMATS
-    #     and format_by_filename != ArchiveFormat.UNKNOWN
-    # ):
-    #     format_by_signature = COMPRESSION_FORMAT_TO_TAR_FORMAT[format_by_signature]
 
     if (
         format_by_filename == ArchiveFormat.UNKNOWN

@@ -698,7 +698,6 @@ class RarReader(BaseArchiveReader):
                 )(),  # rarfile < 4.1 doesn't have is_solid
                 comment=self._archive.comment,
                 extra={
-                    # "is_multivolume": self._archive.is_multivolume(),
                     "needs_password": self._archive.needs_password(),
                     "header_encrypted": has_header_encryption,
                 },

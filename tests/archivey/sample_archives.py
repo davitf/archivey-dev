@@ -7,8 +7,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
-# import lz4.frame
-# import zstandard
 from archivey.config import ArchiveyConfig
 from archivey.types import ArchiveFormat, MemberType
 

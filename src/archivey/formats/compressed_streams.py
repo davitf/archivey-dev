@@ -78,7 +78,6 @@ def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
         else:
             assert not path.closed
             gz = gzip.GzipFile(fileobj=ensure_bufferedio(path), mode="rb")
-            # gz = gzip.GzipFile(fileobj=path, mode="rb")
             assert not path.closed
             underlying_seekable = is_seekable(path)
 
@@ -138,8 +137,6 @@ def _translate_bz2_exception(e: Exception) -> Optional[ArchiveError]:
         return ArchiveCorruptedError(f"BZ2 file is corrupted: {repr(e)}")
     if isinstance(e, EOFError):
         return ArchiveEOFError(f"BZ2 file is truncated: {repr(e)}")
-    # elif isinstance(e, ValueError):
-    #     return ArchiveFormatError("No valid BZ2 stream found")
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 

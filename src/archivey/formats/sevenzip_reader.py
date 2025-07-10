@@ -242,7 +242,6 @@ class ExtractLinkWriter(BasePy7zIOWriter):
 
     def close(self):
         self.member.link_target = self.data.decode("utf-8")
-        # self._extraction_helper.extract_member(self._member, None)
 
 
 class ExtractWriterFactory(WriterFactory):
@@ -711,7 +710,6 @@ class SevenZipReader(BaseArchiveReader):
             # Yield any remaining members that were not extracted, with the error.
             for member in pending_files_by_id.values():
                 yield member, ErrorIOStream(e)
-            # raise e
 
         for member in pending_links_by_id.values():
             filtered_member = filter_func(member)
