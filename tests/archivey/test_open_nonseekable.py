@@ -123,8 +123,6 @@ def test_open_compressed_stream_nonseekable(
         data = f.read()
 
     stream = ensure_binaryio(NonSeekableBytesIO(data))
-    # stream = BinaryIOWrapper(io.BytesIO(data))
-    # print(stream.fileno())
 
     try:
         with open_compressed_stream(stream, config=config) as f:
@@ -134,8 +132,6 @@ def test_open_compressed_stream_nonseekable(
         ArchiveStreamNotSeekableError
     ) as exc:  # pragma: no cover - environment dependent
         key = (sample_archive.creation_info.format, alternative_packages)
-        logger.error(f"key: {key}")
-        logger.error(f"EXPECTED_FAILURES: {EXPECTED_FAILURES}")
         if key in EXPECTED_FAILURES:
             pytest.xfail(
                 f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"

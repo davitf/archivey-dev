@@ -272,7 +272,6 @@ def test_open_archive_statsio_readinto_operations(
                 with archive.open(member) as member_stream:
                     buffer = bytearray(1024)
                     while True:
-                        logger.debug(f"readinto {member_stream}")
                         bytes_read = member_stream.readinto(buffer)  # type: ignore
                         if bytes_read == 0:
                             break

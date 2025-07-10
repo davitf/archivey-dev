@@ -72,7 +72,6 @@ def test_read_corrupted_archives(
             corrupted_archive_path, config=config, streaming_only=True
         ) as archive:
             for member, stream in archive.iter_members_with_io():
-                logger.info(f"Reading member {member.filename}")
                 filename = member.filename
 
                 # Single file formats don't store the filename, and the reader derives
@@ -87,7 +86,6 @@ def test_read_corrupted_archives(
 
                 if stream is not None and read_streams:
                     data = stream.read()
-                    logger.info(f"Read {len(data)} bytes from member {filename}")
 
                     found_member_data[filename] = data
 
@@ -96,7 +94,6 @@ def test_read_corrupted_archives(
         expected_member_data = {
             member.name: member.contents for member in sample_archive.contents.files
         }
-        logger.info(f"{found_member_names=}, expected={expected_member_data.keys()}")
 
         if (
             not read_streams
@@ -138,9 +135,8 @@ def test_read_corrupted_archives(
                 assert len(broken_files) <= len(expected_member_data), (
                     f"Archive {corrupted_archive_path} should have at least one good file"
                 )
-
     except (ArchiveCorruptedError, ArchiveEOFError):
-        logger.info(f"Archive {corrupted_archive_path} raised an error", exc_info=True)
+        pass
 
 
 @pytest.mark.parametrize("corrupted_length", [16, 47, 0.1, 0.9])
@@ -181,9 +177,6 @@ def test_read_truncated_archives(
     filename = sample_archive.get_archive_name(variant=f"truncated_{corrupted_length}")
     output_path = tmp_path_factory.mktemp("generated_archives") / filename
 
-    logger.info(
-        f"Testing truncated archive {output_path} with length {corrupted_length}"
-    )
 
     data = open(sample_archive.get_archive_path(), "rb").read()
     if isinstance(corrupted_length, float):

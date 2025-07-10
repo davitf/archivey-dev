@@ -171,9 +171,6 @@ def open_archive(
             streaming_only=streaming_only,
         )
 
-        # if streaming_only:
-        #     return StreamingOnlyArchiveReaderWrapper(reader)
-        # return reader
 
 
 def open_compressed_stream(

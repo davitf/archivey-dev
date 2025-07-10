@@ -726,7 +726,6 @@ def create_iso_archive_with_pycdlib(
         # for file in contents.files:
         #     abs_path = "/" + file.name
         #     rock_ridge_name = os.path.basename(file.name)
-        #     print(f"Adding file {file.name} as {abs_path}")
         #     if file.type == MemberType.FILE:
         #         iso.add_file(
         #             os.path.join(tempdir, file.name),
@@ -751,7 +750,7 @@ def create_iso_archive_with_pycdlib(
                 rel_root = ""
 
             for d in dirs:
-                print(f"Adding directory {d} to {rel_root}")
+                logger.info("Adding directory %s to %s", d, rel_root)
                 iso_path = os.path.join("/", rel_root, d)
                 iso_path = iso_path.replace(os.sep, "/")
                 iso.add_directory(
@@ -759,7 +758,7 @@ def create_iso_archive_with_pycdlib(
                 )
 
             for f_name in files:
-                print(f"Adding file {f_name} to {rel_root}")
+                logger.info("Adding file %s to %s", f_name, rel_root)
 
                 src_path = os.path.join(root_dir, f_name)
                 iso_path = os.path.join("/", rel_root, f_name)
@@ -906,7 +905,7 @@ if __name__ == "__main__":
     ]
 
     if not archives_to_generate:
-        print("No matching archives found.")
+        logger.error("No matching archives found.")
         exit(1)
 
     logger.info(f"Generating {len(archives_to_generate)} archives:")
