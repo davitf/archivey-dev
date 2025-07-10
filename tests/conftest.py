@@ -5,8 +5,12 @@ import pytest
 
 from archivey.exceptions import PackageNotInstalledError
 from archivey.types import ArchiveFormat
+from archivey.internal.dependency_checker import (
+    format_dependency_versions,
+    get_dependency_versions,
+)
 from tests.archivey.sample_archives import SampleArchive
-from tests.create_archives import create_archive
+from tests.archivey.create_archives import create_archive
 from tests.create_corrupted_archives import corrupt_archive
 
 logger = logging.getLogger(__name__)
@@ -59,3 +63,18 @@ def corrupted_archive_path(
         pathlib.Path(sample_archive_path), output_path, corruption_type=corruption_type
     )
     return str(output_path)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def print_dependency_versions_on_failure(request):
+    yield
+    logger.warning(
+        "\n"
+        + "=" * 30
+        + " Dependency Versions "
+        + "=" * 30
+        + "\n"
+        + format_dependency_versions(get_dependency_versions())
+        + "\n"
+        + "=" * 80
+    )
