@@ -205,13 +205,11 @@ class ArchiveMember:
     )
     _member_id: Optional[int] = field(
         default=None,
-        init=False,
     )
 
     # A flag indicating whether the member has been modified by a filter.
     _edited_by_filter: bool = field(
         default=False,
-        init=False,
     )
 
     @property
@@ -234,7 +232,6 @@ class ArchiveMember:
 
     _archive_id: Optional[str] = field(
         default=None,
-        init=False,
     )
 
     @property
