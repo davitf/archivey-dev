@@ -86,8 +86,6 @@ def process_member(
         assert isinstance(member.mtime, datetime)
 
         try:
-            # if member.extra:
-            # print(f"{member.filename} {member.extra}")
 
             if verify:
                 if stream is None:

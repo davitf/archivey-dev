@@ -723,28 +723,6 @@ def create_iso_archive_with_pycdlib(
         iso = pycdlib.pycdlib.PyCdlib()
         iso.new(interchange_level=3, rock_ridge="1.09", joliet=3)
 
-        # for file in contents.files:
-        #     abs_path = "/" + file.name
-        #     rock_ridge_name = os.path.basename(file.name)
-        #     print(f"Adding file {file.name} as {abs_path}")
-        #     if file.type == MemberType.FILE:
-        #         iso.add_file(
-        #             os.path.join(tempdir, file.name),
-        #             abs_path,
-        #             rr_name=rock_ridge_name,
-        #         )
-        #     elif file.type == MemberType.DIR:
-        #         iso.add_directory(
-        #             abs_path,
-        #             rr_name=rock_ridge_name,
-        #         )
-        #     elif file.type == MemberType.LINK and file.link_target:
-        #         iso.add_symlink(
-        #             abs_path,
-        #             rr_symlink_name=rock_ridge_name,
-        #             udf_target="/" + file.link_target,
-        #         )
-
         for root_dir, dirs, files in os.walk(tempdir):
             rel_root = os.path.relpath(root_dir, tempdir)
             if rel_root == ".":
