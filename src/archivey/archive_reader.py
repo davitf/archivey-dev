@@ -123,12 +123,13 @@ class ArchiveReader(abc.ABC):
                 the member to include it, or ``None`` to skip.
 
         Yields:
-            Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]: An iterator where each
-            item is a tuple containing the ArchiveMember object and a binary I/O
-            stream for reading its content. The stream is None for non-file entries.
-            Streams are closed automatically when iteration advances to the next
-            member or when the generator is closed, so they should be consumed
-            before requesting another member.
+            tuple[ArchiveMember, BinaryIO | None]:
+                Each yielded item is a tuple containing the ``ArchiveMember``
+                object and a binary I/O stream for reading its content.  The
+                stream is ``None`` for non-file entries.  Streams are closed
+                automatically when iteration advances to the next member or when
+                the generator is closed, so they should be consumed before
+                requesting another member.
 
         Raises:
             ArchiveEncryptedError: If a member is encrypted and `pwd` is incorrect

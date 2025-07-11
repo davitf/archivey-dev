@@ -343,7 +343,7 @@ class BaseArchiveReader(ArchiveReader):
           to build its initial list of all members.
 
         Yields:
-            Iterator[ArchiveMember]: ArchiveMember instances from the archive.
+            ArchiveMember: ArchiveMember instances from the archive.
         """
         pass  # pragma: no cover
 
@@ -610,11 +610,14 @@ class BaseArchiveReader(ArchiveReader):
             pwd: Password to use for decryption, if needed and different from the one
             used when opening the archive. May not be supported by all archive formats.
 
-        Returns:
-            A (ArchiveMember, BinaryIO) iterator over the members. Each stream
-            should be consumed before advancing to the next member. Streams are
-            closed automatically when iteration continues or the generator is
-            closed. The stream may be None if the member is not a file.
+        Yields:
+            tuple[ArchiveMember, BinaryIO | None]:
+                A tuple where the first element is the ``ArchiveMember`` and the
+                second element is the opened stream for that member.  The stream
+                may be ``None`` for non-file members.  Each stream should be
+                fully consumed before advancing to the next member.  Streams are
+                closed automatically when iteration continues or the generator is
+                closed.
 
         Notes:
             If :meth:`has_random_access` returns ``False`` (streaming-only
