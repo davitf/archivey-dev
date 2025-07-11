@@ -38,17 +38,18 @@ These are the basic features of the library. For more details, see the **[User g
 
 ### Extracting files
 
-``` py
+```python
 from archivey import open_archive
 
 with open_archive("example.zip") as archive:
-    archive.extractall(path="/tmp/destpath", filter=ExtractionFilter.DATA)
+    archive.extractall(path="/tmp/destpath", filter="data")
 ```
 
 You can use filters when extracting to avoid security issues, similarly to [tarfile](https://docs.python.org/3/library/tarfile.html#extraction-filters).
 
 ### Random access
-``` py
+
+```python
 from archivey import open_archive
 
 with open_archive("example.zip") as archive:
@@ -58,21 +59,22 @@ with open_archive("example.zip") as archive:
     if member_to_read.is_file:
         stream = archive.open(member_to_read)
         data = stream.read()
+        print(member_to_read.filename, data[:20])
 ```
 
-You can open standalone compressed files as well. They are handled as an archive containing a single member.
+`open_archive` can open standalone compressed files (e.g. `example.gz`) as well. They are handled as archives containing a single member.
 
 ### Streaming access
 
-Some libraries may decompress parts of the archive multiple times if you access files individually, as in the example above. If you only need to perform some operation on all (or some) files of an archive, this mode avoids extra re-reads and decompressions:
-``` py
+Some libraries may decompress parts of the archive multiple times if you access files individually with `archive.open()`. If you don't need to open arbitrary files, and just need to perform an operation on all (or some) files of an archive, iterating through the files avoids extra re-reads and decompressions:
+
+```python
 from archivey import open_archive
 
-with open_archive("example.zip", streaming_only=True) as archive:
+with open_archive("example.tar.gz", streaming_only=True) as archive:
     for member, stream in archive.iter_members_with_io():
-        print(member.filename, member.file_size)
-        if stream:
-            data = stream.read()
+        data = stream and stream.read(20)
+        print(member.filename, member.file_size, data)
 ```
 
 `streaming_only` is an optional argument; if set, it disallows some methods to ensure your code doesn't accidentally perform expensive operations.
