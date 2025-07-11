@@ -20,8 +20,8 @@ from tests.archivey.sample_archives import (
     SampleArchive,
     filter_archives,
 )
-from tests.create_corrupted_archives import corrupt_archive
 from tests.archivey.testing_utils import skip_if_package_missing
+from tests.create_corrupted_archives import corrupt_archive
 
 
 def _prepare_corrupted_archive(

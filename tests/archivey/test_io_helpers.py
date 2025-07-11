@@ -5,13 +5,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from archivey.internal import io_helpers
 from archivey.internal.io_helpers import (
     BinaryIOWrapper,
     ConcatenationStream,
     LazyOpenIO,
     RecordableStream,
-    UncloseableStream,
     ensure_binaryio,
     ensure_bufferedio,
     is_stream,
@@ -208,10 +206,7 @@ def test_is_stream(tmp_path: Path):
     buffered = ensure_bufferedio(wrapped)
     assert isinstance(buffered, io.BufferedReader)  # Just checking for the test
     assert is_stream(buffered)
-    uncloseable = io_helpers.ensure_uncloseable(buffered)
-    assert isinstance(uncloseable, UncloseableStream)  # Just checking for the test
-    assert is_stream(uncloseable)
-    assert uncloseable.read() == b"hello"
+    assert buffered.read() == b"hello"
 
     assert is_stream(io.BytesIO(b"hello"))
 

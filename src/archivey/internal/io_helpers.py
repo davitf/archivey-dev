@@ -14,7 +14,6 @@ from typing import (
     TypeGuard,
     TypeVar,
     Union,
-    cast,
     runtime_checkable,
 )
 
@@ -74,7 +73,8 @@ def is_seekable(stream: io.IOBase | IO[bytes] | BinaryStreamLike) -> bool:
         #
         # In the tarfile case specifically, _Stream actually does have a seek() method,
         # but calling seek() on the stream returned by tarfile will raise an exception,
-        # as it's wrapped in a BufferedReader which calls seekable() when doing a seek().
+        # as it's wrapped in a BufferedReader which calls seekable() when doing a
+        # seek().
         logger.debug("Stream %s does not have a seekable method: %s", stream, e)
         return False
 
@@ -179,6 +179,12 @@ class BinaryIOWrapper(io.RawIOBase, BinaryIO):
     def seekable(self):
         return is_seekable(self._raw)  # type: ignore
 
+    def __str__(self):
+        return f"BinaryIOWrapper({self._raw!s})"
+
+    def __repr__(self):
+        return f"BinaryIOWrapper({self._raw!r})"
+
 
 ALL_IO_METHODS = {
     "read",
@@ -207,8 +213,6 @@ ALL_IO_PROPERTIES = {
 def is_stream(obj: Any) -> TypeGuard[BinaryIO]:
     """Check if an object matches the BinaryIO protocol."""
 
-    logger.info("Checking if %s is a stream", obj)
-
     # First check if it's a standard IOBase instance
     is_iobase = isinstance(obj, io.IOBase)
 
@@ -218,7 +222,8 @@ def is_stream(obj: Any) -> TypeGuard[BinaryIO]:
 
     if not has_all_interface:
         logger.debug(
-            "Object %r does not match the BinaryIO protocol: missing methods %r, missing properties %r",
+            "Object %r does not match the BinaryIO protocol: missing methods %r, "
+            "missing properties %r",
             obj,
             missing_methods,
             missing_properties,
@@ -242,36 +247,21 @@ def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
     if is_stream(obj):
         return obj
 
-    logger.info(
-        f"Object {obj!r} does not match the BinaryIO protocol, wrapping it in BinaryIOWrapper."
+    logger.debug(
+        "Object %r does not match the BinaryIO protocol, wrapping in BinaryIOWrapper.",
+        obj,
     )
     return BinaryIOWrapper(obj)
 
 
 StreamT = TypeVar("StreamT", bound=BinaryStreamLike)
 
-
-class UncloseableStream:
-    def __init__(self, inner: BinaryStreamLike):
-        self._inner = inner
-
-    def close(self):
-        logger.error(
-            "Closing UncloseableStream, not closing inner stream %s",
-            self._inner,
-            stack_info=True,
-        )
-        pass
-
-    def __getattr__(self, item: str) -> Any:
-        return getattr(self._inner, item)
-
-
-def ensure_uncloseable(obj: StreamT) -> StreamT:
-    """Return a stream that doesn't close the underlying stream when closed."""
-    if isinstance(obj, UncloseableStream):
-        return obj
-    return cast("StreamT", UncloseableStream(obj))
+class NonClosingBufferedReader(io.BufferedReader):
+    def close(self) -> None:
+        self.detach()
+        # The BufferedReader raises a ValueError if we call super().close() here after
+        # detach() has been called.
+        # super().close()
 
 
 def ensure_bufferedio(obj: BinaryStreamLike) -> io.BufferedIOBase:
@@ -279,14 +269,16 @@ def ensure_bufferedio(obj: BinaryStreamLike) -> io.BufferedIOBase:
         return obj
 
     if not isinstance(obj, io.RawIOBase):
+        # BufferedReader requires the underlying stream to be a RawIOBase.
         obj = BinaryIOWrapper(obj)
 
     # BufferedReader closes the underlying stream when closed or deleted. If
-    # ensure_bufferedio is called to temporarily buffer a stream, we need to ensure
-    # that the underlying stream is not closed when the BufferedReader is closed or
-    # goes out of scope. The underlying stream will be closed when it's garbage
-    # collected anyway, so we don't need to worry about it leaking.
-    return io.BufferedReader(ensure_uncloseable(obj))
+    # ensure_bufferedio is called to temporarily buffer a stream (e.g. when opening
+    # a compressed stream), we need to ensure that the underlying stream is not closed
+    # when the BufferedReader is closed or goes out of scope. The underlying stream
+    # will be closed when it's garbage collected anyway, so we don't need to worry
+    # about it leaking.
+    return NonClosingBufferedReader(obj)
 
 
 class ErrorIOStream(io.RawIOBase, BinaryIO):
@@ -404,7 +396,7 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
             raise translated from e
 
         if not isinstance(e, ArchiveError):
-            logger.error("Unknown exception when reading IO: %s", e, exc_info=e)
+            logger.error("Unknown exception when reading IO: %r", e, exc_info=e)
         raise e
 
     def read(self, n: int = -1) -> bytes:
@@ -463,7 +455,6 @@ class ExceptionTranslatingIO(io.RawIOBase, BinaryIO):
             self._translate_exception(e)
 
     def close(self) -> None:
-
         # If the object raised an exception during initialization, it might not have
         # an _inner attribute. But IOBase.__del__() will eventually be called and may
         # call close() here. If we don't check that the attribute exists, we'll get an

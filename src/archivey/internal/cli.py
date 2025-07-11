@@ -86,7 +86,6 @@ def process_member(
         assert isinstance(member.mtime, datetime)
 
         try:
-
             if verify:
                 if stream is None:
                     stream = stream_to_close = archive.open(member, pwd=pwd)

@@ -126,6 +126,8 @@ def test_open_compressed_stream_nonseekable(
 
     try:
         with open_compressed_stream(stream, config=config) as f:
+            assert not f.seekable()
+
             out = f.read()
 
     except (

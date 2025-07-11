@@ -133,7 +133,7 @@ def open_archive(
     if stream is None:
         assert path is not None
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Archive file not found: {path}")
+            raise FileNotFougitndError(f"Archive file not found: {path}")
 
     format = detect_archive_format(ensure_not_none(stream or path))
 

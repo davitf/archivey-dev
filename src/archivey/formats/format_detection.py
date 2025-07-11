@@ -2,13 +2,13 @@ import logging
 import os
 import tarfile
 import zipfile
-from typing import IO, TYPE_CHECKING, BinaryIO, cast
+from typing import IO, TYPE_CHECKING, BinaryIO
 
 from archivey.config import get_archivey_config
 from archivey.internal.io_helpers import (
     ReadableStreamLikeOrSimilar,
-    UncloseableStream,
     is_seekable,
+    is_stream,
     read_exact,
 )
 from archivey.types import (
@@ -97,7 +97,7 @@ def detect_archive_format_by_signature(
     if rarfile is not None:
         _SFX_DETECTORS.append((rarfile.is_rarfile_sfx, ArchiveFormat.RAR))
 
-    f: IO[bytes]
+    f: BinaryIO
 
     if isinstance(path_or_file, (str, bytes, os.PathLike)):
         # If it's a path, check if it's a directory first
@@ -107,8 +107,8 @@ def detect_archive_format_by_signature(
         f = open(path_or_file, "rb")
         close_after = True
 
-    elif hasattr(path_or_file, "read") and hasattr(path_or_file, "seek"):
-        f = cast("IO[bytes]", path_or_file)
+    elif is_stream(path_or_file):
+        f = path_or_file
         # We can't check is_dir on a stream, assume it's not a folder for streams
         close_after = False
     else:
@@ -131,9 +131,8 @@ def detect_archive_format_by_signature(
         # Check if it is a compressed tar file
         if detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT:
             assert detected_format is not None
-            uncloseable_f = UncloseableStream(f)
             with open_stream(
-                detected_format, cast("BinaryIO", uncloseable_f), get_archivey_config()
+                detected_format, f, get_archivey_config()
             ) as decompressed_stream:
                 if is_uncompressed_tarfile(decompressed_stream):
                     detected_format = COMPRESSION_FORMAT_TO_TAR_FORMAT[detected_format]

@@ -82,12 +82,13 @@ def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
             underlying_seekable = is_seekable(path)
 
         if not underlying_seekable:
-            gz.seekable = lambda: False  # type: ignore[assignment]
+            # GzipFile always returns True for seekable, even if the underlying stream
+            # is not seekable.
+            gz.seekable = lambda: False
 
-            def _unsupported_seek(offset: int, whence: int = io.SEEK_SET) -> int:
+            def _unsupported_seek(offset, whence=io.SEEK_SET):
                 raise io.UnsupportedOperation("seek")
-
-            gz.seek = _unsupported_seek  # type: ignore[assignment]
+            gz.seek = _unsupported_seek
 
         return ensure_binaryio(gz)
 
