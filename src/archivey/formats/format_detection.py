@@ -2,15 +2,15 @@ import logging
 import os
 import tarfile
 import zipfile
-from typing import IO, TYPE_CHECKING, BinaryIO
+from typing import IO, TYPE_CHECKING
 
 from archivey.config import get_archivey_config
 from archivey.internal.io_helpers import (
     ReadableStreamLikeOrSimilar,
     is_seekable,
-    is_stream,
     read_exact,
 )
+from archivey.internal.utils import open_if_file
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
     TAR_COMPRESSED_FORMATS,
@@ -63,60 +63,47 @@ def is_uncompressed_tarfile(stream: IO[bytes]) -> bool:
     return data == b"ustar"
 
 
+# [signature, ...], offset, format
+SIGNATURES = [
+    ([b"\x50\x4b\x03\x04"], 0, ArchiveFormat.ZIP),
+    (
+        [
+            b"\x52\x61\x72\x21\x1a\x07\x00",  # RAR4
+            b"\x52\x61\x72\x21\x1a\x07\x01\x00",  # RAR5
+        ],
+        0,
+        ArchiveFormat.RAR,
+    ),
+    ([b"\x37\x7a\xbc\xaf\x27\x1c"], 0, ArchiveFormat.SEVENZIP),
+    ([b"\x1f\x8b"], 0, ArchiveFormat.GZIP),
+    ([b"\x42\x5a\x68"], 0, ArchiveFormat.BZIP2),
+    ([b"\xfd\x37\x7a\x58\x5a\x00"], 0, ArchiveFormat.XZ),
+    ([b"\x28\xb5\x2f\xfd"], 0, ArchiveFormat.ZSTD),
+    ([b"\x04\x22\x4d\x18"], 0, ArchiveFormat.LZ4),
+    ([b"ustar"], 257, ArchiveFormat.TAR),  # TAR "ustar" magic
+    (_ISO_MAGIC_BYTES, 0x8001, ArchiveFormat.ISO),  # ISO9660
+]
+_EXTRA_DETECTORS = [
+    # There may be other tar variants supported by tarfile.
+    (tarfile.is_tarfile, ArchiveFormat.TAR),
+    # zipfiles can have something prepended; is_zipfile checks the end of the file
+    (zipfile.is_zipfile, ArchiveFormat.ZIP),
+]
+
+_SFX_DETECTORS = []
+if rarfile is not None:
+    _SFX_DETECTORS.append((rarfile.is_rarfile_sfx, ArchiveFormat.RAR))
+
+
 def detect_archive_format_by_signature(
     path_or_file: str | bytes | ReadableStreamLikeOrSimilar,
 ) -> ArchiveFormat:
-    # [signature, ...], offset, format
-    SIGNATURES = [
-        ([b"\x50\x4b\x03\x04"], 0, ArchiveFormat.ZIP),
-        (
-            [
-                b"\x52\x61\x72\x21\x1a\x07\x00",  # RAR4
-                b"\x52\x61\x72\x21\x1a\x07\x01\x00",  # RAR5
-            ],
-            0,
-            ArchiveFormat.RAR,
-        ),
-        ([b"\x37\x7a\xbc\xaf\x27\x1c"], 0, ArchiveFormat.SEVENZIP),
-        ([b"\x1f\x8b"], 0, ArchiveFormat.GZIP),
-        ([b"\x42\x5a\x68"], 0, ArchiveFormat.BZIP2),
-        ([b"\xfd\x37\x7a\x58\x5a\x00"], 0, ArchiveFormat.XZ),
-        ([b"\x28\xb5\x2f\xfd"], 0, ArchiveFormat.ZSTD),
-        ([b"\x04\x22\x4d\x18"], 0, ArchiveFormat.LZ4),
-        ([b"ustar"], 257, ArchiveFormat.TAR),  # TAR "ustar" magic
-        (_ISO_MAGIC_BYTES, 0x8001, ArchiveFormat.ISO),  # ISO9660
-    ]
-    _EXTRA_DETECTORS = [
-        # There may be other tar variants supported by tarfile.
-        (tarfile.is_tarfile, ArchiveFormat.TAR),
-        # zipfiles can have something prepended; is_zipfile checks the end of the file
-        (zipfile.is_zipfile, ArchiveFormat.ZIP),
-    ]
+    if isinstance(path_or_file, (str, bytes, os.PathLike)) and os.path.isdir(
+        path_or_file
+    ):
+        return ArchiveFormat.FOLDER
 
-    _SFX_DETECTORS = []
-    if rarfile is not None:
-        _SFX_DETECTORS.append((rarfile.is_rarfile_sfx, ArchiveFormat.RAR))
-
-    f: BinaryIO
-
-    if isinstance(path_or_file, (str, bytes, os.PathLike)):
-        # If it's a path, check if it's a directory first
-        if os.path.isdir(path_or_file):
-            return ArchiveFormat.FOLDER
-
-        f = open(path_or_file, "rb")
-        close_after = True
-
-    elif is_stream(path_or_file):
-        f = path_or_file
-        # We can't check is_dir on a stream, assume it's not a folder for streams
-        close_after = False
-    else:
-        # Not a path and not a stream
-        logger.warning("%s: Not a path or stream", path_or_file)
-        return ArchiveFormat.UNKNOWN
-
-    try:
+    with open_if_file(path_or_file) as f:
         detected_format = None
         for magics, offset, fmt in SIGNATURES:
             bytes_to_read = max(len(magic) for magic in magics)
@@ -156,14 +143,6 @@ def detect_archive_format_by_signature(
                 f.seek(0)
 
         return ArchiveFormat.UNKNOWN
-
-    finally:
-        if close_after:
-            f.close()
-        elif hasattr(f, "seek"):
-            f.seek(0)
-        else:
-            logger.warning("%s: Not a path or stream", path_or_file)
 
 
 EXTENSION_TO_FORMAT = {

@@ -19,6 +19,7 @@ from typing import (
 )
 
 from archivey.exceptions import ArchiveError
+from archivey.internal.utils import ensure_not_none
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class BinaryIOWrapper(io.RawIOBase, BinaryIO):
     def __init__(self, raw: BinaryStreamLike):
         self._raw = raw
 
-    def read(self, size=-1, /) -> bytes | None:
+    def read(self, size: int = -1, /) -> bytes | None:
         if hasattr(self._raw, "read"):
             data = self._raw.read(size)  # type: ignore
             # If read succeeded, we can use it directly for future reads
@@ -100,7 +101,7 @@ class BinaryIOWrapper(io.RawIOBase, BinaryIO):
 
         return super().read(size)
 
-    def write(self, data, /):
+    def write(self, data: bytes, /) -> int:
         if not hasattr(self._raw, "write"):
             raise io.UnsupportedOperation("write not supported")
         self.write = self._raw.write  # type: ignore
@@ -128,7 +129,7 @@ class BinaryIOWrapper(io.RawIOBase, BinaryIO):
             self.readinto = self._readinto_from_read
             return self._readinto_from_read(b)
 
-    def seek(self, offset, whence=io.SEEK_SET, /):
+    def seek(self, offset: int, whence=io.SEEK_SET, /) -> int:
         if hasattr(self._raw, "seek"):
             pos = self._raw.seek(offset, whence)  # type: ignore
             # If seek succeeded, we can use it for future seeks
@@ -137,7 +138,7 @@ class BinaryIOWrapper(io.RawIOBase, BinaryIO):
 
         raise io.UnsupportedOperation("seek")
 
-    def tell(self, /):
+    def tell(self, /) -> int:
         if hasattr(self._raw, "tell"):
             pos = self._raw.tell()  # type: ignore
             # If tell succeeded, we can use it for future tells
@@ -145,10 +146,9 @@ class BinaryIOWrapper(io.RawIOBase, BinaryIO):
             return pos
         raise io.UnsupportedOperation("tell")
 
-    def close(self):
+    def close(self) -> None:
         super().close()
-        if hasattr(self._raw, "close"):
-            self._raw.close()  # type: ignore
+        # Don't close the underlying stream, as this may be a temporary wrapper.
 
     def flush(self):
         if hasattr(self._raw, "flush"):
@@ -812,15 +812,97 @@ class RewindableStreamWrapper:
         else:
             self._recordable_stream = RecordableStream(stream)
 
-    def get_stream(self) -> ReadableStreamLikeOrSimilar:
+    def get_stream(self) -> BinaryIO:
         if self._recordable_stream is not None:
             return self._recordable_stream
-        return self._stream
+        return ensure_binaryio(self._stream)
 
-    def get_rewinded_stream(self) -> ReadableStreamLikeOrSimilar:
+    def get_rewinded_stream(self) -> BinaryIO:
         if self._start_pos is not None:
             self._stream.seek(self._start_pos)  # type: ignore[attr-defined]
-            return self._stream
+            return ensure_binaryio(self._stream)
 
         assert self._recordable_stream is not None
         return self._recordable_stream.get_complete_stream()
+
+
+class SlicingStream(io.RawIOBase, BinaryIO):
+    def __init__(
+        self, stream: BinaryIO, start: int | None = None, length: int | None = None
+    ):
+        super().__init__()
+        self._stream = stream
+        self._seekable = is_seekable(stream)
+
+        if self._seekable:
+            if start is None:
+                start = stream.tell()
+
+        else:
+            if start is not None:
+                raise ValueError(
+                    "Cannot slice a non-seekable stream with a start position"
+                )
+
+        self._start = start
+        self._length = length
+        self._pos = 0
+
+    def _compute_bytes_to_read(self, n: int) -> int:
+        if self._length is not None:
+            remaining = self._length - self._pos
+            if n == -1:
+                return remaining
+            return min(n, remaining)
+        return n
+
+    def read(self, n: int = -1) -> bytes:
+        n = self._compute_bytes_to_read(n)
+        if n == 0:
+            return b""
+
+        data = self._stream.read(n)
+        self._pos += len(data)
+        return data
+
+    def readinto(self, b: bytearray | memoryview) -> int:
+        buf = self.read(len(b))
+        b[: len(buf)] = buf
+        return len(buf)
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        if not self._seekable:
+            raise io.UnsupportedOperation("seek")
+
+        start = ensure_not_none(self._start)
+
+        # If seeking to the end and length is not specified, seek to the end of the
+        # underlying stream.
+        if whence == io.SEEK_END and self._length is None:
+            self._pos = self._stream.seek(offset, whence) - start
+            return self._pos
+
+        if whence == io.SEEK_SET:
+            pass  # abs_offset = start + offset
+
+        elif whence == io.SEEK_CUR:
+            offset = self._pos + offset
+            # abs_offset = self._pos + offset
+
+        elif whence == io.SEEK_END:
+            offset = ensure_not_none(self._length) + offset
+
+        else:
+            raise ValueError(f"Invalid whence: {whence}")
+
+        if offset < 0:
+            raise io.UnsupportedOperation("seek outside recorded region")
+
+        self._pos = offset
+        if self._length is not None and self._length > offset:
+            abs_offset = start + self._length
+        else:
+            abs_offset = start + offset
+
+        self._stream.seek(abs_offset, whence)
+        return offset
