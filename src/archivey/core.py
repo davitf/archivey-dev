@@ -202,13 +202,6 @@ def open_compressed_stream(
             (some checks are format-specific).
     """
 
-    stream: BinaryIO | None
-    path: str | None
-    input_obj: BinaryIO | str # Can be path string or a stream
-    path_str: str | None # Only if input_obj is a path string
-
-    initial_input_stream, path_str = _normalize_path_or_stream(path_or_stream)
-
     input_obj: BinaryIO | str
     path_str: str | None
 
