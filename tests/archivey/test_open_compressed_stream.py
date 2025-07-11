@@ -5,17 +5,14 @@ import pytest
 from archivey.config import ArchiveyConfig
 from archivey.core import open_compressed_stream
 from archivey.exceptions import ArchiveNotSupportedError
-from tests.archivey.sample_archives import SAMPLE_ARCHIVES, filter_archives
+from tests.archivey.sample_archives import (
+    BASIC_ARCHIVES,
+    SINGLE_FILE_ARCHIVES,
+    filter_archives,
+)
 from tests.archivey.testing_utils import skip_if_package_missing
 
-# Select single-file archives for testing
-SINGLE_FILE_ARCHIVES = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["single_file", "single_file_with_metadata"]
-)
-
-BASIC_ZIP_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["basic_nonsolid"], extensions=["zip"]
-)[0]
+BASIC_ZIP_ARCHIVE = filter_archives(BASIC_ARCHIVES, extensions=["zip"])[0]
 
 logger = logging.getLogger(__name__)
 
@@ -54,3 +51,4 @@ def test_open_compressed_stream_wrong_format(tmp_path):
     path = sample_archive.get_archive_path()
     with pytest.raises(ArchiveNotSupportedError):
         open_compressed_stream(path)
+

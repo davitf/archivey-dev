@@ -22,7 +22,7 @@ for a in SAMPLE_ARCHIVES:
 @pytest.mark.parametrize(
     "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
 )
-def test_open_from_memory(sample_archive, alternative_packages):
+def test_open_stream(sample_archive, alternative_packages):
     config = ALTERNATIVE_CONFIG if alternative_packages else None
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
