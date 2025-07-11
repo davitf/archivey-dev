@@ -4,15 +4,15 @@ Utility functions for archivey.
 
 import logging
 import os
-from contextlib import contextmanager
-from typing import BinaryIO, Iterator, TypeVar, overload
+# contextmanager, BinaryIO, Iterator, overload were for open_if_file, no longer needed here
+from typing import TypeVar, overload
 
-from archivey.internal.io_helpers import (
-    ReadableStreamLikeOrSimilar,
-    ensure_binaryio,
-    is_filename,
-    is_stream,
-)
+
+# ensure_binaryio, is_filename, is_stream, ReadableStreamLikeOrSimilar
+# were for open_if_file, no longer needed here.
+
+# ensure_not_none is still used by io_helpers, so io_helpers will import utils.
+# utils no longer imports io_helpers.
 
 
 @overload
@@ -79,16 +79,3 @@ def ensure_not_none(x: T | None) -> T:
     if x is None:
         raise ValueError("Expected non-None value")
     return x
-
-
-@contextmanager
-def open_if_file(
-    path_or_stream: str | bytes | os.PathLike | ReadableStreamLikeOrSimilar,
-) -> Iterator[BinaryIO]:
-    if is_stream(path_or_stream):
-        yield ensure_binaryio(path_or_stream)
-    elif is_filename(path_or_stream):
-        with open(path_or_stream, "rb") as f:
-            yield f
-    else:
-        raise ValueError(f"Expected a filename or stream, got {type(path_or_stream)}")

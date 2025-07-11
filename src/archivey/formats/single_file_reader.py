@@ -11,8 +11,8 @@ from archivey.exceptions import (
 from archivey.formats.compressed_streams import open_stream
 from archivey.formats.format_detection import EXTENSION_TO_FORMAT
 from archivey.internal.base_reader import BaseArchiveReader
-from archivey.internal.io_helpers import read_exact
-from archivey.internal.utils import open_if_file
+from archivey.internal.io_helpers import read_exact, open_if_file # Updated import
+# from archivey.internal.utils import open_if_file # Removed
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     ArchiveFormat,

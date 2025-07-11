@@ -17,6 +17,7 @@ from archivey.formats.zip_reader import ZipReader
 from archivey.internal.io_helpers import (
     ReadableBinaryStream,
     RewindableStreamWrapper,
+    SlicingStream, # Added
     ensure_binaryio,
     ensure_bufferedio,
     is_seekable,
@@ -179,6 +180,11 @@ def open_compressed_stream(
 ) -> BinaryIO:
     """Open a single-file compressed stream and return the uncompressed stream.
 
+    This function ensures that if a stream is passed, reading starts from the
+    stream's current position at the time of the call, after any internal
+    operations like format detection (which might require reading from the
+    beginning of the stream).
+
     Args:
         path_or_stream: Path to the compressed file (e.g., "my_data.gz", "data.bz2")
         or a binary file object containing the compressed data.
@@ -198,34 +204,56 @@ def open_compressed_stream(
 
     stream: BinaryIO | None
     path: str | None
-    stream, path = _normalize_path_or_stream(path_or_stream)
+    input_obj: BinaryIO | str # Can be path string or a stream
+    path_str: str | None # Only if input_obj is a path string
 
-    rewindable_wrapper: RewindableStreamWrapper | None = None
-    if stream is not None:
-        assert not stream.closed
+    initial_input_stream, path_str = _normalize_path_or_stream(path_or_stream)
 
-        # Many reader libraries expect the stream's read() method to return the
-        # full data, so we need to ensure the stream is buffered.
-        rewindable_wrapper = RewindableStreamWrapper(ensure_bufferedio(stream))
-        stream = rewindable_wrapper.get_stream()
+    input_obj: BinaryIO | str
+    path_str: str | None
 
+    initial_input_stream, path_str = _normalize_path_or_stream(path_or_stream)
+
+    stream_for_detection: BinaryIO | str
+    stream_to_pass_to_open_stream: BinaryIO | str
+
+    if initial_input_stream is not None:
+        # Input is a stream. Wrap it with SlicingStream immediately.
+        input_obj = SlicingStream(initial_input_stream, start=None, length=None)
+
+        # This SlicingStream needs to be buffered and made rewindable for detection.
+        assert not input_obj.closed
+        buffered_sliced_stream = ensure_bufferedio(input_obj)
+
+        rewindable_wrapper = RewindableStreamWrapper(buffered_sliced_stream)
+        stream_for_detection = rewindable_wrapper.get_stream()
+        # stream_to_pass_to_open_stream will be set after format detection
     else:
-        assert path is not None
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Archive file not found: {path}")
+        # Input is a path.
+        assert path_str is not None
+        if not os.path.exists(path_str):
+            raise FileNotFoundError(f"Archive file not found: {path_str}")
+        input_obj = path_str # Keep as string for now
+        stream_for_detection = input_obj # Path string is fine for detect_archive_format
+        stream_to_pass_to_open_stream = input_obj # Path string is fine for open_stream
 
-    format = detect_archive_format(ensure_not_none(stream or path))
+    # Perform format detection
+    detected_format_value = detect_archive_format(stream_for_detection)
 
-    if rewindable_wrapper is not None:
-        stream = rewindable_wrapper.get_rewinded_stream()
+    # If input was a stream, now prepare the final stream for open_stream
+    if initial_input_stream is not None:
+        # This was in the 'else' block before, now correctly after detection
+        # rewindable_wrapper must have been set if initial_input_stream was not None
+        assert rewindable_wrapper is not None
+        stream_to_pass_to_open_stream = rewindable_wrapper.get_rewinded_stream()
 
-    if format not in SINGLE_FILE_COMPRESSED_FORMATS:
+    if detected_format_value not in SINGLE_FILE_COMPRESSED_FORMATS:
         raise ArchiveNotSupportedError(
-            f"Unsupported single-file compressed format: {format}"
+            f"Unsupported single-file compressed format: {detected_format_value} for {path_or_stream}"
         )
 
     if config is None:
         config = get_archivey_config()
 
     with archivey_config(config):
-        return open_stream(format, ensure_not_none(stream or path), config)
+        return open_stream(detected_format_value, stream_to_pass_to_open_stream, config)
