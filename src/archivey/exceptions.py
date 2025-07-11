@@ -29,14 +29,14 @@ class ArchiveError(Exception):
         return base
 
 
-class ArchiveFormatError(ArchiveError):
-    """Raised when an archive's format is incorrect or unexpected."""
+class ArchiveCorruptedError(ArchiveError):
+    """Raised when an archive is detected as corrupted, incomplete, or invalid."""
 
     pass
 
 
-class ArchiveCorruptedError(ArchiveError):
-    """Raised when an archive is detected as corrupted, incomplete, or invalid."""
+class ArchiveEOFError(ArchiveCorruptedError):
+    """Raised when an unexpected end-of-file is encountered while reading an archive."""
 
     pass
 
@@ -46,12 +46,6 @@ class ArchiveEncryptedError(ArchiveError):
     Raised when an archive or its member is encrypted and either no password
     was provided, or the provided password was incorrect.
     """
-
-    pass
-
-
-class ArchiveEOFError(ArchiveError):
-    """Raised when an unexpected end-of-file is encountered while reading an archive."""
 
     pass
 

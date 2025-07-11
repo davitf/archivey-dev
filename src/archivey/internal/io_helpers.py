@@ -2,6 +2,7 @@
 
 import io
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import (
     IO,
@@ -37,7 +38,7 @@ class CloseableStream(Protocol):
     def close(self) -> None: ...
 
 
-BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream, CloseableStream]
+BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream]
 
 ReadableStreamLikeOrSimilar = Union[ReadableBinaryStream, io.IOBase, IO[bytes]]
 
@@ -57,7 +58,9 @@ def read_exact(stream: ReadableBinaryStream, n: int) -> bytes:
     return bytes(data)
 
 
-def is_seekable(stream: io.IOBase | IO[bytes] | BinaryStreamLike) -> bool:
+def is_seekable(
+    stream: io.IOBase | IO[bytes] | BinaryStreamLike,
+) -> bool:
     """Check if a stream is seekable."""
     # When we wrap a RewindableNonSeekableStream in a BufferedReader, we want to check
     # if the inner stream is seekable, with the check below.
@@ -208,6 +211,11 @@ ALL_IO_METHODS = {
 ALL_IO_PROPERTIES = {
     "closed",
 }
+
+
+def is_filename(obj: Any) -> TypeGuard[str | bytes | os.PathLike]:
+    """Check if an object is a filename-like object."""
+    return isinstance(obj, (str, bytes, os.PathLike))
 
 
 def is_stream(obj: Any) -> TypeGuard[BinaryIO]:
@@ -636,7 +644,17 @@ class ConcatenationStream(io.RawIOBase, BinaryIO):
 
     def __init__(self, streams: list[ReadableStreamLikeOrSimilar]):
         super().__init__()
-        self._streams = streams
+
+        # Flatten multiple concatenation streams to avoid extra overhead.
+        flattened_streams = []
+
+        for stream in streams:
+            if isinstance(stream, ConcatenationStream):
+                flattened_streams.extend(stream._streams[stream._index :])
+            else:
+                flattened_streams.append(stream)
+
+        self._streams = flattened_streams
         self._index = 0
 
     # Basic IO methods -------------------------------------------------
@@ -781,3 +799,28 @@ class RecordableStream(io.RawIOBase, BinaryIO):
     def close(self) -> None:  # pragma: no cover - simple delegation
         # Do not close the underlying stream, as it may be used by other code.
         super().close()
+
+
+class RewindableStreamWrapper:
+    def __init__(self, stream: ReadableStreamLikeOrSimilar):
+        self._stream = stream
+        self._start_pos: int | None = None
+        self._recordable_stream: RecordableStream | None = None
+
+        if is_seekable(stream):
+            self._start_pos = stream.tell()  # type: ignore[attr-defined]
+        else:
+            self._recordable_stream = RecordableStream(stream)
+
+    def get_stream(self) -> ReadableStreamLikeOrSimilar:
+        if self._recordable_stream is not None:
+            return self._recordable_stream
+        return self._stream
+
+    def get_rewinded_stream(self) -> ReadableStreamLikeOrSimilar:
+        if self._start_pos is not None:
+            self._stream.seek(self._start_pos)  # type: ignore[attr-defined]
+            return self._stream
+
+        assert self._recordable_stream is not None
+        return self._recordable_stream.get_complete_stream()

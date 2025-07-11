@@ -51,4 +51,3 @@ def test_open_compressed_stream_wrong_format(tmp_path):
     path = sample_archive.get_archive_path()
     with pytest.raises(ArchiveNotSupportedError):
         open_compressed_stream(path)
-
