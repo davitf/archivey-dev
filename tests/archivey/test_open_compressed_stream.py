@@ -1,3 +1,4 @@
+import io
 import logging
 
 import pytest
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize(
     "alternative_packages", [False, True], ids=["default", "altlibs"]
 )
-def test_open_compressed_stream(
+def test_open_compressed_stream_from_file(
     sample_archive, sample_archive_path, alternative_packages
 ):
     if alternative_packages:
@@ -45,9 +46,75 @@ def test_open_compressed_stream(
     assert data == expected
 
 
-def test_open_compressed_stream_wrong_format(tmp_path):
+def test_open_compressed_stream_unsupported_format(tmp_path):
     sample_archive = BASIC_ZIP_ARCHIVE
     skip_if_package_missing(sample_archive.creation_info.format, None)
     path = sample_archive.get_archive_path()
     with pytest.raises(ArchiveNotSupportedError):
         open_compressed_stream(path)
+
+
+@pytest.mark.parametrize(
+    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
+)
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["default", "altlibs"]
+)
+def test_open_compressed_stream_from_stream(
+    sample_archive, sample_archive_path, alternative_packages
+):
+    if alternative_packages:
+        config = ArchiveyConfig(
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            use_zstandard=True,
+        )
+    else:
+        config = ArchiveyConfig()
+
+    skip_if_package_missing(sample_archive.creation_info.format, config)
+
+    compressed_data = open(sample_archive_path, "rb").read()
+    compressed_stream = io.BytesIO(compressed_data)
+
+    with open_compressed_stream(compressed_stream, config=config) as f:
+        data = f.read()
+
+    expected = sample_archive.contents.files[0].contents
+    assert data == expected
+
+
+@pytest.mark.parametrize(
+    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
+)
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["default", "altlibs"]
+)
+def test_open_compressed_stream_from_stream_with_prefix(
+    sample_archive, sample_archive_path, alternative_packages
+):
+    if alternative_packages:
+        config = ArchiveyConfig(
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            use_zstandard=True,
+        )
+    else:
+        config = ArchiveyConfig()
+
+    skip_if_package_missing(sample_archive.creation_info.format, config)
+
+    # Add some bad data to the beginning of the stream, to test that the reading is
+    # done from the initial position.
+    bad_data = b"bad data " * 1000
+    compressed_data = bad_data + open(sample_archive_path, "rb").read()
+    compressed_stream = io.BytesIO(compressed_data)
+    compressed_stream.seek(len(bad_data))
+
+    with open_compressed_stream(compressed_stream, config=config) as f:
+        data = f.read()
+
+    expected = sample_archive.contents.files[0].contents
+    assert data == expected

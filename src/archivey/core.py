@@ -1,6 +1,5 @@
 """Core functionality for opening and interacting with archives."""
 
-import io
 import os
 from typing import BinaryIO, Callable
 
@@ -16,9 +15,8 @@ from archivey.formats.single_file_reader import SingleFileReader
 from archivey.formats.tar_reader import TarReader
 from archivey.formats.zip_reader import ZipReader
 from archivey.internal.io_helpers import (
-    ConcatenationStream,
     ReadableBinaryStream,
-    RecordableStream,
+    RewindableStreamWrapper,
     ensure_binaryio,
     ensure_bufferedio,
     is_seekable,
@@ -120,34 +118,31 @@ def open_archive(
     if pwd is not None and not isinstance(pwd, (str, bytes)):
         raise TypeError("Password must be a string or bytes")
 
-    stream: BinaryIO | io.BufferedIOBase | None
+    stream: BinaryIO | None
     path: str | None
-
     stream, path = _normalize_path_or_stream(path_or_stream)
 
-    recordable_stream: RecordableStream | None = None
+    rewindable_wrapper: RewindableStreamWrapper | None = None
     if stream is not None:
         assert not stream.closed
+        if is_seekable(stream):
+            stream.seek(0)
+
         # Many reader libraries expect the stream's read() method to return the
         # full data, so we need to ensure the stream is buffered.
-        stream = ensure_bufferedio(stream)
+        rewindable_wrapper = RewindableStreamWrapper(ensure_bufferedio(stream))
+        stream = rewindable_wrapper.get_stream()
 
-        if not is_seekable(stream):
-            recordable_stream = RecordableStream(stream)
-            stream = recordable_stream
-
-    if stream is None:
+    else:
         assert path is not None
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
     format = detect_archive_format(ensure_not_none(stream or path))
 
-    if stream is not None:
+    if rewindable_wrapper is not None:
+        stream = rewindable_wrapper.get_rewinded_stream()
         assert not stream.closed
-
-    if recordable_stream is not None:
-        stream = recordable_stream.get_complete_stream()
 
     if format == ArchiveFormat.UNKNOWN:
         raise ArchiveNotSupportedError(
@@ -201,26 +196,28 @@ def open_compressed_stream(
             (some checks are format-specific).
     """
 
+    stream: BinaryIO | None
+    path: str | None
     stream, path = _normalize_path_or_stream(path_or_stream)
 
-    wrapper: RecordableStream | None = None
+    rewindable_wrapper: RewindableStreamWrapper | None = None
     if stream is not None:
         assert not stream.closed
-        if not is_seekable(stream):
-            original_stream = stream
-            wrapper = RecordableStream(stream)
-            stream = wrapper
 
-    if stream is None:
+        # Many reader libraries expect the stream's read() method to return the
+        # full data, so we need to ensure the stream is buffered.
+        rewindable_wrapper = RewindableStreamWrapper(ensure_bufferedio(stream))
+        stream = rewindable_wrapper.get_stream()
+
+    else:
         assert path is not None
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
     format = detect_archive_format(ensure_not_none(stream or path))
 
-    if wrapper is not None:
-        recorded_data = wrapper.get_all_data()
-        stream = ConcatenationStream([io.BytesIO(recorded_data), original_stream])
+    if rewindable_wrapper is not None:
+        stream = rewindable_wrapper.get_rewinded_stream()
 
     if format not in SINGLE_FILE_COMPRESSED_FORMATS:
         raise ArchiveNotSupportedError(

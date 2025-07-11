@@ -7,7 +7,12 @@ import os
 from contextlib import contextmanager
 from typing import BinaryIO, Iterator, TypeVar, overload
 
-from archivey.internal.io_helpers import is_filename, is_stream
+from archivey.internal.io_helpers import (
+    ReadableStreamLikeOrSimilar,
+    ensure_binaryio,
+    is_filename,
+    is_stream,
+)
 
 
 @overload
@@ -78,10 +83,10 @@ def ensure_not_none(x: T | None) -> T:
 
 @contextmanager
 def open_if_file(
-    path_or_stream: str | bytes | os.PathLike | BinaryIO,
+    path_or_stream: str | bytes | os.PathLike | ReadableStreamLikeOrSimilar,
 ) -> Iterator[BinaryIO]:
     if is_stream(path_or_stream):
-        yield path_or_stream
+        yield ensure_binaryio(path_or_stream)
     elif is_filename(path_or_stream):
         with open(path_or_stream, "rb") as f:
             yield f
