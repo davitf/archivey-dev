@@ -15,20 +15,21 @@ from typing import (
     TypeGuard,
     TypeVar,
     Union,
-    runtime_checkable,
+    Iterator, # Added for open_if_file
+    overload, # Added for open_if_file
+    runtime_checkable, # For WritableBinaryStream and CloseableStream
 )
+from contextlib import contextmanager # Added for open_if_file
 
 from archivey.exceptions import ArchiveError
 from archivey.internal.utils import ensure_not_none
+from archivey.types import ReadableBinaryStream, ReadableStreamLikeOrSimilar
 
 logger = logging.getLogger(__name__)
 
 
-@runtime_checkable
-class ReadableBinaryStream(Protocol):
-    def read(self, n: int = -1, /) -> bytes: ...
-
-
+# ReadableBinaryStream and ReadableStreamLikeOrSimilar are now in archivey.types
+# WritableBinaryStream and CloseableStream remain here as they are not part of the circular import.
 @runtime_checkable
 class WritableBinaryStream(Protocol):
     def write(self, data: bytes, /) -> int: ...
@@ -40,11 +41,10 @@ class CloseableStream(Protocol):
 
 
 BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream]
+# ReadableStreamLikeOrSimilar is imported from archivey.types
 
-ReadableStreamLikeOrSimilar = Union[ReadableBinaryStream, io.IOBase, IO[bytes]]
 
-
-def read_exact(stream: ReadableBinaryStream, n: int) -> bytes:
+def read_exact(stream: ReadableBinaryStream, n: int) -> bytes: # Uses ReadableBinaryStream from types
     """Read exactly ``n`` bytes, or all available bytes if the file ends."""
 
     if n < 0:
@@ -830,23 +830,58 @@ class SlicingStream(io.RawIOBase, BinaryIO):
     def __init__(
         self, stream: BinaryIO, start: int | None = None, length: int | None = None
     ):
+        """
+        Wraps a binary stream to provide a view (slice) of a portion of it.
+
+        If the underlying stream `stream` is seekable:
+        - If `start` is provided, it defines the absolute offset in the underlying
+          stream where the slice begins. If `start` is None, the slice begins
+          at the underlying stream's current position.
+        - If `length` is provided, it defines the maximum number of bytes in the
+          slice. If `length` is None, the slice extends to the end of the
+          underlying stream.
+        - Seeking within this stream will be relative to the start of the slice.
+
+        If the underlying stream `stream` is not seekable:
+        - `start` must be None (or not provided), as seeking to an absolute
+          position is not possible. The slice implicitly starts from the current
+          position of the non-seekable stream.
+        - If `length` is provided, it defines the maximum number of bytes that
+          can be read from the slice. If `length` is None, the slice will
+          read until the underlying non-seekable stream is exhausted.
+        - Seeking is not supported.
+
+        Args:
+            stream: The underlying binary IO stream.
+            start: The absolute starting position of the slice in the underlying
+                   stream. If None and stream is seekable, uses current position.
+                   Must be None if stream is not seekable.
+            length: The maximum length of the slice. If None, reads until the end
+                    of the underlying stream (or until the non-seekable stream ends).
+        """
         super().__init__()
         self._stream = stream
         self._seekable = is_seekable(stream)
+        self._initial_stream_pos: int | None = None
 
         if self._seekable:
+            self._initial_stream_pos = stream.tell()
             if start is None:
-                start = stream.tell()
-
+                start = self._initial_stream_pos
+            # Position the underlying stream at the start of the slice
+            if self._initial_stream_pos != start:
+                stream.seek(start)
         else:
             if start is not None:
                 raise ValueError(
                     "Cannot slice a non-seekable stream with a start position"
                 )
+            # For non-seekable streams, start is implicitly the current position.
+            # We don't store it as it's not an absolute position we can return to.
 
-        self._start = start
+        self._start = start  # Absolute start in the underlying stream if seekable
         self._length = length
-        self._pos = 0
+        self._pos = 0  # Current position relative to the start of the slice
 
     def _compute_bytes_to_read(self, n: int) -> int:
         if self._length is not None:
@@ -870,39 +905,103 @@ class SlicingStream(io.RawIOBase, BinaryIO):
         b[: len(buf)] = buf
         return len(buf)
 
+    def tell(self) -> int:
+        """Return the current position within the slice."""
+        return self._pos
+
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        """
+        Change the stream position within the current slice.
+
+        Args:
+            offset: The offset in bytes.
+            whence: The reference point for the offset.
+                io.SEEK_SET (0): Start of the slice.
+                io.SEEK_CUR (1): Current position within the slice.
+                io.SEEK_END (2): End of the slice (if length is defined).
+
+        Returns:
+            The new absolute position within the slice.
+
+        Raises:
+            ValueError: If whence is invalid.
+            io.UnsupportedOperation: If the stream is not seekable, or if trying
+                                     to seek outside slice boundaries in some cases.
+        """
         if not self._seekable:
-            raise io.UnsupportedOperation("seek")
+            raise io.UnsupportedOperation("seek on non-seekable stream")
 
-        start = ensure_not_none(self._start)
-
-        # If seeking to the end and length is not specified, seek to the end of the
-        # underlying stream.
-        if whence == io.SEEK_END and self._length is None:
-            self._pos = self._stream.seek(offset, whence) - start
-            return self._pos
+        start_abs = ensure_not_none(self._start)
+        current_abs_pos_in_stream = start_abs + self._pos
+        new_relative_pos: int
 
         if whence == io.SEEK_SET:
-            pass  # abs_offset = start + offset
-
+            new_relative_pos = offset
         elif whence == io.SEEK_CUR:
-            offset = self._pos + offset
-            # abs_offset = self._pos + offset
-
+            new_relative_pos = self._pos + offset
         elif whence == io.SEEK_END:
-            offset = ensure_not_none(self._length) + offset
+            if self._length is None:
+                # Seeking from SEEK_END is problematic if length is not defined.
+                # We could try to seek to the end of the underlying stream,
+                # but that might be very far.
+                # For now, let's disallow SEEK_END if length is not set.
+                # Alternatively, one could argue it should behave like underlying stream's SEEK_END.
+                # However, the slice abstraction implies boundaries.
+                # Let underlying stream handle if offset is 0, effectively asking for its size.
+                if offset == 0:
+                    # This will effectively give the size of the underlying stream
+                    # relative to our start, which can act as an unbounded length.
+                    # We don't set self._length here, but it informs the possible _pos.
+                    underlying_end = self._stream.seek(0, io.SEEK_END)
+                    self._stream.seek(current_abs_pos_in_stream) # restore position
+                    new_relative_pos = underlying_end - start_abs + offset
 
+                else:
+                    raise io.UnsupportedOperation(
+                        "SEEK_END is not supported when slice length is not defined "
+                        "and offset is non-zero"
+                    )
+
+            else:
+                new_relative_pos = self._length + offset
         else:
             raise ValueError(f"Invalid whence: {whence}")
 
-        if offset < 0:
-            raise io.UnsupportedOperation("seek outside recorded region")
+        if new_relative_pos < 0:
+            raise ValueError("Negative seek position")
 
-        self._pos = offset
-        if self._length is not None and self._length > offset:
-            abs_offset = start + self._length
-        else:
-            abs_offset = start + offset
+        if self._length is not None and new_relative_pos > self._length:
+            # Allow seeking past the defined end, but reads will be clamped.
+            # This matches behavior of io.BytesIO.
+            pass
 
-        self._stream.seek(abs_offset, whence)
-        return offset
+
+        # Calculate the new absolute position in the underlying stream
+        new_abs_pos_in_stream = start_abs + new_relative_pos
+
+        # Perform the actual seek on the underlying stream
+        self._stream.seek(new_abs_pos_in_stream)
+        self._pos = new_relative_pos
+        return self._pos
+
+    def readable(self) -> bool:
+        return True
+
+    def writable(self) -> bool:
+        return False
+
+    def seekable(self) -> bool:
+        return self._seekable
+
+
+@contextmanager
+def open_if_file(
+    path_or_stream: str | bytes | os.PathLike | ReadableStreamLikeOrSimilar,
+) -> Iterator[BinaryIO]:
+    if is_stream(path_or_stream):
+        yield ensure_binaryio(path_or_stream)
+    elif is_filename(path_or_stream):
+        with open(path_or_stream, "rb") as f:
+            yield f
+    else:
+        raise ValueError(f"Expected a filename or stream, got {type(path_or_stream)}")
