@@ -2,16 +2,14 @@
 
 Archivey is a library for reading many common archive formats through a simple, consistent interface. It uses several builtin modules and optional external packages for handling different formats, and also adds some features that are missing from them.
 
-The full documentation is kept under [`docs/`]() and published via MkDocs.
-
 ## Features
 
 - Automatic file format detection
 - Support for ZIP, TAR (including `.tar.gz`, `.tar.bz2`, etc.), RAR and 7z archives
 - Support for single-file compressed formats like gzip, bzip2, xz, zstd and lz4
-- Optimized streaming access reading of archive members
 - Consistent handling of symlinks, file times, permissions, and passwords
 - Consistent exception hierarchy
+- Optimized for sequential iteration over archive members
 
 ## Installation
 
@@ -38,30 +36,19 @@ If you'd rather manage dependencies yourself, install only the extras you need. 
 
 These are the basic features of the library. For more details, see the **[User guide](user_guide.md)** and **[API reference](api.md)**.
 
-### Single-file compressed streams
-
-Open a compressed file (e.g., `.gz` or `.xz`) to work with the uncompressed stream:
-
-```python
-from archivey import open_compressed_stream
-
-with open_compressed_stream("example.txt.gz") as f:
-    data = f.read()
-```
-
 ### Extracting files
 
-You can use filters when extracting to avoid security issues, similarly to [tarfile](https://docs.python.org/3/library/tarfile.html#extraction-filters).
-
-```
+``` py
 from archivey import open_archive
 
 with open_archive("example.zip") as archive:
     archive.extractall(path="/tmp/destpath", filter=ExtractionFilter.DATA)
 ```
 
+You can use filters when extracting to avoid security issues, similarly to [tarfile](https://docs.python.org/3/library/tarfile.html#extraction-filters).
+
 ### Random access
-```python
+``` py
 from archivey import open_archive
 
 with open_archive("example.zip") as archive:
@@ -78,7 +65,7 @@ You can open standalone compressed files as well. They are handled as an archive
 ### Streaming access
 
 Some libraries may decompress parts of the archive multiple times if you access files individually, as in the example above. If you only need to perform some operation on all (or some) files of an archive, this mode avoids extra re-reads and decompressions:
-```python
+``` py
 from archivey import open_archive
 
 with open_archive("example.zip", streaming_only=True) as archive:
@@ -89,6 +76,17 @@ with open_archive("example.zip", streaming_only=True) as archive:
 ```
 
 `streaming_only` is an optional argument; if set, it disallows some methods to ensure your code doesn't accidentally perform expensive operations.
+
+### Single-file compressed streams
+
+Open a compressed file (e.g., `.gz` or `.xz`) to work with the uncompressed stream:
+
+```python
+from archivey import open_compressed_stream
+
+with open_compressed_stream("example.txt.gz") as f:
+    data = f.read()
+```
 
 ### Configuration
 You can enable optional features and libraries by passing an `ArchiveyConfig` to `open_archive` and `open_compressed_stream`.
