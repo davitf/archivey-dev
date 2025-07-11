@@ -88,6 +88,7 @@ def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
 
             def _unsupported_seek(offset, whence=io.SEEK_SET):
                 raise io.UnsupportedOperation("seek")
+
             gz.seek = _unsupported_seek
 
         return ensure_binaryio(gz)

@@ -68,6 +68,7 @@ def open_archive(
     config: ArchiveyConfig | None = None,
     streaming_only: bool = False,
     pwd: bytes | str | None = None,
+    format: ArchiveFormat | None = None,
 ) -> ArchiveReader:
     """
     Open an archive file and return an appropriate ArchiveReader instance.
@@ -101,24 +102,25 @@ def open_archive(
         TypeError: If `archive_path` or `pwd` have an invalid type.
 
     Example:
-        >>> from archivey import open_archive, ArchiveError
-        >>>
-        >>> try:
-        ...     with open_archive("my_data.zip", pwd="secret") as archive:
-        ...         for member in archive.get_members():
-        ...             print(f"Found member: {member.filename}")
-        ...         # Further operations with the archive
-        ... except FileNotFoundError:
-        ...     print("Error: Archive file not found.")
-        ... except ArchiveError as e:
-        ...     print(f"An archive error occurred: {e}")
+        ```python
+        from archivey import open_archive, ArchiveError
+
+        try:
+            with open_archive("my_data.zip", pwd="secret") as archive:
+                print(f"Members: {archive.get_members()}")
+                # Further operations with the archive
+        except FileNotFoundError:
+            print("Error: Archive file not found.")
+        except ArchiveError as e:
+            print(f"An archive error occurred: {e}")
+        ```
     """
     if pwd is not None and not isinstance(pwd, (str, bytes)):
         raise TypeError("Password must be a string or bytes")
 
     stream, path = _normalize_path_or_stream(path_or_stream)
 
-    wrapper: RecordableStream | None = None
+    recordable_stream: RecordableStream | None = None
     if stream is not None:
         assert not stream.closed
         # Many reader libraries expect the stream's read() method to return the
@@ -126,9 +128,8 @@ def open_archive(
         stream = ensure_bufferedio(stream)
 
         if not is_seekable(stream):
-            original_stream = stream
-            wrapper = RecordableStream(stream)
-            stream = wrapper
+            recordable_stream = RecordableStream(stream)
+            stream = recordable_stream
 
     if stream is None:
         assert path is not None
@@ -140,9 +141,8 @@ def open_archive(
     if stream is not None:
         assert not stream.closed
 
-    if wrapper is not None:
-        recorded_data = wrapper.get_all_data()
-        stream = ConcatenationStream([io.BytesIO(recorded_data), original_stream])
+    if recordable_stream is not None:
+        stream = recordable_stream.get_complete_stream()
 
     if format == ArchiveFormat.UNKNOWN:
         raise ArchiveNotSupportedError(

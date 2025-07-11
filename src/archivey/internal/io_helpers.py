@@ -256,6 +256,7 @@ def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
 
 StreamT = TypeVar("StreamT", bound=BinaryStreamLike)
 
+
 class NonClosingBufferedReader(io.BufferedReader):
     def close(self) -> None:
         self.detach()
@@ -630,6 +631,55 @@ class StatsIO(io.RawIOBase, BinaryIO):
         return getattr(self._inner, item)
 
 
+class ConcatenationStream(io.RawIOBase, BinaryIO):
+    """Concatenate multiple streams sequentially."""
+
+    def __init__(self, streams: list[ReadableStreamLikeOrSimilar]):
+        super().__init__()
+        self._streams = streams
+        self._index = 0
+
+    # Basic IO methods -------------------------------------------------
+    def read(self, n: int = -1) -> bytes:
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+
+        if n == -1:
+            return b"".join(stream.read() for stream in self._streams)
+
+        while self._index < len(self._streams):
+            data = self._streams[self._index].read(n)
+            if data:
+                return data
+            self._index += 1
+
+        # All streams are exhausted.
+        return b""
+
+    def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
+        data = self.read(len(b))
+        n = len(data)
+        b[:n] = data
+        return n
+
+    # Properties -------------------------------------------------------
+    def readable(self) -> bool:  # pragma: no cover - trivial
+        return True
+
+    def writable(self) -> bool:  # pragma: no cover - trivial
+        return False
+
+    def seekable(self) -> bool:  # pragma: no cover - trivial
+        return False
+
+    def fileno(self) -> int:  # pragma: no cover - simple
+        raise OSError("fileno")
+
+    # Control methods --------------------------------------------------
+    def close(self) -> None:  # pragma: no cover - simple delegation
+        super().close()
+
+
 class RecordableStream(io.RawIOBase, BinaryIO):
     """Wrap a stream, caching all data read from it."""
 
@@ -642,6 +692,17 @@ class RecordableStream(io.RawIOBase, BinaryIO):
     def get_all_data(self) -> bytes:
         """Return all data read so far."""
         return bytes(self._buffer)
+
+    def get_complete_stream(self) -> ConcatenationStream:
+        """Return a stream that will provide all the data in the original stream,
+        including any data read so far.
+
+        Calling this method closes this stream, to prevent messing up the contents of
+        the concatenated stream.
+        """
+        concatenation = ConcatenationStream([io.BytesIO(self._buffer), self._inner])
+        self.close()
+        return concatenation
 
     # Basic IO methods -------------------------------------------------
     def read(self, n: int = -1) -> bytes:
@@ -718,55 +779,5 @@ class RecordableStream(io.RawIOBase, BinaryIO):
 
     # Control methods --------------------------------------------------
     def close(self) -> None:  # pragma: no cover - simple delegation
-        if hasattr(self._inner, "close"):
-            self._inner.close()  # type: ignore
-        super().close()
-
-
-class ConcatenationStream(io.RawIOBase, BinaryIO):
-    """Concatenate multiple streams sequentially."""
-
-    def __init__(self, streams: list[ReadableStreamLikeOrSimilar]):
-        super().__init__()
-        self._streams = streams
-        self._index = 0
-
-    # Basic IO methods -------------------------------------------------
-    def read(self, n: int = -1) -> bytes:
-        if self.closed:
-            raise ValueError("I/O operation on closed file.")
-
-        if n == -1:
-            return b"".join(stream.read() for stream in self._streams)
-
-        while self._index < len(self._streams):
-            data = self._streams[self._index].read(n)
-            if data:
-                return data
-            self._index += 1
-
-        # All streams are exhausted.
-        return b""
-
-    def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
-        data = self.read(len(b))
-        n = len(data)
-        b[:n] = data
-        return n
-
-    # Properties -------------------------------------------------------
-    def readable(self) -> bool:  # pragma: no cover - trivial
-        return True
-
-    def writable(self) -> bool:  # pragma: no cover - trivial
-        return False
-
-    def seekable(self) -> bool:  # pragma: no cover - trivial
-        return False
-
-    def fileno(self) -> int:  # pragma: no cover - simple
-        raise OSError("fileno")
-
-    # Control methods --------------------------------------------------
-    def close(self) -> None:  # pragma: no cover - simple delegation
+        # Do not close the underlying stream, as it may be used by other code.
         super().close()
