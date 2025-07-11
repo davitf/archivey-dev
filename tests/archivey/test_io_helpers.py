@@ -13,6 +13,7 @@ from archivey.internal.io_helpers import (
     ensure_binaryio,
     ensure_bufferedio,
     is_stream,
+    read_exact,
 )
 from tests.archivey.test_open_nonseekable import NonSeekableBytesIO
 
@@ -152,6 +153,19 @@ def test_concatenation_stream_with_buffering():
     assert buffered.read(1) == b"a"
     assert buffered.read(4) == b"bcde"  # Start reading from the second stream
     assert buffered.read() == b""
+
+
+def test_concatenation_stream_composition():
+    stream = ConcatenationStream(
+        [io.BytesIO(b"01234"), io.BytesIO(b"56789"), io.BytesIO(b"abcdef")]
+    )
+    assert not stream.seekable()
+    some_data = read_exact(stream, 7)
+    assert some_data == b"0123456"
+
+    second_stream = ConcatenationStream([io.BytesIO(b"foo"), stream])
+    # The data read from the second stream should start from its current position.
+    assert second_stream.read() == b"foo789abcdef"
 
 
 class OnlyReadStream:

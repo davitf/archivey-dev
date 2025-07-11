@@ -6,12 +6,13 @@ from datetime import datetime, timezone
 from typing import BinaryIO, Iterator, List
 
 from archivey.exceptions import (
-    ArchiveFormatError,
+    ArchiveCorruptedError,
 )
 from archivey.formats.compressed_streams import open_stream
 from archivey.formats.format_detection import EXTENSION_TO_FORMAT
 from archivey.internal.base_reader import BaseArchiveReader
 from archivey.internal.io_helpers import read_exact
+from archivey.internal.utils import open_if_file
 from archivey.types import (
     SINGLE_FILE_COMPRESSED_FORMATS,
     ArchiveFormat,
@@ -24,7 +25,7 @@ from archivey.types import (
 logger = logging.getLogger(__name__)
 
 
-def _read_null_terminated_bytes(f: io.BufferedReader) -> bytes:
+def _read_null_terminated_bytes(f: BinaryIO) -> bytes:
     str_bytes = bytearray()
     while True:
         b = f.read(1)
@@ -35,7 +36,7 @@ def _read_null_terminated_bytes(f: io.BufferedReader) -> bytes:
 
 
 def read_gzip_metadata(
-    path: str, member: ArchiveMember, use_stored_metadata: bool = False
+    path: str | BinaryIO, member: ArchiveMember, use_stored_metadata: bool = False
 ):
     """
     Extract metadata from a .gz file without decompressing and update the ArchiveMember:
@@ -51,11 +52,11 @@ def read_gzip_metadata(
 
     extra_fields = {}
 
-    with open(path, "rb") as f:
+    with open_if_file(path) as f:
         # Read the fixed 10-byte GZIP header
         header = read_exact(f, 10)
         if len(header) != 10 or header[:2] != b"\x1f\x8b":
-            raise ArchiveFormatError("Not a valid GZIP file")
+            raise ArchiveCorruptedError("Not a valid GZIP file")
 
         # Parse header fields
         id1, id2, cm, flg, mtime_timestamp, xfl, os = struct.unpack("<4BIBB", header)
@@ -111,10 +112,17 @@ def read_gzip_metadata(
             member.extra.update(extra_fields)
 
         # Now seek to trailer and read CRC32 and ISIZE
-        f.seek(-8, 2)
-        crc32, isize = struct.unpack("<II", read_exact(f, 8))
-        member.crc32 = crc32
-        member.file_size = isize
+        try:
+            f.seek(-8, 2)
+            crc32, isize = struct.unpack("<II", read_exact(f, 8))
+            member.crc32 = crc32
+            member.file_size = isize
+        except io.UnsupportedOperation:
+            # Stream not seekable or not seekable to end
+            logger.info(
+                "Stream not seekable to end when reading GZIP metadata: %s", path
+            )
+            pass
 
 
 def _read_xz_multibyte_integer(data: bytes, offset: int) -> tuple[int, int]:
@@ -138,10 +146,15 @@ XZ_MAGIC_FOOTER = b"YZ"
 XZ_STREAM_HEADER_MAGIC = b"\xfd7zXZ\x00"
 
 
-def read_xz_metadata(path: str, member: ArchiveMember):
+def read_xz_metadata(path: str | BinaryIO, member: ArchiveMember):
     logger.info("Reading XZ metadata for %s", path)
-    with open(path, "rb") as f:
-        f.seek(-12, 2)  # Footer is always 12 bytes
+    with open_if_file(path) as f:
+        try:
+            f.seek(-12, 2)  # Footer is always 12 bytes
+        except io.UnsupportedOperation:
+            # Stream not seekable or not seekable to end
+            return
+
         footer = read_exact(f, 12)
 
         if footer[-2:] != XZ_MAGIC_FOOTER:

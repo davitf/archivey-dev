@@ -92,14 +92,16 @@ def open_archive(
         An ArchiveReader instance suitable for the detected archive format.
 
     Raises:
-        FileNotFoundError: If the `archive_path` does not exist.
+        FileNotFoundError: If `path_or_stream` points to a non-existent file.
         ArchiveNotSupportedError: If the archive format is not supported or cannot
             be determined.
-        ArchiveCorruptedError: If the archive is detected as corrupted during opening
-            (some checks are format-specific).
+        ArchiveCorruptedError: If the archive is detected as corrupted during opening.
         ArchiveEncryptedError: If the archive is encrypted and no password is provided,
-            or if the provided password is incorrect.
-        TypeError: If `archive_path` or `pwd` have an invalid type.
+            or if the provided password is incorrect. This will only be raised here
+            if the archive header is encrypted; otherwise, the incorrect password
+            may only be detected when attempting to read an encrypted member.
+
+        TypeError: If `path_or_stream` or `pwd` have an invalid type.
 
     Example:
         ```python
@@ -117,6 +119,9 @@ def open_archive(
     """
     if pwd is not None and not isinstance(pwd, (str, bytes)):
         raise TypeError("Password must be a string or bytes")
+
+    stream: BinaryIO | io.BufferedIOBase | None
+    path: str | None
 
     stream, path = _normalize_path_or_stream(path_or_stream)
 
@@ -177,7 +182,24 @@ def open_compressed_stream(
     *,
     config: ArchiveyConfig | None = None,
 ) -> BinaryIO:
-    """Open a single-file compressed stream and return the uncompressed stream."""
+    """Open a single-file compressed stream and return the uncompressed stream.
+
+    Args:
+        path_or_stream: Path to the compressed file (e.g., "my_data.gz", "data.bz2")
+        or a binary file object containing the compressed data.
+        config: Optional ArchiveyConfig object to customize behavior. If None,
+            default configuration is used.
+
+    Returns:
+        A binary file object containing the uncompressed data.
+
+    Raises:
+        FileNotFoundError: If `path_or_stream` points to a non-existent file.
+        ArchiveNotSupportedError: If the archive format is not supported or cannot
+            be determined.
+        ArchiveCorruptedError: If the archive is detected as corrupted during opening
+            (some checks are format-specific).
+    """
 
     stream, path = _normalize_path_or_stream(path_or_stream)
 

@@ -3,7 +3,11 @@ Utility functions for archivey.
 """
 
 import logging
-from typing import TypeVar, overload
+import os
+from contextlib import contextmanager
+from typing import BinaryIO, Iterator, TypeVar, overload
+
+from archivey.internal.io_helpers import is_filename, is_stream
 
 
 @overload
@@ -70,3 +74,16 @@ def ensure_not_none(x: T | None) -> T:
     if x is None:
         raise ValueError("Expected non-None value")
     return x
+
+
+@contextmanager
+def open_if_file(
+    path_or_stream: str | bytes | os.PathLike | BinaryIO,
+) -> Iterator[BinaryIO]:
+    if is_stream(path_or_stream):
+        yield path_or_stream
+    elif is_filename(path_or_stream):
+        with open(path_or_stream, "rb") as f:
+            yield f
+    else:
+        raise ValueError(f"Expected a filename or stream, got {type(path_or_stream)}")
