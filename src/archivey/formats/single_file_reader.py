@@ -276,7 +276,9 @@ class SingleFileReader(BaseArchiveReader):
         # Open the file to see if it's supported by the library and valid.
         # To avoid opening the file twice, we'll store the reference and return it
         # on the first open() call.
-        self.fileobj = open_stream(self.format, self.path_or_stream, self.config)
+        self.fileobj: BinaryIO | None = open_stream(
+            self.format, self.path_or_stream, self.config
+        )
 
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         yield self.member

@@ -56,6 +56,10 @@ def bytes_to_str(b: None) -> None: ...
 def bytes_to_str(b: str | bytes) -> str: ...
 
 
+@overload
+def bytes_to_str(b: str | bytes | None) -> str | None: ...
+
+
 def bytes_to_str(b: str | bytes | None) -> str | None:
     if b is None or isinstance(b, str):
         return b

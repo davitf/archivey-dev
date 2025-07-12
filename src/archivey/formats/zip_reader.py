@@ -129,7 +129,7 @@ class ZipReader(BaseArchiveReader):
             # The typeshed definition of ZipFile is incorrect, it should allow byte streams.
             return zipfile.ZipFile(archive_path, "r")  # type: ignore
 
-        self._archive = run_with_exception_translation(
+        self._archive: zipfile.ZipFile | None = run_with_exception_translation(
             _open_zip,
             self._exception_translator,
             archive_path=str(archive_path),

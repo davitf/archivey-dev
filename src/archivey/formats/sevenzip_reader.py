@@ -12,6 +12,7 @@ from typing import (
     TYPE_CHECKING,
     BinaryIO,
     Callable,
+    Collection,
     Iterator,
     Optional,
     Union,
@@ -138,9 +139,9 @@ class StreamingFile(BasePy7zIOWriter):
             self._buffer = self._buffer[size:]
             return bytes(data)
 
-        def readinto(self, b: bytearray) -> int:
-            data = self.read(len(b))
-            b[: len(data)] = data
+        def readinto(self, buffer: bytearray) -> int:
+            data = self.read(len(buffer))
+            buffer[: len(data)] = data
             return len(data)
 
         def close(self):
@@ -182,14 +183,14 @@ class StreamingFile(BasePy7zIOWriter):
         self._started = False
         self._closed = False
 
-    def write(self, b: Union[bytes, bytearray]) -> int:
+    def write(self, s: Union[bytes, bytearray]) -> int:
         if not self._started:
             self._started = True
             self._files_queue.put((self._fname, self._reader))
         if not self._reader_alive:
             return 0
-        self._data_queue.put(b)
-        return len(b)
+        self._data_queue.put(s)
+        return len(s)
 
     def close(self):
         if not self._closed:
@@ -201,8 +202,8 @@ class StreamingFactory(WriterFactory):
     def __init__(self, q: Queue, pwd: bytes | str | None = None):
         self._queue = q
 
-    def create(self, fname: str) -> Py7zIO:
-        return StreamingFile(fname, self._queue)
+    def create(self, filename: str) -> Py7zIO:
+        return StreamingFile(filename, self._queue)
 
     def yield_files(self) -> Iterator[tuple[str, BinaryIO]]:
         while True:
@@ -222,9 +223,9 @@ class ExtractFileWriter(BasePy7zIOWriter):
 
         self.file = open(self.full_path, "wb")
 
-    def write(self, b: Union[bytes, bytearray]) -> int:
-        self.file.write(b)
-        return len(b)
+    def write(self, s: Union[bytes, bytearray]) -> int:
+        self.file.write(s)
+        return len(s)
 
     def close(self):
         logger.debug("Closing file writer for %s", self.full_path)
@@ -236,9 +237,9 @@ class ExtractLinkWriter(BasePy7zIOWriter):
         self.data = bytearray()
         self.member = member
 
-    def write(self, b: Union[bytes, bytearray]) -> int:
-        self.data.extend(b)
-        return len(b)
+    def write(self, s: Union[bytes, bytearray]) -> int:
+        self.data.extend(s)
+        return len(s)
 
     def close(self):
         self.member.link_target = self.data.decode("utf-8")
@@ -255,26 +256,26 @@ class ExtractWriterFactory(WriterFactory):
         self.member_id_to_outfile: dict[int, str] = {}
         self.outfiles: set[str] = set()
 
-    def create(self, fname: str) -> Py7zIO:
-        member = self._extract_filename_to_member.get(fname)
+    def create(self, filename: str) -> Py7zIO:
+        member = self._extract_filename_to_member.get(filename)
         if member is None:
-            logger.error("Member %s not found", fname)
+            logger.error("Member %s not found", filename)
             return py7zr.io.NullIO()
         if member.is_link:
-            logger.debug("Extracting link %s", fname)
+            logger.debug("Extracting link %s", filename)
             return ExtractLinkWriter(member)
         if not member.is_file:
-            logger.debug("Ignoring non-file member %s", fname)
+            logger.debug("Ignoring non-file member %s", filename)
             return py7zr.io.NullIO()
 
-        full_path = os.path.join(self._path, fname)
+        full_path = os.path.join(self._path, filename)
         if os.path.lexists(full_path) or full_path in self.outfiles:
             full_path += f"_{member.member_id}"
 
         self.member_id_to_outfile[member.member_id] = full_path
         self.outfiles.add(full_path)
 
-        logger.debug("Creating writer for %s, path=%s", fname, full_path)
+        logger.debug("Creating writer for %s, path=%s", filename, full_path)
         return ExtractFileWriter(full_path)
 
 
@@ -387,7 +388,7 @@ class SevenZipReader(BaseArchiveReader):
         def _open_7z() -> py7zr.SevenZipFile:
             return py7zr.SevenZipFile(archive_path, "r", password=bytes_to_str(pwd))
 
-        self._archive = run_with_exception_translation(
+        self._archive: py7zr.SevenZipFile | None = run_with_exception_translation(
             _open_7z,
             self._exception_translator,
             archive_path=str(archive_path),
@@ -614,7 +615,7 @@ class SevenZipReader(BaseArchiveReader):
 
     def iter_members_with_io(
         self,
-        members: list[str | ArchiveMember]
+        members: Collection[ArchiveMember | str]
         | Callable[[ArchiveMember], bool]
         | None = None,
         *,
@@ -717,16 +718,15 @@ class SevenZipReader(BaseArchiveReader):
 
     def extract(
         self,
-        member: ArchiveMember | str,
-        path: str | None = None,
-        *,
+        member_or_filename: ArchiveMember | str,
+        path: str | os.PathLike | None = None,
         pwd: bytes | str | None = None,
     ) -> str:
         self.check_archive_open()
         assert self._archive is not None
         archive = self._archive
 
-        member_obj = self.get_member(member)
+        member_obj = self.get_member(member_or_filename)
 
         def _do_extract() -> None:
             with self._temporary_password(pwd):
@@ -808,37 +808,3 @@ class SevenZipReader(BaseArchiveReader):
         if py7zr is not None:
             return py7zr.is_7zfile(file)
         return False
-
-
-if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) != 2:
-        print("Usage: python -m archivey.formats.sevenzip_reader <archive_path>")
-        sys.exit(1)
-
-    archive_path = sys.argv[1]
-    with SevenZipReader(archive_path, format=ArchiveFormat.SEVENZIP) as archive:
-        for member in archive.get_members():
-            print(member)
-
-        print()
-        for member, stream in archive.iter_members_with_io():
-            assert isinstance(member.raw_info, ArchiveFile)
-            print(
-                member.member_id,
-                member.filename,
-                member.raw_info.filename,
-                stream.read() if stream is not None else "NO STREAM",
-            )
-
-        print()
-        for member in archive.get_members():
-            assert isinstance(member.raw_info, ArchiveFile)
-            stream = archive.open(member)
-            print(
-                member.member_id,
-                member.filename,
-                member.raw_info.filename,
-                stream.read() if stream is not None else "NO STREAM",
-            )

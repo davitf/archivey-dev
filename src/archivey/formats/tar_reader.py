@@ -85,10 +85,9 @@ class TarReader(BaseArchiveReader):
         )
 
         if format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
-            self.compression_method = TAR_FORMAT_TO_COMPRESSION_FORMAT[format]
-            self._fileobj = open_stream(
-                self.compression_method, archive_path, self.config
-            )
+            compression_format = TAR_FORMAT_TO_COMPRESSION_FORMAT[format]
+            self.compression_method = str(compression_format)
+            self._fileobj = open_stream(compression_format, archive_path, self.config)
             self._close_fileobj = True
             logger.debug(
                 "Compressed tar opened: %s seekable=%s",
@@ -123,7 +122,7 @@ class TarReader(BaseArchiveReader):
                 errorlevel=2,
             )
 
-        self._archive = run_with_exception_translation(
+        self._archive: tarfile.TarFile | None = run_with_exception_translation(
             _open_tar,
             self._exception_translator,
             archive_path=str(archive_path),
