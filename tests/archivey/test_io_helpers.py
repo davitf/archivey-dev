@@ -13,7 +13,6 @@ from archivey.internal.io_helpers import (
     SlicingStream,
     ensure_binaryio,
     ensure_bufferedio,
-    is_seekable,
     is_stream,
     read_exact,
 )
@@ -31,40 +30,40 @@ class TestSlicingStream:
         sliced = SlicingStream(underlying, start=5, length=10)
         assert sliced.read(3) == b"567"
         assert sliced.tell() == 3
-        assert sliced.read() == b"89abcde" # Reads remaining 7 bytes of the slice
+        assert sliced.read() == b"89abcde"  # Reads remaining 7 bytes of the slice
         assert sliced.tell() == 10
-        assert sliced.read(5) == b"" # No more data in slice
-        assert underlying.tell() == 15 # Underlying stream is at end of slice
+        assert sliced.read(5) == b""  # No more data in slice
+        assert underlying.tell() == 15  # Underlying stream is at end of slice
 
     def test_read_seekable_with_start_only(self):
         """Read from a seekable stream with only start specified (reads to end)."""
         underlying = io.BytesIO(self.DATA)
-        underlying.seek(3) # Initial position of underlying stream
+        underlying.seek(3)  # Initial position of underlying stream
         # Slice from index 10 to the end of the underlying stream
         sliced = SlicingStream(underlying, start=10)
         assert sliced.read(5) == self.DATA[10:15]
         assert sliced.tell() == 5
         assert sliced.read() == self.DATA[15:]
         assert sliced.tell() == len(self.DATA) - 10
-        assert underlying.tell() == len(self.DATA) # Underlying stream at its end
+        assert underlying.tell() == len(self.DATA)  # Underlying stream at its end
 
     def test_read_seekable_with_length_only(self):
         """Read from a seekable stream with only length specified (from current pos)."""
         underlying = io.BytesIO(self.DATA)
-        underlying.seek(7) # Underlying stream starts at index 7
+        underlying.seek(7)  # Underlying stream starts at index 7
         # Slice from current position (7), length 10
         sliced = SlicingStream(underlying, length=10)
         assert sliced.read(4) == self.DATA[7:11]
         assert sliced.tell() == 4
         assert sliced.read() == self.DATA[11:17]
         assert sliced.tell() == 10
-        assert underlying.tell() == 17 # Underlying stream is at end of slice
+        assert underlying.tell() == 17  # Underlying stream is at end of slice
 
     def test_read_seekable_no_start_no_length(self):
         """Read from a seekable stream, no start/length (from current to end)."""
         underlying = io.BytesIO(self.DATA)
-        underlying.seek(20) # Underlying stream starts at index 20
-        sliced = SlicingStream(underlying) # Slice from 20 to end
+        underlying.seek(20)  # Underlying stream starts at index 20
+        sliced = SlicingStream(underlying)  # Slice from 20 to end
         assert sliced.read(5) == self.DATA[20:25]
         assert sliced.tell() == 5
         assert sliced.read() == self.DATA[25:]
@@ -79,9 +78,9 @@ class TestSlicingStream:
         assert sliced.tell() == 5
         assert sliced.read(5) == self.DATA[5:10]
         assert sliced.tell() == 10
-        assert sliced.read() == self.DATA[10:15] # Reads remaining 5
+        assert sliced.read() == self.DATA[10:15]  # Reads remaining 5
         assert sliced.tell() == 15
-        assert sliced.read(1) == b"" # No more data in slice
+        assert sliced.read(1) == b""  # No more data in slice
 
     def test_read_non_seekable_no_length(self):
         """Read from a non-seekable stream with no length (reads all)."""
@@ -101,25 +100,25 @@ class TestSlicingStream:
         # SEEK_SET
         assert sliced.seek(3) == 3
         assert sliced.tell() == 3
-        assert sliced.read(2) == self.DATA[13:15] # Reads b"de"
+        assert sliced.read(2) == self.DATA[13:15]  # Reads b"de"
         assert sliced.tell() == 5
 
         # SEEK_CUR
-        assert sliced.seek(-2, io.SEEK_CUR) == 3 # Back to relative pos 3
+        assert sliced.seek(-2, io.SEEK_CUR) == 3  # Back to relative pos 3
         assert sliced.tell() == 3
-        assert sliced.read(4) == self.DATA[13:17] # Reads b"defg"
+        assert sliced.read(4) == self.DATA[13:17]  # Reads b"defg"
         assert sliced.tell() == 7
 
         # SEEK_END
-        assert sliced.seek(-1, io.SEEK_END) == 9 # 1 before end of slice (10 - 1)
+        assert sliced.seek(-1, io.SEEK_END) == 9  # 1 before end of slice (10 - 1)
         assert sliced.tell() == 9
-        assert sliced.read(5) == self.DATA[19:20] # Reads b"j" (only 1 byte left)
+        assert sliced.read(5) == self.DATA[19:20]  # Reads b"j" (only 1 byte left)
         assert sliced.tell() == 10
 
         # Seek past end of slice
         assert sliced.seek(100) == 100
         assert sliced.tell() == 100
-        assert sliced.read(1) == b"" # Reads nothing
+        assert sliced.read(1) == b""  # Reads nothing
 
         # Seek before start of slice
         with pytest.raises(ValueError, match="Negative seek position"):
@@ -129,7 +128,9 @@ class TestSlicingStream:
         """Seeking on a SlicingStream wrapping a non-seekable stream should fail."""
         underlying = NonSeekableBytesIO(self.DATA)
         sliced = SlicingStream(underlying, length=10)
-        with pytest.raises(io.UnsupportedOperation, match="seek on non-seekable stream"):
+        with pytest.raises(
+            io.UnsupportedOperation, match="seek on non-seekable stream"
+        ):
             sliced.seek(5)
 
     def test_tell_initial_and_after_read(self):
@@ -159,10 +160,10 @@ class TestSlicingStream:
 
     def test_edge_case_slice_larger_than_stream_seekable(self):
         """Slice length exceeds underlying seekable stream."""
-        underlying = io.BytesIO(self.DATA[:10]) # Underlying data is "0123456789"
+        underlying = io.BytesIO(self.DATA[:10])  # Underlying data is "0123456789"
         # Try to slice 20 bytes starting from 0
         sliced = SlicingStream(underlying, start=0, length=20)
-        assert sliced.read() == self.DATA[:10] # Reads only available 10 bytes
+        assert sliced.read() == self.DATA[:10]  # Reads only available 10 bytes
         assert sliced.tell() == 10
         assert sliced.read(5) == b""
 
@@ -183,43 +184,53 @@ class TestSlicingStream:
     def test_non_seekable_start_is_none_enforced(self):
         """Ensure ValueError if start is given for non-seekable stream."""
         underlying = NonSeekableBytesIO(self.DATA)
-        with pytest.raises(ValueError, match="Cannot slice a non-seekable stream with a start position"):
+        with pytest.raises(
+            ValueError, match="Cannot slice a non-seekable stream with a start position"
+        ):
             SlicingStream(underlying, start=5, length=10)
 
     def test_seek_end_no_length_seekable(self):
         """Test SEEK_END when length is None for a seekable stream slice."""
-        underlying = io.BytesIO(self.DATA) # Length 36
-        sliced = SlicingStream(underlying, start=10) # Slice from 10 to end (length 26)
+        underlying = io.BytesIO(self.DATA)  # Length 36
+        sliced = SlicingStream(underlying, start=10)  # Slice from 10 to end (length 26)
 
         # Seek to the end of the slice (which is end of underlying stream)
         # underlying.seek(0, io.SEEK_END) gives 36.
         # start_abs is 10. So relative end is 36 - 10 = 26.
         assert sliced.seek(0, io.SEEK_END) == 26
         assert sliced.tell() == 26
-        assert sliced.read(1) == b"" # At the end
+        assert sliced.read(1) == b""  # At the end
 
         # Seeking with non-zero offset from SEEK_END when length is None is unsupported
-        with pytest.raises(io.UnsupportedOperation, match="SEEK_END is not supported when slice length is not defined and offset is non-zero"):
+        with pytest.raises(
+            io.UnsupportedOperation,
+            match="SEEK_END is not supported when slice length is not defined and offset is non-zero",
+        ):
             sliced.seek(-5, io.SEEK_END)
 
-        with pytest.raises(io.UnsupportedOperation, match="SEEK_END is not supported when slice length is not defined and offset is non-zero"):
+        with pytest.raises(
+            io.UnsupportedOperation,
+            match="SEEK_END is not supported when slice length is not defined and offset is non-zero",
+        ):
             sliced.seek(5, io.SEEK_END)
 
         # However, seeking to current position should still work if we manually go there
         # This part of the test verifies that after a SEEK_END with offset 0,
         # the stream is still usable for other seek operations like SEEK_SET.
-        underlying.seek(0) # Reset underlying stream for clarity for this part
-        sliced_2 = SlicingStream(underlying, start=10) # New slice from 10 to end
-        end_pos_of_slice = sliced_2.seek(0, io.SEEK_END) # Should be 26
+        underlying.seek(0)  # Reset underlying stream for clarity for this part
+        sliced_2 = SlicingStream(underlying, start=10)  # New slice from 10 to end
+        end_pos_of_slice = sliced_2.seek(0, io.SEEK_END)  # Should be 26
         assert end_pos_of_slice == len(self.DATA) - 10
 
         # Now seek to a position relative to start
-        target_relative_pos = end_pos_of_slice - 5 # Target: 21
+        target_relative_pos = end_pos_of_slice - 5  # Target: 21
         assert sliced_2.seek(target_relative_pos, io.SEEK_SET) == target_relative_pos
         assert sliced_2.tell() == target_relative_pos
-        assert sliced_2.read(2) == self.DATA[10 + target_relative_pos : 10 + target_relative_pos + 2]
+        assert (
+            sliced_2.read(2)
+            == self.DATA[10 + target_relative_pos : 10 + target_relative_pos + 2]
+        )
         assert sliced_2.tell() == target_relative_pos + 2
-
 
     def test_seek_end_no_length_non_zero_offset_error_in_seek(self):
         """
@@ -228,12 +239,18 @@ class TestSlicingStream:
         This is based on the current implementation of SlicingStream.seek().
         """
         underlying = io.BytesIO(self.DATA)
-        sliced = SlicingStream(underlying, start=5) # Length is None
+        sliced = SlicingStream(underlying, start=5)  # Length is None
 
         # This should fail as per SlicingStream.seek() logic
-        with pytest.raises(io.UnsupportedOperation, match="SEEK_END is not supported when slice length is not defined and offset is non-zero"):
+        with pytest.raises(
+            io.UnsupportedOperation,
+            match="SEEK_END is not supported when slice length is not defined and offset is non-zero",
+        ):
             sliced.seek(1, io.SEEK_END)
-        with pytest.raises(io.UnsupportedOperation, match="SEEK_END is not supported when slice length is not defined and offset is non-zero"):
+        with pytest.raises(
+            io.UnsupportedOperation,
+            match="SEEK_END is not supported when slice length is not defined and offset is non-zero",
+        ):
             sliced.seek(-1, io.SEEK_END)
 
 

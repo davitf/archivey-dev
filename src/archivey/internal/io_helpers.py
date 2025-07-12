@@ -3,23 +3,22 @@
 import io
 import logging
 import os
+from contextlib import contextmanager  # Added for open_if_file
 from dataclasses import dataclass, field
 from typing import (
     IO,
     Any,
     BinaryIO,
     Callable,
+    Iterator,  # Added for open_if_file
     NoReturn,
     Optional,
     Protocol,
     TypeGuard,
     TypeVar,
     Union,
-    Iterator, # Added for open_if_file
-    overload, # Added for open_if_file
-    runtime_checkable, # For WritableBinaryStream and CloseableStream
+    runtime_checkable,  # For WritableBinaryStream and CloseableStream
 )
-from contextlib import contextmanager # Added for open_if_file
 
 from archivey.exceptions import ArchiveError
 from archivey.internal.utils import ensure_not_none
@@ -44,7 +43,9 @@ BinaryStreamLike = Union[ReadableBinaryStream, WritableBinaryStream]
 # ReadableStreamLikeOrSimilar is imported from archivey.types
 
 
-def read_exact(stream: ReadableBinaryStream, n: int) -> bytes: # Uses ReadableBinaryStream from types
+def read_exact(
+    stream: ReadableBinaryStream, n: int
+) -> bytes:  # Uses ReadableBinaryStream from types
     """Read exactly ``n`` bytes, or all available bytes if the file ends."""
 
     if n < 0:
@@ -953,7 +954,7 @@ class SlicingStream(io.RawIOBase, BinaryIO):
                     # relative to our start, which can act as an unbounded length.
                     # We don't set self._length here, but it informs the possible _pos.
                     underlying_end = self._stream.seek(0, io.SEEK_END)
-                    self._stream.seek(current_abs_pos_in_stream) # restore position
+                    self._stream.seek(current_abs_pos_in_stream)  # restore position
                     new_relative_pos = underlying_end - start_abs + offset
 
                 else:
@@ -974,7 +975,6 @@ class SlicingStream(io.RawIOBase, BinaryIO):
             # Allow seeking past the defined end, but reads will be clamped.
             # This matches behavior of io.BytesIO.
             pass
-
 
         # Calculate the new absolute position in the underlying stream
         new_abs_pos_in_stream = start_abs + new_relative_pos

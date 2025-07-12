@@ -3,10 +3,9 @@ Utility functions for archivey.
 """
 
 import logging
-import os
+
 # contextmanager, BinaryIO, Iterator, overload were for open_if_file, no longer needed here
 from typing import TypeVar, overload
-
 
 # ensure_binaryio, is_filename, is_stream, ReadableStreamLikeOrSimilar
 # were for open_if_file, no longer needed here.

@@ -8,9 +8,10 @@ from archivey.config import get_archivey_config
 from archivey.internal.io_helpers import (
     ReadableStreamLikeOrSimilar,
     is_seekable,
+    open_if_file,  # Moved from utils
     read_exact,
-    open_if_file, # Moved from utils
 )
+
 # from archivey.internal.utils import open_if_file # Removed
 from archivey.types import (
     COMPRESSION_FORMAT_TO_TAR_FORMAT,
