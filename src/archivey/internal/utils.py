@@ -3,15 +3,7 @@ Utility functions for archivey.
 """
 
 import logging
-
-# contextmanager, BinaryIO, Iterator, overload were for open_if_file, no longer needed here
 from typing import TypeVar, overload
-
-# ensure_binaryio, is_filename, is_stream, ReadableStreamLikeOrSimilar
-# were for open_if_file, no longer needed here.
-
-# ensure_not_none is still used by io_helpers, so io_helpers will import utils.
-# utils no longer imports io_helpers.
 
 
 @overload

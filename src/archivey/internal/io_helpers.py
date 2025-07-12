@@ -10,14 +10,14 @@ from typing import (
     Any,
     BinaryIO,
     Callable,
-    Iterator,  # Added for open_if_file
+    Iterator,
     NoReturn,
     Optional,
     Protocol,
     TypeGuard,
     TypeVar,
     Union,
-    runtime_checkable,  # For WritableBinaryStream and CloseableStream
+    runtime_checkable,
 )
 
 from archivey.exceptions import ArchiveError
@@ -992,6 +992,16 @@ class SlicingStream(io.RawIOBase, BinaryIO):
 
     def seekable(self) -> bool:
         return self._seekable
+
+
+def fix_stream_start_position(stream: BinaryIO) -> BinaryIO:
+    if not is_seekable(stream):
+        return stream
+    start_pos = stream.tell()
+    if start_pos == 0:
+        return stream
+
+    return SlicingStream(stream, start=start_pos)
 
 
 @contextmanager
