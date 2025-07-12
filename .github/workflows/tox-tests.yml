@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.13t", "3.14-beta", "3.14t-beta"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.13t", "3.14", "3.14t"]
 
     steps:
       - name: Check out code
@@ -32,9 +32,9 @@ jobs:
 
       - name: Run tox environment
         run: |
-          if [[ "${{ matrix.python-version }}" == "3.14-beta" ]]; then
+          if [[ "${{ matrix.python-version }}" == "3.14" ]]; then
             tox -e py3.14beta-alldeps
-          elif [[ "${{ matrix.python-version }}" == "3.14t-beta" ]]; then
+          elif [[ "${{ matrix.python-version }}" == "3.14t" ]]; then
             tox -e py3.14tbeta-alldeps
           else
             tox -e py${{ matrix.python-version }}-alldeps
