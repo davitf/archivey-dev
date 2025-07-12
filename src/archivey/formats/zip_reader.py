@@ -202,7 +202,7 @@ class ZipReader(BaseArchiveReader):
     def _open_member(
         self,
         member: ArchiveMember,
-        pwd: Optional[bytes | str],
+        pwd: str | bytes | None,
         for_iteration: bool,
     ) -> BinaryIO:
         assert self._archive is not None

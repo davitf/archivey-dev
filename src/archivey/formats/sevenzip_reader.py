@@ -515,9 +515,8 @@ class SevenZipReader(BaseArchiveReader):
     def _open_member(
         self,
         member: ArchiveMember,
-        *,
-        pwd: str | None = None,
-        for_iteration: bool = False,
+        pwd: str | bytes | None,
+        for_iteration: bool,
     ) -> BinaryIO:
         assert self._archive is not None
 

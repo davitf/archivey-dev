@@ -142,9 +142,8 @@ class FolderReader(BaseArchiveReader):
     def _open_member(
         self,
         member: ArchiveMember,
-        *,
-        pwd: str | bytes | None = None,
-        for_iteration: bool = False,
+        pwd: str | bytes | None,
+        for_iteration: bool,
     ) -> BinaryIO:
         assert member.type == MemberType.FILE
 

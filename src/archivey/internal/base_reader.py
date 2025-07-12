@@ -494,9 +494,8 @@ class BaseArchiveReader(ArchiveReader):
     def _open_member(
         self,
         member: ArchiveMember,
-        *,
-        pwd: bytes | str | None = None,
-        for_iteration: bool = False,
+        pwd: bytes | str | None,
+        for_iteration: bool,
     ) -> BinaryIO:
         """
         Open the given archive member and return a readable binary stream.

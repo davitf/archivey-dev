@@ -302,9 +302,8 @@ class SingleFileReader(BaseArchiveReader):
     def _open_member(
         self,
         member: ArchiveMember,
-        *,
-        pwd: bytes | None = None,
-        for_iteration: bool = False,
+        pwd: str | bytes | None,
+        for_iteration: bool,
     ) -> BinaryIO:
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
