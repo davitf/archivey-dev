@@ -1,9 +1,9 @@
 import os
+import pathlib
 from venv import logger
 
 import pytest
 
-from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -14,29 +14,42 @@ from archivey.types import (
     ArchiveFormat,
 )
 from tests.archivey.sample_archives import (
+    ALTERNATIVE_CONFIG,
+    ALTERNATIVE_PACKAGES_FORMATS,
     SAMPLE_ARCHIVES,
     SampleArchive,
     filter_archives,
 )
 from tests.archivey.testing_utils import skip_if_package_missing
+from tests.create_corrupted_archives import corrupt_archive
 
-_ALTERNATIVE_CONFIG = ArchiveyConfig(
-    use_rapidgzip=True,
-    use_indexed_bzip2=True,
-    use_python_xz=True,
-    use_zstandard=True,
-)
 
-_ALTERNATIVE_PACKAGES_FORMATS = (
-    ArchiveFormat.GZIP,
-    ArchiveFormat.BZIP2,
-    ArchiveFormat.XZ,
-    ArchiveFormat.ZSTD,
-    ArchiveFormat.TAR_GZ,
-    ArchiveFormat.TAR_BZ2,
-    ArchiveFormat.TAR_XZ,
-    ArchiveFormat.TAR_ZSTD,
-)
+def _prepare_corrupted_archive(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    tmp_path_factory: pytest.TempPathFactory,
+    corruption_type: str,
+) -> pathlib.Path:
+    """Return path to a corrupted version of the sample archive."""
+    path = pathlib.Path(
+        sample_archive.get_archive_path(variant=f"corrupted_{corruption_type}")
+    )
+    if path.exists():
+        return path
+
+    output_dir = tmp_path_factory.mktemp("generated_archives")
+    corrupted_archive_path = output_dir / sample_archive.get_archive_name(
+        variant=f"corrupted_{corruption_type}"
+    )
+    logger.info(
+        f"Creating corrupted archive {corrupted_archive_path} with corruption type {corruption_type}"
+    )
+    corrupt_archive(
+        pathlib.Path(sample_archive_path),
+        corrupted_archive_path,
+        corruption_type=corruption_type,
+    )
+    return corrupted_archive_path
 
 
 @pytest.mark.parametrize(
@@ -47,30 +60,33 @@ _ALTERNATIVE_PACKAGES_FORMATS = (
     ),
     ids=lambda a: a.filename,
 )
+@pytest.mark.parametrize("corruption_type", ["random", "zeroes", "ffs"])
 @pytest.mark.parametrize("read_streams", [True, False], ids=["read", "noread"])
 @pytest.mark.parametrize(
     "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
 )
 def test_read_corrupted_archives(
     sample_archive: SampleArchive,
-    corrupted_archive_path: str,
+    sample_archive_path: str,
+    tmp_path_factory: pytest.TempPathFactory,
     read_streams: bool,
     alternative_packages: bool,
+    corruption_type: str,
 ):
     """Test that reading generally corrupted archives raises ArchiveCorruptedError.
 
     Args:
         sample_archive: The archive to test
-        corrupted_archive_path: Path to the corrupted archive
+        sample_archive_path: Path to the source archive
         corruption_type: Type of corruption applied:
-            - "header": Corruption near the start of the file
-            - "data": Corruption in the middle of the file
-            - "checksum": Corruption near the end of the file
+            - "random": Byte range replaced with random data
+            - "zeroes": Byte range replaced with zeros
+            - "ffs": Byte range replaced with 0xFF
     """
     if alternative_packages:
-        if sample_archive.creation_info.format not in _ALTERNATIVE_PACKAGES_FORMATS:
+        if sample_archive.creation_info.format not in ALTERNATIVE_PACKAGES_FORMATS:
             pytest.skip("No alternative package for this format, no need to test")
-        config = _ALTERNATIVE_CONFIG
+        config = ALTERNATIVE_CONFIG
     else:
         config = None
 
@@ -80,6 +96,16 @@ def test_read_corrupted_archives(
         ArchiveFormat.LZ4,
         ArchiveFormat.TAR,
     ]
+
+    if sample_archive.creation_info.format == ArchiveFormat.FOLDER:
+        pytest.skip("Folder archives cannot be corrupted")
+
+    corrupted_archive_path = _prepare_corrupted_archive(
+        sample_archive,
+        sample_archive_path,
+        tmp_path_factory,
+        corruption_type,
+    )
 
     try:
         found_member_names = []
@@ -114,6 +140,18 @@ def test_read_corrupted_archives(
             member.name: member.contents for member in sample_archive.contents.files
         }
         logger.info(f"{found_member_names=}, expected={expected_member_data.keys()}")
+
+        if (
+            not read_streams
+            and archive.format == ArchiveFormat.BZIP2
+            and sample_archive.creation_info.format == ArchiveFormat.TAR_BZ2
+        ):
+            # In some corrupted archives, bz2 can uncompress the data stream, but it's
+            # not a valid tar format. If we don't actually attempt to read the streams,
+            # we won't detect the corruption.
+            pytest.xfail(
+                "Bzip2 can uncompress the data stream, but it's not a valid tar format."
+            )
 
         # If no error was raised, it likely means that the corruption didn't affect the
         # archive directory or member metadata, so at least all the members should have
@@ -171,11 +209,13 @@ def test_read_truncated_archives(
     alternative_packages: bool,
 ):
     """Test that reading truncated archives raises appropriate errors."""
+    if sample_archive.creation_info.format == ArchiveFormat.FOLDER:
+        pytest.skip("Folder archives cannot be truncated")
 
     if alternative_packages:
-        if sample_archive.creation_info.format not in _ALTERNATIVE_PACKAGES_FORMATS:
+        if sample_archive.creation_info.format not in ALTERNATIVE_PACKAGES_FORMATS:
             pytest.skip("No alternative package for this format, no need to test")
-        config = _ALTERNATIVE_CONFIG
+        config = ALTERNATIVE_CONFIG
     else:
         config = None
 

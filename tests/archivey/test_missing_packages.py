@@ -5,10 +5,10 @@ from unittest.mock import patch
 import pytest
 
 from archivey.core import open_archive
-from archivey.dependency_checker import get_dependency_versions
 from archivey.exceptions import (
     PackageNotInstalledError,
 )
+from archivey.internal.dependency_checker import get_dependency_versions
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     filter_archives,
@@ -79,7 +79,7 @@ def test_missing_package_raises_exception(library_name: str, archive_path: str):
 )
 def test_rarfile_missing_cryptography_raises_exception():
     """Test that LibraryNotInstalledError is raised for header-encrypted .rar when cryptography is not installed."""
-    with patch("archivey.rar_reader.rarfile._have_crypto", 0):
+    with patch("archivey.formats.rar_reader.rarfile._have_crypto", 0):
         with open_archive(
             NORMAL_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
             pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,
@@ -95,7 +95,7 @@ def test_rarfile_missing_cryptography_raises_exception():
 )
 def test_rarfile_missing_cryptography_does_not_raise_exception_for_other_files():
     """Test that LibraryNotInstalledError is NOT raised for non-header-encrypted .rar when cryptography is not installed."""
-    with patch("archivey.rar_reader.rarfile._have_crypto", 0):
+    with patch("archivey.formats.rar_reader.rarfile._have_crypto", 0):
         with open_archive(
             NORMAL_ENCRYPTED_RAR_ARCHIVE.get_archive_path(),
             pwd=NORMAL_ENCRYPTED_RAR_ARCHIVE.contents.header_password,

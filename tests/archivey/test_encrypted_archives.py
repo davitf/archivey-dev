@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 
-from archivey.config import OverwriteMode
 from archivey.core import open_archive
 from archivey.exceptions import ArchiveEncryptedError, ArchiveError
 from archivey.types import ArchiveFormat, MemberType
@@ -150,10 +149,11 @@ def test_extract_with_password(
     dest = tmp_path / "out"
     dest.mkdir()
     encrypted = _first_encrypted_file(sample_archive)
+    # config = get_default_config()
     with open_archive(sample_archive_path) as archive:
         if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
             pytest.skip("py7zr extract password support incomplete")
-        archive.config.overwrite_mode = OverwriteMode.OVERWRITE
+        # archive.config.overwrite_mode = OverwriteMode.OVERWRITE
         path = archive.extract(encrypted.name, dest, pwd=pwd)
     extracted_path = Path(path or dest / encrypted.name)
     with open(extracted_path, "rb") as f:
@@ -196,7 +196,7 @@ def test_extract_wrong_password(
     with open_archive(sample_archive_path) as archive:
         if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
             pytest.skip("py7zr extract password support incomplete")
-        archive.config.overwrite_mode = OverwriteMode.OVERWRITE
+        # archive.config.overwrite_mode = OverwriteMode.OVERWRITE
         with pytest.raises((ArchiveEncryptedError, ArchiveError)):
             archive.extract(encrypted.name, dest, pwd=wrong)
 
@@ -286,3 +286,78 @@ def test_iterator_encryption_with_symlinks_password_in_iterator(
     assert set(members_by_name.keys()) == {
         f.name for f in sample_archive.contents.files
     }
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["encryption_with_symlinks"],
+        extensions=["rar", "7z"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_open_encrypted_symlink(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    sample_files = {f.name: f for f in sample_archive.contents.files}
+
+    files_to_test = [
+        ("encrypted_link_to_secret.txt", "pwd"),
+        ("encrypted_link_to_not_secret.txt", "longpwd"),
+        ("plain_link_to_secret.txt", "pwd"),
+    ]
+    with open_archive(sample_archive_path) as archive:
+        for filename, pwd in files_to_test:
+            data = archive.open(filename, pwd=pwd).read()
+            assert data == sample_files[filename].contents
+
+            # After reading the file, the link target should have been set
+            member = archive.get_member(filename)
+            assert member.link_target == sample_files[filename].link_target
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["encryption_with_symlinks"],
+        extensions=["rar", "7z"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_open_encrypted_symlink_wrong_password(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    symlink_name = "encrypted_link_to_secret.txt"
+
+    with open_archive(sample_archive_path) as archive:
+        with pytest.raises((ArchiveEncryptedError, ArchiveError)):
+            with archive.open(symlink_name, pwd="wrong") as fh:
+                fh.read()
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["encryption_with_symlinks"],
+        extensions=["rar", "7z"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_open_encrypted_symlink_target_wrong_password(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    symlink_name = "encrypted_link_to_very_secret.txt"
+
+    with open_archive(sample_archive_path) as archive:
+        with pytest.raises((ArchiveEncryptedError, ArchiveError)):
+            with archive.open(symlink_name, pwd="pwd") as fh:
+                fh.read()

@@ -4,20 +4,22 @@ import os
 import subprocess
 import zlib
 from datetime import timezone
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import pytest
 
 from archivey.config import ArchiveyConfig
-from archivey.dependency_checker import get_dependency_versions
+from archivey.internal.dependency_checker import get_dependency_versions
 from archivey.types import (
     TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,
     MemberType,
 )
-from tests.archivey.sample_archives import (
-    FileInfo,
-)
+
+if TYPE_CHECKING:
+    from tests.archivey.sample_archives import (
+        FileInfo,
+    )
 
 
 def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):

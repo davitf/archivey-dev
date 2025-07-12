@@ -2,7 +2,7 @@
 
 This project follows a **src layout**. The Python package lives in
 `src/archivey` and tests are under the `tests` directory.  Test archives live in
-`tests/test_archives` and helper scripts are in `tests/create_archives.py`.
+`tests/test_archives` and helper scripts are in `tests/archivey/create_archives.py`.
 
 Tox configurations are provided to run the suite against multiple Python
 versions and dependency sets (`tox -e <env>`).  Continuous integration executes
@@ -35,13 +35,13 @@ uv run --extra optional pytest -k .zip
 ## Updating test files
 
 ```bash
-uv run --extra optional python -m tests.create_archives [file_pattern]
+uv run --extra optional python -m tests.archivey.create_archives [file_pattern]
 ```
 
 E.g. to update only zip archives:
 
 ```bash
-uv run --extra optional python -m tests.create_archives "*.zip"
+uv run --extra optional python -m tests.archivey.create_archives "*.zip"
 ```
 
 If no file_pattern is specified, all the files will be created.
@@ -51,7 +51,7 @@ If no file_pattern is specified, all the files will be created.
 
 - `src/archivey` – implementation modules (readers, CLI, helpers).
 - `tests` – pytest suite.
-  - `archivey` – test utilities and main test file.
+  - `archivey` – conftest, test utilities and main test modules.
   - `test_archives` – sample archives used by the tests.
   - `test_archives_external` – external archives for specific scenarios.
 - `pyproject.toml` – project metadata and tooling configuration.
@@ -71,6 +71,4 @@ along with the file hashes (computed by reading the archive members).
 ## Best practices
 
 - All exceptions raised by libraries should be wrapped in an exception defined in
-`src/archivey/exceptions.py`. NEVER catch `Exception` as it may hide code bugs; catch
-only the base exception of each library, or specific builtin exceptions that they raise.
-
+`src/archivey/exceptions.py`.

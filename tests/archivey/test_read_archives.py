@@ -1,6 +1,7 @@
 import collections
 import logging
 import os
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -8,10 +9,12 @@ import pytest
 
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
-from archivey.dependency_checker import get_dependency_versions
 from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
+from archivey.filters import create_filter
+from archivey.internal.dependency_checker import get_dependency_versions
 from archivey.types import ArchiveMember, CreateSystem, MemberType
 from tests.archivey.sample_archives import (
+    ALTERNATIVE_CONFIG,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
     FileInfo,
@@ -29,6 +32,15 @@ def _has_unicode_non_bmp_chars(s: str) -> bool:
     return any(ord(c) >= 0x10000 for c in s)
 
 
+TESTING_FILTER = create_filter(
+    for_data=False,
+    sanitize_names=False,
+    sanitize_link_targets=False,
+    sanitize_permissions=False,
+    raise_on_error=True,
+)
+
+
 def check_member_metadata(
     member: ArchiveMember,
     sample_file: FileInfo | None,
@@ -37,6 +49,10 @@ def check_member_metadata(
 ):
     if sample_file is None:
         return
+
+    assert member.type == sample_file.type, (
+        f"Member type mismatch for {member.filename}: got {member.type}, expected {sample_file.type}"
+    )
 
     features = sample_archive.creation_info.features
 
@@ -167,8 +183,11 @@ def check_iter_members(
     )
 
     for sample_file in sample_archive.contents.files:
+        filename = sample_file.name
+        if features.replace_backslash_with_slash:
+            filename = filename.replace("\\", "/")
         if features.dir_entries or sample_file.type != MemberType.DIR:
-            expected_files_by_filename[sample_file.name].append(sample_file)
+            expected_files_by_filename[filename].append(sample_file)
 
     # expected_filenames = set(expected_files_by_filename.keys())
 
@@ -193,6 +212,8 @@ def check_iter_members(
         )
 
     archive_path_resolved = archive_path or sample_archive.get_archive_path()
+    config = replace(config or ArchiveyConfig(), extraction_filter=TESTING_FILTER)
+
     with open_archive(
         archive_path_resolved,
         pwd=constructor_password,
@@ -221,10 +242,6 @@ def check_iter_members(
             else archive.iter_members_with_io()
         )
 
-        # logger.info(f"files_by_name: {expected_files_by_filename}")
-        # logger.info(f"skip_member_contents: {skip_member_contents}")
-        # logger.info(f"members_iter: {members_iter}")
-
         all_contents_by_filename: collections.defaultdict[
             str, list[tuple[ArchiveMember, bytes | None]]
         ] = collections.defaultdict(list)
@@ -235,6 +252,16 @@ def check_iter_members(
             logger.info(
                 f"member: {member.filename} [{member.type}] [{member.member_id}] {stream=}"
             )
+
+            if skip_member_contents:
+                assert not member._edited_by_filter, (
+                    f"Member {member.filename} was edited by filter"
+                )
+            else:
+                assert member._edited_by_filter, (
+                    f"Member {member.filename} was not edited by filter"
+                )
+
             filekey = member.filename
             if member.is_dir:
                 assert member.filename.endswith("/"), (
@@ -349,7 +376,9 @@ logger = logging.getLogger(__name__)
     ),
     ids=lambda x: x.filename,
 )
-@pytest.mark.parametrize("alternative_packages", [False, True])
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+)
 def test_read_tar_archives(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
@@ -357,15 +386,7 @@ def test_read_tar_archives(
         f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
     )
 
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = None
+    config = ALTERNATIVE_CONFIG if alternative_packages else None
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
@@ -375,17 +396,6 @@ def test_read_tar_archives(
         skip_member_contents=True,
         config=config,
     )
-
-
-# @pytest.mark.parametrize(
-#     "sample_archive",
-#     filter_archives(SAMPLE_ARCHIVES, extensions=["iso"]),
-#     ids=lambda x: x.filename,
-# )
-# def test_read_iso_archives(sample_archive: SampleArchive, sample_archive_path: str):
-#     if not pathlib.Path(sample_archive_path).exists():
-#         pytest.skip("ISO archive not available")
-#     check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 
 @pytest.mark.parametrize(
@@ -494,9 +504,7 @@ def test_read_zip_and_7z_archives_with_password_in_constructor(
     filter_archives(SAMPLE_ARCHIVES, extensions=["7z"]),
     ids=lambda x: x.filename,
 )
-def test_read_sevenzip_py7zr_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
-):
+def test_read_7z_archives(sample_archive: SampleArchive, sample_archive_path: str):
     check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 
@@ -507,7 +515,9 @@ def test_read_sevenzip_py7zr_archives(
     ),
     ids=lambda x: x.filename,
 )
-@pytest.mark.parametrize("alternative_packages", [False, True])
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+)
 def test_read_single_file_compressed_archives(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
@@ -567,4 +577,14 @@ def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_pat
 def test_read_hardlinks_archives(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
+    check_iter_members(sample_archive, archive_path=sample_archive_path)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(SAMPLE_ARCHIVES, extensions=["_folder/"]),
+    ids=lambda x: x.filename,
+)
+def test_read_folder_archives(sample_archive: SampleArchive, sample_archive_path: str):
+    logger.info(f"Testing {sample_archive.filename}; files at {sample_archive_path}")
     check_iter_members(sample_archive, archive_path=sample_archive_path)

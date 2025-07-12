@@ -1,6 +1,6 @@
-# archivey User Guide
+# Archivey user guide
 
-This guide explains how to use the `archivey` library to work with various archive formats.
+This guide explains how to use the `archivey` library to work with a variety of archive formats.
 
 ## Opening an Archive
 
@@ -22,7 +22,23 @@ except ArchiveError as e:
 
 ```
 
-The `open_archive` function takes the path to the archive file as its primary argument. It can also accept an optional `config` object and `streaming_only` flag.
+`[open_archive][archivey.core.open_archive]` takes the path to an archive file (or an IO stream) and returns an `archivey.archive_reader.ArchiveReader` when the format is recognized. You can also pass an optional `config` object or set `streaming_only=True` to force sequential access.
+
+## Opening a Compressed Stream
+
+Archivey can also handle single-file compressed formats such as gzip, bzip2, xz,
+zstd and lz4. Use `[open_compressed_stream][archivey.core.open_compressed_stream]` to obtain an uncompressed binary
+stream:
+
+```python
+from archivey import open_compressed_stream
+
+with open_compressed_stream("example.txt.gz") as f:
+    data = f.read()
+```
+
+`open_compressed_stream` accepts the same `ArchiveyConfig` object as
+`open_archive` for enabling alternative decompression libraries.
 
 ## The ArchiveReader Object
 
@@ -33,21 +49,23 @@ Key methods of the `ArchiveReader` object:
 *   **`close()`**: Closes the archive. Automatically called if using a context manager.
 *   **`get_members_if_available() -> List[ArchiveMember] | None`**: Returns a list of all members in the archive if readily available (e.g., from a central directory). May return `None` for stream-based archives where the full list isn't known without reading through the archive.
 *   **`get_members() -> List[ArchiveMember]`**: Returns a list of all members in the archive. For some archive types or streaming modes, this might involve processing a significant portion of the archive if the member list isn't available upfront.
-*   **`iter_members_with_io(members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember], Optional[ArchiveMember]]] = None) -> Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]`**: Iterates over members in the archive, yielding a tuple of `(ArchiveMember, BinaryIO_stream)` for each. The stream is `None` for non-file members like directories.
+*   **`iter_members_with_io(members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember, Optional[str]], Optional[ArchiveMember]]] = None) -> Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]`**: Iterates over members in the archive, yielding a tuple of `(ArchiveMember, BinaryIO_stream)` for each. The stream is `None` for non-file members like directories.
     *   `members`: Optionally specify a collection of member names or `ArchiveMember` objects to iterate over.
     *   `pwd`: Password for encrypted archives.
-    *   `filter`: A callable to filter members during iteration.
+    *   `filter`: Callable applied to each member (with `None` as the destination path) that can return the member to include or `None` to skip.
 *   **`get_archive_info() -> ArchiveInfo`**: Returns an `ArchiveInfo` object containing metadata about the archive itself (e.g., format, comments, solid status).
 *   **`has_random_access() -> bool`**: Returns `True` if the archive supports random access to its members (i.e., `open()` and `extract()` can be used directly without iterating). Returns `False` for streaming-only access.
 *   **`get_member(member_or_filename: Union[ArchiveMember, str]) -> ArchiveMember`**: Retrieves a specific `ArchiveMember` object by its name or by passing an existing `ArchiveMember` object (useful for identity checks).
 *   **`open(member_or_filename: Union[ArchiveMember, str], *, pwd: Optional[Union[bytes, str]] = None) -> BinaryIO`**: Opens a specific member of the archive for reading and returns a binary I/O stream. This is typically available if `has_random_access()` is `True`.
 *   **`extract(member_or_filename: Union[ArchiveMember, str], path: Optional[Union[str, os.PathLike]] = None, pwd: Optional[Union[bytes, str]] = None) -> Optional[str]`**: Extracts a single member to the specified `path` (defaults to the current directory). Returns the path to the extracted file. This is typically available if `has_random_access()` is `True`.
-*   **`extractall(path: Optional[Union[str, os.PathLike]] = None, members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember], Optional[ArchiveMember]]] = None) -> dict[str, ArchiveMember]`**: Extracts all (or a specified subset of) members to the given `path`.
+*   **`extractall(path: Optional[Union[str, os.PathLike]] = None, members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember, Optional[str]], Optional[ArchiveMember]]] = None) -> dict[str, ArchiveMember]`**: Extracts all (or a specified subset of) members to the given `path`.
     *   `path`: Target directory for extraction (defaults to current directory).
     *   `members`: A collection of member names or `ArchiveMember` objects to extract.
     *   `pwd`: Password for encrypted archives.
-    *   `filter`: A callable to filter which members get extracted.
-    *   Returns a dictionary mapping extracted file paths to their `ArchiveMember` objects.
+    *   `filter`: Callable invoked for each member with the member and destination path. Return the member to extract it, or `None` to skip.
+*   Returns a dictionary mapping extracted file paths to their `ArchiveMember` objects.
+
+Streaming-only archives (where `archive.has_random_access()` returns `False`) can be iterated only **once**. After calling `iter_members_with_io()` or `extractall()`, further attempts to read or extract members will raise a `ValueError`.
 
 ## Working with Archive Members
 
@@ -75,6 +93,45 @@ try:
 except ArchiveError as e:
     print(f"Error: {e}")
 ```
+
+## Configuration options
+
+`open_archive` accepts an `ArchiveyConfig` object to enable optional features.
+You can pass it directly or set it as the default using
+`archivey.config.default_config()`.
+
+```python
+from archivey import open_archive, ArchiveyConfig
+
+config = ArchiveyConfig(
+    use_rar_stream=True,
+    use_rapidgzip=True,
+    use_indexed_bzip2=True,
+    overwrite_mode=OverwriteMode.OVERWRITE,
+    extraction_filter=ExtractionFilter.TAR, # Example: use tar-like filtering
+)
+
+with open_archive("file.rar", config=config) as archive:
+    ...
+```
+
+
+Fields on `ArchiveyConfig` enable support for optional dependencies such as
+`rapidgzip`, `indexed_bzip2`, `python-xz` and `zstandard`. Each flag requires the
+corresponding package to be installed. `overwrite_mode` controls how extraction
+handles existing files and may be `overwrite`, `skip` or `error`.
+
+The `extraction_filter` option controls which files are extracted and how their
+paths are sanitized. It can be set to one of the predefined `ExtractionFilter`
+enum values:
+*   `ExtractionFilter.DATA`: (Default) Aims to be safe for extracting general data archives.
+    It might be more restrictive about filenames or paths.
+*   `ExtractionFilter.TAR`: Mimics typical behavior of `tar` extraction, which might
+    be more permissive.
+*   `ExtractionFilter.FULLY_TRUSTED`: Assumes the archive content is fully trusted
+    and performs minimal to no sanitization. Use with caution.
+It can also be set to a custom callable function that takes an `ArchiveMember`
+and the destination path, and returns a modified `ArchiveMember` or `None` to skip.
 
 ### Example: Reading a File from an Archive
 
@@ -144,4 +201,4 @@ except ArchiveError as e:
     print(f"Error: {e}")
 ```
 
-This guide provides a basic overview. For more detailed information on specific classes and methods, please refer to the [API documentation](./api/archivey.html).
+This guide provides a basic overview. For more detailed information on specific classes and methods, please refer to the [API documentation](api.md).

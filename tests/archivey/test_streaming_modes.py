@@ -3,21 +3,16 @@ from typing import IO
 
 import pytest
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
+    SYMLINK_ARCHIVES,
     SampleArchive,
     filter_archives,
 )
 from tests.archivey.testing_utils import skip_if_package_missing
-
-
-def _last_regular_file(sample: SampleArchive):
-    for f in reversed(sample.contents.files):
-        if f.type == MemberType.FILE:
-            return f
-    raise ValueError("sample archive has no regular file")
 
 
 def _first_regular_file(sample: SampleArchive):
@@ -28,12 +23,6 @@ def _first_regular_file(sample: SampleArchive):
 
 
 logger = logging.getLogger(__name__)
-
-#  "duplicate_files",
-#                   "hardlinks_nonsolid", "hardlinks_solid",
-#                   "hardlinks_with_duplicate_files",
-#                   "hardlinks_recursive_and_broken",
-#                   "symlinks", "symlinks_solid"
 
 
 @pytest.mark.parametrize(
@@ -88,11 +77,11 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
                 == sample_archive.contents.files[i].contents
             )
 
-    # After the archive context manager is closed, all streams should have been closed.
-    # TODO: this is not actually true. Should this be implemented? Or should we test
-    # that trying to read() from these streams raises an error?
-    # for f in files:
-    #     assert f.closed
+    # After closing the archive, all previously opened streams should be closed.
+    for f in files:
+        assert f.closed
+        with pytest.raises(ValueError):
+            f.read()
 
 
 @pytest.mark.parametrize(
@@ -104,13 +93,32 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
     ids=lambda a: a.filename,
 )
 @pytest.mark.parametrize("close_streams", [False, True], ids=["noclose", "close"])
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["default", "alternative"]
+)
 def test_streaming_only_mode(
-    sample_archive: SampleArchive, sample_archive_path: str, close_streams: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    close_streams: bool,
+    alternative_packages: bool,
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    if alternative_packages:
+        config = ArchiveyConfig(
+            use_rar_stream=True,
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            use_zstandard=True,
+        )
+    else:
+        config = ArchiveyConfig()
+
+    skip_if_package_missing(sample_archive.creation_info.format, config)
 
     first_file = _first_regular_file(sample_archive)
-    with open_archive(sample_archive_path, streaming_only=True) as archive:
+    with open_archive(
+        sample_archive_path, streaming_only=True, config=config
+    ) as archive:
         assert not archive.has_random_access()
 
         with pytest.raises(ValueError):
@@ -136,6 +144,27 @@ def test_streaming_only_mode(
                     logger.info(
                         f"previous_stream.read() = {data[:20]} -- {previous_stream=}"
                     )
+
+            if m.is_link:
+                # The link target should have been filled before the member was yielded
+                assert m.link_target is not None
+                assert stream is None
+            elif m.is_dir:
+                assert stream is None
+            else:
+                assert stream is not None
+                seekable_before = stream.seekable()
+                data = stream.read()
+                seekable_after = stream.seekable()
+                if seekable_before:
+                    # Check that we didn't report the stream as seekable if it's actually not
+                    assert seekable_after
+                if seekable_after:
+                    # Check that the stream is actually seekable
+                    print(m, f"Stream: {stream}")
+                    stream.seek(0)
+                    data_after = stream.read()
+                    assert data == data_after
 
             previous_stream = stream
 
@@ -222,3 +251,82 @@ def test_iter_members_list_filter(
             )
 
     assert sorted(file_contents) == sorted(read_contents), file_names
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["large_files_nonsolid", "large_files_solid"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_streaming_only_allows_single_iteration(
+    tmp_path, sample_archive: SampleArchive, sample_archive_path: str
+):
+    """Ensure streaming-only archives can be consumed only once."""
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    with open_archive(sample_archive_path, streaming_only=True) as archive:
+        next(archive.iter_members_with_io())
+
+        with pytest.raises(ValueError):
+            next(archive.iter_members_with_io())
+
+        with pytest.raises(ValueError):
+            archive.extractall(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    filter_archives(
+        SAMPLE_ARCHIVES,
+        prefixes=["large_files_nonsolid", "large_files_solid"],
+    ),
+    ids=lambda a: a.filename,
+)
+def test_random_access_allows_multiple_iterations(
+    tmp_path, sample_archive: SampleArchive, sample_archive_path: str
+):
+    """Random access readers should allow multiple iterations."""
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    with open_archive(sample_archive_path) as archive:
+        next(archive.iter_members_with_io())
+        list(archive.iter_members_with_io())
+        list(archive.iter_members_with_io())
+
+
+@pytest.mark.parametrize("sample_archive", SYMLINK_ARCHIVES, ids=lambda a: a.filename)
+def test_resolve_link_symlink_without_target(
+    sample_archive: SampleArchive, sample_archive_path: str
+) -> None:
+    skip_if_package_missing(sample_archive.creation_info.format, None)
+
+    with open_archive(sample_archive_path) as archive:
+        for sample_file in sample_archive.contents.files:
+            member = archive.get_member(sample_file.name)
+            resolved = archive.resolve_link(member)
+
+            if member.type != MemberType.SYMLINK:
+                assert member is resolved
+                continue
+
+            if sample_archive.creation_info.features.link_targets_in_header:
+                assert member.link_target is not None, (
+                    f"{sample_file.name=} {member.filename=} {member.link_target=}"
+                )
+
+            if member.link_target is None:
+                assert resolved is None, (
+                    f"{sample_file.name=} {member.filename=} {member.link_target=} {resolved=}"
+                )
+            else:
+                assert resolved is not None
+                logger.info(f"{member.filename=} {member.link_target=} {resolved=}")
+                assert resolved.type in (MemberType.FILE, MemberType.DIR)
+                if resolved.type == MemberType.FILE:
+                    with archive.open(resolved) as f:
+                        assert f.read() == sample_file.contents
+                    with archive.open(member) as f:
+                        assert f.read() == sample_file.contents
