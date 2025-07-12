@@ -5,18 +5,17 @@ The main types can be accessed from the :mod:`archivey` module, but any others t
 are needed can be imported from here.
 """
 
+import io  # Required for ReadableStreamLikeOrSimilar
 import sys
 from typing import (
+    IO,
     TYPE_CHECKING,
     Callable,
     Protocol,
-    overload,
-    Protocol,
     Union,
-    IO,
+    overload,
     runtime_checkable,
 )
-import io # Required for ReadableStreamLikeOrSimilar
 
 if TYPE_CHECKING or sys.version_info >= (3, 11):
     from enum import StrEnum
@@ -328,7 +327,9 @@ class ExtractionFilter(StrEnum):
 @runtime_checkable
 class ReadableBinaryStream(Protocol):
     """Protocol for a readable binary stream."""
+
     def read(self, n: int = -1, /) -> bytes: ...
+
 
 ReadableStreamLikeOrSimilar = Union[ReadableBinaryStream, io.IOBase, IO[bytes]]
 """Type alias for objects that are like readable binary streams."""

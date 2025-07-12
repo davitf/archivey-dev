@@ -17,7 +17,7 @@ from archivey.formats.zip_reader import ZipReader
 from archivey.internal.io_helpers import (
     ReadableBinaryStream,
     RewindableStreamWrapper,
-    SlicingStream, # Added
+    SlicingStream,  # Added
     ensure_binaryio,
     ensure_bufferedio,
     is_seekable,
@@ -226,9 +226,11 @@ def open_compressed_stream(
         assert path_str is not None
         if not os.path.exists(path_str):
             raise FileNotFoundError(f"Archive file not found: {path_str}")
-        input_obj = path_str # Keep as string for now
-        stream_for_detection = input_obj # Path string is fine for detect_archive_format
-        stream_to_pass_to_open_stream = input_obj # Path string is fine for open_stream
+        input_obj = path_str  # Keep as string for now
+        stream_for_detection = (
+            input_obj  # Path string is fine for detect_archive_format
+        )
+        stream_to_pass_to_open_stream = input_obj  # Path string is fine for open_stream
 
     # Perform format detection
     detected_format_value = detect_archive_format(stream_for_detection)
