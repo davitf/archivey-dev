@@ -4,6 +4,7 @@ import logging
 import pytest
 
 from archivey.core import open_archive
+from archivey.internal.utils import ensure_not_none
 from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
@@ -33,13 +34,14 @@ class OneByteReader(io.RawIOBase):
     def readable(self) -> bool:
         return True
 
-    def readinto(self, b: bytearray | memoryview) -> int | None:  # type: ignore[override]
-        data = self._stream.read(1)
-        if data is None:
-            return None
+    def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
+        data = ensure_not_none(self._stream.read(min(len(b), 1)))
         n = len(data)
         b[:n] = data
         return n
+
+    def read(self, n: int = -1, /) -> bytes:
+        return ensure_not_none(self._stream.read(min(n, 1)))
 
     def close(self) -> None:
         # logger.error("Closing OneByteReader", stack_info=True)
