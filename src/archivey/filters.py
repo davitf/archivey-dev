@@ -17,6 +17,7 @@ import functools
 import logging
 import os
 import posixpath
+from typing import Any
 
 from archivey.config import ExtractionFilter
 from archivey.exceptions import ArchiveFilterError
@@ -103,7 +104,7 @@ def _get_filtered_member(
     raise_on_error: bool,
 ) -> ArchiveMember | None:
     try:
-        new_attrs = {}
+        new_attrs: dict[str, Any] = {}
         if sanitize_names:
             name = _sanitize_name(member, dest_path)
             if name != member.filename:

@@ -497,7 +497,7 @@ class LazyOpenIO(io.BufferedIOBase, BinaryIO):
 
     def __init__(
         self,
-        open_fn: Callable[..., io.BufferedIOBase],
+        open_fn: Callable[..., BinaryIO],
         *args: Any,
         seekable: bool,
         **kwargs: Any,
@@ -518,10 +518,10 @@ class LazyOpenIO(io.BufferedIOBase, BinaryIO):
         self._open_fn = open_fn
         self._args = args
         self._kwargs = kwargs
-        self._inner: io.BufferedIOBase | None = None
+        self._inner: BinaryIO | None = None
         self._seekable = seekable
 
-    def _ensure_open(self) -> io.BufferedIOBase:
+    def _ensure_open(self) -> BinaryIO:
         if self.closed:
             raise ValueError("I/O operation on closed file.")
         if self._inner is None:

@@ -6,7 +6,7 @@ import os
 import posixpath
 import threading
 from collections import defaultdict
-from io import BufferedIOBase, IOBase
+from io import IOBase
 from typing import (
     BinaryIO,
     Callable,
@@ -41,7 +41,7 @@ from .io_helpers import LazyOpenIO
 
 logger = logging.getLogger(__name__)
 
-IoType = TypeVar("IoType", bound=IOBase)
+IoType = TypeVar("IoType", bound=IOBase | BinaryIO)
 
 
 def _build_member_included_func(
@@ -169,7 +169,7 @@ class BaseArchiveReader(ArchiveReader):
 
         self._streaming_iteration_started: bool = False
         self._closed: bool = False
-        self._open_streams: WeakSet[IOBase] = WeakSet()
+        self._open_streams: WeakSet[IOBase | BinaryIO] = WeakSet()
 
     def _track_stream(self, stream: IoType) -> IoType:
         """Register an opened stream to be closed when the archive closes."""
@@ -497,7 +497,7 @@ class BaseArchiveReader(ArchiveReader):
         *,
         pwd: bytes | str | None = None,
         for_iteration: bool = False,
-    ) -> BufferedIOBase:
+    ) -> BinaryIO:
         """
         Open the given archive member and return a readable binary stream.
 
@@ -556,7 +556,7 @@ class BaseArchiveReader(ArchiveReader):
         member_or_filename: ArchiveMember | str,
         pwd: bytes | str | None,
         for_iteration: bool,
-    ) -> BufferedIOBase:
+    ) -> BinaryIO:
         member = self.get_member(member_or_filename)
         member = self._prepare_member_for_open(
             member, pwd=pwd, for_iteration=for_iteration
@@ -570,7 +570,7 @@ class BaseArchiveReader(ArchiveReader):
 
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
-    ) -> BufferedIOBase:
+    ) -> BinaryIO:
         """
         Open ``member_or_filename`` for random access reading.
 

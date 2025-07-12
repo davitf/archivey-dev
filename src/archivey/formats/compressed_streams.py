@@ -5,6 +5,8 @@ import lzma
 import os
 from typing import TYPE_CHECKING, BinaryIO, Optional, cast
 
+from typing_extensions import Buffer
+
 from archivey.config import ArchiveyConfig
 from archivey.internal.io_helpers import ensure_bufferedio, is_seekable, is_stream
 from archivey.types import ArchiveFormat
@@ -236,7 +238,7 @@ class ZstandardReopenOnBackwardsSeekIO(io.RawIOBase, BinaryIO):
     def read(self, n: int = -1) -> bytes:
         return self._inner.read(n)
 
-    def readinto(self, b: bytearray | memoryview) -> int:
+    def readinto(self, b: Buffer) -> int:
         return self._inner.readinto(b)  # type: ignore[attr-defined]
 
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
