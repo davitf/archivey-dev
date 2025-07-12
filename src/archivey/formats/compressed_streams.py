@@ -130,6 +130,11 @@ def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 def open_rapidgzip_stream(path: str | BinaryIO) -> BinaryIO:
+    if rapidgzip is None:
+        raise PackageNotInstalledError(
+            "rapidgzip package is not installed, required for GZIP archives"
+        ) from None  # pragma: no cover -- rapidgzip is installed for main tests
+
     return ExceptionTranslatingIO(
         lambda: rapidgzip.open(path, parallelization=0), _translate_rapidgzip_exception
     )
@@ -170,6 +175,11 @@ def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 def open_indexed_bzip2_stream(path: str | BinaryIO) -> BinaryIO:
+    if indexed_bzip2 is None:
+        raise PackageNotInstalledError(
+            "indexed_bzip2 package is not installed, required for BZIP2 archives"
+        ) from None  # pragma: no cover -- indexed_bzip2 is installed for main tests
+
     return ExceptionTranslatingIO(
         lambda: indexed_bzip2.open(path, parallelization=0),
         _translate_indexed_bzip2_exception,
