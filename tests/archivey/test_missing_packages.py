@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from archivey.core import open_archive, open_compressed_stream
+from archivey.core import open_archive
 from archivey.config import ArchiveyConfig
 from archivey.exceptions import (
     PackageNotInstalledError,
@@ -56,32 +56,13 @@ BASIC_BZIP2_ARCHIVE = filter_archives(
 
 
 @pytest.mark.parametrize(
-    ["library_name", "archive_path"],
-    [
-        # ("pycdlib", BASIC_ISO_ARCHIVE.get_archive_path()),
-        ("rarfile", BASIC_RAR_ARCHIVE.get_archive_path()),
-        ("py7zr", BASIC_7Z_ARCHIVE.get_archive_path()),
-        ("pyzstd", BASIC_ZSTD_ARCHIVE.get_archive_path()),
-        ("lz4", BASIC_LZ4_ARCHIVE.get_archive_path()),
-    ],
-    ids=lambda x: os.path.basename(x),
-)
-def test_missing_package_raises_exception(library_name: str, archive_path: str):
-    dependencies = get_dependency_versions()
-    if getattr(dependencies, f"{library_name}_version") is not None:
-        pytest.skip(
-            f"{library_name} is installed with version {getattr(dependencies, f'{library_name}_version')}"
-        )
-
-    with pytest.raises(PackageNotInstalledError) as excinfo:
-        open_archive(archive_path)
-
-    assert f"{library_name} package is not installed" in str(excinfo.value)
-
-
-@pytest.mark.parametrize(
     ["library_name", "archive_path", "config"],
     [
+        # ("pycdlib", BASIC_ISO_ARCHIVE.get_archive_path(), None),
+        ("rarfile", BASIC_RAR_ARCHIVE.get_archive_path(), None),
+        ("py7zr", BASIC_7Z_ARCHIVE.get_archive_path(), None),
+        ("pyzstd", BASIC_ZSTD_ARCHIVE.get_archive_path(), None),
+        ("lz4", BASIC_LZ4_ARCHIVE.get_archive_path(), None),
         (
             "rapidgzip",
             BASIC_GZIP_ARCHIVE.get_archive_path(),
@@ -93,12 +74,10 @@ def test_missing_package_raises_exception(library_name: str, archive_path: str):
             ArchiveyConfig(use_indexed_bzip2=True),
         ),
     ],
-    ids=lambda x: os.path.basename(x)
-    if isinstance(x, str)
-    else x,
+    ids=lambda x: os.path.basename(x) if isinstance(x, str) else x,
 )
-def test_missing_package_open_compressed_stream(
-    library_name: str, archive_path: str, config: ArchiveyConfig
+def test_missing_package_raises_exception(
+    library_name: str, archive_path: str, config: ArchiveyConfig | None
 ):
     dependencies = get_dependency_versions()
     if getattr(dependencies, f"{library_name}_version") is not None:
@@ -107,8 +86,7 @@ def test_missing_package_open_compressed_stream(
         )
 
     with pytest.raises(PackageNotInstalledError) as excinfo:
-        with open_compressed_stream(archive_path, config=config) as f:
-            f.read()
+        open_archive(archive_path, config=config)
 
     assert f"{library_name} package is not installed" in str(excinfo.value)
 
