@@ -249,11 +249,6 @@ class BaseArchiveReader(ArchiveReader):
             normalized_link_target = posixpath.normpath(
                 posixpath.join(posixpath.dirname(member.filename), link_target_str)
             )
-            logger.info("normalized_link_target: %s", normalized_link_target)
-            logger.info(
-                "normalized_path_to_last_member: %s",
-                self._normalized_path_to_last_member,
-            )
             target_member = self._normalized_path_to_last_member.get(
                 normalized_link_target
             )
@@ -299,9 +294,6 @@ class BaseArchiveReader(ArchiveReader):
             members_with_filename.sort(key=lambda m: m.member_id)
 
         normalized_path = member.filename
-        logger.info(
-            "registering member: normpath: %s -> %s", member.filename, normalized_path
-        )
         if (
             normalized_path not in self._normalized_path_to_last_member
             or self._normalized_path_to_last_member[normalized_path].member_id
@@ -312,7 +304,7 @@ class BaseArchiveReader(ArchiveReader):
         # If the member is a directory, also register the path without the trailing slash
         # so we can resolve links to directories.
         if normalized_path.endswith("/"):
-            normalized_path = normalized_path[:-1]
+            normalized_path = normalized_path.rstrip("/")
             if (
                 normalized_path not in self._normalized_path_to_last_member
                 or self._normalized_path_to_last_member[normalized_path].member_id
