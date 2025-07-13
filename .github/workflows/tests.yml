@@ -1,0 +1,56 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  all-deps-tests:
+    name: just test-new-libs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install just
+        run: cargo install just
+
+      - name: Install unrar (for rarfile tests)
+        run: sudo apt-get update && sudo apt-get install -y unrar
+
+      - name: Run tests
+        run: just test-new-libs
+
+  dependency-version-tests:
+    name: just test-old-libs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install just
+        run: cargo install just
+
+      - name: Install unrar (for rarfile tests)
+        run: sudo apt-get update && sudo apt-get install -y unrar
+
+      - name: Run tests
+        run: just test-old-libs
