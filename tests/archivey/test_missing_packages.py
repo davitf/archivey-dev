@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 import pytest
 
-from archivey.core import open_archive
 from archivey.config import ArchiveyConfig
+from archivey.core import open_archive
 from archivey.exceptions import (
     PackageNotInstalledError,
 )
