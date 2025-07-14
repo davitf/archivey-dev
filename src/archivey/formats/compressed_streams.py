@@ -118,6 +118,9 @@ def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
         return ArchiveStreamNotSeekableError(
             "rapidgzip does not support non-seekable streams"
         )
+    # This happens in some rapidgzip builds, not all.
+    if isinstance(e, RuntimeError) and "std::exception" in str(e):
+        return ArchiveCorruptedError(f"Unknown rror reading RapidGZIP archive: {repr(e)}")
 
     # Found in rapidgzip 0.11.0
     if (
