@@ -26,7 +26,9 @@ optional = [
     "indexed_bzip2>=1.6.0",
     "python-xz>=0.5.0",
     "pyzstd>=0.17.0",
-    "zstandard>=0.23.0",
+    # Not currently compatible with Python 3.14. Fix on the way, see
+    # https://github.com/indygreg/python-zstandard/pull/262
+    "zstandard>=0.23.0 ; python_full_version < '3.14'",
     # Not currently compatible with Python 3.14. Fix on the way, see
     # https://github.com/python-lz4/python-lz4/pull/303
     "lz4>=4.4.4 ; python_full_version < '3.14'",
