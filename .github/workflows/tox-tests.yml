@@ -94,6 +94,8 @@ jobs:
 
       - name: Install tox
         run: pip install tox
+        working-directory: ${{ github.workspace }}
 
       - name: Run tox environment
         run: tox -e py3.13-newlibs
+        working-directory: ${{ github.workspace }}
