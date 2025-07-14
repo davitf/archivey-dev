@@ -20,15 +20,15 @@ archivey = "archivey.__main__:main"
 [project.optional-dependencies]
 optional = [
     "cryptography>=45.0.3",
-    "lz4>=4.4.4",
-    "py7zr>=1.0.0",
     "rarfile>=4.2",
-    "zstandard>=0.23.0",
-    "pycdlib>=1.14.0",
+    "py7zr>=1.0.0",
     "rapidgzip==0.14.3",
     "indexed_bzip2>=1.6.0",
     "python-xz>=0.5.0",
     "pyzstd>=0.17.0",
+    "zstandard>=0.23.0",
+    "lz4>=4.4.4",
+    "pycdlib>=1.14.0",
 ]
 
 [build-system]

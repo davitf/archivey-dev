@@ -229,7 +229,7 @@ def is_stream(obj: Any) -> TypeGuard[BinaryIO]:
     missing_properties = {p for p in ALL_IO_PROPERTIES if not hasattr(obj, p)}
     has_all_interface = not missing_methods and not missing_properties
 
-    if not has_all_interface:
+    if not isinstance(obj, (str, bytes, os.PathLike)) and not has_all_interface:
         logger.debug(
             "Object %r does not match the BinaryIO protocol: missing methods %r, "
             "missing properties %r",

@@ -199,16 +199,19 @@ def open_lzma_stream(path: str | BinaryIO) -> BinaryIO:
 
 
 def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    logger.debug("TRANSLATING XZ EXCEPTION", exc_info=e)
     if isinstance(e, xz.XZError):
         return ArchiveCorruptedError(f"Error reading XZ archive: {repr(e)}")
     if isinstance(e, ValueError) and "filename is not seekable" in str(e):
         return ArchiveStreamNotSeekableError(
             "Python XZ does not support non-seekable streams"
         )
+    # Raised by RecordableStream (used to wrap non-seekable streams during format
+    # detection) when the library tries to seek to the end.
+    if isinstance(e, io.UnsupportedOperation) and "seek to end" in str(e):
+        return ArchiveStreamNotSeekableError(
+            "Python XZ does not support non-seekable streams"
+        )
+
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
