@@ -128,6 +128,7 @@ exclude_also = [
 
 [tool.hatch.version]
 path = "src/archivey/__init__.py"
+validate-bump = false
 
 [tool.pyrefly]
 search-path = ["src"]
