@@ -74,3 +74,26 @@ jobs:
 
       - name: Run tox environment
         run: tox -e py${{ matrix.python-version }}-${{ matrix.tox_env }}
+
+  py313-newlibs-other-os:
+    name: Tox - py3.13-newlibs (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Run tox environment
+        run: tox -e py3.13-newlibs
