@@ -44,7 +44,7 @@ optional-freethreaded = [
     "indexed_bzip2>=1.6.0",
     "python-xz>=0.5.0",
     "pyzstd>=0.17.0",
-    "lz4>=4.4.4",
+    "lz4>=4.4.4 ; python_full_version < '3.14'",
     "pycdlib>=1.14.0",
 ]
 
