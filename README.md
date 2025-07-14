@@ -1,6 +1,6 @@
 # Archivey
 
-**Archivey** is a Python library that provides consistent, streamlined access to common archive formats and compressed files. It supports ZIP, TAR, RAR, 7z, and many single-file compression formats, combining built-in Python modules with optional external packages to offer random access, efficient streaming, and advanced extraction filters.
+**Archivey** is a Python library that provides a unified interface for reading several archive and compression formats, wrapping built-in Python modules and optional external packages.
 
 👉 **Full documentation is published [here](https://davitf.github.io/archivey/)**.
 
@@ -21,7 +21,7 @@ Or manage dependencies yourself for only the formats you need. RAR support requi
 ```python
 from archivey import open_archive
 
-with open_archive("example.zip", streaming_only=True) as archive:
+with open_archive("example.zip") as archive:
     # Extract all files
     archive.extractall("output_dir/")
 
