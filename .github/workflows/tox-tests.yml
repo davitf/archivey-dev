@@ -43,7 +43,9 @@ jobs:
           if [[ "${{ matrix.python-version }}" == "3.14-dev" ]]; then
             tox -e py3.14-alldeps
           elif [[ "${{ matrix.python-version }}" == "3.14t-dev" ]]; then
-            tox -e py3.14t-alldeps
+            tox -e py3.14t-freethreaded
+          elif [[ "${{ matrix.python-version }}" == "3.13t" ]]; then
+            tox -e py3.13t-freethreaded
           else
             tox -e py${{ matrix.python-version }}-alldeps
           fi
