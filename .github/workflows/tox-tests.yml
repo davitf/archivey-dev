@@ -8,11 +8,12 @@ on:
 
 jobs:
   all-deps-tests:
-    name: Tox - py${{ matrix.python-version }}-alldeps
-    runs-on: ubuntu-latest
+    name: Tox - py${{ matrix.python-version }}-alldeps (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.13t", "3.14-dev", "3.14t-dev"]
 
     steps:
@@ -28,7 +29,14 @@ jobs:
         run: pip install tox
 
       - name: Install unrar (for rarfile tests)
-        run: sudo apt-get update && sudo apt-get install -y unrar
+        run: |
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y unrar
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            brew install unrar
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            choco install unrar
+          fi
 
       - name: Run tox environment
         run: |
