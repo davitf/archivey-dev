@@ -73,10 +73,12 @@ jobs:
           fi
 
       - name: Debugging
+        shell: bash
         run: |
           pwd
           cat tox.ini
       - name: Run tox environment
+        shell: bash
         run: tox -c tox.ini -e py${{ matrix.python-version }}-alldeps
 
   dependency-version-tests:
