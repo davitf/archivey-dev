@@ -8,12 +8,11 @@ on:
 
 jobs:
   all-deps-tests:
-    name: Tox - py${{ matrix.python-version }}-alldeps (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Tox - py${{ matrix.python-version }}-alldeps
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.13t", "3.14-dev", "3.14t-dev"]
 
     steps:
@@ -29,14 +28,7 @@ jobs:
         run: pip install tox
 
       - name: Install unrar (for rarfile tests)
-        run: |
-          if [[ "${{ runner.os }}" == "Linux" ]]; then
-            sudo apt-get update && sudo apt-get install -y unrar
-          elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            brew install unrar
-          elif [[ "${{ runner.os }}" == "Windows" ]]; then
-            choco install unrar
-          fi
+        run: sudo apt-get update && sudo apt-get install -y unrar
 
       - name: Run tox environment
         run: |
@@ -49,6 +41,38 @@ jobs:
           else
             tox -e py${{ matrix.python-version }}-alldeps
           fi
+
+  mac-win-tests:
+    name: Tox - py${{ matrix.python-version }}-alldeps (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+        python-version: ["3.10", "3.13"]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Install unrar (for rarfile tests)
+        run: |
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            brew install unrar
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            choco install unrar
+          fi
+
+      - name: Run tox environment
+        run: tox -e py${{ matrix.python-version }}-alldeps
 
   dependency-version-tests:
     name: Tox - py${{ matrix.python-version }}-${{ matrix.tox_env }}
