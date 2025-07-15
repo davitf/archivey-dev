@@ -126,6 +126,24 @@ def get_non_corrupted_filename(rarinfo: RarInfo) -> str | None:
             )
             return utf8_str
 
+    if len(utf16_str) == len(utf8_str):
+        # Compare character by character to detect corrupted characters
+        for i, (u16c, u8c) in enumerate(zip(utf16_str, utf8_str)):
+            u16_code = ord(u16c)
+            u8_code = ord(u8c)
+
+            # Check for likely corruption:
+            # - UTF-16 char is in the surrogate or PUA range
+            # - UTF-8 char is a valid non-BMP character (requires surrogate pair in UTF-16)
+            if (
+                0xD800 <= u16_code <= 0xDFFF or 0xE000 <= u16_code <= 0xF8FF
+            ) and u8_code >= 0x10000:
+                logger.warning(
+                    f"UTF-16 filename appears truncated at char {i}: "
+                    f"{utf16_str!r} vs {utf8_str!r} – preferring UTF-8"
+                )
+                return utf8_str
+
     # If we got here, no strong evidence of corruption — trust the UTF-16 version
     return utf16_str
 

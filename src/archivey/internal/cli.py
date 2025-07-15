@@ -224,6 +224,7 @@ def main(argv: list[str] | None = None) -> None:
     if argv is None:
         argv = sys.argv[1:]
 
+    # argparse doesn't handle -- alone to separate positional arguments
     pattern_args: list[str] = []
     if "--" in argv:
         idx = argv.index("--")
