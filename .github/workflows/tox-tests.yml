@@ -25,7 +25,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install tox
-        run: pip install tox
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          uv tool install tox --with tox-uv
 
       - name: Install unrar (for rarfile tests)
         run: scripts/install_unrar.sh
@@ -90,7 +93,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install tox
-        run: pip install tox
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          uv tool install tox --with tox-uv
 
       - name: Install unrar (for rarfile tests)
         run: sudo apt-get update && sudo apt-get install -y unrar
