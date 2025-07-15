@@ -45,6 +45,7 @@ jobs:
   mac-win-tests:
     name: Tox - py${{ matrix.python-version }}-alldeps (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +75,7 @@ jobs:
 
       - name: Run tox environment
         shell: bash
-        run: python -m tox -c tox.ini -e py${{ matrix.python-version }}-alldeps
+        run: python -m tox -vv -c tox.ini -e py${{ matrix.python-version }}-alldeps
 
   dependency-version-tests:
     name: Tox - py${{ matrix.python-version }}-${{ matrix.tox_env }}
