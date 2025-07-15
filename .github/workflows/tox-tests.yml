@@ -73,7 +73,7 @@ jobs:
           fi
 
       - name: Run tox environment
-        run: tox -e py${{ matrix.python-version }}-alldeps
+        run: tox -c tox.ini -e py${{ matrix.python-version }}-alldeps
 
   dependency-version-tests:
     name: Tox - py${{ matrix.python-version }}-${{ matrix.tox_env }}
