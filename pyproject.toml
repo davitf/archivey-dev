@@ -1,7 +1,7 @@
 [project]
 name = "archivey"
-version = "0.1.0"
-description = "Unified interface for reading ZIP, TAR, RAR, 7z and other archives"
+description = "Python library for reading zip, tar, rar, 7z and other archives"
+dynamic = ["version"]
 readme = "README.md"
 authors = [
     { name = "Davi Figueiredo", email = "gh@davitf.com" }
@@ -20,15 +20,32 @@ archivey = "archivey.__main__:main"
 [project.optional-dependencies]
 optional = [
     "cryptography>=45.0.3",
-    "lz4>=4.4.4",
-    "py7zr>=1.0.0",
     "rarfile>=4.2",
-    "zstandard>=0.23.0",
-    "pycdlib>=1.14.0",
-    "rapidgzip==0.14.3",
+    "py7zr>=1.0.0",
+    "rapidgzip>=0.14.4",
     "indexed_bzip2>=1.6.0",
     "python-xz>=0.5.0",
     "pyzstd>=0.17.0",
+    # Not currently compatible with Python 3.14. Fix on the way, see
+    # https://github.com/indygreg/python-zstandard/pull/262
+    "zstandard>=0.23.0 ; python_full_version < '3.14'",
+    # Not currently compatible with Python 3.14. Fix on the way, see
+    # https://github.com/python-lz4/python-lz4/pull/303
+    "lz4>=4.4.4 ; python_full_version < '3.14'",
+    "pycdlib>=1.14.0",
+]
+
+optional-freethreaded = [
+    # Compilation fails for rapidgzip and zstandard in Github actions
+    # Compilation fails for cryptography, but rarfile can use pycryptodome instead
+    "pycryptodome>=3.23.0",
+    "rarfile>=4.2",
+    "py7zr>=1.0.0",
+    "indexed_bzip2>=1.6.0",
+    "python-xz>=0.5.0",
+    "pyzstd>=0.17.0",
+    "lz4>=4.4.4 ; python_full_version < '3.14'",
+    "pycdlib>=1.14.0",
 ]
 
 [build-system]
@@ -111,6 +128,7 @@ exclude_also = [
 
 [tool.hatch.version]
 path = "src/archivey/__init__.py"
+validate-bump = false
 
 [tool.pyrefly]
 search-path = ["src"]

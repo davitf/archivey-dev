@@ -1,0 +1,62 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Hatch
+        run: pip install hatch
+
+      - name: Build package
+        run: hatch build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          path: ./dist
+
+  pypi-publish:
+    needs: ['build']
+    environment: 'publish'
+    name: upload release to PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Publish package distributions to PyPI
+        if: github.repository == 'davitf/archivey'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages_dir: artifact
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Publish package distributions to TestPyPI
+        if: github.repository == 'davitf/archivey-dev'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages_dir: artifact
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: Fail on unexpected repository
+        if: github.repository != 'davitf/archivey' && github.repository != 'davitf/archivey-dev'
+        run: |
+          echo "Repository ${{ github.repository }} is not allowed to publish" >&2
+          exit 1

@@ -118,6 +118,9 @@ def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
         return ArchiveStreamNotSeekableError(
             "rapidgzip does not support non-seekable streams"
         )
+    # This happens in some rapidgzip builds, not all.
+    if isinstance(e, RuntimeError) and "std::exception" in str(e):
+        return ArchiveCorruptedError(f"Unknown rror reading RapidGZIP archive: {repr(e)}")
 
     # Found in rapidgzip 0.11.0
     if (
@@ -130,6 +133,11 @@ def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 def open_rapidgzip_stream(path: str | BinaryIO) -> BinaryIO:
+    if rapidgzip is None:
+        raise PackageNotInstalledError(
+            "rapidgzip package is not installed, required for GZIP archives"
+        ) from None  # pragma: no cover -- rapidgzip is installed for main tests
+
     return ExceptionTranslatingIO(
         lambda: rapidgzip.open(path, parallelization=0), _translate_rapidgzip_exception
     )
@@ -170,6 +178,11 @@ def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 def open_indexed_bzip2_stream(path: str | BinaryIO) -> BinaryIO:
+    if indexed_bzip2 is None:
+        raise PackageNotInstalledError(
+            "indexed_bzip2 package is not installed, required for BZIP2 archives"
+        ) from None  # pragma: no cover -- indexed_bzip2 is installed for main tests
+
     return ExceptionTranslatingIO(
         lambda: indexed_bzip2.open(path, parallelization=0),
         _translate_indexed_bzip2_exception,
@@ -189,16 +202,19 @@ def open_lzma_stream(path: str | BinaryIO) -> BinaryIO:
 
 
 def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    logger.debug("TRANSLATING XZ EXCEPTION", exc_info=e)
     if isinstance(e, xz.XZError):
         return ArchiveCorruptedError(f"Error reading XZ archive: {repr(e)}")
     if isinstance(e, ValueError) and "filename is not seekable" in str(e):
         return ArchiveStreamNotSeekableError(
             "Python XZ does not support non-seekable streams"
         )
+    # Raised by RecordableStream (used to wrap non-seekable streams during format
+    # detection) when the library tries to seek to the end.
+    if isinstance(e, io.UnsupportedOperation) and "seek to end" in str(e):
+        return ArchiveStreamNotSeekableError(
+            "Python XZ does not support non-seekable streams"
+        )
+
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 

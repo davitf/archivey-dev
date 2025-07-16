@@ -139,7 +139,8 @@ def open_archive(
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
-    format = detect_archive_format(ensure_not_none(stream or path))
+    with archivey_config(config):
+        format = detect_archive_format(ensure_not_none(stream or path))
 
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
@@ -201,7 +202,6 @@ def open_compressed_stream(
         ArchiveCorruptedError: If the archive is detected as corrupted during opening
             (some checks are format-specific).
     """
-
     stream: BinaryIO | None
     path: str | None
 
@@ -240,5 +240,4 @@ def open_compressed_stream(
     if config is None:
         config = get_archivey_config()
 
-    with archivey_config(config):
-        return open_stream(format, ensure_not_none(stream or path), config)
+    return open_stream(format, ensure_not_none(stream or path), config)

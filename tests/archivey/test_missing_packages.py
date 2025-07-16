@@ -10,7 +10,9 @@ from archivey.exceptions import (
 )
 from archivey.internal.dependency_checker import get_dependency_versions
 from tests.archivey.sample_archives import (
+    ALTERNATIVE_CONFIG,
     SAMPLE_ARCHIVES,
+    SampleArchive,
     filter_archives,
 )
 
@@ -45,31 +47,60 @@ BASIC_LZ4_ARCHIVE = filter_archives(
     SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["lz4"]
 )[0]
 
-BASIC_ZSTD_ARCHIVE = filter_archives(
-    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["zst"]
+BASIC_GZIP_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["gz"]
+)[0]
+
+BASIC_BZIP2_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["bz2"]
+)[0]
+
+BASIC_XZ_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["xz"]
 )[0]
 
 
 @pytest.mark.parametrize(
-    ["library_name", "archive_path"],
+    ["library_name", "sample_archive", "alternative_packages"],
     [
-        # ("pycdlib", BASIC_ISO_ARCHIVE.get_archive_path()),
-        ("rarfile", BASIC_RAR_ARCHIVE.get_archive_path()),
-        ("py7zr", BASIC_7Z_ARCHIVE.get_archive_path()),
-        ("pyzstd", BASIC_ZSTD_ARCHIVE.get_archive_path()),
-        ("lz4", BASIC_LZ4_ARCHIVE.get_archive_path()),
+        # ("pycdlib", BASIC_ISO_ARCHIVE.get_archive_path(), None),
+        ("rarfile", BASIC_RAR_ARCHIVE, False),
+        ("py7zr", BASIC_7Z_ARCHIVE, False),
+        ("rapidgzip", BASIC_GZIP_ARCHIVE, True),
+        ("indexed_bzip2", BASIC_BZIP2_ARCHIVE, True),
+        ("python-xz", BASIC_XZ_ARCHIVE, True),
+        ("pyzstd", BASIC_ZSTD_ARCHIVE, False),
+        ("zstandard", BASIC_ZSTD_ARCHIVE, True),
+        ("lz4", BASIC_LZ4_ARCHIVE, False),
     ],
-    ids=lambda x: os.path.basename(x),
+    ids=lambda x: os.path.basename(x) if isinstance(x, str) else x,
 )
-def test_missing_package_raises_exception(library_name: str, archive_path: str):
+def test_missing_package_raises_exception(
+    library_name: str, sample_archive: SampleArchive, alternative_packages: bool
+):
+    config = ALTERNATIVE_CONFIG if alternative_packages else None
+    archive_path = sample_archive.get_archive_path()
     dependencies = get_dependency_versions()
-    if getattr(dependencies, f"{library_name}_version") is not None:
+    library_version = getattr(dependencies, f"{library_name.replace('-', '_')}_version")
+
+    # Check if we're in a no-libs test environment
+    if os.environ.get("ARCHIVEY_TEST_NO_LIBS"):
+        if library_version is not None:
+            pytest.fail(
+                f"{library_name} should not be installed in nolibs environment, but found version {library_version}"
+            )
+    else:
+        # Original behavior: skip if library is installed
+        if library_version is not None:
+            pytest.skip(f"{library_name} is installed with version {library_version}")
+
+    if library_version is not None:
         pytest.skip(
             f"{library_name} is installed with version {getattr(dependencies, f'{library_name}_version')}"
         )
 
     with pytest.raises(PackageNotInstalledError) as excinfo:
-        open_archive(archive_path)
+        open_archive(archive_path, config=config)
 
     assert f"{library_name} package is not installed" in str(excinfo.value)
 

@@ -4,7 +4,7 @@ import contextvars
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Any, Iterator, Literal, TypeAlias, TypedDict
 
 from .types import ExtractionFilter, FilterFunc
 
@@ -122,7 +122,7 @@ def set_archivey_config_fields(
 def archivey_config(
     config: ArchiveyConfig | None = None,
     **overrides: Unpack[ConfigOverrides],
-):
+) -> Iterator[ArchiveyConfig]:
     """Temporarily use ``config`` and/or override fields as the default configuration for :func:`open_archive` and :func:`open_compressed_stream`.
 
     Example:
@@ -142,7 +142,7 @@ def archivey_config(
 
     token = _default_config_var.set(config)
     try:
-        yield
+        yield config
     finally:
         _default_config_var.reset(token)
 
