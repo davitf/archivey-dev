@@ -73,8 +73,12 @@ jobs:
             choco install unrar
           fi
 
+      - name: List current directory
+        run: dir
+        shell: cmd
+  
       - name: Run tox environment
-        run: python -m tox -vv -c tox.ini -e py${{ matrix.python-version }}-alldeps
+        run: python -m tox -vv -e py${{ matrix.python-version }}-alldeps
 
   dependency-version-tests:
     name: Tox - py${{ matrix.python-version }}-${{ matrix.tox_env }}
