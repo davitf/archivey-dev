@@ -1,6 +1,5 @@
 import argparse
 import builtins
-import fnmatch
 import hashlib
 import logging
 import os
@@ -8,7 +7,7 @@ import sys
 import zlib
 from datetime import datetime
 from importlib.metadata import version as package_version
-from typing import IO, BinaryIO, Callable, Tuple, cast
+from typing import IO, BinaryIO, Tuple, cast
 
 from tqdm import tqdm
 
@@ -20,6 +19,7 @@ from archivey.internal.dependency_checker import (
     format_dependency_versions,
     get_dependency_versions,
 )
+from archivey.filters import build_pattern_filter
 from archivey.internal.io_helpers import IOStats, StatsIO
 from archivey.types import ArchiveMember, MemberType
 
@@ -51,17 +51,6 @@ def get_member_checksums(member_file: BinaryIO) -> Tuple[int, str]:
         crc32_value = zlib.crc32(block, crc32_value)
         sha256.update(block)
     return crc32_value & 0xFFFFFFFF, sha256.hexdigest()
-
-
-def build_pattern_filter(patterns: list[str]) -> Callable[[ArchiveMember], bool] | None:
-    """Create a filter function for member names based on shell-style patterns."""
-    if not patterns:
-        return None
-
-    def _match(member: ArchiveMember) -> bool:
-        return any(fnmatch.fnmatch(member.filename, pat) for pat in patterns)
-
-    return _match
 
 
 logger = logging.getLogger(__name__)

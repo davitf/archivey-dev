@@ -17,7 +17,8 @@ import functools
 import logging
 import os
 import posixpath
-from typing import Any
+import fnmatch
+from typing import Any, Callable
 
 from archivey.config import ExtractionFilter
 from archivey.exceptions import ArchiveFilterError
@@ -28,6 +29,23 @@ from archivey.types import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def build_pattern_filter(patterns: list[str]) -> Callable[[ArchiveMember], bool] | None:
+    """Create a filename filter based on shell-style patterns.
+
+    The returned callable checks if an :class:`~archivey.types.ArchiveMember`
+    ``filename`` matches any of the given patterns using :func:`fnmatch.fnmatch`.
+    If ``patterns`` is empty, ``None`` is returned.
+    """
+
+    if not patterns:
+        return None
+
+    def _match(member: ArchiveMember) -> bool:
+        return any(fnmatch.fnmatch(member.filename, pat) for pat in patterns)
+
+    return _match
 
 
 def _check_target_inside_archive_root(

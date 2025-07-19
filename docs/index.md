@@ -127,6 +127,10 @@ You can filter member names using shell patterns placed after `--`:
 archivey --list my_archive.zip -- "*.txt"
 ```
 
+In Python code you can create the same filter using
+`[build_pattern_filter][archivey.filters.build_pattern_filter]` and pass it to
+`iter_members_with_io` or `extractall`.
+
 ---
 
 ## Documentation
