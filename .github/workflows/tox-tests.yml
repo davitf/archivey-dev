@@ -74,7 +74,6 @@ jobs:
           fi
 
       - name: Run tox environment
-        shell: bash
         run: python -m tox -vv -c tox.ini -e py${{ matrix.python-version }}-alldeps
 
   dependency-version-tests:
