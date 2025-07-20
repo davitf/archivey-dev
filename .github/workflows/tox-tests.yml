@@ -65,6 +65,7 @@ jobs:
         run: pip install tox
 
       - name: Install unrar (for rarfile tests)
+        shell: bash
         run: scripts/install_unrar.sh
 
       - name: Run tox environment
