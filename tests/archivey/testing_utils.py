@@ -24,11 +24,12 @@ if TYPE_CHECKING:
 
 
 def _set_file_mtime(full_path: str, mtime: datetime.datetime, file_type: MemberType):
-    if file_type == MemberType.SYMLINK and not os.supports_follow_symlinks:
-        return
-
     kwargs = {}
-    if os.supports_follow_symlinks:
+    if file_type == MemberType.HARDLINK:
+        return
+    if file_type == MemberType.SYMLINK:
+        if os.utime not in os.supports_follow_symlinks:
+            return
         kwargs["follow_symlinks"] = False
 
     os.utime(
@@ -42,11 +43,12 @@ def _set_file_mtime(full_path: str, mtime: datetime.datetime, file_type: MemberT
 
 
 def _set_file_permissions(full_path: str, permissions: int, file_type: MemberType):
-    if file_type == MemberType.SYMLINK and not os.supports_follow_symlinks:
-        return
-
     kwargs = {}
-    if os.supports_follow_symlinks:
+    if file_type == MemberType.HARDLINK:
+        return
+    if file_type == MemberType.SYMLINK:
+        if os.chmod not in os.supports_follow_symlinks:
+            return
         kwargs["follow_symlinks"] = False
 
     os.chmod(full_path, permissions, **kwargs)
