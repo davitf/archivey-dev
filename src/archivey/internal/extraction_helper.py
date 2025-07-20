@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def apply_member_metadata(member: ArchiveMember, target_path: str) -> None:
+    # TODO: should we use follow_symlinks=False here? Why aren't tests failing?
     if member.mtime:
         os.utime(target_path, (member.mtime.timestamp(), member.mtime.timestamp()))
 
