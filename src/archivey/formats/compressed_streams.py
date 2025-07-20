@@ -162,7 +162,12 @@ def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
     exc_text = str(e)
     if isinstance(e, RuntimeError) and "Calculated CRC" in exc_text:
         return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {repr(e)}")
-    if isinstance(e, RuntimeError) and exc_text == "std::exception":
+    # Unspecified exception in the indexed_bzip2 native code, likely when dealing with
+    # corrupted data.
+    if isinstance(e, RuntimeError) and exc_text in (
+        "std::exception",  # Seen in Linux with non-prebuilt wheels
+        "Unknown exception",  # Seen in Windows Github actions tests
+    ):
         return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {repr(e)}")
     if isinstance(e, ValueError) and "[BZip2 block data]" in exc_text:
         return ArchiveCorruptedError(f"Error reading Indexed BZIP2 archive: {repr(e)}")
