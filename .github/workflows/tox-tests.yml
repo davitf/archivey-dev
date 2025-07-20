@@ -28,7 +28,7 @@ jobs:
         run: pip install tox
 
       - name: Install unrar (for rarfile tests)
-        run: sudo apt-get update && sudo apt-get install -y unrar
+        run: scripts/install_unrar.sh
 
       - name: Run tox environment
         run: |
@@ -65,21 +65,8 @@ jobs:
         run: pip install tox
 
       - name: Install unrar (for rarfile tests)
-        shell: bash
-        run: |
-          if [[ "${{ runner.os }}" == "macOS" ]]; then
-            brew install rar
-          elif [[ "${{ runner.os }}" == "Windows" ]]; then
-            choco install unrar
-          fi
+        run: scripts/install_unrar.sh
 
-      - name: List current directory
-        run: dir
-        shell: cmd
-
-      - name: Show tox config
-        run: tox --showconfig
-      
       - name: Run tox environment
         run: tox -vv -e py${{ matrix.python-version }}-alldeps
 
