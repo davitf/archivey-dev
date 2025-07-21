@@ -2,8 +2,12 @@
 Utility functions for archivey.
 """
 
+import datetime
 import logging
+import os
 from typing import TypeVar, overload
+
+from archivey.types import MemberType
 
 
 @overload
@@ -74,3 +78,45 @@ def ensure_not_none(x: T | None) -> T:
     if x is None:
         raise ValueError("Expected non-None value")
     return x
+
+
+def platform_supports_setting_symlink_mtime() -> bool:
+    return os.utime in os.supports_follow_symlinks
+
+
+def platform_supports_setting_symlink_permissions() -> bool:
+    return os.chmod in os.supports_follow_symlinks
+
+
+def set_file_mtime(
+    full_path: str, mtime: datetime.datetime, file_type: MemberType
+) -> bool:
+    kwargs = {}
+    if file_type == MemberType.HARDLINK:
+        return False
+    if file_type == MemberType.SYMLINK:
+        if os.utime not in os.supports_follow_symlinks:
+            return False
+        kwargs["follow_symlinks"] = False
+
+    os.utime(
+        full_path,
+        (mtime.timestamp(), mtime.timestamp()),
+        **kwargs,
+    )
+    return True
+
+
+def set_file_permissions(
+    full_path: str, permissions: int, file_type: MemberType
+) -> bool:
+    kwargs = {}
+    if file_type == MemberType.HARDLINK:
+        return False
+    if file_type == MemberType.SYMLINK:
+        if os.chmod not in os.supports_follow_symlinks:
+            return False
+        kwargs["follow_symlinks"] = False
+
+    os.chmod(full_path, permissions, **kwargs)
+    return True

@@ -46,7 +46,7 @@ optional-freethreaded = [
     "pycryptodome>=3.23.0",
     "rarfile>=4.2",
     "py7zr>=1.0.0",
-    "indexed_bzip2>=1.6.0",
+    "indexed_bzip2==1.6.0",  # 1.7.0 does not compile in Github actions for free-threaded builds
     "python-xz>=0.5.0",
     "pyzstd>=0.17.0",
     "lz4>=4.4.4 ; python_full_version < '3.14'",
