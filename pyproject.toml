@@ -14,6 +14,11 @@ dependencies = [
     "tqdm>=4.67.1",
 ]
 
+[project.urls]
+homepage = "https://github.com/davitf/archivey"
+documentation = "https://davitf.github.io/archivey/"
+repository = "https://github.com/davitf/archivey.git"
+
 [project.scripts]
 archivey = "archivey.__main__:main"
 
