@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING
 from archivey.config import OverwriteMode
 from archivey.exceptions import (
     ArchiveFileExistsError,
-    ArchiveLinkTargetNotFoundError,
 )
+from archivey.internal.utils import set_file_mtime, set_file_permissions
 from archivey.types import ArchiveMember, MemberType
 
 if TYPE_CHECKING:
@@ -22,12 +22,11 @@ logger = logging.getLogger(__name__)
 
 
 def apply_member_metadata(member: ArchiveMember, target_path: str) -> None:
-    # TODO: should we use follow_symlinks=False here? Why aren't tests failing?
     if member.mtime:
-        os.utime(target_path, (member.mtime.timestamp(), member.mtime.timestamp()))
+        set_file_mtime(target_path, member.mtime, member.type)
 
     if member.mode:
-        os.chmod(target_path, member.mode)
+        set_file_permissions(target_path, member.mode, member.type)
 
 
 class ExtractionHelper:
@@ -135,12 +134,11 @@ class ExtractionHelper:
         self, member: ArchiveMember, extracted_path: str | None
     ) -> None:
         """Called for files that had a delayed extraction."""
-        logger.info(
+        logger.debug(
             "Processing external extraction of %s [%s] to %s",
             member.filename,
             member.member_id,
             extracted_path,
-            stack_info=True,
         )
         if member.is_link:
             self.extract_member(member, None)
@@ -166,6 +164,7 @@ class ExtractionHelper:
         self.pending_files_to_extract_by_id.pop(member.member_id, None)
 
         self.can_move_file = True
+        written_target_paths: set[str] = set()
         for target in targets:
             logger.info(
                 "  Processing target %s [%s] (member [%s])",
@@ -193,6 +192,7 @@ class ExtractionHelper:
                     with self._lock:
                         self.can_move_file = False
                         self.extracted_members_by_path[target_path] = target
+                        written_target_paths.add(target_path)
                 else:
                     with self._lock:
                         logger.info(
@@ -206,6 +206,7 @@ class ExtractionHelper:
                         os.makedirs(os.path.dirname(target_path), exist_ok=True)
                         shutil.move(extracted_path, target_path)
                         self.extracted_members_by_path[target_path] = target
+                        written_target_paths.add(target_path)
 
             else:
                 # Create a hardlink to the first target.
@@ -217,12 +218,27 @@ class ExtractionHelper:
                 )
                 try:
                     with self._lock:
+                        # Some tar archives can contain hardlinks to a file with the same name.
+                        # If we check for overwrites here, it can end up deleting the original
+                        # extracted file, and we'll have nothing to link to.
+                        if target_path in written_target_paths:
+                            logger.info(
+                                "  Skipping hardlink for %s [%s] (member [%s]) as it is the same file",
+                                target.filename,
+                                target.member_id,
+                                member.member_id,
+                            )
+                            # This was technically extracted last.
+                            self.extracted_members_by_path[target_path] = target
+                            continue
+
                         if not self.check_overwrites(member, target_path):
                             continue
 
                         os.makedirs(os.path.dirname(target_path), exist_ok=True)
                         os.link(target_path, self.get_output_path(target))
                         self.extracted_members_by_path[target_path] = target
+                        written_target_paths.add(target_path)
 
                 except (AttributeError, NotImplementedError, OSError):
                     # os.link failed, so we need to create a copy as a regular file.
@@ -232,6 +248,11 @@ class ExtractionHelper:
                         target.filename,
                     )
                     shutil.copyfile(extracted_path, target_path)
+                    if target.mtime:
+                        set_file_mtime(target_path, target.mtime, MemberType.FILE)
+                    if target.mode:
+                        set_file_permissions(target_path, target.mode, MemberType.FILE)
+                    self.extracted_members_by_path[target_path] = target
 
             # Remove the file from the pending list.
             self.extracted_path_by_source_id[target.member_id] = target_path
@@ -261,7 +282,7 @@ class ExtractionHelper:
         return True
 
     def create_link(self, member: ArchiveMember, member_path: str) -> bool:
-        logger.error(
+        logger.info(
             "Creating link %s to %s , path=%s",
             member.filename,
             member.link_target,
@@ -286,10 +307,13 @@ class ExtractionHelper:
             # If that file was already extracted, take the target path from the extracted path
             target_member = self.archive_reader.resolve_link(member)
             if target_member is None:
-                self.failed_extractions.append(member)
-                raise ArchiveLinkTargetNotFoundError(
-                    f"Hardlink target {member.link_target} not found for {member.filename}"
+                logger.error(
+                    "Hardlink target %s not found for %s",
+                    member.link_target,
+                    member.filename,
                 )
+                self.failed_extractions.append(member)
+                return False
 
             target_path = self.extracted_path_by_source_id.get(target_member.member_id)
             if target_path is None:

@@ -563,9 +563,9 @@ class SevenZipReader(BaseArchiveReader):
         def extractor():
             try:
                 assert self._archive is not None
-                self._archive.reset()
                 factory = StreamingFactory(q)
                 with self._temporary_password(pwd):
+                    self._archive.reset()
                     self._archive.extract(targets=extract_targets, factory=factory)
                     factory.finish()
             except Exception as e:  # noqa: BLE001
@@ -730,6 +730,7 @@ class SevenZipReader(BaseArchiveReader):
 
         def _do_extract() -> None:
             with self._temporary_password(pwd):
+                archive.reset()
                 archive.extract(path=path, targets=[member_obj.filename])
 
         run_with_exception_translation(
@@ -767,6 +768,7 @@ class SevenZipReader(BaseArchiveReader):
 
         def _do_extract() -> None:
             with self._temporary_password(pwd):
+                archive.reset()
                 archive.extract(
                     path, targets=paths_to_extract, recursive=False, factory=factory
                 )
