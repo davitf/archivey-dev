@@ -6,10 +6,12 @@ from pathlib import Path
 import pytest
 
 from archivey.core import open_archive
+from archivey.exceptions import ArchiveLinkTargetNotFoundError
 from archivey.types import MemberType
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     DUPLICATE_FILES_ARCHIVES,
+    HARDLINK_ARCHIVES,
     SYMLINK_ARCHIVES,
     SampleArchive,
 )
@@ -25,7 +27,9 @@ def _check_file_metadata(path: Path, info, sample):
     if info.permissions is not None:
         assert (stat.st_mode & 0o777) == info.permissions, path
 
-    if not features.mtime:
+    if not features.mtime or (
+        info.type == MemberType.HARDLINK and not features.hardlink_mtime
+    ):
         return
 
     actual = datetime.fromtimestamp(stat.st_mtime)
@@ -37,7 +41,7 @@ def _check_file_metadata(path: Path, info, sample):
 
 @pytest.mark.parametrize(
     "sample_archive",
-    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES + SYMLINK_ARCHIVES,
+    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES + SYMLINK_ARCHIVES + HARDLINK_ARCHIVES,
     ids=lambda x: x.filename,
 )
 def test_extractall(
@@ -51,6 +55,10 @@ def test_extractall(
     logger.info(f"Extracting {sample_archive_path} to {dest}")
 
     with open_archive(sample_archive_path) as archive:
+        if "hardlinks_recursive_and_broken" in sample_archive.filename:
+            with pytest.raises(ArchiveLinkTargetNotFoundError):
+                archive.extractall(dest)
+            return
         archive.extractall(dest)
 
     for info in remove_duplicate_files(sample_archive.contents.files):

@@ -231,6 +231,11 @@ class ExtractionHelper:
                         target.filename,
                     )
                     shutil.copyfile(extracted_path, target_path)
+                    if target.mtime:
+                        set_file_mtime(target_path, target.mtime, MemberType.FILE)
+                    if target.mode:
+                        set_file_permissions(target_path, target.mode, MemberType.FILE)
+                    self.extracted_members_by_path[target_path] = target
 
             # Remove the file from the pending list.
             self.extracted_path_by_source_id[target.member_id] = target_path
