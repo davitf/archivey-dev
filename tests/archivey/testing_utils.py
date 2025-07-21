@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import datetime
 import os
 import subprocess
 import zlib
@@ -11,6 +10,7 @@ import pytest
 
 from archivey.config import ArchiveyConfig
 from archivey.internal.dependency_checker import get_dependency_versions
+from archivey.internal.utils import set_file_mtime, set_file_permissions
 from archivey.types import (
     TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,
@@ -21,37 +21,6 @@ if TYPE_CHECKING:
     from tests.archivey.sample_archives import (
         FileInfo,
     )
-
-
-def _set_file_mtime(full_path: str, mtime: datetime.datetime, file_type: MemberType):
-    kwargs = {}
-    if file_type == MemberType.HARDLINK:
-        return
-    if file_type == MemberType.SYMLINK:
-        if os.utime not in os.supports_follow_symlinks:
-            return
-        kwargs["follow_symlinks"] = False
-
-    os.utime(
-        full_path,
-        (
-            mtime.replace(tzinfo=timezone.utc).timestamp(),
-            mtime.replace(tzinfo=timezone.utc).timestamp(),
-        ),
-        **kwargs,
-    )
-
-
-def _set_file_permissions(full_path: str, permissions: int, file_type: MemberType):
-    kwargs = {}
-    if file_type == MemberType.HARDLINK:
-        return
-    if file_type == MemberType.SYMLINK:
-        if os.chmod not in os.supports_follow_symlinks:
-            return
-        kwargs["follow_symlinks"] = False
-
-    os.chmod(full_path, permissions, **kwargs)
 
 
 def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
@@ -66,6 +35,8 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
         ].index(x.type),
     ):
         full_path = os.path.join(dir, file.name)
+        mtime_utc = file.mtime.replace(tzinfo=timezone.utc)
+
         if file.type == MemberType.DIR:
             os.makedirs(full_path, exist_ok=True)
         elif file.type == MemberType.HARDLINK:
@@ -90,7 +61,7 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
                 f.write(file.contents)
 
         if file.type != MemberType.HARDLINK:
-            _set_file_mtime(full_path, file.mtime, file.type)
+            set_file_mtime(full_path, mtime_utc, file.type)
 
             default_permissions_by_type = {
                 MemberType.DIR: 0o755,
@@ -98,7 +69,7 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
                 MemberType.FILE: 0o644,
             }
             perm = file.permissions or default_permissions_by_type[file.type]
-            _set_file_permissions(full_path, perm, file.type)
+            set_file_permissions(full_path, perm, file.type)
 
     # List the files with ls
     subprocess.run(["ls", "-alF", "-R", "--time-style=full-iso", dir], check=True)

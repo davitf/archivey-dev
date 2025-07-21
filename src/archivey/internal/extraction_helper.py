@@ -12,6 +12,7 @@ from archivey.exceptions import (
     ArchiveFileExistsError,
     ArchiveLinkTargetNotFoundError,
 )
+from archivey.internal.utils import set_file_mtime, set_file_permissions
 from archivey.types import ArchiveMember, MemberType
 
 if TYPE_CHECKING:
@@ -22,12 +23,11 @@ logger = logging.getLogger(__name__)
 
 
 def apply_member_metadata(member: ArchiveMember, target_path: str) -> None:
-    # TODO: should we use follow_symlinks=False here? Why aren't tests failing?
     if member.mtime:
-        os.utime(target_path, (member.mtime.timestamp(), member.mtime.timestamp()))
+        set_file_mtime(target_path, member.mtime, member.type)
 
     if member.mode:
-        os.chmod(target_path, member.mode)
+        set_file_permissions(target_path, member.mode, member.type)
 
 
 class ExtractionHelper:
@@ -135,12 +135,11 @@ class ExtractionHelper:
         self, member: ArchiveMember, extracted_path: str | None
     ) -> None:
         """Called for files that had a delayed extraction."""
-        logger.info(
+        logger.debug(
             "Processing external extraction of %s [%s] to %s",
             member.filename,
             member.member_id,
             extracted_path,
-            stack_info=True,
         )
         if member.is_link:
             self.extract_member(member, None)
@@ -261,7 +260,7 @@ class ExtractionHelper:
         return True
 
     def create_link(self, member: ArchiveMember, member_path: str) -> bool:
-        logger.error(
+        logger.info(
             "Creating link %s to %s , path=%s",
             member.filename,
             member.link_target,

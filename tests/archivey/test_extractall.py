@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -9,9 +10,12 @@ from archivey.types import MemberType
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     DUPLICATE_FILES_ARCHIVES,
+    SYMLINK_ARCHIVES,
     SampleArchive,
 )
 from tests.archivey.testing_utils import remove_duplicate_files, skip_if_package_missing
+
+logger = logging.getLogger(__name__)
 
 
 def _check_file_metadata(path: Path, info, sample):
@@ -33,16 +37,24 @@ def _check_file_metadata(path: Path, info, sample):
 
 @pytest.mark.parametrize(
     "sample_archive",
-    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES,
+    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES + SYMLINK_ARCHIVES,
     ids=lambda x: x.filename,
 )
 def test_extractall(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
+    # TODO: fix these cases! py7zr seems to get stuck in an infinite loop
+    if sample_archive.filename.startswith(
+        "symlink"
+    ) and sample_archive.filename.endswith(".7z"):
+        pytest.skip("Skipping symlink.7z archive")
+
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
     dest = tmp_path / "out"
     dest.mkdir()
+
+    logger.info(f"Extracting {sample_archive_path} to {dest}")
 
     with open_archive(sample_archive_path) as archive:
         archive.extractall(dest)
@@ -81,9 +93,7 @@ def test_extractall_filter(
     dest.mkdir()
 
     with open_archive(sample_archive_path) as archive:
-        archive.extractall(
-            dest, members=lambda m, path=None: m.filename.endswith("file2.txt")
-        )
+        archive.extractall(dest, members=lambda m: m.filename.endswith("file2.txt"))
 
     path = dest / "subdir" / "file2.txt"
     assert path.exists() and path.is_file()
