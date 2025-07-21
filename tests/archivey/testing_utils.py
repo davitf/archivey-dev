@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import os
 import subprocess
 import zlib
@@ -20,6 +21,37 @@ if TYPE_CHECKING:
     from tests.archivey.sample_archives import (
         FileInfo,
     )
+
+
+def _set_file_mtime(full_path: str, mtime: datetime.datetime, file_type: MemberType):
+    kwargs = {}
+    if file_type == MemberType.HARDLINK:
+        return
+    if file_type == MemberType.SYMLINK:
+        if os.utime not in os.supports_follow_symlinks:
+            return
+        kwargs["follow_symlinks"] = False
+
+    os.utime(
+        full_path,
+        (
+            mtime.replace(tzinfo=timezone.utc).timestamp(),
+            mtime.replace(tzinfo=timezone.utc).timestamp(),
+        ),
+        **kwargs,
+    )
+
+
+def _set_file_permissions(full_path: str, permissions: int, file_type: MemberType):
+    kwargs = {}
+    if file_type == MemberType.HARDLINK:
+        return
+    if file_type == MemberType.SYMLINK:
+        if os.chmod not in os.supports_follow_symlinks:
+            return
+        kwargs["follow_symlinks"] = False
+
+    os.chmod(full_path, permissions, **kwargs)
 
 
 def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
@@ -58,29 +90,15 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
                 f.write(file.contents)
 
         if file.type != MemberType.HARDLINK:
-            os.utime(
-                full_path,
-                (
-                    file.mtime.replace(tzinfo=timezone.utc).timestamp(),
-                    file.mtime.replace(tzinfo=timezone.utc).timestamp(),
-                ),
-                follow_symlinks=False,
-            )
+            _set_file_mtime(full_path, file.mtime, file.type)
+
             default_permissions_by_type = {
                 MemberType.DIR: 0o755,
                 MemberType.SYMLINK: 0o777,
                 MemberType.FILE: 0o644,
             }
             perm = file.permissions or default_permissions_by_type[file.type]
-            if file.type == MemberType.SYMLINK:
-                try:
-                    os.chmod(full_path, perm, follow_symlinks=False)
-                except (NotImplementedError, OSError):
-                    # Platforms without lchmod support may not allow setting
-                    # permissions on symlinks. Ignore in that case.
-                    pass
-            else:
-                os.chmod(full_path, perm)
+            _set_file_permissions(full_path, perm, file.type)
 
     # List the files with ls
     subprocess.run(["ls", "-alF", "-R", "--time-style=full-iso", dir], check=True)
