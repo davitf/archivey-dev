@@ -8,10 +8,12 @@ Tox configurations are provided to run the suite against multiple Python
 versions and dependency sets (`tox -e <env>`).  Continuous integration executes
 these tox environments via the workflow in `.github/workflows/tox-tests.yml`.
 
-To help development, install **uv** and **hatch**. Also install the **unrar** tool:
+To help development, install **uv** and **hatch**. Also install the **unrar** tool
+and install tox via `uv` with the `tox-uv` plugin:
 
 ```bash
 pip install uv hatch
+uv tool install tox --with tox-uv
 sudo apt-get install -y unrar
 ```
 
