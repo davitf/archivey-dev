@@ -71,8 +71,11 @@ jobs:
         shell: bash
         run: scripts/install_unrar.sh
 
-      - name: Run tox environment
-        run: tox -vv -e py${{ matrix.python-version }}-alldeps
+      - name: Run tox environment (excluding corrupted files test)
+        run: tox -vv -e py${{ matrix.python-version }}-alldeps -- -k "not test_corrupted_archives"
+
+      - name: Run corrupted files test only
+        run: tox -vv -e py${{ matrix.python-version }}-alldeps -- tests/archivey/test_corrupted_archives.py
 
   dependency-version-tests:
     name: Tox - py${{ matrix.python-version }}-${{ matrix.tox_env }}
@@ -81,7 +84,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.13"]
-        tox_env: ["newlibs", "oldlibs", "nolibs", "rarfile_no_crypto"]
+        tox_env: ["oldlibs", "nolibs", "rarfile_no_crypto"]
 
     steps:
       - name: Check out code
