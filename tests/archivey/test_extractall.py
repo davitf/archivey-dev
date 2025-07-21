@@ -43,12 +43,6 @@ def _check_file_metadata(path: Path, info, sample):
 def test_extractall(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
-    # TODO: fix these cases! py7zr seems to get stuck in an infinite loop
-    if sample_archive.filename.startswith(
-        "symlink"
-    ) and sample_archive.filename.endswith(".7z"):
-        pytest.skip("Skipping symlink.7z archive")
-
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
     dest = tmp_path / "out"
@@ -66,7 +60,11 @@ def test_extractall(
             assert path.is_dir()
         elif info.type == MemberType.SYMLINK:
             assert path.is_symlink()
-            assert os.readlink(path) == info.link_target
+            assert info.link_target is not None
+            # When extracting links to dirs, the link target may not include the trailing slash.
+            assert os.readlink(path).removesuffix("/") == info.link_target.removesuffix(
+                "/"
+            )
         else:
             assert path.is_file()
             with open(path, "rb") as f:
