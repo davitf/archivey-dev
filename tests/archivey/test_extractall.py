@@ -55,15 +55,28 @@ def test_extractall(
     logger.info(f"Extracting {sample_archive_path} to {dest}")
 
     with open_archive(sample_archive_path) as archive:
-        # if "hardlinks_recursive_and_broken" in sample_archive.filename:
-        #     with pytest.raises(ArchiveLinkTargetNotFoundError):
-        #         archive.extractall(dest)
-        #     return
+        # TODO: check the dict returned by extractall
         archive.extractall(dest)
+
+    expected_files: set[str] = set()
 
     for info in remove_duplicate_files(sample_archive.contents.files):
         path = dest / info.name.rstrip("/")
-        assert path.exists(), f"Missing {path}"
+        if info.type != MemberType.HARDLINK or info.contents is not None:
+            assert path.exists(follow_symlinks=False), f"Missing {path}"
+            expected_files.add(str(path.relative_to(dest)).replace(os.sep, "/"))
+            # Add any implicit parent directories.
+
+            dirname = os.path.dirname(info.name)
+            while dirname:
+                expected_files.add(dirname)
+                dirname = os.path.dirname(dirname)
+
+        else:
+            # Broken hardlinks should not exist at all in the extracted folder.
+            assert not path.exists(), f"Broken hardlink {path} should not exist"
+            continue
+
         if info.type == MemberType.DIR:
             assert path.is_dir()
         elif info.type == MemberType.SYMLINK:
@@ -80,9 +93,9 @@ def test_extractall(
 
         _check_file_metadata(path, info, sample_archive)
 
+    # Check that no extra files were extracted.
     extracted = {str(p.relative_to(dest)).replace(os.sep, "/") for p in dest.rglob("*")}
-    expected = {f.name.rstrip("/") for f in sample_archive.contents.files}
-    assert expected <= extracted
+    assert expected_files == extracted
 
 
 @pytest.mark.parametrize(
