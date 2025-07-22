@@ -63,7 +63,7 @@ def test_extractall(
     for info in remove_duplicate_files(sample_archive.contents.files):
         path = dest / info.name.rstrip("/")
         if info.type != MemberType.HARDLINK or info.contents is not None:
-            assert path.exists(follow_symlinks=False), f"Missing {path}"
+            assert os.path.lexists(path), f"Missing {path}"
             expected_files.add(str(path.relative_to(dest)).replace(os.sep, "/"))
             # Add any implicit parent directories.
 
@@ -74,7 +74,7 @@ def test_extractall(
 
         else:
             # Broken hardlinks should not exist at all in the extracted folder.
-            assert not path.exists(), f"Broken hardlink {path} should not exist"
+            assert not os.path.lexists(path), f"Broken hardlink {path} should not exist"
             continue
 
         if info.type == MemberType.DIR:
