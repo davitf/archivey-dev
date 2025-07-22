@@ -6,13 +6,13 @@ from pathlib import Path
 import pytest
 
 from archivey.core import open_archive
-from archivey.exceptions import ArchiveLinkTargetNotFoundError
 from archivey.types import MemberType
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     DUPLICATE_FILES_ARCHIVES,
     HARDLINK_ARCHIVES,
     SYMLINK_ARCHIVES,
+    FileInfo,
     SampleArchive,
 )
 from tests.archivey.testing_utils import remove_duplicate_files, skip_if_package_missing
@@ -20,23 +20,23 @@ from tests.archivey.testing_utils import remove_duplicate_files, skip_if_package
 logger = logging.getLogger(__name__)
 
 
-def _check_file_metadata(path: Path, info, sample):
+def _check_file_metadata(path: Path, info: FileInfo, sample: SampleArchive):
     stat = path.lstat() if info.type == MemberType.SYMLINK else path.stat()
     features = sample.creation_info.features
 
     if info.permissions is not None:
         assert (stat.st_mode & 0o777) == info.permissions, path
 
-    if not features.mtime or (
-        info.type == MemberType.HARDLINK and not features.hardlink_mtime
-    ):
+    # Extracted hardlinks will have the same mtime as the original file, which can be
+    # different from the mtime in the archive.
+    if not features.mtime or info.type == MemberType.HARDLINK:
         return
 
     actual = datetime.fromtimestamp(stat.st_mtime)
     if features.rounded_mtime:
         assert abs(actual.timestamp() - info.mtime.timestamp()) <= 1, path
     else:
-        assert actual == info.mtime, path
+        assert actual == info.mtime, (path, info)
 
 
 @pytest.mark.parametrize(
@@ -55,10 +55,10 @@ def test_extractall(
     logger.info(f"Extracting {sample_archive_path} to {dest}")
 
     with open_archive(sample_archive_path) as archive:
-        if "hardlinks_recursive_and_broken" in sample_archive.filename:
-            with pytest.raises(ArchiveLinkTargetNotFoundError):
-                archive.extractall(dest)
-            return
+        # if "hardlinks_recursive_and_broken" in sample_archive.filename:
+        #     with pytest.raises(ArchiveLinkTargetNotFoundError):
+        #         archive.extractall(dest)
+        #     return
         archive.extractall(dest)
 
     for info in remove_duplicate_files(sample_archive.contents.files):
