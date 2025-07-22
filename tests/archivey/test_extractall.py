@@ -10,7 +10,9 @@ from archivey.types import MemberType
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     DUPLICATE_FILES_ARCHIVES,
+    HARDLINK_ARCHIVES,
     SYMLINK_ARCHIVES,
+    FileInfo,
     SampleArchive,
 )
 from tests.archivey.testing_utils import remove_duplicate_files, skip_if_package_missing
@@ -18,26 +20,28 @@ from tests.archivey.testing_utils import remove_duplicate_files, skip_if_package
 logger = logging.getLogger(__name__)
 
 
-def _check_file_metadata(path: Path, info, sample):
+def _check_file_metadata(path: Path, info: FileInfo, sample: SampleArchive):
     stat = path.lstat() if info.type == MemberType.SYMLINK else path.stat()
     features = sample.creation_info.features
 
     if info.permissions is not None:
         assert (stat.st_mode & 0o777) == info.permissions, path
 
-    if not features.mtime:
+    # Extracted hardlinks will have the same mtime as the original file, which can be
+    # different from the mtime in the archive.
+    if not features.mtime or info.type == MemberType.HARDLINK:
         return
 
     actual = datetime.fromtimestamp(stat.st_mtime)
     if features.rounded_mtime:
         assert abs(actual.timestamp() - info.mtime.timestamp()) <= 1, path
     else:
-        assert actual == info.mtime, path
+        assert actual == info.mtime, (path, info)
 
 
 @pytest.mark.parametrize(
     "sample_archive",
-    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES + SYMLINK_ARCHIVES,
+    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES + SYMLINK_ARCHIVES + HARDLINK_ARCHIVES,
     ids=lambda x: x.filename,
 )
 def test_extractall(
@@ -51,11 +55,28 @@ def test_extractall(
     logger.info(f"Extracting {sample_archive_path} to {dest}")
 
     with open_archive(sample_archive_path) as archive:
+        # TODO: check the dict returned by extractall
         archive.extractall(dest)
+
+    expected_files: set[str] = set()
 
     for info in remove_duplicate_files(sample_archive.contents.files):
         path = dest / info.name.rstrip("/")
-        assert path.exists(), f"Missing {path}"
+        if info.type != MemberType.HARDLINK or info.contents is not None:
+            assert os.path.lexists(path), f"Missing {path}"
+            expected_files.add(str(path.relative_to(dest)).replace(os.sep, "/"))
+            # Add any implicit parent directories.
+
+            dirname = os.path.dirname(info.name)
+            while dirname:
+                expected_files.add(dirname)
+                dirname = os.path.dirname(dirname)
+
+        else:
+            # Broken hardlinks should not exist at all in the extracted folder.
+            assert not os.path.lexists(path), f"Broken hardlink {path} should not exist"
+            continue
+
         if info.type == MemberType.DIR:
             assert path.is_dir()
         elif info.type == MemberType.SYMLINK:
@@ -72,9 +93,9 @@ def test_extractall(
 
         _check_file_metadata(path, info, sample_archive)
 
+    # Check that no extra files were extracted.
     extracted = {str(p.relative_to(dest)).replace(os.sep, "/") for p in dest.rglob("*")}
-    expected = {f.name.rstrip("/") for f in sample_archive.contents.files}
-    assert expected <= extracted
+    assert expected_files == extracted
 
 
 @pytest.mark.parametrize(
