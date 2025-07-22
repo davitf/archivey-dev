@@ -55,8 +55,15 @@ def test_extractall(
     logger.info(f"Extracting {sample_archive_path} to {dest}")
 
     with open_archive(sample_archive_path) as archive:
-        # TODO: check the dict returned by extractall
-        archive.extractall(dest)
+        result = archive.extractall(dest)
+
+        # The returned mapping keys should be the absolute paths of the
+        # extracted members and values should be ``ArchiveMember`` objects whose
+        # filenames match those paths relative to the destination directory.
+        for path, member in result.items():
+            assert os.path.normpath(os.path.join(dest, member.filename)) == path
+            assert os.path.lexists(path)
+            assert hasattr(member, "filename")
 
     expected_files: set[str] = set()
 
