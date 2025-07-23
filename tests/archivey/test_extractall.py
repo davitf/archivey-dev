@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 
 from archivey.core import open_archive
-from archivey.types import MemberType
+from archivey.internal.utils import ensure_not_none
+from archivey.types import ArchiveMember, MemberType
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     DUPLICATE_FILES_ARCHIVES,
@@ -55,28 +56,28 @@ def test_extractall(
     logger.info(f"Extracting {sample_archive_path} to {dest}")
 
     with open_archive(sample_archive_path) as archive:
-        result = archive.extractall(dest)
-
-        # The returned mapping keys should be the absolute paths of the
-        # extracted members and values should be ``ArchiveMember`` objects whose
-        # filenames match those paths relative to the destination directory.
-        for path, member in result.items():
-            assert os.path.normpath(os.path.join(dest, member.filename)) == path
-            assert os.path.lexists(path)
-            assert hasattr(member, "filename")
+        extractall_result = archive.extractall(dest)
+        members_by_filename = {
+            m.filename: m for m in ensure_not_none(archive.get_members_if_available())
+        }
 
     expected_files: set[str] = set()
+    implicit_dirs: set[str] = set()
+
+    expected_extractall_result: dict[str, ArchiveMember] = {}
 
     for info in remove_duplicate_files(sample_archive.contents.files):
         path = dest / info.name.rstrip("/")
+
+        # Broken hardlink targets should not be extracted.
         if info.type != MemberType.HARDLINK or info.contents is not None:
             assert os.path.lexists(path), f"Missing {path}"
             expected_files.add(str(path.relative_to(dest)).replace(os.sep, "/"))
-            # Add any implicit parent directories.
 
+            # Add any implicit parent directories.
             dirname = os.path.dirname(info.name)
             while dirname:
-                expected_files.add(dirname)
+                implicit_dirs.add(dirname)
                 dirname = os.path.dirname(dirname)
 
         else:
@@ -86,6 +87,7 @@ def test_extractall(
 
         if info.type == MemberType.DIR:
             assert path.is_dir()
+
         elif info.type == MemberType.SYMLINK:
             assert path.is_symlink()
             assert info.link_target is not None
@@ -99,10 +101,21 @@ def test_extractall(
                 assert f.read() == (info.contents or b"")
 
         _check_file_metadata(path, info, sample_archive)
+        # if info.type != MemberType.HARDLINK or info.name != info.link_target:
+        expected_extractall_result[str(path)] = members_by_filename[info.name]
 
+    implicit_dirs -= expected_files
     # Check that no extra files were extracted.
     extracted = {str(p.relative_to(dest)).replace(os.sep, "/") for p in dest.rglob("*")}
-    assert expected_files == extracted
+    assert (expected_files | implicit_dirs) == extracted
+
+    # Some sample archives may include the implicit parent directories, which are
+    # not in sample_archive.contents.files.
+    for dirname in implicit_dirs:
+        extractall_result.pop(str(dest / dirname), None)
+
+    # Check that the dict returned by extractall is correct.
+    assert expected_extractall_result == extractall_result
 
 
 @pytest.mark.parametrize(

@@ -228,6 +228,8 @@ class ExtractionHelper:
                                 target.member_id,
                                 member.member_id,
                             )
+                            # This was technically extracted last.
+                            self.extracted_members_by_path[target_path] = target
                             continue
 
                         if not self.check_overwrites(member, target_path):
