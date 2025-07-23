@@ -93,7 +93,7 @@ Arguments:
 
 *   `member`: an `ArchiveMember` object previously yielded by `iter_members_for_registration`.
 *   `pwd`: password for encrypted members if applicable. If the user does not specify a file-specific password, this will default to the password passed in the constructor, if any.
-*   `for_iteration`: if `True`, the open request is part of a sequential iteration (e.g., via `iter_members_with_io`). When `streaming_only=True`, this is guaranteed to be `True`.
+*   `for_iteration`: if `True`, the open request is part of a sequential iteration (e.g., via `iter_members_with_streams`). When `streaming_only=True`, this is guaranteed to be `True`.
 
 Tips:
 
@@ -110,7 +110,7 @@ While the above are essential, you might override other methods from `BaseArchiv
     *   The base implementation simply returns the member unmodified; you can override this to perform tasks like fetching additional metadata required for opening, or decrypting member-specific headers, if not done during `iter_members_for_registration`.
     *   This method receives the `ArchiveMember` as initially resolved from the filename or iteration, which may be a `MemberType.LINK`. `_open_member` will then be called with the target of this member if it's a link (after internal resolution), or the same member if not a link.
 
-*   **`iter_members_with_io(...)`**:
+*   **`iter_members_with_streams(...)`**:
     *   The default implementation in `BaseArchiveReader` iterates using `self.iter_members()` (which relies on `iter_members_for_registration`) and then calls the internal open mechanism (which in turn uses your `_prepare_member_for_open` and `_open_member` methods with the `for_iteration=True` flag) for each member.
     *   If your underlying library requires a different approach to iterate through members and get their I/O streams, you can override this method directly.
     *   **Important:** If overridden, you are responsible for correctly applying filtering logic based on the `members` and `filter` arguments. `BaseArchiveReader._build_filter` can be a useful utility for this. Please look at existing implementations for details.
@@ -126,7 +126,7 @@ While the above are essential, you might override other methods from `BaseArchiv
 
 Libraries often have their own exception base classes, or raise builtin exceptions such as `OSError` when there's a problem with an archive. Archivey tries to guarantee that all exceptions raised due to archive issues are subclasses of [`archivey.exceptions.ArchiveError`][], and so readers need to translate all exceptions raised by the libraries into them.
 
-When you return a file stream provided by an underlying library from `_open_member()` (or from a custom `iter_members_with_io` override), you should wrap it with `archivey.internal.io_helpers.ExceptionTranslatingIO`. This ensures that exceptions raised by the underlying third-party library during stream operations (like `read()`, `seek()`) are translated into `ArchiveError` subclasses.
+When you return a file stream provided by an underlying library from `_open_member()` (or from a custom `iter_members_with_streams` override), you should wrap it with `archivey.internal.io_helpers.ExceptionTranslatingIO`. This ensures that exceptions raised by the underlying third-party library during stream operations (like `read()`, `seek()`) are translated into `ArchiveError` subclasses.
 
 For this, you need to implement a translation function that receives any exception raised by the underlying library and returns an `ArchiveError`. Example:
 

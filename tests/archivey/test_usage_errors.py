@@ -30,7 +30,7 @@ def test_get_operations_after_close(
         archive.get_archive_info()
 
     with pytest.raises(ValueError):
-        list(archive.iter_members_with_io())
+        list(archive.iter_members_with_streams())
 
     with pytest.raises(ValueError):
         list(archive.get_members())

@@ -10,7 +10,7 @@ with open_archive("example.zip") as archive:  # Automatic format detection
     archive.extractall("output_dir/")
 
     # Or process each file in the archive
-    for member, stream in archive.iter_members_with_io():
+    for member, stream in archive.iter_members_with_streams():
         print(member.filename, member.type, member.file_size)
         if stream is not None:  # File-like stream for files, None for dirs and links
             data = stream.read()

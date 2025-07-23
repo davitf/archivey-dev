@@ -114,7 +114,7 @@ def test_read_corrupted_archives(
         with open_archive(
             corrupted_archive_path, config=config, streaming_only=True
         ) as archive:
-            for member, stream in archive.iter_members_with_io():
+            for member, stream in archive.iter_members_with_streams():
                 logger.info(f"Reading member {member.filename}")
                 filename = member.filename
 
@@ -237,7 +237,7 @@ def test_read_truncated_archives(
 
     try:
         with open_archive(output_path, config=config, streaming_only=True) as archive:
-            for member, stream in archive.iter_members_with_io():
+            for member, stream in archive.iter_members_with_streams():
                 if stream is not None and read_streams:
                     stream.read()
         logger.warning(f"Archive {output_path} did not raise an error")

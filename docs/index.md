@@ -72,7 +72,7 @@ Some libraries may decompress parts of the archive multiple times if you access 
 from archivey import open_archive
 
 with open_archive("example.tar.gz", streaming_only=True) as archive:
-    for member, stream in archive.iter_members_with_io():
+    for member, stream in archive.iter_members_with_streams():
         data = stream and stream.read(20)
         print(member.filename, member.file_size, data)
 ```

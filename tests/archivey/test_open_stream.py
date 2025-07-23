@@ -32,7 +32,7 @@ def test_open_stream(sample_archive, alternative_packages):
 
     with open_archive(io.BytesIO(data), config=config) as archive:
         has_member = False
-        for member, stream in archive.iter_members_with_io():
+        for member, stream in archive.iter_members_with_streams():
             has_member = True
             if stream is not None:
                 stream.read()

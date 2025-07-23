@@ -296,7 +296,7 @@ def main(argv: list[str] | None = None) -> None:
                             m for m in members_if_available if member_filter(m)
                         ]
                     for member, stream in tqdm(
-                        archive.iter_members_with_io(members=member_filter),
+                        archive.iter_members_with_streams(members=member_filter),
                         desc="Computing checksums" if verify else "Listing members",
                         disable=args.hide_progress,
                         total=len(members_if_available)
