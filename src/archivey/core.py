@@ -62,7 +62,7 @@ for format in SINGLE_FILE_COMPRESSED_FORMATS:
 
 
 def open_archive(
-    path_or_stream: ReadableBinaryStream | str | bytes | os.PathLike,
+    path_or_stream: str | bytes | os.PathLike | ReadableBinaryStream,
     *,
     config: ArchiveyConfig | None = None,
     streaming_only: bool = False,
@@ -70,25 +70,27 @@ def open_archive(
     format: ArchiveFormat | None = None,
 ) -> ArchiveReader:
     """
-    Open an archive file and return an appropriate ArchiveReader instance.
-
-    This function auto-detects the archive format and selects the correct reader.
-    It is the main entry point for users of the archivey library.
+    Open an archive file and return an [ArchiveReader][archivey.ArchiveReader] instance.
 
     Args:
         path_or_stream: Path to the archive file (e.g., "my_archive.zip", "data.tar.gz")
-            or a binary file object containing the archive data.
-        config: Optional ArchiveyConfig object to customize behavior. If None,
-            default configuration is used.
-        streaming_only: If True, forces the archive to be opened in a streaming-only
-            mode, even if it supports random access. This can be useful for
-            very large archives or when only sequential access is needed.
-            Not all archive formats support this flag effectively.
-        pwd: Optional password (str or bytes) used to decrypt the archive if it
-            is encrypted.
+            or a binary file-like object containing the archive data.
+        config: Optional [ArchiveyConfig][archivey.ArchiveyConfig] object to customize
+            behavior. If `None`, the default configuration (which may have been
+            customized with [set_archivey_config][archivey.set_archivey_config]) is
+            used.
+        streaming_only: If `True`, forces the archive to be opened in a streaming-only
+            mode, even if it supports random access. This can be more efficient if you
+            only need to extract the archive or iterate over its members once.
+
+            If set to `True`, disables random access methods like `open()` and
+            `extract()` to avoid expensive seeks or rewinds. Calls to those methods will
+            raise a `ValueError`.
+        pwd: Optional password used to decrypt the archive if it is encrypted.
+        format: Optional archive format to use. If `None`, the format is auto-detected.
 
     Returns:
-        An ArchiveReader instance suitable for the detected archive format.
+        An ArchiveReader instance for working with the archive.
 
     Raises:
         FileNotFoundError: If `path_or_stream` points to a non-existent file.
@@ -99,7 +101,6 @@ def open_archive(
             or if the provided password is incorrect. This will only be raised here
             if the archive header is encrypted; otherwise, the incorrect password
             may only be detected when attempting to read an encrypted member.
-
         TypeError: If `path_or_stream` or `pwd` have an invalid type.
 
     Example:
@@ -139,8 +140,9 @@ def open_archive(
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
-    with archivey_config(config):
-        format = detect_archive_format(ensure_not_none(stream or path))
+    if format is None:
+        with archivey_config(config):
+            format = detect_archive_format(ensure_not_none(stream or path))
 
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
@@ -178,6 +180,7 @@ def open_compressed_stream(
     path_or_stream: BinaryIO | str | bytes | os.PathLike,
     *,
     config: ArchiveyConfig | None = None,
+    format: ArchiveFormat | None = None,
 ) -> BinaryIO:
     """Open a single-file compressed stream and return the uncompressed stream.
 
@@ -188,19 +191,22 @@ def open_compressed_stream(
 
     Args:
         path_or_stream: Path to the compressed file (e.g., "my_data.gz", "data.bz2")
-        or a binary file object containing the compressed data.
-        config: Optional ArchiveyConfig object to customize behavior. If None,
-            default configuration is used.
+            or a binary file-like object containing the compressed data.
+        config: Optional [ArchiveyConfig][archivey.ArchiveyConfig] object to customize
+            behavior. If `None`, the default configuration (which may have been
+            customized with [set_archivey_config][archivey.set_archivey_config]) is
+            used.
+        format: Optional archive format to use. If `None`, the format is auto-detected.
 
     Returns:
-        A binary file object containing the uncompressed data.
+        A binary file-like object containing the uncompressed data.
 
     Raises:
         FileNotFoundError: If `path_or_stream` points to a non-existent file.
         ArchiveNotSupportedError: If the archive format is not supported or cannot
             be determined.
-        ArchiveCorruptedError: If the archive is detected as corrupted during opening
-            (some checks are format-specific).
+        ArchiveCorruptedError: If the archive is detected as corrupted during opening.
+        TypeError: If `path_or_stream` has an invalid type.
     """
     stream: BinaryIO | None
     path: str | None

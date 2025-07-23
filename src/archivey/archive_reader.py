@@ -15,11 +15,11 @@ from archivey.types import (
 
 class ArchiveReader(abc.ABC):
     """
-    Abstract base class defining the interface for an archive reader.
+    Represents a readable archive, such as a ZIP or TAR file.
 
-    This class provides a consistent way to interact with different archive
-    formats. Subclasses must implement the abstract methods to provide
-    format-specific functionality.
+    Provides a uniform interface for listing, reading, and extracting files from
+    archives, regardless of format. Use [open_archive()][archivey.open_archive] to
+    obtain an instance of this class.
     """
 
     path_or_stream: str | BinaryIO
@@ -30,6 +30,16 @@ class ArchiveReader(abc.ABC):
         archive_path: BinaryIO | str | bytes | os.PathLike,
         format: ArchiveFormat,
     ):
+        """
+        Initialize the ArchiveReader with a file path or stream and detected format.
+
+        Args:
+            archive_path: Path or binary stream of the archive.
+            format: ArchiveFormat indicating the archive type.
+
+        Raises:
+            ValueError: If the input is not a supported type.
+        """
         if is_stream(archive_path):
             self.path_str = None
             self.path_or_stream = archive_path
@@ -58,38 +68,31 @@ class ArchiveReader(abc.ABC):
     @abc.abstractmethod
     def get_members(self) -> List[ArchiveMember]:
         """
-        Return a list of all ArchiveMember objects in the archive.
+        Return a list of all members in the archive.
 
-        This method guarantees returning the full list of members. However, for
-        some archive types without a central directory (e.g. TAR) or streaming
-        modes, this might involve processing the entire archive if the member list
-        isn't available upfront (e.g., iterating through a tar stream).
-
-        This method always raises ValueError if the archive is opened in streaming
-        mode, to help avoid programming errors.
+        For some formats (e.g. TAR), this may require reading the entire archive if no
+        central directory is available. Always raises ValueError in streaming mode to
+        avoid misuse.
 
         Returns:
-            A list of all ArchiveMember objects.
+            A list of ArchiveMember objects.
 
         Raises:
-            ArchiveError: If there's an issue reading member information.
-            ValueError: If the archive is opened in streaming-only mode.
+            ArchiveError: If member metadata cannot be read.
+            ValueError: If the archive was opened in streaming mode.
         """
         pass
 
     @abc.abstractmethod
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         """
-        Return a list of all ArchiveMember objects if readily available.
+        Return a list of members if available without full archive traversal.
 
-        For most archive formats (e.g., ZIP with a central directory), the full
-        list of members can be obtained quickly without reading the entire archive.
-        For others, especially stream-based formats (e.g. TAR), this might not be
-        possible or efficient.
+        For formats with a central directory (e.g. ZIP), this is typically fast.
+        Returns None if not readily available (e.g. TAR streams).
 
         Returns:
-            A list of ArchiveMember objects, or None if the list is not readily
-            available without significant processing.
+            A list of ArchiveMember objects, or None if unavailable.
         """
         pass
 
@@ -104,47 +107,48 @@ class ArchiveReader(abc.ABC):
         filter: IteratorFilterFunc | ExtractionFilter | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         """
-        Iterate over members in the archive, yielding a tuple of (ArchiveMember, BinaryIO_stream).
+        Iterate over archive members, yielding each with a readable stream if applicable.
 
-        The returned stream is for reading the content of the member. The stream
-        will be None for non-file members (e.g., directories, symlinks if not
-        dereferenced to content).
+        For each member, this yields a tuple `(ArchiveMember, stream)`. The `stream` is
+        a binary file-like object for regular files, and `None` for non-file members.
 
-        Args:
-            members: Optional. A collection of specific member names (str) or
-                ArchiveMember objects to iterate over. If None, iterates over all
-                members. Can also be a callable that takes an ArchiveMember and
-                returns True if it should be included.
-            pwd: Optional password (str or bytes) for decrypting members, if the
-                archive or specific members are encrypted.
-            filter: Optional callable applied to each member. It may accept an
-                optional destination path argument with default ``None``. When
-                used with ``iter_members_with_streams`` the path is ``None``. Return
-                the member to include it, or ``None`` to skip.
+        If the archive was opened in streaming mode, this method can only be called once.
+
+        Parameters:
+            members: A collection of `ArchiveMember` or filenames, or a predicate
+                function that returns True for members to include. If `None`, all
+                members are included.
+            pwd: Optional password to use for encrypted members, if needed; by default,
+                the password passed when opening the archive is used.
+            filter: Optional filter or sanitizer applied to each member. Either
+                a predefined `ExtractionFilter` policy, or a callable that returns
+                a sanitized member or `None` to exclude it.
 
         Yields:
-            Tuples containing the ``ArchiveMember`` object and a binary I/O stream
-                for reading its content.  The stream is ``None`` for non-file entries.
+            Tuples of `(ArchiveMember, BinaryIO | None)`, one per selected member.
+            For file members, the stream allows reading their content. For non-file
+            members (e.g. directories or links), the stream is `None`.
 
-                The stream is lazily opened only if accessed, so skipping members is
-                efficient. Streams are automatically closed when iteration advances or
-                the generator is closed.
+            Streams are lazily opened only if accessed, so skipping unused members
+            is efficient. Each stream is automatically closed when iteration advances
+            to the next member or when the generator is closed.
 
         Raises:
-            ArchiveEncryptedError: If a member is encrypted and `pwd` is incorrect
-                                   or not provided.
-            ArchiveCorruptedError: If member data is found to be corrupt during iteration.
-            ArchiveIOError: For other I/O related issues during member access.
+            ArchiveEncryptedError: If a member is encrypted and `pwd` is missing or
+                incorrect. (raised only when attempting to read a returned stream)
+            ArchiveCorruptedError: If member data is found to be corrupted. (may be
+                raised when retrieving the next item, or when attempting to read a
+                returned stream)
+            ArchiveIOError: If other I/O-related errors occur.
         """
         pass
 
     @abc.abstractmethod
     def get_archive_info(self) -> ArchiveInfo:
         """
-        Return an ArchiveInfo object containing metadata about the archive itself.
+        Return metadata about the archive as an ArchiveInfo object.
 
-        This includes information like the archive format, whether it's solid,
-        any archive-level comments, etc.
+        Includes format, solidity, comments, and other archive-level information.
 
         Returns:
             An ArchiveInfo object.
@@ -154,36 +158,42 @@ class ArchiveReader(abc.ABC):
     @abc.abstractmethod
     def has_random_access(self) -> bool:
         """
-        Return True if the archive supports random access to its members.
+        Return `True` if this archive supports random access to its members.
 
-        Random access means methods like `open()`, `extract()` can be used to
-        access individual members directly without iterating through the entire
-        archive from the beginning. Returns False for streaming-only access
-        (e.g., reading from a non-seekable stream or some tar variants).
+        Random access allows methods like `open()`, `get_members()`, and `extract()` to
+        be used freely. This returns `False` if the archive was opened in streaming
+        mode, in which case only a single pass through `iter_members_with_streams()` or
+        `extractall()` is supported.
+        supported.
+
+        Random access allows methods like `open()`, `get_members()`, and `extract()` to
+        work reliably. Returns `False` if the archive was opened from a non-seekable
+        source (e.g. a streamed `.tar` file), in which case only a single pass through
+        `iter_members_with_streams()` is allowed.
 
         Returns:
-            bool: True if random access is supported, False otherwise.
+            `True` if random access is available; `False` if in streaming mode.
         """
         pass
 
     @abc.abstractmethod
     def get_member(self, member_or_filename: ArchiveMember | str) -> ArchiveMember:
         """
-        Retrieve a specific ArchiveMember object by its name or by an existing ArchiveMember.
+        Return an [ArchiveMember][archivey.ArchiveMember] for the given name or member.
 
-        If `member_or_filename` is an ArchiveMember instance, this method might
-        be used to refresh its state or confirm its presence in the archive.
-        If it's a string, it's treated as the filename of the member to find.
+        If a filename (str) is provided, looks up the corresponding member. If an
+        ArchiveMember is provided, it is returned as-is after validating that it
+        belongs to this archive. This is useful when accepting either form in a
+        user-facing API.
 
         Args:
-            member_or_filename: The filename (str) of the member to retrieve, or
-                an ArchiveMember object.
+            member_or_filename: A filename or an existing ArchiveMember.
 
         Returns:
-            The ArchiveMember object for the specified entry.
+            The corresponding ArchiveMember.
 
         Raises:
-            ArchiveMemberNotFoundError: If no member with the given name is found.
+            ArchiveMemberNotFoundError: If the name does not match any member.
         """
         pass
 
@@ -192,28 +202,29 @@ class ArchiveReader(abc.ABC):
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
     ) -> BinaryIO:
         """
-        Open a specific member of the archive for reading and return a binary I/O stream.
+        Open a specific member for reading and return a binary stream.
 
-        This method is typically available if `has_random_access()` returns True.
-        For symlinks, this should open the target file's content.
+        Accepts either a filename (str) or an ArchiveMember. Filenames are resolved
+        to members automatically. For symlinks, this returns the target file’s content.
+
+        Requires random access support (see `has_random_access()`).
 
         Args:
-            member_or_filename: The ArchiveMember object or the filename (str) of
-                the member to open.
-            pwd: Optional password (str or bytes) for decrypting the member if it's
-                encrypted.
+            member_or_filename: The member or its filename.
+            pwd: Optional password to use for encrypted members, if needed. By default,
+                the password passed when opening the archive is used.
 
         Returns:
-            A binary I/O stream (BinaryIO) for reading the member's content.
+            A binary stream for reading the member's content.
 
         Raises:
-            ArchiveMemberNotFoundError: If the specified member is not found.
-            ArchiveMemberCannotBeOpenedError: If the member is a type that cannot be
-                                            opened (e.g., a directory).
-            ArchiveEncryptedError: If the member is encrypted and `pwd` is incorrect
-                                   or not provided.
-            ArchiveCorruptedError: If the member data is found to be corrupt.
-            NotImplementedError: If random access `open()` is not supported by this reader.
+            ArchiveMemberNotFoundError: If the member is not found.
+            ArchiveMemberCannotBeOpenedError: If the member is not a file or a link
+                that points to a file.
+            ArchiveEncryptedError: If the member is encrypted and `pwd` is incorrect or
+                not provided.
+            ArchiveCorruptedError: If the compressed data is corrupted.
+            ValueError: If the archive was opened in streaming mode.
         """
         pass
 
@@ -224,13 +235,24 @@ class ArchiveReader(abc.ABC):
         path: str | os.PathLike | None = None,
         pwd: bytes | str | None = None,
     ) -> str | None:
-        """Extract a member to a path.
+        """
+        Extract a single member to a target path.
 
         Args:
-            member: The member to extract
-            path: The path to extract to
-            pwd: Password to use for decryption, if needed and different from the one
-            used when opening the archive.
+            member_or_filename: The member to extract.
+            path: The path to extract to. Defaults to the current working directory.
+            pwd: Optional password to use for encrypted members, if needed; by default,
+                the password passed when opening the archive is used.
+
+        Returns:
+            The path of the extracted file, or None for non-file entries.
+
+        Raises:
+            ArchiveMemberNotFoundError: If the member is not found.
+            ArchiveEncryptedError: If the member is encrypted and `pwd` is incorrect or
+                not provided.
+            ArchiveCorruptedError: If the compressed data is corrupted.
+            ValueError: If the archive was opened in streaming mode.
         """
         pass
 
@@ -246,54 +268,49 @@ class ArchiveReader(abc.ABC):
         filter: ExtractFilterFunc | ExtractionFilter | None = None,
     ) -> dict[str, ArchiveMember]:
         """
-        Extract all (or a specified subset of) members to the given path.
+        Extract all (or selected) members to a given directory.
+
+        If the archive was opened in streaming mode, this method can only be called once.
 
         Args:
-            path: Target directory for extraction. Defaults to the current working
-                directory if None. The directory will be created if it doesn't exist.
-            members: Optional. A collection of member names (str) or ArchiveMember
-                objects to extract. If None, all members are extracted. Can also be
-                a callable that takes an ArchiveMember and returns True if it should
-                be extracted.
-            pwd: Optional password (str or bytes) for decrypting members if the
-                archive or specific members are encrypted.
-            filter: Optional callable that takes an ArchiveMember and the
-                destination path. It should return the (possibly modified)
-                ArchiveMember if it should be extracted, or ``None`` to skip the
-                member. This is applied after the ``members`` selection.
+            path: Target directory. Defaults to the current working directory if `None`.
+                The directory will be created if it doesn't exist.
+            members: Optional. A collection of member names or `ArchiveMember` objects
+                to extract. If None, all members are extracted. Can also be a callable
+                that takes an `ArchiveMember` and returns `True` if it should be
+                extracted.
+            pwd: Optional password to use for encrypted members, if needed; by default,
+                the password passed when opening the archive is used.
+            filter: Optional filter or sanitizer applied to each member. Either
+                a predefined `ExtractionFilter` policy, or a callable that returns
+                a sanitized member or `None` to exclude it.
 
         Returns:
-            A dictionary mapping extracted file paths (absolute) to their
-            corresponding ArchiveMember objects.
+            A mapping from extracted file paths (including the target directory) to
+            their corresponding `ArchiveMember` objects.
 
         Raises:
-            ArchiveEncryptedError: If a member is encrypted and `pwd` is incorrect
-                                   or not provided.
-            ArchiveCorruptedError: If member data is found to be corrupt during extraction.
-            ArchiveIOError: For other I/O related issues during extraction.
-            SameFileError: If an extraction would overwrite a file that is part of
-                           the archive itself (not yet implemented).
+            ArchiveEncryptedError: If a member is encrypted and `pwd` is invalid or missing.
+            ArchiveCorruptedError: If the archive is corrupted.
+            ArchiveIOError: If other I/O-related issues occur.
+            SameFileError: If extraction would overwrite a file in the archive itself.
         """
         pass
 
     @abc.abstractmethod
     def resolve_link(self, member: ArchiveMember) -> ArchiveMember | None:
         """
-        Resolve a link member to its ultimate target ArchiveMember.
+        Resolve a link member to its final non-link target.
 
-        If the given member is not a link, it should typically return the member itself
-        (or None if strict link-only resolution is desired, though returning self is safer).
-        If the member is a link (symlink or hardlink), this method will attempt
-        to find the final, non-link target it points to.
+        If the input is not a link, returns the member itself. For symlinks or hardlinks,
+        follows the chain to the real target. If the link points to a file that is not
+        in the archive, returns `None`.
 
         Args:
-            member: The ArchiveMember to resolve. This member should belong to this archive.
+            member: The ArchiveMember to resolve.
 
         Returns:
-            The resolved ArchiveMember if the target exists and is found,
-            or None if the link target cannot be resolved (e.g., broken link,
-            target not found, or if the input member is not a link and strict
-            resolution is applied).
+            The resolved ArchiveMember, or None if resolution fails.
         """
         pass
 
