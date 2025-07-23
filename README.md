@@ -1,54 +1,39 @@
 # Archivey
 
-**Archivey** is a Python library that provides a unified interface for reading several archive and compression formats, wrapping built-in Python modules and optional external packages.
+**Archivey** is a Python library that provides a unified interface for reading various archive formats:
 
-👉 **Full documentation is published [here](https://davitf.github.io/archivey/)**.
+```python
+from archivey import open_archive
 
----
+with open_archive("example.zip") as archive:  # Automatic format detection
+    # Extract all files
+    archive.extractall("output_dir/")
 
-## Quick start
+    # Or process each file in the archive
+    for member, stream in archive.iter_members_with_io():
+        print(member.filename, member.type, member.file_size)
+        if stream is not None:  # File-like stream for files, None for dirs and links
+            data = stream.read()
+            print("  ", data[:50])
+```
 
-Install with third-party libraries:
+It wraps built-in modules and optional third-party libraries, adding missing features and fixing limitations in the underlying tools. See the [User guide](https://davitf.github.io/archivey/user_guide/) for more details.
+
+
+### Installation
 
 ```bash
 pip install archivey[optional]
 ```
 
-Or manage dependencies yourself for only the formats you need. RAR support requires `unrar` to be installed separately.
+The [optional] extra includes all recommended third-party libraries for full format support.
 
-### Usage example
+**Note:** RAR support requires the `unrar` binary to be available on your system or installed separately.
 
-```python
-from archivey import open_archive
+### Resources
 
-with open_archive("example.zip") as archive:
-    # Extract all files
-    archive.extractall("output_dir/")
-
-    # Or process each file inside the archive
-    for member, stream in archive.iter_members_with_io():
-        print(member.filename, member.type, member.file_size)
-        if stream is not None:  # skip directories and links
-            data = stream.read()
-            print("  ", data[:50])
-```
-
-See more details in the [User guide](https://davitf.github.io/archivey/user_guide/).
-
----
-
-## Why use this?
-
-- Automatic archive format detection
-- Consistent interface across multiple archive types
-- Optimized for random access and streaming
-- Sensible, secure defaults for file extraction
-
----
-
-## Resources
-
-- [User guide](https://davitf.github.io/archivey/user_guide/)
-- [API Reference](https://davitf.github.io/archivey/reference/)
-- [GitHub repository](https://github.com/davitf/archivey) (or the [development repository](https://github.com/davitf/archivey-dev) with messier commits and AI-generated pull requests)
-- [Developer guide](https://davitf.github.io/archivey/developer_guide/), if you'd like to contribute
+- 📖 [User guide](https://davitf.github.io/archivey/user_guide/)
+- 📘 [API reference](https://davitf.github.io/archivey/reference/)
+- 🛠️ [GitHub repository](https://github.com/davitf/archivey)  
+  ↳ or the [development repo](https://github.com/davitf/archivey-dev), with in-progress work, rougher commits and AI-generated pull requests
+- 🤝 [Developer guide](https://davitf.github.io/archivey/developer_guide/) – for contributors
