@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import BinaryIO, Iterator, Optional
 
-from archivey.exceptions import ArchiveIOError, ArchiveMemberNotFoundError
+from archivey.exceptions import (
+    ArchiveMemberNotFoundError,
+    ArchiveReadError,
+)
 from archivey.internal.base_reader import BaseArchiveReader
 from archivey.types import (
     ArchiveFormat,
@@ -185,7 +188,9 @@ class FolderReader(BaseArchiveReader):
         try:
             return full_path.open("rb")
         except OSError as e:
-            raise ArchiveIOError(f"Cannot open member '{member.filename}': {e}") from e
+            raise ArchiveReadError(
+                f"Cannot open member '{member.filename}': {e}"
+            ) from e
 
     def get_archive_info(self) -> ArchiveInfo:
         self.check_archive_open()

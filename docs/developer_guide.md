@@ -1,4 +1,4 @@
-# Developer guide
+# Archivey developer guide
 
 This guide explains how to extend `archivey` by creating custom `archivey.archive_reader.ArchiveReader` classes for new archive formats.
 

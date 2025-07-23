@@ -15,15 +15,17 @@ plugins:
             heading_level: 2
             show_source: false
             show_root_heading: true
-            docstring_section_style: list
+            docstring_section_style: table
             extensions:
             - griffe_fieldz
             - scripts/griffe_extensions.py
 
   - autorefs
+
 theme:
   name: material
   navigation_depth: 2
+  logo: assets/icon_white.png
 
 markdown_extensions:
   - toc:

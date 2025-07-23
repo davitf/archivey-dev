@@ -1,8 +1,8 @@
 """
-Types and enums used in Archivey.
+Common types and enums used internally by Archivey.
 
-The main types can be accessed from the :mod:`archivey` module, but any others that
-are needed can be imported from here.
+Most public types are exposed through the `archivey` module, but advanced or
+format-specific types can be imported from here as needed.
 """
 
 import io  # Required for ReadableStreamLikeOrSimilar
@@ -29,7 +29,7 @@ from typing import Any, Optional, Tuple
 
 
 class ArchiveFormat(StrEnum):
-    """Supported compression formats."""
+    """Supported archive and compression formats."""
 
     ZIP = "zip"
     RAR = "rar"
@@ -91,7 +91,13 @@ class MemberType(StrEnum):
 
 
 class CreateSystem(IntEnum):
-    """Operating system on which the archive member was created."""
+    """
+    Operating system that created the archive member, if known.
+
+    These values match the `create_system` field from the ZIP specification
+    and the Python `zipfile` module. Other formats may report compatible values
+    where applicable.
+    """
 
     FAT = 0
     AMIGA = 1
@@ -112,7 +118,7 @@ class CreateSystem(IntEnum):
 
 @dataclass
 class ArchiveInfo:
-    """Detailed information about an archive's format."""
+    """Metadata about the archive format and container-level properties."""
 
     format: ArchiveFormat = field(metadata={"description": "The archive format type"})
     version: Optional[str] = field(
@@ -127,8 +133,9 @@ class ArchiveInfo:
             "description": "Whether the archive is solid, i.e. decompressing a member may require decompressing others before it."
         },
     )
-    extra: Optional[dict[str, Any]] = field(
-        default=None,
+    extra: dict[str, Any] = field(
+        # Using a lambda instead of "dict" to avoid a mkdocstrings error
+        default_factory=lambda: {},
         metadata={
             "description": "Extra format-specific information about the archive."
         },
@@ -194,7 +201,8 @@ class ArchiveMember:
         metadata={"description": "Whether the member's data is encrypted, if known."},
     )
     extra: dict[str, Any] = field(
-        default_factory=dict,
+        # Using a lambda instead of "dict" to avoid a mkdocstrings error
+        default_factory=lambda: {},
         metadata={"description": "Extra format-specific information about the member."},
     )
     link_target: Optional[str] = field(
@@ -218,17 +226,17 @@ class ArchiveMember:
 
     @property
     def mtime(self) -> Optional[datetime]:
-        """Convenience alias for :pyattr:`mtime_with_tz` without timezone information."""
+        """Returns `mtime_with_tz` without timezone information, for compatibility."""
         if self.mtime_with_tz is None:
             return None
         return self.mtime_with_tz.replace(tzinfo=None)
 
     @property
     def member_id(self) -> int:
-        """A unique identifier for this member within the archive.
+        """Unique ID for this member within the archive.
 
-        Increasing in archive order, this can be used to distinguish
-        members with the same filename and preserve ordering.
+        Values are assigned in archive order and can be used to
+        disambiguate identical filenames or preserve ordering.
         """
         if self._member_id is None:
             raise ValueError("Member index not yet set")
@@ -240,7 +248,7 @@ class ArchiveMember:
 
     @property
     def archive_id(self) -> str:
-        """A unique identifier for the archive. Used to distinguish between archives."""
+        """Unique ID for the archive this member belongs to."""
         if self._archive_id is None:
             raise ValueError("Archive ID not yet set")
         return self._archive_id
@@ -248,7 +256,7 @@ class ArchiveMember:
     # Properties for zipfile compatibility (and others, as much as possible)
     @property
     def date_time(self) -> Optional[Tuple[int, int, int, int, int, int]]:
-        """Returns the date and time as a tuple of (year, month, day, hour, minute, second), for `zipfile` compatibility."""
+        """(year, month, day, hour, minute, second) tuple for `zipfile` compatibility."""
         if self.mtime is None:
             return None
         return (
@@ -282,14 +290,14 @@ class ArchiveMember:
 
     @property
     def CRC(self) -> Optional[int]:
-        """Alias for `crc32`, for `zipfile` compatibility."""
+        """Alias for `crc32` (for `zipfile` compatibility)."""
         return self.crc32
 
     def replace(self, **kwargs: Any) -> "ArchiveMember":
-        """Return a new instance with selected fields updated.
+        """Return a copy of this member with selected fields updated.
 
-        This is primarily used by extraction filters to create modified
-        versions of a member without mutating the original object.
+        Used primarily by extraction filters to modify metadata without
+        mutating the original object.
         """
         replaced = replace(self, **kwargs)
         replaced._edited_by_filter = True
@@ -304,6 +312,9 @@ IteratorFilterFunc = Callable[[ArchiveMember], ArchiveMember | None]
 # A type that must match both ExtractFilterFunc and IteratorFilterFunc
 # The callable must be able to handle both one and two arguments
 class FilterFunc(Protocol):
+    """A callable that takes a member and its destination path, and returns a modified
+    member or `None` to skip it during extraction or iteration."""
+
     @overload
     def __call__(self, member: ArchiveMember) -> ArchiveMember | None: ...
 
@@ -332,4 +343,4 @@ class ReadableBinaryStream(Protocol):
 
 
 ReadableStreamLikeOrSimilar = Union[ReadableBinaryStream, io.IOBase, IO[bytes]]
-"""Type alias for objects that are like readable binary streams."""
+"""A readable binary stream or similar object (e.g. IO[bytes])."""

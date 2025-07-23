@@ -298,7 +298,6 @@ class SingleFileReader(BaseArchiveReader):
         return ArchiveInfo(
             format=self.format,
             is_solid=False,
-            extra=None,
         )
 
     def _open_member(
