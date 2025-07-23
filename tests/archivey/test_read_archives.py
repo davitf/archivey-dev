@@ -239,7 +239,7 @@ def check_iter_members(
         members_iter = (
             ((m, None) for m in archive.get_members())
             if skip_member_contents
-            else archive.iter_members_with_io()
+            else archive.iter_members_with_streams()
         )
 
         all_contents_by_filename: collections.defaultdict[

@@ -495,7 +495,7 @@ class SevenZipReader(BaseArchiveReader):
         if pwd is not None and member.is_link and member.link_target is None:
             try:
                 list(
-                    self.iter_members_with_io(
+                    self.iter_members_with_streams(
                         members=[member], pwd=pwd, close_streams=False
                     )
                 )
@@ -523,7 +523,7 @@ class SevenZipReader(BaseArchiveReader):
 
         def _open() -> BinaryIO:
             it = list(
-                self.iter_members_with_io(
+                self.iter_members_with_streams(
                     members=[member], pwd=pwd, close_streams=False
                 )
             )
@@ -613,7 +613,7 @@ class SevenZipReader(BaseArchiveReader):
         finally:
             thread.join()
 
-    def iter_members_with_io(
+    def iter_members_with_streams(
         self,
         members: Collection[ArchiveMember | str]
         | Callable[[ArchiveMember], bool]
@@ -643,7 +643,7 @@ class SevenZipReader(BaseArchiveReader):
         pending_files: list[ArchiveMember] = []
         pending_links_by_id: dict[int, ArchiveMember] = {}
 
-        logger.debug("iter_members_with_io: starting first pass")
+        logger.debug("iter_members_with_streams: starting first pass")
         for member in self.iter_members():
             if not member_included_func(member):
                 continue
@@ -706,7 +706,7 @@ class SevenZipReader(BaseArchiveReader):
                     if close_streams:
                         stream.close()
         except ArchiveError as e:
-            logger.error("Error in iter_members_with_io: %s", e, exc_info=True)
+            logger.error("Error in iter_members_with_streams: %s", e, exc_info=True)
             # Yield any remaining members that were not extracted, with the error.
             for member in pending_files_by_id.values():
                 yield member, ErrorIOStream(e)

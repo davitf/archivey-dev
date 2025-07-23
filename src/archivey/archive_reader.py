@@ -94,7 +94,7 @@ class ArchiveReader(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def iter_members_with_io(
+    def iter_members_with_streams(
         self,
         members: Collection[ArchiveMember | str]
         | Callable[[ArchiveMember], bool]
@@ -119,17 +119,16 @@ class ArchiveReader(abc.ABC):
                 archive or specific members are encrypted.
             filter: Optional callable applied to each member. It may accept an
                 optional destination path argument with default ``None``. When
-                used with ``iter_members_with_io`` the path is ``None``. Return
+                used with ``iter_members_with_streams`` the path is ``None``. Return
                 the member to include it, or ``None`` to skip.
 
         Yields:
-            tuple[ArchiveMember, BinaryIO | None]:
-                Each yielded item is a tuple containing the ``ArchiveMember``
-                object and a binary I/O stream for reading its content.  The
-                stream is ``None`` for non-file entries.  Streams are closed
-                automatically when iteration advances to the next member or when
-                the generator is closed, so they should be consumed before
-                requesting another member.
+            Tuples containing the ``ArchiveMember`` object and a binary I/O stream
+                for reading its content.  The stream is ``None`` for non-file entries.
+
+                The stream is lazily opened only if accessed, so skipping members is
+                efficient. Streams are automatically closed when iteration advances or
+                the generator is closed.
 
         Raises:
             ArchiveEncryptedError: If a member is encrypted and `pwd` is incorrect

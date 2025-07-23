@@ -24,7 +24,7 @@ def test_fully_trusted_filter(sample_archive: SampleArchive, sample_archive_path
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
     with open_archive(sample_archive_path) as archive:
-        members = list(archive.iter_members_with_io(filter=fully_trusted))
+        members = list(archive.iter_members_with_streams(filter=fully_trusted))
 
         # Should get all members without any filtering
         assert len(members) > 0
@@ -57,7 +57,7 @@ def test_tar_filter(sample_archive: SampleArchive, sample_archive_path: str):
             ArchiveFilterError,
             match="(Absolute path not allowed|Path outside archive root|Symlink target outside archive root)",
         ):
-            list(archive.iter_members_with_io(filter=tar_filter))
+            list(archive.iter_members_with_streams(filter=tar_filter))
 
 
 @pytest.mark.parametrize(
@@ -75,7 +75,7 @@ def test_data_filter(sample_archive: SampleArchive, sample_archive_path: str):
             ArchiveFilterError,
             match="(Absolute path not allowed|Path outside archive root|Symlink target outside archive root)",
         ):
-            list(archive.iter_members_with_io(filter=ExtractionFilter.DATA))
+            list(archive.iter_members_with_streams(filter=ExtractionFilter.DATA))
 
 
 @pytest.mark.parametrize(
@@ -100,7 +100,7 @@ def test_filter_with_raise_on_error_false(
 
     with open_archive(sample_archive_path) as archive:
         # Should not raise an error, but should filter out problematic members
-        members = list(archive.iter_members_with_io(filter=custom_filter))
+        members = list(archive.iter_members_with_streams(filter=custom_filter))
 
         # Should get some members (the safe ones)
         assert len(members) > 0
@@ -136,7 +136,7 @@ def test_filter_without_name_sanitization(
         with pytest.raises(
             ArchiveFilterError, match="Symlink target outside archive root"
         ):
-            list(archive.iter_members_with_io(filter=custom_filter))
+            list(archive.iter_members_with_streams(filter=custom_filter))
 
 
 @pytest.mark.parametrize(
@@ -166,9 +166,9 @@ def test_filter_without_link_target_sanitization(
         )
         if name_issues:
             with pytest.raises(ArchiveFilterError):
-                list(archive.iter_members_with_io(filter=custom_filter))
+                list(archive.iter_members_with_streams(filter=custom_filter))
         else:
-            list(archive.iter_members_with_io(filter=custom_filter))
+            list(archive.iter_members_with_streams(filter=custom_filter))
 
 
 @pytest.mark.parametrize(
@@ -194,7 +194,7 @@ def test_filter_without_permission_sanitization(
     with open_archive(sample_archive_path) as archive:
         # Should still raise error due to name/link sanitization
         with pytest.raises(ArchiveFilterError):
-            list(archive.iter_members_with_io(filter=custom_filter))
+            list(archive.iter_members_with_streams(filter=custom_filter))
 
 
 @pytest.mark.parametrize(
@@ -218,7 +218,7 @@ def test_data_filter_with_permission_changes(
     )
 
     with open_archive(sample_archive_path) as archive:
-        members = list(archive.iter_members_with_io(filter=data_filter_custom))
+        members = list(archive.iter_members_with_streams(filter=data_filter_custom))
 
         # Check that executable files have permissions changed
         for member, _ in members:
@@ -250,7 +250,7 @@ def test_filter_combinations(sample_archive: SampleArchive, sample_archive_path:
     )
 
     with open_archive(sample_archive_path) as archive:
-        members = list(archive.iter_members_with_io(filter=minimal_filter))
+        members = list(archive.iter_members_with_streams(filter=minimal_filter))
         # Should get all members since no filtering is done
         assert len(members) > 0
 
@@ -279,7 +279,7 @@ def test_filter_error_messages(sample_archive: SampleArchive, sample_archive_pat
 
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(ArchiveFilterError) as exc_info:
-            list(archive.iter_members_with_io(filter=tar_filter))
+            list(archive.iter_members_with_streams(filter=tar_filter))
 
         error_msg = str(exc_info.value)
         assert (
@@ -321,7 +321,11 @@ def test_tar_filter_individual_errors(
 
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(ArchiveFilterError, match=pattern):
-            list(archive.iter_members_with_io(members=[member_name], filter=tar_filter))
+            list(
+                archive.iter_members_with_streams(
+                    members=[member_name], filter=tar_filter
+                )
+            )
 
 
 @pytest.mark.parametrize(
@@ -344,7 +348,7 @@ def test_filter_with_dest_path(sample_archive: SampleArchive, sample_archive_pat
 
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(ArchiveFilterError):
-            list(archive.iter_members_with_io(filter=custom_filter))
+            list(archive.iter_members_with_streams(filter=custom_filter))
 
 
 @pytest.mark.parametrize(
@@ -372,4 +376,4 @@ def test_broken_filter(sample_archive: SampleArchive, sample_archive_path: str):
         with pytest.raises(
             ValueError, match="Filter returned a member with a different internal ID"
         ):
-            list(archive.iter_members_with_io(filter=broken_filter))
+            list(archive.iter_members_with_streams(filter=broken_filter))

@@ -49,7 +49,7 @@ Key methods of the `ArchiveReader` object:
 *   **`close()`**: Closes the archive. Automatically called if using a context manager.
 *   **`get_members_if_available() -> List[ArchiveMember] | None`**: Returns a list of all members in the archive if readily available (e.g., from a central directory). May return `None` for stream-based archives where the full list isn't known without reading through the archive.
 *   **`get_members() -> List[ArchiveMember]`**: Returns a list of all members in the archive. For some archive types or streaming modes, this might involve processing a significant portion of the archive if the member list isn't available upfront.
-*   **`iter_members_with_io(members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember, Optional[str]], Optional[ArchiveMember]]] = None) -> Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]`**: Iterates over members in the archive, yielding a tuple of `(ArchiveMember, BinaryIO_stream)` for each. The stream is `None` for non-file members like directories.
+*   **`iter_members_with_streams(members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember, Optional[str]], Optional[ArchiveMember]]] = None) -> Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]`**: Iterates over members in the archive, yielding a tuple of `(ArchiveMember, BinaryIO_stream)` for each. The stream is `None` for non-file members like directories.
     *   `members`: Optionally specify a collection of member names or `ArchiveMember` objects to iterate over.
     *   `pwd`: Password for encrypted archives.
     *   `filter`: Callable applied to each member (with `None` as the destination path) that can return the member to include or `None` to skip.
@@ -65,7 +65,7 @@ Key methods of the `ArchiveReader` object:
     *   `filter`: Callable invoked for each member with the member and destination path. Return the member to extract it, or `None` to skip.
 *   Returns a dictionary mapping extracted file paths to their `ArchiveMember` objects.
 
-Streaming-only archives (where `archive.has_random_access()` returns `False`) can be iterated only **once**. After calling `iter_members_with_io()` or `extractall()`, further attempts to read or extract members will raise a `ValueError`.
+Streaming-only archives (where `archive.has_random_access()` returns `False`) can be iterated only **once**. After calling `iter_members_with_streams()` or `extractall()`, further attempts to read or extract members will raise a `ValueError`.
 
 ## Working with Archive Members
 
@@ -86,7 +86,7 @@ try:
                 print(f"- {member.filename} (Size: {member.file_size}, Type: {member.type.value})")
         else:
             print("Archive is streaming-only. Iterating to get members:")
-            for member, stream in archive.iter_members_with_io():
+            for member, stream in archive.iter_members_with_streams():
                 print(f"- {member.filename} (Size: {member.file_size}, Type: {member.type.value})")
                 if stream:
                     stream.close() # Important to close the stream if not reading from it
@@ -156,9 +156,9 @@ except ArchiveError as e:
     print(f"Error opening archive: {e}")
 
 ```
-### Example: Using `iter_members_with_io`
+### Example: Using `iter_members_with_streams`
 
-The `iter_members_with_io` method allows you to process archive members one by
+The `iter_members_with_streams` method allows you to process archive members one by
 one. Each stream is closed automatically when iteration advances to the next
 member or when the generator is closed.
 
@@ -167,7 +167,7 @@ from archivey import open_archive, ArchiveError
 
 try:
     with open_archive("my_archive.tar") as archive:
-        for member, stream in archive.iter_members_with_io():
+        for member, stream in archive.iter_members_with_streams():
             print(f"Processing {member.filename}")
             if stream:
                 data = stream.read()

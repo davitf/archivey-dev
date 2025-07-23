@@ -793,7 +793,7 @@ class RarReader(BaseArchiveReader):
                 f"Unknown error reading member {member.filename}: {e}"
             ) from e
 
-    def iter_members_with_io(
+    def iter_members_with_streams(
         self,
         members: Collection[ArchiveMember | str]
         | Callable[[ArchiveMember], bool]
@@ -803,7 +803,7 @@ class RarReader(BaseArchiveReader):
         filter: IteratorFilterFunc | ExtractionFilter | None = None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
         if self.config.use_rar_stream:
-            logger.debug("iter_members_with_io: using rar_stream_reader")
+            logger.debug("iter_members_with_streams: using rar_stream_reader")
             pwd_to_use = pwd if pwd is not None else self.get_archive_password()
 
             # This never returns None for archives with member list support.
@@ -824,8 +824,8 @@ class RarReader(BaseArchiveReader):
                 yield filtered_member, stream
 
         else:
-            logger.debug("iter_members_with_io: not using rar_stream_reader")
-            yield from super().iter_members_with_io(
+            logger.debug("iter_members_with_streams: not using rar_stream_reader")
+            yield from super().iter_members_with_streams(
                 members,
                 pwd=pwd,
                 filter=filter,

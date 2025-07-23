@@ -3,7 +3,7 @@ Custom filter functions for Archivey.
 
 You don't need to use this package if you just want to use the default filters.
 Just pass one of the :ref:`archivey.ExtractionFilter` values to the
-`iter_members_with_io` or `extractall` methods, or set it in the
+`iter_members_with_streams` or `extractall` methods, or set it in the
 :ref:`archivey.ArchiveyConfig.extraction_filter` field.
 
 If you need a filter with custom options, you can use the `create_filter`
@@ -142,7 +142,7 @@ def create_filter(
 ) -> FilterFunc:
     """Create a filter function with the given options.
 
-    The filter function can be passed to `iter_members_with_io` or `extractall`.
+    The filter function can be passed to `iter_members_with_streams` or `extractall`.
 
     Args:
         for_data: Whether the filter is for data members (files and directories).

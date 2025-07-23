@@ -77,7 +77,7 @@ def test_open_archive_small_reads(
 
     with open_archive(stream, streaming_only=streaming_only, config=config) as archive:
         has_member = False
-        for member, member_stream in archive.iter_members_with_io():
+        for member, member_stream in archive.iter_members_with_streams():
             has_member = True
             if member_stream is not None:
                 member_stream.read()

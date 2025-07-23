@@ -64,10 +64,10 @@ def test_password_in_iter_members(
     with open_archive(sample_archive_path) as archive:
         if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
             pytest.skip(
-                "py7zr does not support password parameter for iter_members_with_io"
+                "py7zr does not support password parameter for iter_members_with_streams"
             )
         contents = {}
-        for m, stream in archive.iter_members_with_io(pwd=pwd):
+        for m, stream in archive.iter_members_with_streams(pwd=pwd):
             if m.is_file:
                 assert stream is not None
                 contents[m.filename] = stream.read()
@@ -108,12 +108,12 @@ def test_wrong_password_iter_members_read(
 
     if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.skip(
-            "py7zr does not support password parameter for iter_members_with_io"
+            "py7zr does not support password parameter for iter_members_with_streams"
         )
 
     wrong = "wrong_password"
     with open_archive(sample_archive_path) as archive:
-        for m, stream in archive.iter_members_with_io(pwd=wrong):
+        for m, stream in archive.iter_members_with_streams(pwd=wrong):
             assert stream is not None
             if m.is_file:
                 if m.encrypted:
@@ -133,9 +133,9 @@ def test_wrong_password_iter_members_no_read(
     with open_archive(sample_archive_path) as archive:
         if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
             pytest.skip(
-                "py7zr does not support password parameter for iter_members_with_io"
+                "py7zr does not support password parameter for iter_members_with_streams"
             )
-        for _m, _stream in archive.iter_members_with_io(pwd=wrong):
+        for _m, _stream in archive.iter_members_with_streams(pwd=wrong):
             pass
 
 
@@ -234,7 +234,7 @@ def test_iterator_encryption_with_symlinks_no_password(
 
     members_by_name = {}
     with open_archive(sample_archive_path) as archive:
-        for member, stream in archive.iter_members_with_io():
+        for member, stream in archive.iter_members_with_streams():
             members_by_name[member.filename] = stream
 
     assert set(members_by_name.keys()) == {
@@ -257,7 +257,7 @@ def test_iterator_encryption_with_symlinks_password_in_open_archive(
 
     members_by_name = {}
     with open_archive(sample_archive_path, pwd="pwd") as archive:
-        for member, stream in archive.iter_members_with_io():
+        for member, stream in archive.iter_members_with_streams():
             members_by_name[member.filename] = stream
 
     assert set(members_by_name.keys()) == {
@@ -280,7 +280,7 @@ def test_iterator_encryption_with_symlinks_password_in_iterator(
 
     members_by_name = {}
     with open_archive(sample_archive_path) as archive:
-        for member, stream in archive.iter_members_with_io(pwd="pwd"):
+        for member, stream in archive.iter_members_with_streams(pwd="pwd"):
             members_by_name[member.filename] = stream
 
     assert set(members_by_name.keys()) == {

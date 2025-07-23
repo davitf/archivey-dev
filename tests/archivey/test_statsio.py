@@ -63,7 +63,7 @@ def test_open_archive_statsio(
         has_member = False
         total_member_bytes = 0
 
-        for member, member_stream in archive.iter_members_with_io():
+        for member, member_stream in archive.iter_members_with_streams():
             has_member = True
             if member_stream is not None:
                 member_data = member_stream.read()
@@ -114,7 +114,7 @@ def test_open_archive_statsio_streaming_mode(
         has_member = False
         total_member_bytes = 0
 
-        for member, member_stream in archive.iter_members_with_io():
+        for member, member_stream in archive.iter_members_with_streams():
             has_member = True
             if member_stream is not None:
                 member_data = member_stream.read()

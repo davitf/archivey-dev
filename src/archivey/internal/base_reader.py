@@ -133,7 +133,7 @@ class BaseArchiveReader(ArchiveReader):
             streaming_only: If True, the archive is treated as supporting only
                 sequential, forward-only streaming access. This means methods
                 like `open()` (for random access) and `extract()` will be
-                disabled, and `iter_members_with_io()` or `extractall()` might
+                disabled, and `iter_members_with_streams()` or `extractall()` might
                 only be usable once. Set this if the underlying archive format
                 or library inherently doesn't support random access to members
                 (e.g., a raw compressed stream without a central directory).
@@ -473,7 +473,7 @@ class BaseArchiveReader(ArchiveReader):
                 resolution for the open operation.
             pwd: The password, if provided for the open operation.
             for_iteration: A boolean hint. If True, this open request is part
-                of a sequential iteration (e.g., via `iter_members_with_io`).
+                of a sequential iteration (e.g., via `iter_members_with_streams`).
                 Subclasses can use this to optimize if opening for iteration
                 is different or cheaper than a random access `open()` call.
 
@@ -508,11 +508,11 @@ class BaseArchiveReader(ArchiveReader):
           `iter_members_for_registration` (or its resolved target), so
           `member.raw_info` (if populated by the subclass) will be available.
         - If `streaming_only` is `True` and `for_iteration` is `True` (i.e.,
-          called from `iter_members_with_io`):
+          called from `iter_members_with_streams`):
             - This method is called for a member that has just been yielded by
               the `self.iter_members()` chain to the caller of
-              `iter_members_with_io`.
-            - The call occurs *before* `iter_members_with_io` proceeds to the
+              `iter_members_with_streams`.
+            - The call occurs *before* `iter_members_with_streams` proceeds to the
               next member, ensuring the underlying archive's read position
               should be appropriate for sequential access to this member's data.
         - Note: Direct calls to the public `open()` method (which results in
@@ -527,7 +527,7 @@ class BaseArchiveReader(ArchiveReader):
             pwd: The password to use for decryption, if applicable. This might
                 be different from the default archive password.
             for_iteration: A boolean hint. If True, this open request is part
-                of a sequential iteration (e.g., via `iter_members_with_io`).
+                of a sequential iteration (e.g., via `iter_members_with_streams`).
                 Subclasses can use this to optimize if opening for iteration
                 is different or cheaper than a random access `open()` call.
 
@@ -582,7 +582,7 @@ class BaseArchiveReader(ArchiveReader):
             raise ValueError("Streaming-only archive can only be iterated once")
         self._streaming_iteration_started = True
 
-    def iter_members_with_io(
+    def iter_members_with_streams(
         self,
         members: Collection[ArchiveMember | str]
         | Callable[[ArchiveMember], bool]
@@ -624,7 +624,7 @@ class BaseArchiveReader(ArchiveReader):
         )
 
         for member in self.iter_members():
-            logger.debug("iter_members_with_io member: %s", member)
+            logger.debug("iter_members_with_streams member: %s", member)
             filtered_member = filter_func(member)
             if filtered_member is None:
                 logger.debug("skipping %s", member.filename)
@@ -715,7 +715,9 @@ class BaseArchiveReader(ArchiveReader):
         pwd: bytes | str | None,
         extraction_helper: ExtractionHelper,
     ):
-        for member, stream in self.iter_members_with_io(filter=filter_func, pwd=pwd):
+        for member, stream in self.iter_members_with_streams(
+            filter=filter_func, pwd=pwd
+        ):
             logger.debug("Writing member %s", member.filename)
             extraction_helper.extract_member(member, stream)
             if stream:

@@ -136,7 +136,7 @@ def test_streaming_only_mode(
             assert info is not None and len(info) >= 1
 
         previous_stream: IO[bytes] | None = None
-        for m, stream in archive.iter_members_with_io():
+        for m, stream in archive.iter_members_with_streams():
             if previous_stream is not None:
                 assert previous_stream.closed
                 with pytest.raises(ValueError):
@@ -193,7 +193,9 @@ def test_iter_members_partial_reads(
 
     with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
         for i, (member, stream) in enumerate(
-            archive.iter_members_with_io(members=lambda m: m.type == MemberType.FILE)
+            archive.iter_members_with_streams(
+                members=lambda m: m.type == MemberType.FILE
+            )
         ):
             if member.filename not in {f.name for f in files}:
                 continue
@@ -227,7 +229,7 @@ def test_iter_members_partial_reads(
 def test_iter_members_list_filter(
     sample_archive: SampleArchive, sample_archive_path: str, streaming_only: bool
 ):
-    """Ensure iter_members_with_io honours the filter callable."""
+    """Ensure iter_members_with_streams honours the filter callable."""
     skip_if_package_missing(sample_archive.creation_info.format, None)
     if (
         sample_archive.filename.startswith("duplicate_files")
@@ -244,7 +246,7 @@ def test_iter_members_list_filter(
     read_contents = []
 
     with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
-        for member, stream in archive.iter_members_with_io(members=file_names):
+        for member, stream in archive.iter_members_with_streams(members=file_names):
             assert member.filename in file_names
             read_contents.append(
                 (member.filename, stream.read() if stream is not None else None)
@@ -268,10 +270,10 @@ def test_streaming_only_allows_single_iteration(
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
     with open_archive(sample_archive_path, streaming_only=True) as archive:
-        next(archive.iter_members_with_io())
+        next(archive.iter_members_with_streams())
 
         with pytest.raises(ValueError):
-            next(archive.iter_members_with_io())
+            next(archive.iter_members_with_streams())
 
         with pytest.raises(ValueError):
             archive.extractall(tmp_path)
@@ -292,9 +294,9 @@ def test_random_access_allows_multiple_iterations(
     skip_if_package_missing(sample_archive.creation_info.format, None)
 
     with open_archive(sample_archive_path) as archive:
-        next(archive.iter_members_with_io())
-        list(archive.iter_members_with_io())
-        list(archive.iter_members_with_io())
+        next(archive.iter_members_with_streams())
+        list(archive.iter_members_with_streams())
+        list(archive.iter_members_with_streams())
 
 
 @pytest.mark.parametrize("sample_archive", SYMLINK_ARCHIVES, ids=lambda a: a.filename)
