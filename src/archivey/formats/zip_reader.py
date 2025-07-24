@@ -17,7 +17,6 @@ from archivey.internal.base_reader import (
     BaseArchiveReader,
 )
 from archivey.internal.io_helpers import (
-    ExceptionTranslatingIO,
     is_seekable,
     is_stream,
     run_with_exception_translation,
@@ -85,7 +84,7 @@ def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
 class ZipReader(BaseArchiveReader):
     """Reader for ZIP archives."""
 
-    def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
+    def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, zipfile.BadZipFile):
             return ArchiveCorruptedError("Error reading ZIP archive")
         if isinstance(e, RuntimeError) and "password required" in str(e).lower():
@@ -131,7 +130,7 @@ class ZipReader(BaseArchiveReader):
 
         self._archive: zipfile.ZipFile | None = run_with_exception_translation(
             _open_zip,
-            self._exception_translator,
+            self._translate_exception,
             archive_path=str(archive_path),
         )
 
@@ -206,24 +205,15 @@ class ZipReader(BaseArchiveReader):
         for_iteration: bool,
     ) -> BinaryIO:
         assert self._archive is not None
-        archive = self._archive
 
-        def _open_stream() -> BinaryIO:
-            return cast(
-                "BinaryIO",
-                archive.open(
-                    cast("zipfile.ZipInfo", member.raw_info),
-                    pwd=str_to_bytes(
-                        pwd if pwd is not None else self.get_archive_password()
-                    ),
+        return cast(
+            "BinaryIO",
+            self._archive.open(
+                cast("zipfile.ZipInfo", member.raw_info),
+                pwd=str_to_bytes(
+                    pwd if pwd is not None else self.get_archive_password()
                 ),
-            )
-
-        return ExceptionTranslatingIO(
-            _open_stream,
-            self._exception_translator,
-            archive_path=self.path_str,
-            member_name=member.filename,
+            ),
         )
 
     def get_archive_info(self) -> ArchiveInfo:

@@ -3,15 +3,20 @@ import logging
 import os
 import struct
 from datetime import datetime, timezone
-from typing import BinaryIO, Iterator, List
+from typing import BinaryIO, Iterator, List, Optional
 
 from archivey.exceptions import (
     ArchiveCorruptedError,
+    ArchiveError,
 )
-from archivey.formats.compressed_streams import open_stream
+from archivey.formats.compressed_streams import get_stream_open_fn
 from archivey.formats.format_detection import EXTENSION_TO_FORMAT
 from archivey.internal.base_reader import BaseArchiveReader
-from archivey.internal.io_helpers import open_if_file, read_exact  # Updated import
+from archivey.internal.io_helpers import (  # Updated import
+    open_if_file,
+    read_exact,
+    run_with_exception_translation,
+)
 
 # from archivey.internal.utils import open_if_file # Removed
 from archivey.types import (
@@ -276,9 +281,19 @@ class SingleFileReader(BaseArchiveReader):
         # Open the file to see if it's supported by the library and valid.
         # To avoid opening the file twice, we'll store the reference and return it
         # on the first open() call.
-        self.fileobj: BinaryIO | None = open_stream(
-            self.format, self.path_or_stream, self.config
+        self._opener, self._exception_translator = get_stream_open_fn(
+            self.format, self.config
         )
+
+        self.fileobj: BinaryIO | None = run_with_exception_translation(
+            lambda: self._opener(archive_path),
+            self._exception_translator,
+            archive_path=self.path_str,
+            member_name=self.member.filename,
+        )
+
+    def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
+        return self._exception_translator(e)
 
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
         yield self.member
@@ -310,7 +325,7 @@ class SingleFileReader(BaseArchiveReader):
             raise ValueError("Compressed files do not support password protection")
 
         if self.fileobj is None:
-            return open_stream(self.format, self.path_or_stream, self.config)
+            return self._opener(self.path_or_stream)
 
         fileobj = self.fileobj
         self.fileobj = None

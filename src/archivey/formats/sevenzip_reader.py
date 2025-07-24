@@ -284,7 +284,7 @@ class SevenZipReader(BaseArchiveReader):
 
     _password_lock: Lock = Lock()
 
-    def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
+    def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
         if py7zr is not None:
             # Archive open
             if isinstance(e, py7zr.Bad7zFile):
@@ -390,7 +390,7 @@ class SevenZipReader(BaseArchiveReader):
 
         self._archive: py7zr.SevenZipFile | None = run_with_exception_translation(
             _open_7z,
-            self._exception_translator,
+            self._translate_exception,
             archive_path=str(archive_path),
         )
 
@@ -521,26 +521,18 @@ class SevenZipReader(BaseArchiveReader):
     ) -> BinaryIO:
         assert self._archive is not None
 
-        def _open() -> BinaryIO:
-            it = list(
-                self.iter_members_with_streams(
-                    members=[member], pwd=pwd, close_streams=False
-                )
+        it = list(
+            self.iter_members_with_streams(
+                members=[member], pwd=pwd, close_streams=False
             )
-            assert len(it) == 1, (
-                f"Expected exactly one member, got {len(it)}. {member.filename}"
-            )
-            stream = cast("StreamingFile.Reader", it[0][1])
-            if isinstance(stream, ErrorIOStream):
-                stream.read()
-            return stream
-
-        return run_with_exception_translation(
-            _open,
-            self._exception_translator,
-            archive_path=self.path_str,
-            member_name=member.filename,
         )
+        assert len(it) == 1, (
+            f"Expected exactly one member, got {len(it)}. {member.filename}"
+        )
+        stream = cast("StreamingFile.Reader", it[0][1])
+        if isinstance(stream, ErrorIOStream):
+            stream.read()
+        return stream
 
     def _extract_members_iterator(
         self,
@@ -605,7 +597,7 @@ class SevenZipReader(BaseArchiveReader):
 
             # TODO: the extractor may skip non-files or files with errors. Yield all remaining members. (but yield dirs before files?)
         except Exception as e:
-            translated = self._exception_translator(e)
+            translated = self._translate_exception(e)
             if translated is not None:
                 raise translated from e
             raise
@@ -735,7 +727,7 @@ class SevenZipReader(BaseArchiveReader):
 
         run_with_exception_translation(
             _do_extract,
-            self._exception_translator,
+            self._translate_exception,
             archive_path=self.path_str,
             member_name=member_obj.filename,
         )
@@ -775,7 +767,7 @@ class SevenZipReader(BaseArchiveReader):
 
         run_with_exception_translation(
             _do_extract,
-            self._exception_translator,
+            self._translate_exception,
             archive_path=self.path_str,
         )
         logger.info("Extraction done")

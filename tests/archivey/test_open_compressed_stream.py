@@ -118,3 +118,6 @@ def test_open_compressed_stream_from_stream_with_prefix(
 
     expected = sample_archive.contents.files[0].contents
     assert data == expected
+
+
+# TODO: test that it opens compressed tar files as a stream

@@ -5,6 +5,7 @@ import zipfile
 from typing import IO, TYPE_CHECKING
 
 from archivey.config import get_archivey_config
+from archivey.formats.compressed_streams import open_stream
 from archivey.internal.io_helpers import (
     ReadableStreamLikeOrSimilar,
     is_seekable,
@@ -16,8 +17,6 @@ from archivey.types import (
     TAR_COMPRESSED_FORMATS,
     ArchiveFormat,
 )
-
-from .compressed_streams import open_stream
 
 if TYPE_CHECKING:
     import rarfile

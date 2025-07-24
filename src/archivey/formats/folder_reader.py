@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import BinaryIO, Iterator, Optional
 
 from archivey.exceptions import (
+    ArchiveError,
     ArchiveMemberNotFoundError,
-    ArchiveReadError,
 )
 from archivey.internal.base_reader import BaseArchiveReader
 from archivey.types import (
@@ -142,6 +142,11 @@ class FolderReader(BaseArchiveReader):
             for filename in filenames:
                 yield self._convert_entry_to_member(dirpath / filename, seen_inodes)
 
+    def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
+        if isinstance(e, FileNotFoundError):
+            return ArchiveMemberNotFoundError(f"Member not found: {e}")
+        return None
+
     def _open_member(
         self,
         member: ArchiveMember,
@@ -185,12 +190,18 @@ class FolderReader(BaseArchiveReader):
                 f"Error resolving path for member '{member.filename}': {e}"
             ) from e
 
-        try:
-            return full_path.open("rb")
-        except OSError as e:
-            raise ArchiveReadError(
-                f"Cannot open member '{member.filename}': {e}"
-            ) from e
+        return full_path.open("rb")
+        # try:
+        #     return ArchiveStream(
+        #         open_fn=lambda: full_path.open("rb"),
+        #         underlying_library_name="pathlib",
+        #         archive_path=self.path_str,
+        #         member_name=member.filename,
+        #     )
+        # except OSError as e:
+        #     raise ArchiveReadError(
+        #         f"Cannot open member '{member.filename}': {e}"
+        #     ) from e
 
     def get_archive_info(self) -> ArchiveInfo:
         self.check_archive_open()

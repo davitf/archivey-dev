@@ -3,7 +3,7 @@ import os
 import stat
 import tarfile
 from datetime import datetime, timezone
-from typing import IO, BinaryIO, Iterator, List, Optional, cast
+from typing import BinaryIO, Iterator, List, Optional, cast
 
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -18,7 +18,7 @@ from archivey.internal.base_reader import (
     BaseArchiveReader,
 )
 from archivey.internal.io_helpers import (
-    ExceptionTranslatingIO,
+    ensure_binaryio,
     is_seekable,
     read_exact,
     run_with_exception_translation,
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 class TarReader(BaseArchiveReader):
     """Reader for TAR archives and compressed TAR archives."""
 
-    def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
+    def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, tarfile.ReadError):
             if "unexpected end of data" in str(e).lower():
                 return ArchiveEOFError("TAR archive is truncated")
@@ -124,7 +124,7 @@ class TarReader(BaseArchiveReader):
 
         self._archive: tarfile.TarFile | None = run_with_exception_translation(
             _open_tar,
-            self._exception_translator,
+            self._translate_exception,
             archive_path=str(archive_path),
         )
         logger.debug(
@@ -253,21 +253,13 @@ class TarReader(BaseArchiveReader):
 
         tarinfo = cast("tarfile.TarInfo", member.raw_info)
 
-        def _open_stream() -> IO[bytes]:
-            assert self._archive is not None
-            stream = self._archive.extractfile(tarinfo)
-            if stream is None:
-                raise ArchiveMemberCannotBeOpenedError(
-                    f"Member {member.filename} cannot be opened"
-                )
-            return stream
-
-        return ExceptionTranslatingIO(
-            _open_stream,
-            self._exception_translator,
-            archive_path=self.path_str,
-            member_name=member.filename,
-        )
+        assert self._archive is not None
+        stream = self._archive.extractfile(tarinfo)
+        if stream is None:
+            raise ArchiveMemberCannotBeOpenedError(
+                f"Member {member.filename} cannot be opened"
+            )
+        return ensure_binaryio(stream)
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
@@ -306,7 +298,7 @@ class TarReader(BaseArchiveReader):
             if self.config.tar_check_integrity and tarinfo is not None:
                 self._check_tar_integrity(tarinfo)
         except (tarfile.TarError, OSError) as e:
-            translated = self._exception_translator(e)
+            translated = self._translate_exception(e)
             if translated is not None:
                 raise translated from e
             raise

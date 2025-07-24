@@ -52,7 +52,6 @@ from archivey.exceptions import (
 from archivey.internal.base_reader import BaseArchiveReader, _build_filter
 from archivey.internal.io_helpers import (
     ErrorIOStream,
-    ExceptionTranslatingIO,
     ensure_binaryio,
     is_seekable,
     is_stream,
@@ -520,7 +519,7 @@ class RarReader(BaseArchiveReader):
 
         self._archive = run_with_exception_translation(
             open_rar_file,
-            self._exception_translator,
+            self._translate_exception,
             archive_path=str(archive_path),
         )
 
@@ -705,7 +704,7 @@ class RarReader(BaseArchiveReader):
 
         return self._format_info
 
-    def _exception_translator(self, e: Exception) -> Optional[ArchiveError]:
+    def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, rarfile.BadRarFile):
             return ArchiveCorruptedError("Error reading RAR archive")
         if isinstance(e, rarfile.RarWrongPassword):
@@ -762,36 +761,14 @@ class RarReader(BaseArchiveReader):
                     f"Wrong password specified for {member.filename}"
                 )
 
-        try:
-            return ExceptionTranslatingIO(
-                lambda: ensure_binaryio(
-                    cast(
-                        "IO[bytes]",
-                        ensure_not_none(self._archive).open(
-                            member.raw_info, pwd=bytes_to_str(pwd)
-                        ),
-                    )
+        return ensure_binaryio(
+            cast(
+                "IO[bytes]",
+                ensure_not_none(self._archive).open(
+                    member.raw_info, pwd=bytes_to_str(pwd)
                 ),
-                self._exception_translator,
-                archive_path=self.path_str,
-                member_name=member.filename,
             )
-        except rarfile.BadRarFile as e:
-            raise ArchiveCorruptedError(
-                f"Error reading member {member.filename}"
-            ) from e
-        except rarfile.RarWrongPassword as e:
-            raise ArchiveEncryptedError(
-                f"Wrong password specified for {member.filename}"
-            ) from e
-        except rarfile.PasswordRequired as e:
-            raise ArchiveEncryptedError(
-                f"Password required for {member.filename}"
-            ) from e
-        except rarfile.Error as e:
-            raise ArchiveError(
-                f"Unknown error reading member {member.filename}: {e}"
-            ) from e
+        )
 
     def iter_members_with_streams(
         self,

@@ -13,6 +13,7 @@ from typing import (
     Collection,
     Iterator,
     List,
+    Optional,
     TypeVar,
     Union,
     cast,
@@ -23,10 +24,12 @@ from weakref import WeakSet
 from archivey.archive_reader import ArchiveReader
 from archivey.config import ArchiveyConfig, ExtractionFilter, get_archivey_config
 from archivey.exceptions import (
+    ArchiveError,
     ArchiveMemberCannotBeOpenedError,
     ArchiveMemberNotFoundError,
 )
 from archivey.filters import DEFAULT_FILTERS
+from archivey.internal.archive_stream import ArchiveStream
 from archivey.internal.extraction_helper import ExtractionHelper
 from archivey.types import (
     ArchiveFormat,
@@ -36,8 +39,6 @@ from archivey.types import (
     IteratorFilterFunc,
     MemberType,
 )
-
-from .io_helpers import LazyOpenIO
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +172,7 @@ class BaseArchiveReader(ArchiveReader):
         self._closed: bool = False
         self._open_streams: WeakSet[IOBase | BinaryIO] = WeakSet()
 
-    def _track_stream(self, stream: IoType) -> IoType:
+    def _track_stream(self, stream: ArchiveStream) -> ArchiveStream:
         """Register an opened stream to be closed when the archive closes."""
         self._open_streams.add(stream)
         return stream
@@ -483,6 +484,10 @@ class BaseArchiveReader(ArchiveReader):
         return member
 
     @abc.abstractmethod
+    def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
+        pass  # pragma: no cover
+
+    @abc.abstractmethod
     def _open_member(
         self,
         member: ArchiveMember,
@@ -493,11 +498,6 @@ class BaseArchiveReader(ArchiveReader):
         Open the given archive member and return a readable binary stream.
 
         **Subclasses MUST implement this method.**
-
-        The returned stream **MUST** be wrapped with
-        `archivey.internal.io_helpers.ExceptionTranslatingIO` to ensure that
-        exceptions from the underlying archive library are converted into
-        `archivey.exceptions.ArchiveError` subclasses.
 
         **Guarantees for Implementers:**
         - This method is guaranteed to be called only for members where
@@ -547,17 +547,25 @@ class BaseArchiveReader(ArchiveReader):
         member_or_filename: ArchiveMember | str,
         pwd: bytes | str | None,
         for_iteration: bool,
-    ) -> BinaryIO:
+    ) -> ArchiveStream:
         member = self.get_member(member_or_filename)
         member = self._prepare_member_for_open(
             member, pwd=pwd, for_iteration=for_iteration
         )
         final_member, _ = self._resolve_member_to_open(member)
-        return self._open_member(
-            final_member,
-            pwd=pwd if pwd is not None else self.get_archive_password(),
-            for_iteration=for_iteration,
+
+        stream = ArchiveStream(
+            open_fn=lambda: self._open_member(
+                final_member, pwd=pwd, for_iteration=for_iteration
+            ),
+            exception_translator=self._translate_exception,
+            archive_path=self.path_str,
+            member_name=member.filename,
+            lazy=for_iteration,
+            seekable=not self._streaming_only,
         )
+        self._track_stream(stream)
+        return stream
 
     def open(
         self, member_or_filename: ArchiveMember | str, *, pwd: bytes | str | None = None
@@ -632,19 +640,7 @@ class BaseArchiveReader(ArchiveReader):
 
             try:
                 stream = (
-                    self._track_stream(
-                        LazyOpenIO(
-                            self._open_internal,
-                            member,
-                            pwd=pwd,
-                            for_iteration=True,
-                            # Some backends are optimized for seeking inside files.
-                            # Most others support seeking, but need to re-read the file from
-                            # the beginning when seeking backwards.
-                            # TODO: should we make these streams non-seekable?
-                            seekable=not self._streaming_only,  # LazyOpenIO kwarg
-                        )
-                    )
+                    self._open_internal(member, pwd=pwd, for_iteration=True)
                     if member.is_file
                     else None
                 )

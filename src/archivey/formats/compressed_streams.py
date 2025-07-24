@@ -3,12 +3,18 @@ import gzip
 import io
 import lzma
 import os
-from typing import TYPE_CHECKING, BinaryIO, Optional, cast
+from typing import TYPE_CHECKING, BinaryIO, Callable, Optional, cast
 
 from typing_extensions import Buffer
 
 from archivey.config import ArchiveyConfig
-from archivey.internal.io_helpers import ensure_bufferedio, is_seekable, is_stream
+from archivey.internal.archive_stream import ArchiveStream
+from archivey.internal.io_helpers import (
+    ExceptionTranslatorFn,
+    ensure_bufferedio,
+    is_seekable,
+    is_stream,
+)
 from archivey.types import ArchiveFormat
 
 if TYPE_CHECKING:
@@ -59,7 +65,7 @@ from archivey.exceptions import (
     ArchiveStreamNotSeekableError,
     PackageNotInstalledError,
 )
-from archivey.internal.io_helpers import ExceptionTranslatingIO, ensure_binaryio
+from archivey.internal.io_helpers import ensure_binaryio
 
 logger = logging.getLogger(__name__)
 
@@ -73,29 +79,26 @@ def _translate_gzip_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 def open_gzip_stream(path: str | BinaryIO) -> BinaryIO:
-    def _open() -> BinaryIO:
-        if isinstance(path, (str, bytes, os.PathLike)):
-            gz = gzip.open(path, mode="rb")
-            underlying_seekable = True
-        else:
-            assert not path.closed
-            gz = gzip.GzipFile(fileobj=ensure_bufferedio(path), mode="rb")
-            assert not path.closed
-            underlying_seekable = is_seekable(path)
+    if isinstance(path, (str, bytes, os.PathLike)):
+        gz = gzip.open(path, mode="rb")
+        underlying_seekable = True
+    else:
+        assert not path.closed
+        gz = gzip.GzipFile(fileobj=ensure_bufferedio(path), mode="rb")
+        assert not path.closed
+        underlying_seekable = is_seekable(path)
 
-        if not underlying_seekable:
-            # GzipFile always returns True for seekable, even if the underlying stream
-            # is not seekable.
-            gz.seekable = lambda: False
+    if not underlying_seekable:
+        # GzipFile always returns True for seekable, even if the underlying stream
+        # is not seekable.
+        gz.seekable = lambda: False
 
-            def _unsupported_seek(offset, whence=io.SEEK_SET):
-                raise io.UnsupportedOperation("seek")
+        def _unsupported_seek(offset, whence=io.SEEK_SET):
+            raise io.UnsupportedOperation("seek")
 
-            gz.seek = _unsupported_seek
+        gz.seek = _unsupported_seek
 
-        return ensure_binaryio(gz)
-
-    return ExceptionTranslatingIO(_open, _translate_gzip_exception)
+    return ensure_binaryio(gz)
 
 
 def _translate_rapidgzip_exception(e: Exception) -> Optional[ArchiveError]:
@@ -140,9 +143,7 @@ def open_rapidgzip_stream(path: str | BinaryIO) -> BinaryIO:
             "rapidgzip package is not installed, required for GZIP archives"
         ) from None  # pragma: no cover -- rapidgzip is installed for main tests
 
-    return ExceptionTranslatingIO(
-        lambda: rapidgzip.open(path, parallelization=0), _translate_rapidgzip_exception
-    )
+    return rapidgzip.open(path, parallelization=0)
 
 
 def _translate_bz2_exception(e: Exception) -> Optional[ArchiveError]:
@@ -155,7 +156,7 @@ def _translate_bz2_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 def open_bzip2_stream(path: str | BinaryIO) -> BinaryIO:
-    return ExceptionTranslatingIO(lambda: bz2.open(path), _translate_bz2_exception)
+    return ensure_binaryio(bz2.open(path))
 
 
 def _translate_indexed_bzip2_exception(e: Exception) -> Optional[ArchiveError]:
@@ -190,10 +191,7 @@ def open_indexed_bzip2_stream(path: str | BinaryIO) -> BinaryIO:
             "indexed_bzip2 package is not installed, required for BZIP2 archives"
         ) from None  # pragma: no cover -- indexed_bzip2 is installed for main tests
 
-    return ExceptionTranslatingIO(
-        lambda: indexed_bzip2.open(path, parallelization=0),
-        _translate_indexed_bzip2_exception,
-    )
+    return indexed_bzip2.open(path, parallelization=0)
 
 
 def _translate_lzma_exception(e: Exception) -> Optional[ArchiveError]:
@@ -205,7 +203,7 @@ def _translate_lzma_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 def open_lzma_stream(path: str | BinaryIO) -> BinaryIO:
-    return ExceptionTranslatingIO(lambda: lzma.open(path), _translate_lzma_exception)
+    return ensure_binaryio(lzma.open(path))
 
 
 def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
@@ -231,9 +229,7 @@ def open_python_xz_stream(path: str | BinaryIO) -> BinaryIO:
             "python-xz package is not installed, required for XZ archives"
         ) from None  # pragma: no cover -- lz4 is installed for main tests
 
-    return ExceptionTranslatingIO(
-        lambda: ensure_binaryio(xz.open(path)), _translate_python_xz_exception
-    )
+    return ensure_binaryio(xz.open(path))
 
 
 class ZstandardReopenOnBackwardsSeekIO(io.RawIOBase, BinaryIO):
@@ -302,9 +298,7 @@ def open_zstandard_stream(path: str | BinaryIO) -> BinaryIO:
             "zstandard package is not installed, required for Zstandard archives"
         ) from None  # pragma: no cover -- lz4 is installed for main tests
 
-    return ExceptionTranslatingIO(
-        lambda: ZstandardReopenOnBackwardsSeekIO(path), _translate_zstandard_exception
-    )
+    return ZstandardReopenOnBackwardsSeekIO(path)
 
 
 def _translate_pyzstd_exception(e: Exception) -> Optional[ArchiveError]:
@@ -320,9 +314,7 @@ def open_pyzstd_stream(path: str | BinaryIO) -> BinaryIO:
         raise PackageNotInstalledError(
             "pyzstd package is not installed, required for Zstandard archives"
         ) from None  # pragma: no cover -- pyzstd is installed for main tests
-    return ExceptionTranslatingIO(
-        lambda: ensure_binaryio(pyzstd.open(path)), _translate_pyzstd_exception
-    )
+    return ensure_binaryio(pyzstd.open(path))
 
 
 def _translate_lz4_exception(e: Exception) -> Optional[ArchiveError]:
@@ -339,39 +331,49 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
             "lz4 package is not installed, required for LZ4 archives"
         ) from None  # pragma: no cover -- lz4 is installed for main tests
 
-    return ExceptionTranslatingIO(
-        lambda: ensure_binaryio(cast("lz4.frame.LZ4FrameFile", lz4.frame.open(path))),
-        _translate_lz4_exception,
-    )
+    return ensure_binaryio(cast("lz4.frame.LZ4FrameFile", lz4.frame.open(path)))
 
 
-def open_stream(
-    format: ArchiveFormat, path_or_stream: str | BinaryIO, config: ArchiveyConfig
-) -> BinaryIO:
-    if is_stream(path_or_stream):
-        assert not path_or_stream.closed
-
+def get_stream_open_fn(
+    format: ArchiveFormat, config: ArchiveyConfig
+) -> tuple[Callable[[str | BinaryIO], BinaryIO], ExceptionTranslatorFn]:
     if format == ArchiveFormat.GZIP:
         if config.use_rapidgzip:
-            return open_rapidgzip_stream(path_or_stream)
-        return open_gzip_stream(path_or_stream)
+            return open_rapidgzip_stream, _translate_rapidgzip_exception
+        return open_gzip_stream, _translate_gzip_exception
 
     if format == ArchiveFormat.BZIP2:
         if config.use_indexed_bzip2:
-            return open_indexed_bzip2_stream(path_or_stream)
-        return open_bzip2_stream(path_or_stream)
+            return open_indexed_bzip2_stream, _translate_indexed_bzip2_exception
+        return open_bzip2_stream, _translate_bz2_exception
 
     if format == ArchiveFormat.XZ:
         if config.use_python_xz:
-            return open_python_xz_stream(path_or_stream)
-        return open_lzma_stream(path_or_stream)
+            return open_python_xz_stream, _translate_python_xz_exception
+        return open_lzma_stream, _translate_lzma_exception
 
     if format == ArchiveFormat.LZ4:
-        return open_lz4_stream(path_or_stream)
+        return open_lz4_stream, _translate_lz4_exception
 
     if format == ArchiveFormat.ZSTD:
         if config.use_zstandard:
-            return open_zstandard_stream(path_or_stream)
-        return open_pyzstd_stream(path_or_stream)
+            return open_zstandard_stream, _translate_zstandard_exception
+        return open_pyzstd_stream, _translate_pyzstd_exception
 
     raise ValueError(f"Unsupported archive format: {format}")  # pragma: no cover
+
+
+def open_stream(
+    format: ArchiveFormat,
+    path_or_stream: str | BinaryIO,
+    config: ArchiveyConfig,
+) -> BinaryIO:
+    open_fn, exception_translator = get_stream_open_fn(format, config)
+    return ArchiveStream(
+        open_fn=lambda: open_fn(path_or_stream),
+        exception_translator=exception_translator,
+        lazy=False,
+        archive_path=path_or_stream if isinstance(path_or_stream, str) else None,
+        member_name="<stream>",
+        seekable=True,
+    )
