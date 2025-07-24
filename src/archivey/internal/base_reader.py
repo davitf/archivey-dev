@@ -890,3 +890,9 @@ class BaseArchiveReader(ArchiveReader):
             self._filename_to_members = None  # type: ignore
             self._normalized_path_to_last_member = None  # type: ignore
             self._iterator_for_registration = None
+
+    def __str__(self) -> str:
+        return f"<{self.__class__.__name__} path_or_stream={self.path_or_stream!r}>"
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__module__}.{self.__class__.__name__} path_or_stream={self.path_or_stream!r} streaming_only={self._streaming_only}>"
