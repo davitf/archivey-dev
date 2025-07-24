@@ -3,7 +3,7 @@ import logging
 import os
 import struct
 from datetime import datetime, timezone
-from typing import BinaryIO, Iterator, List, Optional
+from typing import BinaryIO, Iterator, Optional
 
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -303,10 +303,6 @@ class SingleFileReader(BaseArchiveReader):
         if self.fileobj is not None:
             self.fileobj.close()
             self.fileobj = None
-
-    def get_members(self) -> List[ArchiveMember]:
-        """Get a list of all members in the archive."""
-        return [self.member]
 
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format."""
