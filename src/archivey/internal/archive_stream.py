@@ -90,6 +90,13 @@ class ArchiveStream(io.RawIOBase, BinaryIO):
         return self._inner
 
     def _translate_exception(self, e: Exception) -> NoReturn:
+        if isinstance(e, ArchiveError):
+            if e.archive_path is None:
+                e.archive_path = self.archive_path
+            if e.member_name is None:
+                e.member_name = self.member_name
+            raise e
+
         translated = self._translate(e)
         if translated is not None:
             translated.archive_path = self.archive_path
