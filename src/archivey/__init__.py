@@ -35,4 +35,4 @@ __all__ = [
     "ArchiveError",
 ]
 
-__version__ = "0.1.0a2"
+__version__ = "0.0.1a1"
