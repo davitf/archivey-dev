@@ -6,6 +6,7 @@ import pytest
 from archivey.config import ArchiveyConfig
 from archivey.core import open_compressed_stream
 from archivey.exceptions import ArchiveNotSupportedError
+from archivey.types import TAR_COMPRESSED_FORMATS
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
@@ -120,4 +121,29 @@ def test_open_compressed_stream_from_stream_with_prefix(
     assert data == expected
 
 
-# TODO: test that it opens compressed tar files as a stream
+@pytest.mark.parametrize("sample_archive", BASIC_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.parametrize(
+    "alternative_packages", [False, True], ids=["default", "altlibs"]
+)
+def test_open_compressed_stream_from_archive(
+    sample_archive, sample_archive_path, alternative_packages
+):
+    if alternative_packages:
+        config = ArchiveyConfig(
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            use_zstandard=True,
+        )
+    else:
+        config = ArchiveyConfig()
+
+    skip_if_package_missing(sample_archive.creation_info.format, config)
+
+    if sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS:
+        with open_compressed_stream(sample_archive_path, config=config) as f:
+            data = f.read()
+            assert data[257 : 257 + 5] == b"ustar"
+    else:
+        with pytest.raises(ArchiveNotSupportedError):
+            open_compressed_stream(sample_archive_path, config=config)

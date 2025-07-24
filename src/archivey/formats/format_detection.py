@@ -96,6 +96,7 @@ if rarfile is not None:
 
 def detect_archive_format_by_signature(
     path_or_file: str | bytes | ReadableStreamLikeOrSimilar,
+    detect_compressed_tar: bool = True,
 ) -> ArchiveFormat:
     if isinstance(path_or_file, (str, bytes, os.PathLike)) and os.path.isdir(
         path_or_file
@@ -115,7 +116,10 @@ def detect_archive_format_by_signature(
         f.seek(0)
 
         # Check if it is a compressed tar file
-        if detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT:
+        if (
+            detect_compressed_tar
+            and detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT
+        ):
             assert detected_format is not None
             with open_stream(
                 detected_format, f, get_archivey_config()
@@ -192,6 +196,7 @@ logger = logging.getLogger(__name__)
 
 def detect_archive_format(
     filename: str | os.PathLike | ReadableStreamLikeOrSimilar,
+    detect_compressed_tar: bool = True,
 ) -> ArchiveFormat:
     # Check if it's a directory first
     if isinstance(filename, os.PathLike):
@@ -200,7 +205,9 @@ def detect_archive_format(
     if isinstance(filename, str) and os.path.isdir(filename):
         return ArchiveFormat.FOLDER
 
-    format_by_signature = detect_archive_format_by_signature(filename)
+    format_by_signature = detect_archive_format_by_signature(
+        filename, detect_compressed_tar
+    )
 
     if isinstance(filename, str):
         format_by_filename = detect_archive_format_by_filename(filename)

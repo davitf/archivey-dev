@@ -233,7 +233,9 @@ def open_compressed_stream(
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
-    format = detect_archive_format(ensure_not_none(stream or path))
+    format = detect_archive_format(
+        ensure_not_none(stream or path), detect_compressed_tar=False
+    )
 
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
