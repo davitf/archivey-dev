@@ -6,6 +6,7 @@ This guide covers the most common use cases. For full details, see the [API refe
 
 ---
 
+<!-- opening -->
 ## 📦 Opening an Archive
 
 Use [`open_archive`][archivey.open_archive] to open any supported archive:
@@ -25,6 +26,7 @@ You can pass:
 
 ---
 
+<!-- streaming -->
 ## 📤 Streaming-Safe Methods
 
 Some archive formats (like `.tar.gz`, `.tar.xz`) don’t include a central index, so listing or accessing members typically requires decompressing the entire archive. Similarly, **solid archives** (like some RAR and 7z files) store multiple files in a single compressed block — so accessing a file mid-archive may require decompressing everything before it. Underlying libraries often perform this extra decompression silently.
@@ -35,6 +37,7 @@ When opening with `streaming_only=True`, non-streaming methods are disabled to p
 
 ---
 
+<!-- extractall -->
 ### [`extractall`][archivey.ArchiveReader.extractall]
 
 Extracts all or selected members to a target directory:
@@ -59,6 +62,7 @@ Returns a mapping of extracted paths to their corresponding [`ArchiveMember`][ar
 
 ---
 
+<!-- iter-members -->
 ### [`iter_members_with_streams`][archivey.ArchiveReader.iter_members_with_streams]
 
 Iterates over each member, yielding `(ArchiveMember, BinaryIO | None)`:
@@ -76,6 +80,7 @@ for member, stream in archive.iter_members_with_streams():
 
 ---
 
+<!-- get-members-if-available -->
 ### [`get_members_if_available`][archivey.ArchiveReader.get_members_if_available]
 
 Returns the member list if it’s already known or can be retrieved from a central directory (e.g. ZIP or 7z). Returns `None` if the archive would need to be scanned or decompressed.
@@ -84,6 +89,7 @@ Useful for progress reporting or early inspection without triggering a full scan
 
 ---
 
+<!-- random-access -->
 ## 🗂️ Random-Access Methods
 
 These methods are available only if the archive was **not** opened in `streaming_only` mode. You can check with:
@@ -95,6 +101,7 @@ if archive.has_random_access():
 
 ---
 
+<!-- get-members -->
 ### [`get_members`][archivey.ArchiveReader.get_members]
 
 Returns a complete list of archive entries:
@@ -107,6 +114,7 @@ Note: For some formats, this may involve scanning or decompressing large portion
 
 ---
 
+<!-- open -->
 ### [`open`][archivey.ArchiveReader.open]
 
 Opens a specific file in the archive:
@@ -120,6 +128,7 @@ If the member is a symlink or hardlink, the link will be resolved to its target,
 
 ---
 
+<!-- extract -->
 ### [`extract`][archivey.ArchiveReader.extract]
 
 Extracts a single member to disk:
@@ -132,6 +141,7 @@ Returns the extracted file path.
 
 ---
 
+<!-- get-member -->
 ### [`get_member`][archivey.ArchiveReader.get_member]
 
 Looks up a member by name or validates an existing one:
@@ -142,6 +152,7 @@ member = archive.get_member("assets/logo.png")
 
 ---
 
+<!-- filters -->
 ## 🧪 Filters and Sanitization
 
 Archivey applies sanitization by default to prevent unsafe extraction:
@@ -170,6 +181,7 @@ You can also use a custom function:
 
 ---
 
+<!-- config -->
 ## ⚙️ Configuration Options
 
 You can control Archivey’s behavior using an [`ArchiveyConfig`][archivey.ArchiveyConfig] object.
@@ -207,6 +219,7 @@ with archivey_config(
 
 ---
 
+<!-- compressed-stream -->
 ## 🧵 Reading Compressed Streams
 
 Use [`open_compressed_stream`][archivey.open_compressed_stream] to read `.gz`, `.bz2`, `.xz`, `.zst`, or `.lz4` files:
@@ -220,6 +233,7 @@ with open_compressed_stream("file.txt.gz") as f:
 
 ---
 
+<!-- errors -->
 ## 🛑 Error Handling
 
 All archive-related exceptions derive from [`ArchiveError`][archivey.ArchiveError].
@@ -243,6 +257,7 @@ except ArchiveError as e:
 
 ---
 
+<!-- links -->
 ## 📘 See Also
 
 - [API Reference](reference.md)
