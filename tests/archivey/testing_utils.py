@@ -71,8 +71,12 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
             perm = file.permissions or default_permissions_by_type[file.type]
             set_file_permissions(full_path, perm, file.type)
 
-    # List the files with ls
-    subprocess.run(["ls", "-alF", "-R", "--time-style=full-iso", dir], check=True)
+    # List the files to help debug failures
+    try:
+        subprocess.run(["ls", "-alF", "-R", "--time-style=full-iso", dir], check=True)
+    except subprocess.CalledProcessError:
+        # Fallback to a simpler command if the full one fails
+        subprocess.run(["ls", "-alF", "-R", dir])
 
 
 def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConfig]):
