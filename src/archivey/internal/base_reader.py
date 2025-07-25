@@ -485,6 +485,18 @@ class BaseArchiveReader(ArchiveReader):
 
     @abc.abstractmethod
     def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
+        """Translate a third-party exception into an :class:`ArchiveError`.
+
+        Subclasses must inspect ``e`` and return an appropriate
+        :class:`~archivey.exceptions.ArchiveError` instance if the error
+        originates from the underlying archive library. If the exception is not
+        recognised, return ``None`` so it can propagate unchanged.
+
+        Any exception object returned by this method will have its
+        ``archive_path`` and ``member_name`` attributes filled in by
+        :class:`archivey.internal.archive_stream.ArchiveStream` before being
+        raised to the caller.
+        """
         pass  # pragma: no cover
 
     @abc.abstractmethod

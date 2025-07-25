@@ -98,7 +98,9 @@ Arguments:
 Tips:
 
 *   As some archive formats (e.g. tar) may contain multiple members with the same file name, you should pass `member.raw_info` object to the underlying library if possible instead of the filename, to avoid opening a different member with the same name.
-*   The returned stream should be wrapped with `archivey.internal.io_helpers.ExceptionTranslatingIO` (see section below) to ensure proper error handling.
+*   Exceptions raised while reading the returned stream will be passed through
+    your `_translate_exception()` method to ensure they become
+    `ArchiveError` subclasses.
 
 
 ## Optional Methods to Override
@@ -126,12 +128,11 @@ While the above are essential, you might override other methods from `BaseArchiv
 
 Libraries often have their own exception base classes, or raise builtin exceptions such as `OSError` when there's a problem with an archive. Archivey tries to guarantee that all exceptions raised due to archive issues are subclasses of [`archivey.exceptions.ArchiveError`][], and so readers need to translate all exceptions raised by the libraries into them.
 
-When you return a file stream provided by an underlying library from `_open_member()` (or from a custom `iter_members_with_streams` override), you should wrap it with `archivey.internal.io_helpers.ExceptionTranslatingIO`. This ensures that exceptions raised by the underlying third-party library during stream operations (like `read()`, `seek()`) are translated into `ArchiveError` subclasses.
+When your reader returns a stream from `_open_member()`, `BaseArchiveReader` wraps it in an internal `ArchiveStream`.  Any exceptions raised while reading from the stream will be passed to your `_translate_exception()` method so that they can be converted to `ArchiveError` subclasses.
 
-For this, you need to implement a translation function that receives any exception raised by the underlying library and returns an `ArchiveError`. Example:
+To do so, implement a translation function that receives any exception raised by the underlying library and returns an `ArchiveError` (or ``None`` to propagate the original error). Example:
 
 ```python
-from archivey.internal.io_helpers import ExceptionTranslatingIO # Corrected path
 from archivey.exceptions import ArchiveCorruptedError, ArchiveIOError # Corrected path
 # Import specific exceptions from your third-party library
 from third_party_lib import ThirdPartyReadError, ThirdPartyCorruptError
@@ -149,10 +150,7 @@ class MyReader(BaseArchiveReader):
 
     def _open_member(self, member: ArchiveMember, pwd: Optional[str | bytes] = None, for_iteration: bool = False):
         ...
-        def _open_stream() -> IO[bytes]:
-            return underlying_library.open_member(member.raw_info)
-        
-        return ExceptionTranslatingIO(_open_stream, self._translate_exception, self.path_str, member.filename)
+        return underlying_library.open_member(member.raw_info)
 ```
 
 When opening an archive in your reader `__init__()`, an exception may also be raised. You may use the same translation function by wrapping your archive opening with `archivey.internal.io_helpers.run_with_exception_translation`.
