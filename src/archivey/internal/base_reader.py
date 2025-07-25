@@ -615,11 +615,11 @@ class BaseArchiveReader(ArchiveReader):
 
         Args:
             filter: A filter function to apply to each member. If specified, only
-            members for which the filter returns True will be yielded.
-            The filter may be called for all members either before or during the
-            iteration, so don't rely on any specific behavior.
+                members for which the filter returns True will be yielded.
+                The filter may be called for all members either before or during the
+                iteration, so don't rely on any specific behavior.
             pwd: Password to use for decryption, if needed and different from the one
-            used when opening the archive. May not be supported by all archive formats.
+                used when opening the archive.
 
         Yields:
             tuple[ArchiveMember, BinaryIO | None]:
