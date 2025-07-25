@@ -21,8 +21,13 @@
 :::archivey.types
     options:
       show_source: true
+      group_by_category: false
+      members_order: source
 
 :::archivey.exceptions
+    options:
+      group_by_category: false
+      members_order: source
 
 :::archivey.filters
 

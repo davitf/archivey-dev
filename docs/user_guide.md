@@ -1,204 +1,251 @@
-# Archivey user guide
+# Archivey User Guide
 
-This guide explains how to use the `archivey` library to work with a variety of archive formats.
+Archivey is a Python library that provides a consistent interface for reading and extracting files from many archive formats, including ZIP, TAR, RAR, 7z, and compressed formats like `.gz`, `.bz2`, `.xz`, `.zst`, and `.lz4`.
 
-## Opening an Archive
+This guide covers the most common use cases. For full details, see the [API reference](api.md).
 
-The main entry point to the library is the `open_archive` function:
+---
+
+## 📦 Opening an Archive
+
+Use [`open_archive`][archivey.open_archive] to open any supported archive:
 
 ```python
 from archivey import open_archive
 
-try:
-    with open_archive("my_archive.zip") as archive:
-        # Work with the archive
-        print("Successfully opened archive")
-except FileNotFoundError:
-    print("Archive not found at the specified path.")
-except ArchiveNotSupportedError:
-    print("The archive format is not supported.")
-except ArchiveError as e:
-    print(f"An archive-related error occurred: {e}")
-
+with open_archive("data.zip") as archive:
+    print("Opened archive with", len(archive.get_members()), "entries")
 ```
 
-`[open_archive][archivey.core.open_archive]` takes the path to an archive file (or an IO stream) and returns an `archivey.archive_reader.ArchiveReader` when the format is recognized. You can also pass an optional `config` object or set `streaming_only=True` to force sequential access.
+You can pass:
 
-## Opening a Compressed Stream
+- A file path or binary stream
+- `config`: an [`ArchiveyConfig`][archivey.ArchiveyConfig] object
+- `streaming_only=True`: enables one-pass streaming mode
+- `pwd`: password for encrypted archives
 
-Archivey can also handle single-file compressed formats such as gzip, bzip2, xz,
-zstd and lz4. Use `[open_compressed_stream][archivey.core.open_compressed_stream]` to obtain an uncompressed binary
-stream:
+---
+
+## 📤 Streaming-Safe Methods
+
+Some archive formats (like `.tar.gz`, `.tar.xz`) don’t include a central index, so listing or accessing members typically requires decompressing the entire archive. Similarly, **solid archives** (like some RAR and 7z files) store multiple files in a single compressed block — so accessing a file mid-archive may require decompressing everything before it. Underlying libraries often perform this extra decompression silently.
+
+**Streaming-safe methods** let you read or extract relevant members in a single pass, avoiding redundant decompression. They also support non-seekable sources (e.g. pipes or network streams), if the underlying format or library allows.
+
+When opening with `streaming_only=True`, non-streaming methods are disabled to prevent accidental re-decompression. Even outside of streaming mode, these methods may still be more efficient.
+
+---
+
+### [`extractall`][archivey.ArchiveReader.extractall]
+
+Extracts all or selected members to a target directory:
+
+```python
+archive.extractall(
+    path="output/",
+    members=lambda m: m.filename.endswith(".txt"),
+)
+```
+
+Options:
+
+- `members`: list of names and/or [`ArchiveMember`][archivey.ArchiveMember] objects, or a predicate function to select entries to extract
+- `filter`: sanitization policy or callable to adjust, reject, or rename members  
+  - Predefined [`ExtractionFilter`][archivey.ExtractionFilter] values: `DATA`, `TAR`, or `FULLY_TRUSTED`
+  - Custom: `(member, dest_path) -> member or None`  
+    Useful for renaming files, skipping dangerous paths, adjusting permissions, etc.
+- `pwd`: optional password for encrypted members  
+  If omitted, uses the value passed to `open_archive` (if any). You can override it here or use it to handle archives with multiple passwords.
+
+Returns a mapping of extracted paths to their corresponding [`ArchiveMember`][archivey.ArchiveMember].
+
+---
+
+### [`iter_members_with_streams`][archivey.ArchiveReader.iter_members_with_streams]
+
+Iterates over each member, yielding `(ArchiveMember, BinaryIO | None)`:
+
+```python
+for member, stream in archive.iter_members_with_streams():
+    print(member.filename)
+    if stream:
+        data = stream.read()
+```
+
+- Accepts the same `members`, `filter`, and `pwd` arguments as [`extractall`](#extractall)
+- Streams are lazily opened and closed automatically as iteration advances
+- `stream` is `None` for non-file entries (e.g. directories or symlinks)
+
+---
+
+### [`get_members_if_available`][archivey.ArchiveReader.get_members_if_available]
+
+Returns the member list if it’s already known or can be retrieved from a central directory (e.g. ZIP or 7z). Returns `None` if the archive would need to be scanned or decompressed.
+
+Useful for progress reporting or early inspection without triggering a full scan.
+
+---
+
+## 🗂️ Random-Access Methods
+
+These methods are available only if the archive was **not** opened in `streaming_only` mode. You can check with:
+
+```python
+if archive.has_random_access():
+    ...
+```
+
+---
+
+### [`get_members`][archivey.ArchiveReader.get_members]
+
+Returns a complete list of archive entries:
+
+```python
+members = archive.get_members()
+```
+
+Note: For some formats, this may involve scanning or decompressing large portions of the archive.
+
+---
+
+### [`open`][archivey.ArchiveReader.open]
+
+Opens a specific file in the archive:
+
+```python
+with archive.open("docs/readme.txt") as f:
+    content = f.read()
+```
+
+If the member is a symlink or hardlink, the link will be resolved to its target, and the stream will reflect the target’s contents. Raises an error if the member is a directory, or a link pointing outside the archive or to a missing file.
+
+---
+
+### [`extract`][archivey.ArchiveReader.extract]
+
+Extracts a single member to disk:
+
+```python
+archive.extract("README.md", path="docs/")
+```
+
+Returns the extracted file path.
+
+---
+
+### [`get_member`][archivey.ArchiveReader.get_member]
+
+Looks up a member by name or validates an existing one:
+
+```python
+member = archive.get_member("assets/logo.png")
+```
+
+---
+
+## 🧪 Filters and Sanitization
+
+Archivey applies sanitization by default to prevent unsafe extraction:
+- Strips absolute paths
+- Blocks path traversal (`../`)
+- Normalizes symlink targets
+- Adjusts unsafe permissions
+
+You can override this with the `filter` argument or set it globally using [`extraction_filter`][archivey.ArchiveyConfig.extraction_filter]:
+
+```python
+from archivey import ArchiveyConfig, ExtractionFilter
+
+config = ArchiveyConfig(extraction_filter=ExtractionFilter.FULLY_TRUSTED)
+```
+
+### Predefined filters:
+- `DATA`: safe defaults (default)
+- `TAR`: mimics `tar` behavior
+- `FULLY_TRUSTED`: disables filtering (use with caution)
+
+You can also use a custom function:
+```python
+(member: ArchiveMember, dest_path: str | None) → ArchiveMember | None
+```
+
+---
+
+## ⚙️ Configuration Options
+
+You can control Archivey’s behavior using an [`ArchiveyConfig`][archivey.ArchiveyConfig] object.
+
+Pass it to [`open_archive`][archivey.open_archive], or set it globally using [`set_archivey_config`][archivey.set_archivey_config] and [`get_archivey_config`][archivey.get_archivey_config].
+
+```python
+from archivey import ArchiveyConfig, OverwriteMode
+
+config = ArchiveyConfig(
+    use_rapidgzip=True,
+    overwrite_mode=OverwriteMode.SKIP,
+)
+set_archivey_config(config)
+```
+
+Common options:
+- `use_rar_stream`: improves streaming performance for solid RAR archives by avoiding repeated decompression; uses `unrar` directly instead of `rarfile`
+- `use_rapidgzip`, `use_indexed_bzip2`, etc.: enable faster or more flexible backends
+- `overwrite_mode`: controls behavior when extracting over existing files
+- `extraction_filter`: global sanitization policy for extracted entries
+
+You can also use the [`archivey_config`][archivey.archivey_config] context manager to temporarily override the global config:
+
+```python
+from archivey import archivey_config, get_archivey_config
+
+with archivey_config(
+    use_rapidgzip=True, extraction_filter="data", overwrite_mode="skip"
+):
+    print(get_archivey_config())
+    with open_archive(...):
+        ...
+```
+
+---
+
+## 🧵 Reading Compressed Streams
+
+Use [`open_compressed_stream`][archivey.open_compressed_stream] to read `.gz`, `.bz2`, `.xz`, `.zst`, or `.lz4` files:
 
 ```python
 from archivey import open_compressed_stream
 
-with open_compressed_stream("example.txt.gz") as f:
-    data = f.read()
+with open_compressed_stream("file.txt.gz") as f:
+    print(f.read().decode())
 ```
 
-`open_compressed_stream` accepts the same `ArchiveyConfig` object as
-`open_archive` for enabling alternative decompression libraries.
+---
 
-## The ArchiveReader Object
+## 🛑 Error Handling
 
-When an archive is successfully opened, `open_archive` returns an `ArchiveReader` object. This object provides methods to interact with the archive's contents. It's recommended to use the `ArchiveReader` as a context manager (as shown above) to ensure resources are properly released.
+All archive-related exceptions derive from [`ArchiveError`][archivey.ArchiveError].
 
-Key methods of the `ArchiveReader` object:
+Notable subtypes:
+- `ArchiveEncryptedError`
+- `ArchiveCorruptedError`
+- `ArchiveMemberNotFoundError`
 
-*   **`close()`**: Closes the archive. Automatically called if using a context manager.
-*   **`get_members_if_available() -> List[ArchiveMember] | None`**: Returns a list of all members in the archive if readily available (e.g., from a central directory). May return `None` for stream-based archives where the full list isn't known without reading through the archive.
-*   **`get_members() -> List[ArchiveMember]`**: Returns a list of all members in the archive. For some archive types or streaming modes, this might involve processing a significant portion of the archive if the member list isn't available upfront.
-*   **`iter_members_with_streams(members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember, Optional[str]], Optional[ArchiveMember]]] = None) -> Iterator[tuple[ArchiveMember, Optional[BinaryIO]]]`**: Iterates over members in the archive, yielding a tuple of `(ArchiveMember, BinaryIO_stream)` for each. The stream is `None` for non-file members like directories.
-    *   `members`: Optionally specify a collection of member names or `ArchiveMember` objects to iterate over.
-    *   `pwd`: Password for encrypted archives.
-    *   `filter`: Callable applied to each member (with `None` as the destination path) that can return the member to include or `None` to skip.
-*   **`get_archive_info() -> ArchiveInfo`**: Returns an `ArchiveInfo` object containing metadata about the archive itself (e.g., format, comments, solid status).
-*   **`has_random_access() -> bool`**: Returns `True` if the archive supports random access to its members (i.e., `open()` and `extract()` can be used directly without iterating). Returns `False` for streaming-only access.
-*   **`get_member(member_or_filename: Union[ArchiveMember, str]) -> ArchiveMember`**: Retrieves a specific `ArchiveMember` object by its name or by passing an existing `ArchiveMember` object (useful for identity checks).
-*   **`open(member_or_filename: Union[ArchiveMember, str], *, pwd: Optional[Union[bytes, str]] = None) -> BinaryIO`**: Opens a specific member of the archive for reading and returns a binary I/O stream. This is typically available if `has_random_access()` is `True`.
-*   **`extract(member_or_filename: Union[ArchiveMember, str], path: Optional[Union[str, os.PathLike]] = None, pwd: Optional[Union[bytes, str]] = None) -> Optional[str]`**: Extracts a single member to the specified `path` (defaults to the current directory). Returns the path to the extracted file. This is typically available if `has_random_access()` is `True`.
-*   **`extractall(path: Optional[Union[str, os.PathLike]] = None, members: Optional[Collection[Union[ArchiveMember, str]]] = None, *, pwd: Optional[Union[bytes, str]] = None, filter: Optional[Callable[[ArchiveMember, Optional[str]], Optional[ArchiveMember]]] = None) -> dict[str, ArchiveMember]`**: Extracts all (or a specified subset of) members to the given `path`.
-    *   `path`: Target directory for extraction (defaults to current directory).
-    *   `members`: A collection of member names or `ArchiveMember` objects to extract.
-    *   `pwd`: Password for encrypted archives.
-    *   `filter`: Callable invoked for each member with the member and destination path. Return the member to extract it, or `None` to skip.
-*   Returns a dictionary mapping extracted file paths to their `ArchiveMember` objects.
-
-Streaming-only archives (where `archive.has_random_access()` returns `False`) can be iterated only **once**. After calling `iter_members_with_streams()` or `extractall()`, further attempts to read or extract members will raise a `ValueError`.
-
-## Working with Archive Members
-
-The `ArchiveMember` object contains metadata about an individual entry within the archive, such as its name, size, modification time, type (file, directory, link), etc.
-
-### Example: Listing Archive Contents
+Example:
 
 ```python
 from archivey import open_archive, ArchiveError
 
 try:
-    with open_archive("my_archive.tar.gz") as archive:
-        print(f"Archive Format: {archive.get_archive_info().format.value}")
-        if archive.has_random_access():
-            print("Archive supports random access.")
-            members = archive.get_members()
-            for member in members:
-                print(f"- {member.filename} (Size: {member.file_size}, Type: {member.type.value})")
-        else:
-            print("Archive is streaming-only. Iterating to get members:")
-            for member, stream in archive.iter_members_with_streams():
-                print(f"- {member.filename} (Size: {member.file_size}, Type: {member.type.value})")
-                if stream:
-                    stream.close() # Important to close the stream if not reading from it
+    with open_archive("file.7z") as archive:
+        ...
 except ArchiveError as e:
-    print(f"Error: {e}")
+    print("Archive error:", e)
 ```
 
-## Configuration options
+---
 
-`open_archive` accepts an `ArchiveyConfig` object to enable optional features.
-You can pass it directly or set it as the default using
-`archivey.config.default_config()`.
+## 📘 See Also
 
-```python
-from archivey import open_archive, ArchiveyConfig
-
-config = ArchiveyConfig(
-    use_rar_stream=True,
-    use_rapidgzip=True,
-    use_indexed_bzip2=True,
-    overwrite_mode=OverwriteMode.OVERWRITE,
-    extraction_filter=ExtractionFilter.TAR, # Example: use tar-like filtering
-)
-
-with open_archive("file.rar", config=config) as archive:
-    ...
-```
-
-
-Fields on `ArchiveyConfig` enable support for optional dependencies such as
-`rapidgzip`, `indexed_bzip2`, `python-xz` and `zstandard`. Each flag requires the
-corresponding package to be installed. `overwrite_mode` controls how extraction
-handles existing files and may be `overwrite`, `skip` or `error`.
-
-The `extraction_filter` option controls which files are extracted and how their
-paths are sanitized. It can be set to one of the predefined `ExtractionFilter`
-enum values:
-*   `ExtractionFilter.DATA`: (Default) Aims to be safe for extracting general data archives.
-    It might be more restrictive about filenames or paths.
-*   `ExtractionFilter.TAR`: Mimics typical behavior of `tar` extraction, which might
-    be more permissive.
-*   `ExtractionFilter.FULLY_TRUSTED`: Assumes the archive content is fully trusted
-    and performs minimal to no sanitization. Use with caution.
-It can also be set to a custom callable function that takes an `ArchiveMember`
-and the destination path, and returns a modified `ArchiveMember` or `None` to skip.
-
-### Example: Reading a File from an Archive
-
-```python
-from archivey import open_archive, ArchiveMemberNotFoundError, ArchiveError
-
-try:
-    with open_archive("my_archive.zip") as archive:
-        if not archive.has_random_access():
-            print("Cannot directly open members in this archive type for reading without iteration.")
-        else:
-            try:
-                member_to_read = "path/to/file_in_archive.txt"
-                with archive.open(member_to_read) as f_stream:
-                    content = f_stream.read()
-                print(f"Content of {member_to_read}:\n{content.decode()}")
-            except ArchiveMemberNotFoundError:
-                print(f"File '{member_to_read}' not found in archive.")
-            except ArchiveError as e: # Other archive errors like decryption
-                print(f"Error reading file: {e}")
-except ArchiveError as e:
-    print(f"Error opening archive: {e}")
-
-```
-### Example: Using `iter_members_with_streams`
-
-The `iter_members_with_streams` method allows you to process archive members one by
-one. Each stream is closed automatically when iteration advances to the next
-member or when the generator is closed.
-
-```python
-from archivey import open_archive, ArchiveError
-
-try:
-    with open_archive("my_archive.tar") as archive:
-        for member, stream in archive.iter_members_with_streams():
-            print(f"Processing {member.filename}")
-            if stream:
-                data = stream.read()
-                print(f"  size: {len(data)} bytes")
-            # stream is closed automatically on the next iteration
-except ArchiveError as e:
-    print(f"Error: {e}")
-```
-
-
-### Example: Extracting an Archive
-
-```python
-from archivey import open_archive, ArchiveError
-import os
-
-DESTINATION_DIR = "extracted_files"
-
-try:
-    with open_archive("my_archive.rar") as archive:
-        print(f"Extracting all files from {archive.archive_path} to {DESTINATION_DIR}...")
-        if not os.path.exists(DESTINATION_DIR):
-            os.makedirs(DESTINATION_DIR)
-
-        extracted_files = archive.extractall(path=DESTINATION_DIR)
-        print(f"Successfully extracted {len(extracted_files)} files:")
-        for path, member in extracted_files.items():
-            print(f"  - {path} (Original: {member.filename})")
-
-except ArchiveError as e:
-    print(f"Error: {e}")
-```
-
-This guide provides a basic overview. For more detailed information on specific classes and methods, please refer to the [API documentation](api.md).
+- [API Reference](api.md)
+- [Developer Guide](developer_guide.md)
