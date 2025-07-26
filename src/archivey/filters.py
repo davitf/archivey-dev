@@ -104,6 +104,12 @@ def _get_filtered_member(
     raise_on_error: bool,
 ) -> ArchiveMember | None:
     try:
+        if for_data and member.is_other:
+            raise ArchiveFilterError(f"{member.filename} is a special file")
+
+        # TODO: let's make sure to remove uid/gid if is_data=True when those fields
+        # are supported
+
         new_attrs: dict[str, Any] = {}
         if sanitize_names:
             name = _sanitize_name(member, dest_path)
@@ -120,6 +126,8 @@ def _get_filtered_member(
             if for_data and member.is_file:
                 mode &= ~0o111  # Remove executable bit
                 mode |= 0o600  # Set read/write permissions for owner
+            elif for_data and member.is_dir:
+                mode = None
             if mode != member.mode:
                 new_attrs["mode"] = mode
 
