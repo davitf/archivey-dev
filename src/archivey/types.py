@@ -12,7 +12,6 @@ from typing import (
     TYPE_CHECKING,
     Callable,
     Protocol,
-    Union,
     overload,
     runtime_checkable,
 )
@@ -329,9 +328,20 @@ class FilterFunc(Protocol):
 
 
 class ExtractionFilter(StrEnum):
+    """Built-in sanitization policies for archive extraction.
+
+    These match Python's built-in [`tarfile` named filters](https://docs.python.org/3/library/tarfile.html#default-named-filters),
+    and can be used to block unsafe paths, strip permissions, or restrict file types.
+    """
+
     FULLY_TRUSTED = "fully_trusted"
+    """No filtering or restrictions. Use only with fully trusted archives."""
+
     TAR = "tar"
+    """Blocks absolute paths and files outside destination; strips setuid/setgid/sticky bits and group/other write permissions."""
+
     DATA = "data"
+    """Stricter than 'tar': also blocks special files and unsafe links, and removes executable bits from regular files."""
 
 
 # Stream type definitions moved here to break circular import
@@ -342,5 +352,5 @@ class ReadableBinaryStream(Protocol):
     def read(self, n: int = -1, /) -> bytes: ...
 
 
-ReadableStreamLikeOrSimilar = Union[ReadableBinaryStream, io.IOBase, IO[bytes]]
+ReadableStreamLikeOrSimilar = ReadableBinaryStream | io.IOBase | IO[bytes]
 """A readable binary stream or similar object (e.g. IO[bytes])."""
