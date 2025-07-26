@@ -2,7 +2,7 @@
 
 Archivey is a Python library that provides a consistent interface for reading and extracting files from many archive formats, including ZIP, TAR, RAR, 7z, and compressed formats like `.gz`, `.bz2`, `.xz`, `.zst`, and `.lz4`.
 
-This guide covers the most common use cases. For full details, see the [API reference](reference.md).
+This guide covers the most common use cases. For full details, see the [API reference](api.md).
 
 ---
 
@@ -19,6 +19,7 @@ with open_archive("data.zip") as archive:
 ```
 
 You can pass:
+
 - A file path or binary stream
 - `config`: an [`ArchiveyConfig`][archivey.ArchiveyConfig] object
 - `streaming_only=True`: enables one-pass streaming mode
@@ -50,7 +51,8 @@ archive.extractall(
 ```
 
 Options:
-- `members`: list of names, `ArchiveMember` objects, or a predicate function to select entries to extract
+
+- `members`: list of names and/or [`ArchiveMember`][archivey.ArchiveMember] objects, or a predicate function to select entries to extract
 - `filter`: sanitization policy or callable to adjust, reject, or rename members  
   - Predefined [`ExtractionFilter`][archivey.ExtractionFilter] values: `DATA`, `TAR`, or `FULLY_TRUSTED`
   - Custom: `(member, dest_path) -> member or None`  
@@ -260,5 +262,5 @@ except ArchiveError as e:
 <!-- links -->
 ## 📘 See Also
 
-- [API Reference](reference.md)
+- [API Reference](api.md)
 - [Developer Guide](developer_guide.md)

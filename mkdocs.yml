@@ -25,7 +25,6 @@ plugins:
 theme:
   name: material
   navigation_depth: 2
-  logo: assets/icon_white.png
 
 markdown_extensions:
   - toc:
