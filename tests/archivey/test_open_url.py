@@ -12,7 +12,6 @@ from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
-    SAMPLE_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
     filter_archives,
 )
