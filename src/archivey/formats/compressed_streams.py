@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, BinaryIO, Callable, Optional, cast
 
 from typing_extensions import Buffer
 
-from archivey.config import ArchiveyConfig
+from archivey.config import ArchiveyConfig, get_archivey_config
 from archivey.internal.archive_stream import ArchiveStream
 from archivey.internal.io_helpers import (
     ExceptionTranslatorFn,
@@ -346,8 +346,10 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
 
 
 def get_stream_open_fn(
-    format: ArchiveFormat, config: ArchiveyConfig
+    format: ArchiveFormat, config: ArchiveyConfig | None = None
 ) -> tuple[Callable[[str | BinaryIO], BinaryIO], ExceptionTranslatorFn]:
+    if config is None:
+        config = get_archivey_config()
     if format == ArchiveFormat.GZIP:
         if config.use_rapidgzip:
             return open_rapidgzip_stream, _translate_rapidgzip_exception
