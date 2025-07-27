@@ -154,7 +154,11 @@ class BinaryIOWrapper(io.RawIOBase, BinaryIO):
         # Don't close the underlying stream, as this may be a temporary wrapper.
 
     def flush(self):
-        if hasattr(self._raw, "flush"):
+        if (
+            hasattr(self._raw, "flush")
+            and hasattr(self._raw, "closed")
+            and not self._raw.closed  # type: ignore
+        ):
             return self._raw.flush()  # type: ignore
         return None
 

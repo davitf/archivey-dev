@@ -121,14 +121,19 @@ class ArchiveStream(io.RawIOBase, BinaryIO):
         except Exception as e:  # noqa: BLE001
             self._translate_exception(e)
 
+    def _readinto_fallback(self, b: bytearray | memoryview) -> int:
+        data = self.read(len(b))
+        b[: len(data)] = data
+        return len(data)
+
     def readinto(self, b: bytearray | memoryview) -> int:
+        # BinaryIO objects don't necessarily have readinto (specifically, XZFile from
+        # python-xz doesn't), so we fall back to read() if needed.
+        if not hasattr(self._ensure_open(), "readinto"):
+            return self._readinto_fallback(b)
+
         try:
             return self._ensure_open().readinto(b)  # type: ignore[attr-defined]
-        except NotImplementedError:
-            # Some streams don't support readinto, so we fall back to read()
-            data = self.read(len(b))
-            b[: len(data)] = data
-            return len(data)
         except Exception as e:  # noqa: BLE001
             self._translate_exception(e)
 
