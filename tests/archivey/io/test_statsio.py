@@ -3,7 +3,6 @@ import logging
 
 import pytest
 
-from archivey.config import ArchiveyConfig
 from archivey.core import open_archive, open_compressed_stream
 from archivey.internal.io_helpers import IOStats, StatsIO, ensure_binaryio
 from archivey.types import ArchiveFormat
@@ -14,8 +13,8 @@ from tests.archivey.sample_archives import (
     SampleArchive,
     filter_archives,
 )
-from tests.archivey.test_open_compressed_stream import SINGLE_FILE_ARCHIVES
-from tests.archivey.testing_utils import skip_if_package_missing
+from tests.archivey.readers.test_open_compressed_stream import SINGLE_FILE_ARCHIVES
+from tests.archivey.testing_utils import skip_if_package_missing, build_config
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +34,7 @@ def test_open_archive_statsio(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
     """Ensure open_archive can read from StatsIO-wrapped streams and tracks statistics correctly."""
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = None
+    config = build_config(alternative_packages) if alternative_packages else None
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
@@ -349,15 +340,7 @@ def test_open_archive_statsio_io_methods(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
     """Test that StatsIO properly delegates IO methods to the underlying stream."""
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = None
+    config = build_config(alternative_packages) if alternative_packages else None
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 

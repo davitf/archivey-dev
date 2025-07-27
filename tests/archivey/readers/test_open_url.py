@@ -15,7 +15,9 @@ from tests.archivey.sample_archives import (
     SINGLE_FILE_ARCHIVES,
     filter_archives,
 )
-from tests.archivey.test_open_nonseekable import EXPECTED_NON_SEEKABLE_FAILURES
+from tests.archivey.readers.test_open_nonseekable import (
+    EXPECTED_NON_SEEKABLE_FAILURES,
+)
 from tests.archivey.testing_utils import skip_if_package_missing
 
 

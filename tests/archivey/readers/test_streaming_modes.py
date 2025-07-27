@@ -3,7 +3,6 @@ from typing import IO
 
 import pytest
 
-from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
@@ -12,7 +11,7 @@ from tests.archivey.sample_archives import (
     SampleArchive,
     filter_archives,
 )
-from tests.archivey.testing_utils import skip_if_package_missing
+from tests.archivey.testing_utils import skip_if_package_missing, build_config
 
 
 def _first_regular_file(sample: SampleArchive):
@@ -102,16 +101,7 @@ def test_streaming_only_mode(
     close_streams: bool,
     alternative_packages: bool,
 ):
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rar_stream=True,
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = ArchiveyConfig()
+    config = build_config(alternative_packages, use_rar_stream=alternative_packages)
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 

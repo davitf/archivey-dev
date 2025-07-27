@@ -4,7 +4,7 @@ import os
 import subprocess
 import zlib
 from datetime import timezone
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Any
 
 import pytest
 
@@ -102,6 +102,19 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         pytest.importorskip("zstandard")
     elif format == ArchiveFormat.ZSTD:
         pytest.importorskip("pyzstd")
+
+
+def build_config(alternative: bool, **kwargs: Any) -> ArchiveyConfig:
+    """Return an ArchiveyConfig with optional alternative packages enabled."""
+    if alternative:
+        return ArchiveyConfig(
+            use_rapidgzip=True,
+            use_indexed_bzip2=True,
+            use_python_xz=True,
+            use_zstandard=True,
+            **kwargs,
+        )
+    return ArchiveyConfig(**kwargs)
 
 
 def normalize_newlines(s: str | None) -> str | None:
