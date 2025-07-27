@@ -5,7 +5,6 @@ from unittest.mock import Mock
 
 import pytest
 
-from archivey.config import ArchiveyConfig
 from archivey.core import open_compressed_stream
 from archivey.formats.compressed_streams import get_stream_open_fn
 from archivey.internal.archive_stream import ArchiveStream
@@ -19,7 +18,7 @@ from archivey.internal.io_helpers import (
     is_stream,
     read_exact,
 )
-from tests.archivey.sample_archives import SINGLE_FILE_ARCHIVES
+from tests.archivey.sample_archives import ALTERNATIVE_CONFIG, SINGLE_FILE_ARCHIVES
 from tests.archivey.test_open_nonseekable import NonSeekableBytesIO
 from tests.archivey.testing_utils import skip_if_package_missing
 
@@ -366,12 +365,6 @@ class TestRecordableStream:
         stream.close()
         assert stream.closed
 
-    # def test_delegate_attributes(self):
-    #     inner = Mock(spec=io.BytesIO)
-    #     inner.custom_attr = "test_value"
-    #     stream = RecordableStream(inner)
-    #     assert stream.custom_attr == "test_value"
-
     def test_empty_stream(self):
         inner = io.BytesIO(b"")
         stream = RecordableStream(inner)
@@ -482,15 +475,7 @@ def test_ensure_bufferedio():
 def test_ensure_bufferedio_with_compressed_stream(
     sample_archive, sample_archive_path, alternative_packages
 ):
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = ArchiveyConfig()
+    config = ALTERNATIVE_CONFIG if alternative_packages else None
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
@@ -520,15 +505,7 @@ def test_ensure_bufferedio_with_compressed_stream(
 def test_ensure_bufferedio_with_raw_compressed_stream(
     sample_archive, sample_archive_path, alternative_packages
 ):
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = ArchiveyConfig()
+    config = ALTERNATIVE_CONFIG if alternative_packages else None
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
