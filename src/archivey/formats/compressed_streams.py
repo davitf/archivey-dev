@@ -239,6 +239,7 @@ class ZstandardReopenOnBackwardsSeekIO(io.RawIOBase, BinaryIO):
         super().__init__()
         self._archive_path = archive_path
         self._inner = zstandard.open(archive_path)
+        self._size = None
 
     def _reopen_stream(self) -> None:
         self._inner.close()
@@ -254,6 +255,12 @@ class ZstandardReopenOnBackwardsSeekIO(io.RawIOBase, BinaryIO):
             return is_seekable(self._archive_path)
         return True
 
+    def readable(self) -> bool:
+        return True
+
+    def writable(self) -> bool:
+        return False
+
     def read(self, n: int = -1) -> bytes:
         return self._inner.read(n)
 
@@ -267,14 +274,18 @@ class ZstandardReopenOnBackwardsSeekIO(io.RawIOBase, BinaryIO):
         elif whence == io.SEEK_CUR:
             new_pos = self._inner.tell() + offset
         elif whence == io.SEEK_END:
-            raise io.UnsupportedOperation(
-                "seek backwards from end of stream in Zstandard "
-            )
+            # Very inefficient, but we don't have a way to get the size of the stream
+            # without reading it. This is the way _compression.DecompressReader does it.
+            if self._size is None:
+                while self._inner.read(65536):
+                    pass
+                self._size = self._inner.tell()
+            new_pos = self._size + offset
         else:
             raise ValueError(f"Invalid whence: {whence}")
 
         try:
-            return self._inner.seek(offset, whence)
+            return self._inner.seek(new_pos)
         except OSError as e:
             if "cannot seek zstd decompression stream backwards" in str(e):
                 self._reopen_stream()
