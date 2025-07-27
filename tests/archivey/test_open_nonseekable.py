@@ -28,7 +28,7 @@ SKIPPABLE_FORMATS: set[ArchiveFormat] = {
 
 
 # Formats known to fail when opened from a non-seekable stream with default/alternative packages
-EXPECTED_FAILURES: set[tuple[ArchiveFormat, bool]] = {
+EXPECTED_NON_SEEKABLE_FAILURES: set[tuple[ArchiveFormat, bool]] = {
     (ArchiveFormat.GZIP, True),
     (ArchiveFormat.BZIP2, True),
     (ArchiveFormat.XZ, True),
@@ -96,7 +96,7 @@ def test_open_archive_nonseekable(
         ArchiveStreamNotSeekableError
     ) as exc:  # pragma: no cover - environment dependent
         key = (sample_archive.creation_info.format, alternative_packages)
-        if key in EXPECTED_FAILURES:
+        if key in EXPECTED_NON_SEEKABLE_FAILURES:
             pytest.xfail(
                 f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
             )
@@ -135,8 +135,8 @@ def test_open_compressed_stream_nonseekable(
     ) as exc:  # pragma: no cover - environment dependent
         key = (sample_archive.creation_info.format, alternative_packages)
         logger.error(f"key: {key}")
-        logger.error(f"EXPECTED_FAILURES: {EXPECTED_FAILURES}")
-        if key in EXPECTED_FAILURES:
+        logger.error(f"EXPECTED_FAILURES: {EXPECTED_NON_SEEKABLE_FAILURES}")
+        if key in EXPECTED_NON_SEEKABLE_FAILURES:
             pytest.xfail(
                 f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
             )
