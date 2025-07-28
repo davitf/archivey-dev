@@ -9,7 +9,7 @@ from archivey.filters import (
     tar_filter,
 )
 from archivey.types import ArchiveMember, MemberType
-from tests.archivey.sample_archives import SANITIZE_ARCHIVES, SampleArchive
+from tests.archivey.test_archive_creation import SANITIZE_ARCHIVES, SampleArchive
 from tests.archivey.testing_utils import skip_if_package_missing
 
 

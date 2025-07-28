@@ -13,7 +13,7 @@ from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
 from archivey.filters import create_filter
 from archivey.internal.dependency_checker import get_dependency_versions
 from archivey.types import ArchiveMember, CreateSystem, MemberType
-from tests.archivey.sample_archives import (
+from tests.archivey.test_archive_creation import (
     ALTERNATIVE_CONFIG,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,

@@ -62,7 +62,7 @@ from archivey.types import (
     ArchiveFormat,
     MemberType,
 )
-from tests.archivey.sample_archives import (
+from tests.archivey.test_archive_creation import (
     SAMPLE_ARCHIVES,
     ArchiveContents,
     FileInfo,

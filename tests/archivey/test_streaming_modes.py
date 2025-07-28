@@ -6,7 +6,7 @@ import pytest
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
-from tests.archivey.sample_archives import (
+from tests.archivey.test_archive_creation import (
     SAMPLE_ARCHIVES,
     SYMLINK_ARCHIVES,
     SampleArchive,

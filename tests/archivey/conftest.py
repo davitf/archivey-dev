@@ -8,8 +8,8 @@ from archivey.internal.dependency_checker import (
     format_dependency_versions,
     get_dependency_versions,
 )
+from tests.archivey.test_archive_creation import SampleArchive
 from tests.archivey.create_archives import create_archive
-from tests.archivey.sample_archives import SampleArchive
 
 logger = logging.getLogger(__name__)
 
