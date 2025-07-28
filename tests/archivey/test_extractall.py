@@ -8,7 +8,7 @@ import pytest
 from archivey.core import open_archive
 from archivey.internal.utils import ensure_not_none
 from archivey.types import ArchiveMember, MemberType
-from tests.archivey.sample_archives import (
+from tests.archivey.test_samples import (
     BASIC_ARCHIVES,
     DUPLICATE_FILES_ARCHIVES,
     HARDLINK_ARCHIVES,
@@ -16,7 +16,7 @@ from tests.archivey.sample_archives import (
     FileInfo,
     SampleArchive,
 )
-from tests.archivey.testing_utils import remove_duplicate_files, skip_if_package_missing
+from tests.archivey.test_utils import remove_duplicate_files, skip_if_package_missing
 
 logger = logging.getLogger(__name__)
 

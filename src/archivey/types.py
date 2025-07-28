@@ -27,6 +27,22 @@ from enum import IntEnum
 from typing import Any, Optional, Tuple
 
 
+class GenerationMethod(StrEnum):
+    ZIPFILE = "zipfile"
+    INFOZIP = "infozip"
+    TAR_COMMAND_LINE = "tar_cmd"
+    TAR_LIBRARY = "tarfile"
+    PY7ZR = "py7zr"
+    SEVENZIP_COMMAND_LINE = "7z_cmd"
+    RAR_COMMAND_LINE = "rar_cmd"
+    SINGLE_FILE_COMMAND_LINE = "single_file_cmd"
+    SINGLE_FILE_LIBRARY = "single_file_lib"
+    ISO_PYCDLIB = "iso_pycdlib"
+    ISO_GENISOIMAGE = "iso_genisoimage"
+    TEMP_DIR_POPULATION = "temp_dir_population"
+    EXTERNAL = "external"
+
+
 class ArchiveFormat(StrEnum):
     """Supported archive and compression formats."""
 

@@ -7,12 +7,12 @@ from archivey.config import ArchiveyConfig
 from archivey.core import open_compressed_stream
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.types import TAR_COMPRESSED_FORMATS
-from tests.archivey.sample_archives import (
+from tests.archivey.test_samples import (
     BASIC_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
     filter_archives,
 )
-from tests.archivey.testing_utils import skip_if_package_missing
+from tests.archivey.test_utils import skip_if_package_missing
 
 BASIC_ZIP_ARCHIVE = filter_archives(BASIC_ARCHIVES, extensions=["zip"])[0]
 

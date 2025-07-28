@@ -9,11 +9,11 @@ import pytest
 
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
-from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
+from archivey.exceptions import ArchiveError
 from archivey.filters import create_filter
 from archivey.internal.dependency_checker import get_dependency_versions
 from archivey.types import ArchiveMember, CreateSystem, MemberType
-from tests.archivey.sample_archives import (
+from tests.archivey.test_samples import (
     ALTERNATIVE_CONFIG,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
@@ -21,7 +21,7 @@ from tests.archivey.sample_archives import (
     SampleArchive,
     filter_archives,
 )
-from tests.archivey.testing_utils import (
+from tests.archivey.test_utils import (
     get_crc32,
     normalize_newlines,
     skip_if_package_missing,
@@ -533,51 +533,6 @@ def test_read_single_file_compressed_archives(
         config = ArchiveyConfig(use_single_file_stored_metadata=True)
 
     check_iter_members(sample_archive, archive_path=sample_archive_path, config=config)
-
-
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, prefixes=["symlinks", "symlinks_solid"]),
-    ids=lambda x: x.filename,
-)
-def test_read_symlinks_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
-):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
-
-
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, prefixes=["symlink_loop"]),
-    ids=lambda x: x.filename,
-)
-def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_path: str):
-    """Ensure that archives with symlink loops do not cause infinite loops."""
-    with open_archive(sample_archive_path) as archive:
-        for member in archive.get_members():
-            if member.type == MemberType.SYMLINK:
-                if member.link_target == "file5.txt":
-                    with archive.open(member) as fh:
-                        fh.read()
-                else:
-                    with pytest.raises(ArchiveMemberCannotBeOpenedError):
-                        archive.open(member)
-            else:
-                with archive.open(member) as fh:
-                    fh.read()
-
-
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
-        SAMPLE_ARCHIVES, prefixes=["hardlinks_nonsolid", "hardlinks_solid"]
-    ),
-    ids=lambda x: x.filename,
-)
-def test_read_hardlinks_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
-):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
 
 
 @pytest.mark.parametrize(

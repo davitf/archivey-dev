@@ -1,7 +1,7 @@
 import pytest
 
 from archivey.core import open_archive
-from tests.archivey.sample_archives import (
+from tests.archivey.test_samples import (
     ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     HARDLINK_ARCHIVES,

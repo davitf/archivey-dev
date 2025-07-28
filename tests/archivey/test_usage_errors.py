@@ -5,7 +5,7 @@ import pytest
 from archivey.core import open_archive
 from archivey.exceptions import ArchiveMemberCannotBeOpenedError
 from archivey.types import ArchiveMember, MemberType
-from tests.archivey.sample_archives import (
+from tests.archivey.test_samples import (
     BASIC_ARCHIVES,
     SYMLINK_ARCHIVES,
     SampleArchive,

@@ -1183,32 +1183,41 @@ if missing_skip_tests:
 
 
 if __name__ == "__main__":
-    # Check if the files in tests/test_archives matches the list in SAMPLE_ARCHIVES.
-
-    expected_files = {
-        a.filename
-        for a in SAMPLE_ARCHIVES
-        if a.creation_info.format != ArchiveFormat.FOLDER
-    }
-    existing_files = set(
-        os.listdir(os.path.join(DEFAULT_ARCHIVES_BASE_DIR, TEST_ARCHIVES_DIR))
+    parser = argparse.ArgumentParser(description="Generate test archives")
+    parser.add_argument(
+        "patterns",
+        nargs="*",
+        help="Optional list of file patterns to generate. If not specified, generates all archives.",
     )
-    missing_files = expected_files - existing_files
-    extra_files = existing_files - expected_files
+    parser.add_argument(
+        "--base-dir",
+        help="Base directory where archives will be generated. Defaults to the script directory.",
+    )
+    args = parser.parse_args()
 
-    if missing_files:
-        print(f"Files missing in {DEFAULT_ARCHIVES_BASE_DIR}/{TEST_ARCHIVES_DIR}:")
-        for filename in sorted(missing_files):
-            print(f"    {filename}")
+    # Use base_dir if provided, otherwise use the directory of the script
+    base_dir = (
+        args.base_dir if args.base_dir else os.path.dirname(os.path.abspath(__file__))
+    )
 
-    if extra_files:
-        print(
-            f"Files in {DEFAULT_ARCHIVES_BASE_DIR}/{TEST_ARCHIVES_DIR} but not in SAMPLE_ARCHIVES:"
+    # Filter archives based on patterns if provided
+    archives_to_generate = filter_archives(SAMPLE_ARCHIVES, args.patterns)
+    archives_to_generate = [
+        archive
+        for archive in archives_to_generate
+        if archive.creation_info.format != ArchiveFormat.FOLDER
+    ]
+
+    if not archives_to_generate:
+        print("No matching archives found.")
+        exit(1)
+
+    logger.info(f"Generating {len(archives_to_generate)} archives:")
+    for archive in archives_to_generate:
+        create_archive(archive, base_dir)
+        bullet = (
+            "-"
+            if archive.creation_info.generation_method != GenerationMethod.EXTERNAL
+            else "s"
         )
-        for filename in sorted(extra_files):
-            print(f"    {filename}")
-
-    if not missing_files and not extra_files:
-        print("All files match")
-    else:
-        sys.exit(1)
+        logger.info(f"  {bullet} {archive.filename}")

@@ -123,3 +123,34 @@ def get_crc32(data: bytes) -> int:
 def remove_duplicate_files(files: list[FileInfo]) -> list[FileInfo]:
     """Remove duplicate files, leaving only the last one for each file name."""
     return list({file.name: file for file in files}.values())
+
+
+def create_archive(archive_info: "SampleArchive", base_dir: str) -> str:
+    full_path = archive_info.get_archive_path(base_dir)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+    if archive_info.creation_info.generation_method == "external":
+        # Check that the archive file exists
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"External archive {full_path} does not exist")
+        return full_path
+
+    # Assert that header_password is None for formats that don't support it
+    generator = GENERATION_METHODS_TO_GENERATOR[
+        archive_info.creation_info.generation_method
+    ]
+    logger.info(
+        f"Creating archive {archive_info.filename} with generator {archive_info.creation_info.generation_method} {generator}"
+    )
+    try:
+        generator(
+            full_path,
+            contents=archive_info.contents,
+            compression_format=archive_info.creation_info.format,
+            **archive_info.creation_info.generation_method_options,
+        )
+    except Exception as e:
+        logger.error(f"Error creating archive {archive_info.filename}: {e}")
+        raise
+
+    return full_path
