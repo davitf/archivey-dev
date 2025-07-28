@@ -36,14 +36,24 @@ _ZIP_ENCODINGS = ["utf-8", "cp437", "cp1252", "latin-1"]
 logger = logging.getLogger(__name__)
 
 
-def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime:
+def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime | None:
     """Return the modification time stored in ``zip_info``.
 
     Extended timestamp extra fields are used when available because the
     standard ``ZipInfo.date_time`` field only stores timestamps with a two-second
     granularity.
     """
-    main_modtime = datetime(*zip_info.date_time)
+    if zip_info.date_time == (1980, 0, 0, 0, 0, 0):
+        return None
+
+    try:
+        main_modtime = datetime(*zip_info.date_time)
+    except ValueError:
+        logger.warning(
+            f"Invalid date time in zipinfo for {zip_info.filename}: {zip_info.date_time}"
+        )
+        main_modtime = None
+
     if not zip_info.extra:
         return main_modtime
 

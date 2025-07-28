@@ -83,7 +83,7 @@ def process_member(
 
     if member.is_file:
         assert isinstance(member.filename, str)
-        assert isinstance(member.mtime, datetime)
+        assert isinstance(member.mtime, datetime) or member.mtime is None
 
         try:
             if verify:
