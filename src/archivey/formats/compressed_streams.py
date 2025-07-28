@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     import lz4.frame
     import pyzstd
     import rapidgzip
+    import uncompresspy
     import xz
     import zstandard
 else:
@@ -54,6 +55,11 @@ else:
         import xz
     except ImportError:
         xz = None
+
+    try:
+        import uncompresspy
+    except ImportError:
+        uncompresspy = None
 
 
 import logging
@@ -345,6 +351,24 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
     return ensure_binaryio(cast("lz4.frame.LZ4FrameFile", lz4.frame.open(path)))
 
 
+def _translate_uncompresspy_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, ValueError) and "must be seekable" in str(e):
+        return ArchiveStreamNotSeekableError(
+            "uncompresspy does not support non-seekable streams"
+        )
+    return None
+
+
+def open_uncompresspy_stream(path: str | BinaryIO) -> BinaryIO:
+    if uncompresspy is None:
+        raise PackageNotInstalledError(
+            "uncompresspy package is not installed, required for Unix compress archives"
+        ) from None  # pragma: no cover -- uncompresspy is installed for main tests
+
+    lzwfile = cast("uncompresspy.LZWFile", uncompresspy.open(path))
+    return ensure_binaryio(lzwfile)
+
+
 def get_stream_open_fn(
     format: ArchiveFormat, config: ArchiveyConfig | None = None
 ) -> tuple[Callable[[str | BinaryIO], BinaryIO], ExceptionTranslatorFn]:
@@ -372,6 +396,9 @@ def get_stream_open_fn(
         if config.use_zstandard:
             return open_zstandard_stream, _translate_zstandard_exception
         return open_pyzstd_stream, _translate_pyzstd_exception
+
+    if format == ArchiveFormat.UNIX_COMPRESS:
+        return open_uncompresspy_stream, _translate_uncompresspy_exception
 
     raise ValueError(f"Unsupported archive format: {format}")  # pragma: no cover
 

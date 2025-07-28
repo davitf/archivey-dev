@@ -25,6 +25,7 @@ class GenerationMethod(Enum):
     ISO_GENISOIMAGE = "iso_genisoimage"
     TEMP_DIR_POPULATION = "temp_dir_population"
     EXTERNAL = "external"
+    UNIX_COMPRESS = "unix_compress"
 
 
 @dataclass
@@ -366,6 +367,13 @@ TAR_ZSTD_TARFILE = ArchiveCreationInfo(
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
+TAR_Z_CMD = ArchiveCreationInfo(
+    file_suffix="tarcmd.tar.Z",
+    format=ArchiveFormat.TAR_Z,
+    generation_method=GenerationMethod.TAR_COMMAND_LINE,
+    features=_TAR_FORMAT_FEATURES_TARCMD,
+)
+
 
 # No need to test both tarfile and cmdline for the other formats, as there shouldn't
 # be significant differences that won't be caught by the gz format.
@@ -403,6 +411,13 @@ GZIP_CMD_PRESERVE_METADATA = ArchiveCreationInfo(
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "gzip", "cmd_args": ["-N"]},
     features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
+)
+UNIX_COMPRESS_CMD = ArchiveCreationInfo(
+    file_suffix="cmd.Z",
+    format=ArchiveFormat.UNIX_COMPRESS,
+    generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
+    generation_method_options={"compression_cmd": "compress", "cmd_args": ["-f"]},
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 
 BZIP2_CMD = ArchiveCreationInfo(
@@ -500,6 +515,7 @@ ALL_SINGLE_FILE_FORMATS = [
     XZ_CMD,
     ZSTD_CMD,
     LZ4_CMD,
+    UNIX_COMPRESS_CMD,
     GZIP_LIBRARY,
     BZIP2_LIBRARY,
     XZ_LIBRARY,
@@ -520,6 +536,7 @@ ALL_TAR_FORMATS = BASIC_TAR_FORMATS + [
     TAR_BZ2,
     TAR_XZ,
     TAR_LZ4,
+    TAR_Z_CMD,
 ]
 
 ZIP_FORMATS = [
