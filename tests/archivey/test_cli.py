@@ -1,7 +1,7 @@
 import subprocess
 
-from tests.archivey.sample_archives import BASIC_ARCHIVES
-from tests.archivey.testing_utils import skip_if_package_missing
+from tests.archivey.test_samples import BASIC_ARCHIVES
+from tests.archivey.test_utils import skip_if_package_missing
 
 SAMPLE = BASIC_ARCHIVES[0]
 

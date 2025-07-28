@@ -1,6 +1,4 @@
-import argparse
 import bz2
-import fnmatch
 import functools
 import gzip
 import io
@@ -41,35 +39,19 @@ try:  # Optional dependency
 except ModuleNotFoundError:
     zstandard = None
 
-try:  # Optional dependency
-    import py7zr  # type: ignore
-except ModuleNotFoundError:
-    py7zr = None
-
-try:  # Optional dependency
-    import pycdlib  # type: ignore
-except ModuleNotFoundError:
-    pycdlib = None
-
-try:  # Optional dependency
-    import zstandard  # type: ignore
-except ModuleNotFoundError:
-    zstandard = None
-
 from archivey.exceptions import PackageNotInstalledError
 from archivey.types import (
     TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,
+    GenerationMethod,
     MemberType,
 )
-from tests.archivey.sample_archives import (
-    SAMPLE_ARCHIVES,
+from tests.archivey.test_samples import (
     ArchiveContents,
     FileInfo,
-    GenerationMethod,
     SampleArchive,
 )
-from tests.archivey.testing_utils import write_files_to_dir
+from tests.archivey.test_utils import write_files_to_dir, create_archive
 
 _COMPRESSION_METHOD_TO_ZIPFILE_VALUE = {
     "store": zipfile.ZIP_STORED,
@@ -81,7 +63,6 @@ _COMPRESSION_METHOD_TO_ZIPFILE_VALUE = {
 DEFAULT_ZIP_COMPRESSION_METHOD = "store"
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 
 def group_files_by_password_and_compression_method(
@@ -785,114 +766,3 @@ def create_folder_archive(
         f"Only FOLDER format is supported, got {compression_format}"
     )
     write_files_to_dir(archive_path, contents.files)
-
-
-GENERATION_METHODS_TO_GENERATOR = {
-    GenerationMethod.ZIPFILE: create_zip_archive_with_zipfile,
-    GenerationMethod.INFOZIP: create_zip_archive_with_infozip_command_line,
-    GenerationMethod.TAR_COMMAND_LINE: create_tar_archive_with_command_line,
-    GenerationMethod.TAR_LIBRARY: create_tar_archive_with_tarfile,
-    GenerationMethod.RAR_COMMAND_LINE: create_rar_archive_with_command_line,
-    GenerationMethod.PY7ZR: create_7z_archive_with_py7zr,
-    GenerationMethod.SEVENZIP_COMMAND_LINE: create_7z_archive_with_command_line,
-    GenerationMethod.SINGLE_FILE_COMMAND_LINE: create_single_file_compressed_archive_with_command_line,
-    GenerationMethod.SINGLE_FILE_LIBRARY: create_single_file_compressed_archive_with_library,
-    GenerationMethod.ISO_PYCDLIB: create_iso_archive_with_pycdlib,
-    GenerationMethod.ISO_GENISOIMAGE: create_iso_archive_with_genisoimage,
-    GenerationMethod.TEMP_DIR_POPULATION: create_folder_archive,
-}
-
-
-def create_archive(archive_info: SampleArchive, base_dir: str) -> str:
-    full_path = archive_info.get_archive_path(base_dir)
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-
-    if archive_info.creation_info.generation_method == GenerationMethod.EXTERNAL:
-        # Check that the archive file exists
-        if not os.path.exists(full_path):
-            raise FileNotFoundError(f"External archive {full_path} does not exist")
-        return full_path
-
-    # Assert that header_password is None for formats that don't support it
-    generator = GENERATION_METHODS_TO_GENERATOR[
-        archive_info.creation_info.generation_method
-    ]
-    logger.info(
-        f"Creating archive {archive_info.filename} with generator {archive_info.creation_info.generation_method} {generator}"
-    )
-    try:
-        generator(
-            full_path,
-            contents=archive_info.contents,
-            compression_format=archive_info.creation_info.format,
-            **archive_info.creation_info.generation_method_options,
-        )
-    except Exception as e:
-        logger.error(f"Error creating archive {archive_info.filename}: {e}")
-        raise
-
-    return full_path
-
-
-def filter_archives(
-    archives: list[SampleArchive], patterns: list[str] | None
-) -> list[SampleArchive]:
-    """
-    Filter archives based on filename patterns.
-    If patterns is None or empty, return all archives.
-    Takes the basename of each pattern to match against archive filenames.
-    """
-    if not patterns:
-        return archives
-
-    # Convert patterns to their basenames
-    pattern_basenames = [os.path.basename(pattern) for pattern in patterns]
-
-    filtered = []
-    for archive in archives:
-        if any(
-            fnmatch.fnmatch(archive.filename, pattern) for pattern in pattern_basenames
-        ):
-            filtered.append(archive)
-    return filtered
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate test archives")
-    parser.add_argument(
-        "patterns",
-        nargs="*",
-        help="Optional list of file patterns to generate. If not specified, generates all archives.",
-    )
-    parser.add_argument(
-        "--base-dir",
-        help="Base directory where archives will be generated. Defaults to the script directory.",
-    )
-    args = parser.parse_args()
-
-    # Use base_dir if provided, otherwise use the directory of the script
-    base_dir = (
-        args.base_dir if args.base_dir else os.path.dirname(os.path.abspath(__file__))
-    )
-
-    # Filter archives based on patterns if provided
-    archives_to_generate = filter_archives(SAMPLE_ARCHIVES, args.patterns)
-    archives_to_generate = [
-        archive
-        for archive in archives_to_generate
-        if archive.creation_info.format != ArchiveFormat.FOLDER
-    ]
-
-    if not archives_to_generate:
-        print("No matching archives found.")
-        exit(1)
-
-    logger.info(f"Generating {len(archives_to_generate)} archives:")
-    for archive in archives_to_generate:
-        create_archive(archive, base_dir)
-        bullet = (
-            "-"
-            if archive.creation_info.generation_method != GenerationMethod.EXTERNAL
-            else "s"
-        )
-        logger.info(f"  {bullet} {archive.filename}")
