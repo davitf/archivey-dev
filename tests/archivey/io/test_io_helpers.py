@@ -19,7 +19,7 @@ from archivey.internal.io_helpers import (
     read_exact,
 )
 from tests.archivey.sample_archives import ALTERNATIVE_CONFIG, SINGLE_FILE_ARCHIVES
-from tests.archivey.test_open_nonseekable import NonSeekableBytesIO
+from tests.archivey.readers.test_open_nonseekable import NonSeekableBytesIO
 from tests.archivey.testing_utils import skip_if_package_missing
 
 

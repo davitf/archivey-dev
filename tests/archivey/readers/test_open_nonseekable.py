@@ -14,7 +14,7 @@ from tests.archivey.sample_archives import (
     SampleArchive,
     filter_archives,
 )
-from tests.archivey.test_open_compressed_stream import SINGLE_FILE_ARCHIVES
+from tests.archivey.readers.test_open_compressed_stream import SINGLE_FILE_ARCHIVES
 from tests.archivey.testing_utils import skip_if_package_missing
 
 logger = logging.getLogger(__name__)
