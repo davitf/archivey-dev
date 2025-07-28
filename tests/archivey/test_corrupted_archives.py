@@ -95,6 +95,7 @@ def test_read_corrupted_archives(
     formats_without_redundancy_check = [
         ArchiveFormat.LZ4,
         ArchiveFormat.TAR,
+        ArchiveFormat.UNIX_COMPRESS,
     ]
 
     if sample_archive.creation_info.format == ArchiveFormat.FOLDER:

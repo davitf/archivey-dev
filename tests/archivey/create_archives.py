@@ -58,6 +58,7 @@ except ModuleNotFoundError:
 
 from archivey.exceptions import PackageNotInstalledError
 from archivey.types import (
+    SINGLE_FILE_COMPRESSED_FORMATS,
     TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,
     MemberType,
@@ -287,6 +288,8 @@ def create_tar_archive_with_command_line(
             command.append("-J")  # xz
         elif compression_format == ArchiveFormat.TAR_ZSTD:
             command.append("--zstd")
+        elif compression_format == ArchiveFormat.TAR_Z:
+            command.append("-Z")
         elif compression_format != ArchiveFormat.TAR:
             # This case should ideally not be reached if enums are used correctly
             raise ValueError(
@@ -454,13 +457,9 @@ def create_single_file_compressed_archive_with_command_line(
     compression_cmd: str = "gzip",
     cmd_args: list[str] = [],
 ):
-    assert compression_format in [
-        ArchiveFormat.GZIP,
-        ArchiveFormat.BZIP2,
-        ArchiveFormat.XZ,
-        ArchiveFormat.ZSTD,
-        ArchiveFormat.LZ4,
-    ], f"Only supported compression formats are supported, got {compression_format}"
+    assert compression_format in SINGLE_FILE_COMPRESSED_FORMATS, (
+        f"Only supported compression formats are supported, got {compression_format}"
+    )
     assert not contents.solid, f"{compression_cmd} archives are not solid"
     assert len(contents.files) == 1, (
         f"{compression_cmd} archives only support a single file."
@@ -872,7 +871,9 @@ if __name__ == "__main__":
 
     # Use base_dir if provided, otherwise use the directory of the script
     base_dir = (
-        args.base_dir if args.base_dir else os.path.dirname(os.path.abspath(__file__))
+        args.base_dir
+        if args.base_dir
+        else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
 
     # Filter archives based on patterns if provided
@@ -889,7 +890,8 @@ if __name__ == "__main__":
 
     logger.info(f"Generating {len(archives_to_generate)} archives:")
     for archive in archives_to_generate:
-        create_archive(archive, base_dir)
+        output_path = create_archive(archive, base_dir)
+        assert os.path.exists(output_path)
         bullet = (
             "-"
             if archive.creation_info.generation_method != GenerationMethod.EXTERNAL

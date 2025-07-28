@@ -102,6 +102,8 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         pytest.importorskip("zstandard")
     elif format == ArchiveFormat.ZSTD:
         pytest.importorskip("pyzstd")
+    elif format == ArchiveFormat.UNIX_COMPRESS:
+        pytest.importorskip("uncompresspy")
 
 
 def normalize_newlines(s: str | None) -> str | None:

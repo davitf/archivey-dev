@@ -35,12 +35,16 @@ EXPECTED_NON_SEEKABLE_FAILURES: set[tuple[ArchiveFormat, bool]] = {
     (ArchiveFormat.TAR_GZ, True),
     (ArchiveFormat.TAR_BZ2, True),
     (ArchiveFormat.TAR_XZ, True),
+    (ArchiveFormat.TAR_Z, False),
+    (ArchiveFormat.TAR_Z, True),
     (ArchiveFormat.ZIP, False),
     (ArchiveFormat.ZIP, True),
     (ArchiveFormat.RAR, False),
     (ArchiveFormat.RAR, True),
     (ArchiveFormat.SEVENZIP, False),
     (ArchiveFormat.SEVENZIP, True),
+    (ArchiveFormat.UNIX_COMPRESS, False),
+    (ArchiveFormat.UNIX_COMPRESS, True),
 }
 
 

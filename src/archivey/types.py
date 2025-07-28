@@ -39,6 +39,7 @@ class ArchiveFormat(StrEnum):
     XZ = "xz"
     ZSTD = "zstd"
     LZ4 = "lz4"
+    UNIX_COMPRESS = "Z"
 
     TAR = "tar"
     TAR_GZ = "tar.gz"
@@ -46,6 +47,7 @@ class ArchiveFormat(StrEnum):
     TAR_XZ = "tar.xz"
     TAR_ZSTD = "tar.zstd"
     TAR_LZ4 = "tar.lz4"
+    TAR_Z = "tar.Z"
 
     ISO = "iso"
     FOLDER = "folder"
@@ -59,13 +61,7 @@ SINGLE_FILE_COMPRESSED_FORMATS = [
     ArchiveFormat.XZ,
     ArchiveFormat.ZSTD,
     ArchiveFormat.LZ4,
-]
-TAR_COMPRESSED_FORMATS = [
-    ArchiveFormat.TAR_GZ,
-    ArchiveFormat.TAR_BZ2,
-    ArchiveFormat.TAR_XZ,
-    ArchiveFormat.TAR_ZSTD,
-    ArchiveFormat.TAR_LZ4,
+    ArchiveFormat.UNIX_COMPRESS,
 ]
 
 COMPRESSION_FORMAT_TO_TAR_FORMAT = {
@@ -74,7 +70,9 @@ COMPRESSION_FORMAT_TO_TAR_FORMAT = {
     ArchiveFormat.XZ: ArchiveFormat.TAR_XZ,
     ArchiveFormat.ZSTD: ArchiveFormat.TAR_ZSTD,
     ArchiveFormat.LZ4: ArchiveFormat.TAR_LZ4,
+    ArchiveFormat.UNIX_COMPRESS: ArchiveFormat.TAR_Z,
 }
+TAR_COMPRESSED_FORMATS = list(COMPRESSION_FORMAT_TO_TAR_FORMAT.values())
 
 TAR_FORMAT_TO_COMPRESSION_FORMAT = {
     v: k for k, v in COMPRESSION_FORMAT_TO_TAR_FORMAT.items()

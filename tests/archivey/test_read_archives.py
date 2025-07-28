@@ -372,7 +372,15 @@ logger = logging.getLogger(__name__)
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        extensions=["tar", "tar.gz", "tar.bz2", "tar.xz", "tar.zst", "tar.lz4"],
+        extensions=[
+            "tar",
+            "tar.gz",
+            "tar.bz2",
+            "tar.xz",
+            "tar.zst",
+            "tar.lz4",
+            "tar.Z",
+        ],
     ),
     ids=lambda x: x.filename,
 )
