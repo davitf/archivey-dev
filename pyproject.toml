@@ -38,7 +38,7 @@ optional = [
     # https://github.com/python-lz4/python-lz4/pull/303
     "lz4>=4.4.4 ; python_full_version < '3.14'",
     "pycdlib>=1.14.0",
-    "uncompresspy>=0.4.0",
+    "uncompresspy>=0.4.0; python_full_version >= '3.11'",
 ]
 
 optional-freethreaded = [
