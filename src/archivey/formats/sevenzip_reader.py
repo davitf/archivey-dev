@@ -776,6 +776,15 @@ class SevenZipReader(BaseArchiveReader):
             outfile = factory.member_id_to_outfile.get(member.member_id)
             extraction_helper.process_file_extracted(member, outfile)
 
+    def _is_solid(self) -> bool:
+        assert self._archive is not None
+        if self._archive.header.main_streams is None:
+            # There's a bug in py7zr that causes archiveinfo() to raise an exception
+            # if the archive is empty or has no main streams, so avoid it here.
+            return False
+
+        return self._archive.archiveinfo().solid
+
     def get_archive_info(self) -> ArchiveInfo:
         """Get detailed information about the archive's format.
 
@@ -785,12 +794,10 @@ class SevenZipReader(BaseArchiveReader):
         self.check_archive_open()
         assert self._archive is not None
 
-        sevenzip_info = self._archive.archiveinfo()
-
         if self._format_info is None:
             self._format_info = ArchiveInfo(
                 format=self.format,
-                is_solid=sevenzip_info.solid,
+                is_solid=self._is_solid(),
                 extra={
                     "is_encrypted": self._archive.password_protected,
                 },
