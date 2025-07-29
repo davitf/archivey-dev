@@ -5,6 +5,7 @@ Utility functions for archivey.
 import datetime
 import logging
 import os
+import sys
 from typing import TypeVar, overload
 
 from archivey.types import MemberType
@@ -86,6 +87,10 @@ def platform_supports_setting_symlink_mtime() -> bool:
 
 def platform_supports_setting_symlink_permissions() -> bool:
     return os.chmod in os.supports_follow_symlinks
+
+
+def platform_is_windows():
+    return sys.platform.startswith("win")
 
 
 def set_file_mtime(

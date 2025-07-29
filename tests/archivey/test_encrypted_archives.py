@@ -4,6 +4,7 @@ import pytest
 
 from archivey.core import open_archive
 from archivey.exceptions import ArchiveEncryptedError, ArchiveError
+from archivey.internal.utils import platform_is_windows
 from archivey.types import ArchiveFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
@@ -311,12 +312,25 @@ def test_open_encrypted_symlink(
     ]
     with open_archive(sample_archive_path) as archive:
         for filename, pwd in files_to_test:
-            data = archive.open(filename, pwd=pwd).read()
-            assert data == sample_files[filename].contents
+            try:
+                data = archive.open(filename, pwd=pwd).read()
+                assert data == sample_files[filename].contents
 
-            # After reading the file, the link target should have been set
-            member = archive.get_member(filename)
-            assert member.link_target == sample_files[filename].link_target
+                # After reading the file, the link target should have been set
+                member = archive.get_member(filename)
+                assert member.link_target == sample_files[filename].link_target
+            except ArchiveEncryptedError:
+                # The workaround we have to read encrypted symlink targets for RAR4
+                # archives involves extracting the symlink and reading the target,
+                # which doesn't fully work on Windows.
+                if (
+                    platform_is_windows()
+                    and filename.startswith("encrypted_link_to_")
+                    and sample_archive_path.endswith("rar4.rar")
+                ):
+                    pytest.xfail("Windows does not support encrypted symlinks")
+                else:
+                    raise
 
 
 @pytest.mark.parametrize(
