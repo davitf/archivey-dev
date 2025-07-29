@@ -36,6 +36,12 @@ class ArchiveReadError(ArchiveError):
     pass
 
 
+class ArchiveUnsupportedFeatureError(ArchiveReadError):
+    """Raised when an archive format or feature is not supported."""
+
+    pass
+
+
 class ArchiveCorruptedError(ArchiveReadError):
     """Raised when an archive is detected as corrupted, incomplete, or invalid."""
 

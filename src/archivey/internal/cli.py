@@ -102,7 +102,7 @@ def process_member(
                 )
                 sha = " " * 16
             print(
-                f"{encrypted_str}  {size_str}  {format_str}  {crc_display}  {sha}  {member.mtime}  {member.filename}"
+                f"{encrypted_str}  {size_str}  {format_str}  {crc_display}  {sha}  {member.mtime}  {member.filename.encode('utf-8', 'backslashreplace').decode('utf-8')}"
             )
         except ArchiveError as e:
             formatted_crc = (

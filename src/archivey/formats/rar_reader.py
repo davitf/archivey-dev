@@ -752,13 +752,24 @@ class RarReader(BaseArchiveReader):
         assert member.type == MemberType.FILE
 
         if member.encrypted:
+            password = str_to_bytes(
+                pwd if pwd is not None else self.get_archive_password()
+            )
+            if password is None:
+                raise ArchiveEncryptedError(
+                    "Password required",
+                    archive_path=self.path_str,
+                    member_name=member.filename,
+                )
             pwd_check = verify_rar5_password(
-                str_to_bytes(pwd if pwd is not None else self.get_archive_password()),
+                password,
                 cast("RarInfo", member.raw_info),
             )
             if pwd_check == PasswordCheckResult.INCORRECT:
                 raise ArchiveEncryptedError(
-                    f"Wrong password specified for {member.filename}"
+                    "Wrong password specified",
+                    archive_path=self.path_str,
+                    member_name=member.filename,
                 )
 
         return ensure_binaryio(
