@@ -153,7 +153,9 @@ Some things on my radar for future versions. Feel free to pick some to contribut
 *   Auto-select libraries or implementations to use based on what is installed and/or required features
 *   Archive writing support
 *   Bug: ZIP filename decoding can be wrong in some cases (see sample archive `tests/test_archives_external/encoding_infozip_jules.zip`)
-*   Split the IO wrappers (`src/archivey/internal/io_helpers.py`) into a separate library, as it seems to be generally useful
-*   Test under Windows / Mac
-*   Add additional metadata fields (uid, gid, Windows permissions)
+*   Test under Windows / Mac (there are CI tests, but with failures)
+    *   There should be archives generated in Mac / Windows in test_archives
+    *   Possibly: use [oschmod](https://pypi.org/project/oschmod/) for setting permissions properly under Windows
+*   Add additional metadata fields (uid, gid, Windows permissions (read-only) in 7z files)
 *   Add Pathlib-compatible wrapper that allows accessing files inside archives
+*   Try to read / extract all the test archives in unittests for underlying libraries, and old/weird files, to find bugs
