@@ -32,8 +32,7 @@ The [optional] extra includes all recommended third-party libraries for full for
 
 ### Resources
 
-- 📖 [User guide](https://davitf.github.io/archivey/user_guide/)
-- 📘 [API reference](https://davitf.github.io/archivey/reference/)
+- 📖 [Documentation](https://davitf.github.io/archivey/)
+- 📘 [API reference](https://davitf.github.io/archivey/api/)
 - 🛠️ [GitHub repository](https://github.com/davitf/archivey)  
   ↳ or the [development repo](https://github.com/davitf/archivey-dev), with in-progress work, rougher commits and AI-generated pull requests
-- 🤝 [Developer guide](https://davitf.github.io/archivey/developer_guide/) – for contributors
