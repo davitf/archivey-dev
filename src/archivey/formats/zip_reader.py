@@ -12,6 +12,7 @@ from archivey.exceptions import (
     ArchiveEncryptedError,
     ArchiveError,
     ArchiveStreamNotSeekableError,
+    ArchiveUnsupportedFeatureError,
 )
 from archivey.internal.base_reader import (
     BaseArchiveReader,
@@ -91,6 +92,28 @@ def get_zipinfo_timestamp(zip_info: zipfile.ZipInfo) -> datetime | None:
     return main_modtime
 
 
+# Taken from zipfile.compressor_names
+ZIP_COMPRESSION_METHODS = {
+    0: "store",
+    1: "shrink",
+    2: "reduce",
+    3: "reduce",
+    4: "reduce",
+    5: "reduce",
+    6: "implode",
+    7: "tokenize",
+    8: "deflate",
+    9: "deflate64",
+    10: "implode",
+    12: "bzip2",
+    14: "lzma",
+    18: "terse",
+    19: "lz77",
+    97: "wavpack",
+    98: "ppmd",
+}
+
+
 class ZipReader(BaseArchiveReader):
     """Reader for ZIP archives."""
 
@@ -107,6 +130,10 @@ class ZipReader(BaseArchiveReader):
             return ArchiveStreamNotSeekableError(
                 "ZIP archives do not support non-seekable streams"
             )
+        if isinstance(
+            e, NotImplementedError
+        ) and "That compression method is not supported" in str(e):
+            return ArchiveUnsupportedFeatureError("Compression method is not supported")
         return None
 
     def __init__(
@@ -155,15 +182,10 @@ class ZipReader(BaseArchiveReader):
         is_dir = info.is_dir()
         is_link = stat.S_ISLNK(mode)
 
-        compression_method = (
-            {
-                zipfile.ZIP_STORED: "store",
-                zipfile.ZIP_DEFLATED: "deflate",
-                zipfile.ZIP_BZIP2: "bzip2",
-                zipfile.ZIP_LZMA: "lzma",
-            }.get(info.compress_type, "unknown")
-            if hasattr(info, "compress_type")
-            else None
+        compression_method = ZIP_COMPRESSION_METHODS.get(info.compress_type, "unknown")
+
+        logger.info(
+            f"Filename: {info.filename}: compression_method={compression_method} {info.compress_type}"
         )
 
         return ArchiveMember(
