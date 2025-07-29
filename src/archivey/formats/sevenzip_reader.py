@@ -64,6 +64,7 @@ from archivey.exceptions import (
     ArchiveEOFError,
     ArchiveError,
     ArchiveStreamNotSeekableError,
+    ArchiveUnsupportedFeatureError,
     PackageNotInstalledError,
 )
 from archivey.internal.extraction_helper import ExtractionHelper
@@ -292,6 +293,9 @@ class SevenZipReader(BaseArchiveReader):
             # Archive open or member read
             if isinstance(e, py7zr.PasswordRequired):
                 return ArchiveEncryptedError("Password required")
+
+            if isinstance(e, py7zr.exceptions.UnsupportedCompressionMethodError):
+                return ArchiveUnsupportedFeatureError("Unsupported compression method")
 
             # Member read
             if isinstance(e, py7zr.exceptions.ArchiveError):
@@ -534,14 +538,32 @@ class SevenZipReader(BaseArchiveReader):
             stream.read()
         return stream
 
+    def _build_extract_filename_to_member_map(
+        self, members: list[ArchiveMember], path_str: str | None
+    ) -> dict[str, ArchiveMember]:
+        """Mimics the py7zr name sanitization logic in py7zr.SevenZipFile._extract()."""
+        path = pathlib.Path(path_str) if path_str is not None else None
+        if path is not None and not path.is_absolute():
+            path = pathlib.Path(os.getcwd()).joinpath(path)
+
+        return {
+            py7zr.helpers.get_sanitized_output_path(
+                member.extra["extract_filename"], path
+            ).as_posix(): member
+            for member in members
+        }
+
     def _extract_members_iterator(
         self,
         members: list[ArchiveMember],
         pwd: bytes | str | None,
     ) -> Iterator[tuple[ArchiveMember, BinaryIO]]:
-        extract_filename_to_member = {
-            member.extra["extract_filename"]: member for member in members
-        }
+        # We need to use the exact same sanitization logic as py7zr so we can match
+        # the filenames passed to the StreamingFactory with the members.
+        extract_filename_to_member = self._build_extract_filename_to_member_map(
+            members, None
+        )
+
         # The original filenames in the raw infos.
         extract_targets = [
             cast("ArchiveFile", member.raw_info).filename for member in members
@@ -743,17 +765,9 @@ class SevenZipReader(BaseArchiveReader):
         assert self._archive is not None
         archive = self._archive
 
-        canonical_path = pathlib.Path(os.getcwd()).joinpath(path)
-
-        def _py7zr_full_path(member: ArchiveMember) -> str:
-            outname = member.extra["extract_filename"]
-            return py7zr.helpers.get_sanitized_output_path(
-                outname, canonical_path
-            ).as_posix()
-
-        pending_extractions_to_member = {
-            _py7zr_full_path(member): member for member in pending_extractions
-        }
+        pending_extractions_to_member = self._build_extract_filename_to_member_map(
+            pending_extractions, path
+        )
         factory = ExtractWriterFactory(path, pending_extractions_to_member)
 
         logger.info("Extracting %s to %s", paths_to_extract, path)

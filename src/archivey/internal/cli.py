@@ -21,7 +21,7 @@ from archivey.internal.dependency_checker import (
     get_dependency_versions,
 )
 from archivey.internal.io_helpers import IOStats, StatsIO
-from archivey.types import ArchiveMember, MemberType
+from archivey.types import ArchiveMember, ExtractionFilter, MemberType
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 
@@ -296,7 +296,9 @@ def main(argv: list[str] | None = None) -> None:
                             m for m in members_if_available if member_filter(m)
                         ]
                     for member, stream in tqdm(
-                        archive.iter_members_with_streams(members=member_filter),
+                        archive.iter_members_with_streams(
+                            members=member_filter, filter=ExtractionFilter.FULLY_TRUSTED
+                        ),
                         desc="Computing checksums" if verify else "Listing members",
                         disable=args.hide_progress,
                         total=len(members_if_available)
