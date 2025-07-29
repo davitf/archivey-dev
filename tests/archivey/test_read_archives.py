@@ -189,8 +189,6 @@ def check_iter_members(
         if features.dir_entries or sample_file.type != MemberType.DIR:
             expected_files_by_filename[filename].append(sample_file)
 
-    # expected_filenames = set(expected_files_by_filename.keys())
-
     constructor_password = sample_archive.contents.header_password
 
     if (

@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 
 from archivey.core import open_archive
-from archivey.internal.utils import ensure_not_none
+from archivey.internal.utils import (
+    ensure_not_none,
+    platform_supports_setting_symlink_mtime,
+    platform_supports_setting_symlink_permissions,
+)
 from archivey.types import ArchiveMember, MemberType
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
@@ -25,7 +29,12 @@ def _check_file_metadata(path: Path, info: FileInfo, sample: SampleArchive):
     stat = path.lstat() if info.type == MemberType.SYMLINK else path.stat()
     features = sample.creation_info.features
 
-    if info.permissions is not None:
+    if (
+        info.type == MemberType.SYMLINK
+        and not platform_supports_setting_symlink_permissions()
+    ):
+        pass
+    elif info.permissions is not None:
         assert (stat.st_mode & 0o777) == info.permissions, path
 
     # Extracted hardlinks will have the same mtime as the original file, which can be
@@ -34,7 +43,12 @@ def _check_file_metadata(path: Path, info: FileInfo, sample: SampleArchive):
         return
 
     actual = datetime.fromtimestamp(stat.st_mtime)
-    if features.rounded_mtime:
+    if (
+        info.type == MemberType.SYMLINK
+        and not platform_supports_setting_symlink_mtime()
+    ):
+        pass
+    elif features.rounded_mtime:
         assert abs(actual.timestamp() - info.mtime.timestamp()) <= 1, path
     else:
         assert actual == info.mtime, (path, info)
