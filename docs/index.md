@@ -20,17 +20,20 @@ pip install archivey[optional]
 
 If you'd rather manage dependencies yourself, install only the extras you need. RAR support requires the `unrar` tool, which you may need to install separately.
 
-| Format | Builtin module | Python package | System requirement |
-| --- | --- | --- | --- |
-| ZIP archives | [`zipfile`](https://docs.python.org/3/library/zipfile.html) | | |
-| TAR archives | [`tarfile`](https://docs.python.org/3/library/tarfile.html) | | |
-| RAR archives | | [`rarfile`](https://pypi.org/project/rarfile)<br>[`cryptography`](https://pypi.org/project/cryptography) (for encrypted headers) | `unrar` binary |
-| 7z archives | | [`py7zr`](https://pypi.org/project/py7zr) | |
-| Gzip | [`gzip`](https://docs.python.org/3/library/gzip.html) | [`rapidgzip`](https://pypi.org/project/rapidgzip) (multithreaded decompression and random access) | |
-| Bzip2 | [`bz2`](https://docs.python.org/3/library/bz2.html) | [`indexed_bzip2`](https://pypi.org/project/indexed-bzip2) (multithreaded decompression and random access) | |
-| XZ | [`lzma`](https://docs.python.org/3/library/lzma.html) | [`python-xz`](https://pypi.org/project/python-xz) (random access) | |
-| Zstandard | | [`pyzstd`](https://pypi.org/project/pyzstd) (preferred) or [`zstandard`](https://pypi.org/project/zstandard) | |
-| LZ4 | | [`lz4`](https://pypi.org/project/lz4) | |
+## Supported formats and required packages
+
+| Format | Extension | Builtin module | Python package | System requirement |
+| --- | --- | --- | --- | --- |
+| ZIP archives | `.zip` | [`zipfile`](https://docs.python.org/3/library/zipfile.html) | | |
+| TAR archives | `.tar`, `.tar.*` | [`tarfile`](https://docs.python.org/3/library/tarfile.html) | | |
+| RAR archives | `.rar` | | [`rarfile`](https://pypi.org/project/rarfile)<br>[`cryptography`](https://pypi.org/project/cryptography) (for encrypted headers) | `unrar` binary |
+| 7z archives | `.7z` | | [`py7zr`](https://pypi.org/project/py7zr) | |
+| Gzip | `.gz` | [`gzip`](https://docs.python.org/3/library/gzip.html) | [`rapidgzip`](https://pypi.org/project/rapidgzip) (multithreaded decompression and random access) | |
+| Bzip2 | `.bz2` | [`bz2`](https://docs.python.org/3/library/bz2.html) | [`indexed_bzip2`](https://pypi.org/project/indexed-bzip2) (multithreaded decompression and random access) | |
+| XZ | `.xz` | [`lzma`](https://docs.python.org/3/library/lzma.html) | [`python-xz`](https://pypi.org/project/python-xz) (random access) | |
+| Zstandard | `.zst` | | [`pyzstd`](https://pypi.org/project/pyzstd) (preferred) or [`zstandard`](https://pypi.org/project/zstandard) | |
+| LZ4 | `.lz4` | | [`lz4`](https://pypi.org/project/lz4) | |
+| Unix compress | `.Z` | | [`uncompresspy`](https://pypi.org/project/uncompresspy) | |
 
 ## Usage
 
@@ -62,22 +65,22 @@ with open_archive("example.zip") as archive:
         print(member_to_read.filename, data[:20])
 ```
 
-`open_archive` can open standalone compressed files (e.g. `example.gz`) as well. They are handled as archives containing a single member.
+[`open_archive`][archivey.open_archive] can open standalone compressed files (e.g. `example.gz`) as well. They are handled as archives containing a single member.
 
 ### Streaming access
 
-Some libraries may decompress parts of the archive multiple times if you access files individually with `archive.open()`. If you don't need to open arbitrary files, and just need to perform an operation on all (or some) files of an archive, iterating through the files avoids extra re-reads and decompressions:
+Some libraries may decompress parts of the archive multiple times if you list the members in advance or access files individually with `archive.open()`. If you don't need to open arbitrary files, and just need to perform an operation on all (or some) files of an archive, iterating through the files avoids extra re-reads and decompressions:
 
 ```python
 from archivey import open_archive
 
 with open_archive("example.tar.gz", streaming_only=True) as archive:
-    for member, stream in archive.iter_members_with_streams():
+    for member, stream in [archive.iter_members_with_streams()]:
         data = stream and stream.read(20)
         print(member.filename, member.file_size, data)
 ```
 
-`streaming_only` is an optional argument; if set, it disallows some methods to ensure your code doesn't accidentally perform expensive operations.
+`streaming_only` is an optional argument; if set, it disallows some methods to ensure your code doesn't accidentally perform expensive operations. ([more details](user_guide.md#streaming-safe-methods))
 
 ### Single-file compressed streams
 
@@ -142,7 +145,7 @@ For more detailed information on using and extending `archivey`, please refer to
 Some things on my radar for future versions. Feel free to pick some to contribute!
 
 *   Archive format support: [ar archives](https://en.wikipedia.org/wiki/Ar_(Unix)) (`.ar`, `.deb`), [ISO images](https://en.wikipedia.org/wiki/Optical_disc_image) (`.iso`)
-*   Compression format support: [UNIX compress format](https://en.wikipedia.org/wiki/Compress_(software)) (`.Z`), [Brotli](https://en.wikipedia.org/wiki/Brotli)
+*   Compression format support: [Brotli](https://en.wikipedia.org/wiki/Brotli)
 *   Add [libarchive](https://pypi.org/project/libarchive/) as a backend, see what it allows us to do
 *   Opening self-extracting (SFX) RAR and 7z archives
 *   Non-seeking access to ZIP archives (similar approach to [`stream-unzip`](http://pypi.org/project/stream-unzip))
