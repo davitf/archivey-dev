@@ -169,6 +169,7 @@ EXTENSION_TO_FORMAT = {
     ".xz": ArchiveFormat.XZ,
     ".zst": ArchiveFormat.ZSTD,
     ".lz4": ArchiveFormat.LZ4,
+    ".br": ArchiveFormat.BROTLI,
     ".z": ArchiveFormat.UNIX_COMPRESS,
     ".zip": ArchiveFormat.ZIP,
     ".rar": ArchiveFormat.RAR,

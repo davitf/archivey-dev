@@ -42,6 +42,11 @@ except ModuleNotFoundError:
     zstandard = None
 
 try:  # Optional dependency
+    import brotli  # type: ignore
+except ModuleNotFoundError:
+    brotli = None
+
+try:  # Optional dependency
     import py7zr  # type: ignore
 except ModuleNotFoundError:
     py7zr = None
@@ -306,6 +311,27 @@ def create_tar_archive_with_command_line(
         subprocess.run(command, check=True, cwd=tempdir)
 
 
+class _BrotliWriter(io.BufferedIOBase):
+    def __init__(self, path: str) -> None:
+        self._f = open(path, "wb")
+        self._compressor = brotli.Compressor()
+
+    def write(self, data: bytes) -> int:
+        self._f.write(self._compressor.process(data))
+        return len(data)
+
+    def close(self) -> None:
+        if not self._f.closed:
+            self._f.write(self._compressor.finish())
+            self._f.close()
+        super().close()
+
+
+def _brotli_open(path: str, mode: str = "wb") -> _BrotliWriter:
+    assert mode == "wb"
+    return _BrotliWriter(path)
+
+
 SINGLE_FILE_LIBRARY_OPENERS = {
     ArchiveFormat.GZIP: gzip.GzipFile,
     ArchiveFormat.BZIP2: bz2.BZ2File,
@@ -315,10 +341,11 @@ SINGLE_FILE_LIBRARY_OPENERS = {
         level_or_option={
             pyzstd.CParameter.checksumFlag: 1,
         },
-    )  # type: ignore[reportUnknownReturnType]
+    )
     if pyzstd is not None
     else None,
     ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
+    ArchiveFormat.BROTLI: _brotli_open if brotli is not None else None,
 }
 
 

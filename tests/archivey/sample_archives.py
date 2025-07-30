@@ -480,6 +480,12 @@ LZ4_LIBRARY = ArchiveCreationInfo(
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
+BROTLI_LIBRARY = ArchiveCreationInfo(
+    file_suffix="lib.br",
+    format=ArchiveFormat.BROTLI,
+    generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
+)
 
 FOLDER_FORMAT = ArchiveCreationInfo(
     file_suffix="_folder/",  # Results in names like 'basic_nonsolid___folder'
@@ -521,6 +527,7 @@ ALL_SINGLE_FILE_FORMATS = [
     XZ_LIBRARY,
     ZSTD_LIBRARY,
     LZ4_LIBRARY,
+    BROTLI_LIBRARY,
 ]
 
 BASIC_TAR_FORMATS = [
@@ -564,10 +571,12 @@ ISO_FORMATS = [
 ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
 
 # Skip test filenames
-SKIP_TEST_FILENAMES = set(
+SKIP_TEST_FILENAMES = {
     # "basic_nonsolid__genisoimage.iso",
     # "basic_nonsolid__pycdlib.iso",
-)
+    "single_file__lib.br",
+    "large_single_file__lib.br",
+}
 
 
 def _create_random_data(size: int, seed: int, chars: bytes = b"0123456789 ") -> bytes:

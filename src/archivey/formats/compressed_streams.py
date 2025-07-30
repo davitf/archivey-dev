@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     import pyzstd
     import rapidgzip
     import uncompresspy
+    import brotli
     import xz
     import zstandard
 else:
@@ -60,6 +61,11 @@ else:
         import uncompresspy
     except ImportError:
         uncompresspy = None
+
+    try:
+        import brotli
+    except ImportError:
+        brotli = None
 
 
 import logging
@@ -351,6 +357,89 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
     return ensure_binaryio(cast("lz4.frame.LZ4FrameFile", lz4.frame.open(path)))
 
 
+class BrotliDecompressorStream(io.RawIOBase, BinaryIO):
+    """Wrap a file-like object and decompress it using ``brotli``."""
+
+    def __init__(self, path: str | BinaryIO) -> None:
+        super().__init__()
+        if isinstance(path, (str, bytes, os.PathLike)):
+            self._inner = open(path, "rb")
+            self._should_close = True
+        else:
+            self._inner = ensure_bufferedio(path)
+            self._should_close = False
+        self._decompressor = brotli.Decompressor()
+        self._buffer = bytearray()
+        self._eof = False
+
+    def readable(self) -> bool:
+        return True
+
+    def writable(self) -> bool:  # pragma: no cover - not used
+        return False
+
+    def seekable(self) -> bool:
+        return False
+
+    def _fill_buffer(self, n: int | None) -> None:
+        while (n is None or len(self._buffer) < n) and not self._eof:
+            chunk = self._inner.read(65536)
+            if not chunk:
+                self._eof = True
+                try:
+                    self._buffer.extend(self._decompressor.process(b""))
+                except Exception as e:  # noqa: BLE001
+                    raise e
+                if not self._decompressor.is_finished():
+                    raise ArchiveEOFError("Brotli file is truncated")
+                break
+            try:
+                self._buffer.extend(self._decompressor.process(chunk))
+            except brotli.error as e:  # pragma: no cover - library handles
+                raise ArchiveCorruptedError(
+                    f"Error reading Brotli archive: {repr(e)}"
+                ) from e
+
+    def read(self, n: int = -1) -> bytes:
+        if n == 0:
+            return b""
+        if n is None or n < 0:
+            self._fill_buffer(None)
+            data = bytes(self._buffer)
+            self._buffer.clear()
+            return data
+        else:
+            if len(self._buffer) < n:
+                self._fill_buffer(n)
+            data = bytes(self._buffer[:n])
+            del self._buffer[:n]
+            return data
+
+    def readinto(self, b: Buffer) -> int:
+        data = self.read(len(b))
+        b[: len(data)] = data
+        return len(data)
+
+    def close(self) -> None:
+        if self._should_close:
+            self._inner.close()
+        super().close()
+
+
+def _translate_brotli_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, brotli.error):
+        return ArchiveCorruptedError(f"Error reading Brotli archive: {repr(e)}")
+    return None
+
+
+def open_brotli_stream(path: str | BinaryIO) -> BinaryIO:
+    if brotli is None:
+        raise PackageNotInstalledError(
+            "brotli package is not installed, required for Brotli archives"
+        ) from None
+    return ensure_binaryio(BrotliDecompressorStream(path))
+
+
 def _translate_uncompresspy_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, ValueError) and "must be seekable" in str(e):
         return ArchiveStreamNotSeekableError(
@@ -391,6 +480,9 @@ def get_stream_open_fn(
 
     if format == ArchiveFormat.LZ4:
         return open_lz4_stream, _translate_lz4_exception
+
+    if format == ArchiveFormat.BROTLI:
+        return open_brotli_stream, _translate_brotli_exception
 
     if format == ArchiveFormat.ZSTD:
         if config.use_zstandard:
