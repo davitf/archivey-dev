@@ -59,6 +59,10 @@ BASIC_XZ_ARCHIVE = filter_archives(
     SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["xz"]
 )[0]
 
+BASIC_UNIX_COMPRESS_ARCHIVE = filter_archives(
+    SAMPLE_ARCHIVES, prefixes=["single_file"], extensions=["Z"]
+)[0]
+
 
 @pytest.mark.parametrize(
     ["library_name", "sample_archive", "alternative_packages"],
@@ -72,6 +76,7 @@ BASIC_XZ_ARCHIVE = filter_archives(
         ("pyzstd", BASIC_ZSTD_ARCHIVE, False),
         ("zstandard", BASIC_ZSTD_ARCHIVE, True),
         ("lz4", BASIC_LZ4_ARCHIVE, False),
+        ("uncompresspy", BASIC_UNIX_COMPRESS_ARCHIVE, False),
     ],
     ids=lambda x: os.path.basename(x) if isinstance(x, str) else x,
 )
