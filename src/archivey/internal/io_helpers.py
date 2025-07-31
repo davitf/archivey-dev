@@ -338,6 +338,13 @@ def run_with_exception_translation(
 ) -> T:
     try:
         return func()
+    except ArchiveError as e:
+        if archive_path is not None:
+            e.archive_path = archive_path
+        if member_name is not None:
+            e.member_name = member_name
+        raise e
+
     except Exception as e:
         translated = exception_translator(e)
         if translated is not None:
