@@ -96,6 +96,7 @@ def test_read_corrupted_archives(
         ArchiveFormat.LZ4,
         ArchiveFormat.TAR,
         ArchiveFormat.UNIX_COMPRESS,
+        ArchiveFormat.BROTLI,
     ]
 
     if sample_archive.creation_info.format == ArchiveFormat.FOLDER:

@@ -338,6 +338,13 @@ def run_with_exception_translation(
 ) -> T:
     try:
         return func()
+    except ArchiveError as e:
+        if archive_path is not None:
+            e.archive_path = archive_path
+        if member_name is not None:
+            e.member_name = member_name
+        raise e
+
     except Exception as e:
         translated = exception_translator(e)
         if translated is not None:
@@ -493,6 +500,7 @@ class RecordableStream(io.RawIOBase, BinaryIO):
         self._inner = inner
         self._buffer = bytearray()
         self._pos = 0
+        self._inner_eof = False
 
     def get_all_data(self) -> bytes:
         """Return all data read so far."""
@@ -520,6 +528,7 @@ class RecordableStream(io.RawIOBase, BinaryIO):
             chunk = self._inner.read()
             self._buffer.extend(chunk)
             self._pos = len(self._buffer)
+            self._inner_eof = True
             return bytes(data) + chunk
 
         remaining = n
@@ -532,8 +541,10 @@ class RecordableStream(io.RawIOBase, BinaryIO):
             self._pos += take
             remaining -= take
 
-        if remaining > 0:
+        if remaining > 0 and not self._inner_eof:
             chunk = self._inner.read(remaining)
+            if not chunk:
+                self._inner_eof = True
             self._buffer.extend(chunk)
             self._pos += len(chunk)
             data.extend(chunk)
@@ -557,14 +568,13 @@ class RecordableStream(io.RawIOBase, BinaryIO):
 
         if offset < 0:
             raise io.UnsupportedOperation("seek outside recorded region")
+
         while offset > len(self._buffer):
             chunk = self._inner.read(offset - len(self._buffer))
             if not chunk:
+                self._inner_eof = True
                 break
             self._buffer.extend(chunk)
-
-        if offset > len(self._buffer):
-            raise io.UnsupportedOperation("seek outside recorded region")
 
         self._pos = offset
         return self._pos

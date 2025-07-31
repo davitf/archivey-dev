@@ -19,12 +19,18 @@ from archivey.types import (
 )
 
 if TYPE_CHECKING:
+    import brotli
     import rarfile
 else:
     try:
         import rarfile
     except ImportError:
         rarfile = None  # type: ignore[assignment]
+
+    try:
+        import brotli
+    except ImportError:
+        brotli = None  # type: ignore[assignment]
 
 # Taken from the pycdlib code
 _ISO_MAGIC_BYTES = (
@@ -83,6 +89,21 @@ SIGNATURES = [
     ([b"ustar"], 257, ArchiveFormat.TAR),  # TAR "ustar" magic
     (_ISO_MAGIC_BYTES, 0x8001, ArchiveFormat.ISO),  # ISO9660
 ]
+
+
+def _is_brotli_stream(stream: IO[bytes]) -> bool:
+    """Attempt to decompress a small chunk to see if it is Brotli."""
+    if brotli is None:
+        return False
+    try:
+        sample = stream.read(256)
+        decompressor = brotli.Decompressor()
+        decompressor.process(sample)
+        return True
+    except brotli.error:
+        return False
+
+
 _EXTRA_DETECTORS = [
     # There may be other tar variants supported by tarfile.
     # TODO: this tries decompressing with the builtin formats. Avoid it.
@@ -90,6 +111,7 @@ _EXTRA_DETECTORS = [
     # zipfiles can have something prepended; is_zipfile checks the end of the file.
     # TODO: is this reading the whole stream for non-seekable streams?
     (zipfile.is_zipfile, ArchiveFormat.ZIP),
+    (_is_brotli_stream, ArchiveFormat.BROTLI),
 ]
 
 _SFX_DETECTORS = []
@@ -169,6 +191,7 @@ EXTENSION_TO_FORMAT = {
     ".xz": ArchiveFormat.XZ,
     ".zst": ArchiveFormat.ZSTD,
     ".lz4": ArchiveFormat.LZ4,
+    ".br": ArchiveFormat.BROTLI,
     ".z": ArchiveFormat.UNIX_COMPRESS,
     ".zip": ArchiveFormat.ZIP,
     ".rar": ArchiveFormat.RAR,

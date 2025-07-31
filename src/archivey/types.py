@@ -39,6 +39,7 @@ class ArchiveFormat(StrEnum):
     XZ = "xz"
     ZSTD = "zstd"
     LZ4 = "lz4"
+    BROTLI = "br"
     UNIX_COMPRESS = "Z"
 
     TAR = "tar"
@@ -61,6 +62,7 @@ SINGLE_FILE_COMPRESSED_FORMATS = [
     ArchiveFormat.XZ,
     ArchiveFormat.ZSTD,
     ArchiveFormat.LZ4,
+    ArchiveFormat.BROTLI,
     ArchiveFormat.UNIX_COMPRESS,
 ]
 
