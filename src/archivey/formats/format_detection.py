@@ -85,8 +85,10 @@ SIGNATURES = [
 ]
 _EXTRA_DETECTORS = [
     # There may be other tar variants supported by tarfile.
+    # TODO: this tries decompressing with the builtin formats. Avoid it.
     (tarfile.is_tarfile, ArchiveFormat.TAR),
-    # zipfiles can have something prepended; is_zipfile checks the end of the file
+    # zipfiles can have something prepended; is_zipfile checks the end of the file.
+    # TODO: is this reading the whole stream for non-seekable streams?
     (zipfile.is_zipfile, ArchiveFormat.ZIP),
 ]
 
