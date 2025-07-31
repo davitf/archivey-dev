@@ -480,6 +480,12 @@ LZ4_LIBRARY = ArchiveCreationInfo(
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
+ZLIB_LIBRARY = ArchiveCreationInfo(
+    file_suffix="lib.zz",
+    format=ArchiveFormat.ZLIB,
+    generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
+)
 BROTLI_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.br",
     format=ArchiveFormat.BROTLI,
@@ -527,6 +533,7 @@ ALL_SINGLE_FILE_FORMATS = [
     XZ_LIBRARY,
     ZSTD_LIBRARY,
     LZ4_LIBRARY,
+    ZLIB_LIBRARY,
     BROTLI_LIBRARY,
 ]
 
