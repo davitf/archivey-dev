@@ -19,8 +19,8 @@ from archivey.types import (
 )
 
 if TYPE_CHECKING:
-    import rarfile
     import brotli
+    import rarfile
 else:
     try:
         import rarfile

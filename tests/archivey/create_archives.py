@@ -313,6 +313,7 @@ def create_tar_archive_with_command_line(
 
 class _BrotliWriter(io.BufferedIOBase):
     def __init__(self, path: str) -> None:
+        assert brotli is not None, "Brotli is not installed"
         self._f = open(path, "wb")
         self._compressor = brotli.Compressor()
 
@@ -341,7 +342,7 @@ SINGLE_FILE_LIBRARY_OPENERS = {
         level_or_option={
             pyzstd.CParameter.checksumFlag: 1,
         },
-    )
+    )  # type: ignore[reportUnknownReturnType]
     if pyzstd is not None
     else None,
     ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
