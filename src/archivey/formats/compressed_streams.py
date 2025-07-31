@@ -1,6 +1,7 @@
 import bz2
 import gzip
 import io
+import zlib
 import lzma
 import os
 from typing import TYPE_CHECKING, BinaryIO, Callable, Optional, cast
@@ -357,6 +358,154 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
     return ensure_binaryio(cast("lz4.frame.LZ4FrameFile", lz4.frame.open(path)))
 
 
+def open_zlib_stream(path: str | BinaryIO) -> BinaryIO:
+    return ensure_binaryio(ZlibDecompressorStream(path))
+
+
+def _translate_zlib_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, zlib.error):
+        if "incomplete" in str(e) or "truncated" in str(e):
+            return ArchiveEOFError(f"Zlib file is truncated: {repr(e)}")
+        return ArchiveCorruptedError(f"Error reading Zlib archive: {repr(e)}")
+    if isinstance(e, EOFError):
+        return ArchiveEOFError(f"Zlib file is truncated: {repr(e)}")
+    return None
+
+
+class ZlibDecompressorStream(io.RawIOBase, BinaryIO):
+    def __init__(self, path: str | BinaryIO) -> None:
+        super().__init__()
+        if isinstance(path, (str, bytes, os.PathLike)):
+            self._inner = open(path, "rb")
+            self._should_close = True
+        else:
+            self._inner = ensure_bufferedio(path)
+            self._should_close = False
+        self._decompressor = zlib.decompressobj()
+        self._buffer = bytearray()
+        self._eof = False
+        self._pos = 0
+        self._size = None
+
+    def readable(self) -> bool:
+        return True
+
+    def writable(self) -> bool:  # pragma: no cover - not used
+        return False
+
+    def seekable(self) -> bool:
+        return self._inner.seekable()
+
+    def _rewind(self) -> None:
+        self._inner.seek(0)
+        self._decompressor = zlib.decompressobj()
+        self._buffer.clear()
+        self._eof = False
+        self._pos = 0
+        self._size = None
+
+    def _read_decompressed_chunk(self) -> bytes:
+        chunk = self._inner.read(65536)
+        if not chunk:
+            self._eof = True
+            leftover = self._decompressor.flush()
+            self._size = self._pos + len(self._buffer) + len(leftover)
+            if not self._decompressor.eof:
+                raise ArchiveEOFError("Zlib file is truncated")
+            return leftover
+        return self._decompressor.decompress(chunk)
+
+    def _seek_to_pos(self, pos: int) -> None:
+        if pos == self._pos:
+            return
+
+        if pos < self._pos:
+            self._rewind()
+            assert self._pos == 0
+
+        if self._pos + len(self._buffer) >= pos:
+            del self._buffer[: pos - self._pos]
+            self._pos = pos
+            return
+
+        self._pos += len(self._buffer)
+        self._buffer.clear()
+
+        while not self._eof:
+            decompressed = self._read_decompressed_chunk()
+            if self._pos + len(decompressed) >= pos:
+                self._buffer.extend(decompressed[pos - self._pos :])
+                self._pos = pos
+                return
+            self._pos += len(decompressed)
+
+        self._pos = pos
+
+    def readall(self) -> bytes:
+        while not self._eof:
+            self._buffer.extend(self._read_decompressed_chunk())
+
+        data = bytes(self._buffer)
+        self._pos += len(data)
+        assert self._size == self._pos
+        self._size = self._pos
+        self._buffer.clear()
+        return data
+
+    def read(self, n: int = -1) -> bytes:
+        if n == 0:
+            return b""
+        if n is None or n < 0:
+            return self.readall()
+
+        if len(self._buffer) < n:
+            self._buffer.extend(self._read_decompressed_chunk())
+
+        data = bytes(self._buffer[:n])
+        del self._buffer[:n]
+        self._pos += len(data)
+        return data
+
+    def readinto(self, b: bytearray | memoryview) -> int:
+        data = self.read(len(b))
+        b[: len(data)] = data
+        return len(data)
+
+    def close(self) -> None:
+        if self._should_close:
+            self._inner.close()
+        super().close()
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        if whence == io.SEEK_SET:
+            new_pos = offset
+        elif whence == io.SEEK_CUR:
+            new_pos = self._pos + offset
+        elif whence == io.SEEK_END:
+            if self._size is None:
+                while data := self._read_decompressed_chunk():
+                    self._pos += len(data)
+
+                assert self._size is not None and self._size == self._pos
+
+            new_pos = self._size + offset
+        else:
+            raise ValueError(f"Invalid whence: {whence}")
+
+        logger.info(
+            f"Seeking to {new_pos} (offset: {offset}, whence: {whence}, current pos: {self._pos})"
+        )
+
+        if new_pos < 0:
+            raise ValueError(f"Invalid offset: {offset}")
+
+        self._seek_to_pos(new_pos)
+        return self._pos
+
+    def tell(self) -> int:
+        return self._pos
+
+
 class BrotliDecompressorStream(io.RawIOBase, BinaryIO):
     """Wrap a file-like object and decompress it using ``brotli``."""
 
@@ -552,6 +701,9 @@ def get_stream_open_fn(
 
     if format == ArchiveFormat.LZ4:
         return open_lz4_stream, _translate_lz4_exception
+
+    if format == ArchiveFormat.ZLIB:
+        return open_zlib_stream, _translate_zlib_exception
 
     if format == ArchiveFormat.BROTLI:
         return open_brotli_stream, _translate_brotli_exception

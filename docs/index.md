@@ -33,6 +33,7 @@ If you'd rather manage dependencies yourself, install only the extras you need. 
 | XZ | `.xz` | [`lzma`](https://docs.python.org/3/library/lzma.html) | [`python-xz`](https://pypi.org/project/python-xz) (random access) | |
 | Zstandard | `.zst` | | [`pyzstd`](https://pypi.org/project/pyzstd) (preferred) or [`zstandard`](https://pypi.org/project/zstandard) | |
 | LZ4 | `.lz4` | | [`lz4`](https://pypi.org/project/lz4) | |
+| Zlib | `.zz` | [`zlib`](https://docs.python.org/3/library/zlib.html) | | |
 | Brotli | `.br` | | [`brotli`](https://pypi.org/project/brotli) | |
 | Unix compress | `.Z` | | [`uncompresspy`](https://pypi.org/project/uncompresspy) | |
 

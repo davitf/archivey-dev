@@ -85,6 +85,11 @@ SIGNATURES = [
     ([b"\xfd\x37\x7a\x58\x5a\x00"], 0, ArchiveFormat.XZ),
     ([b"\x28\xb5\x2f\xfd"], 0, ArchiveFormat.ZSTD),
     ([b"\x04\x22\x4d\x18"], 0, ArchiveFormat.LZ4),
+    (
+        [b"\x78\x01", b"\x78\x5e", b"\x78\x9c", b"\x78\xda"],
+        0,
+        ArchiveFormat.ZLIB,
+    ),
     ([b"\x1f\x9d"], 0, ArchiveFormat.UNIX_COMPRESS),
     ([b"ustar"], 257, ArchiveFormat.TAR),  # TAR "ustar" magic
     (_ISO_MAGIC_BYTES, 0x8001, ArchiveFormat.ISO),  # ISO9660
@@ -191,6 +196,7 @@ EXTENSION_TO_FORMAT = {
     ".xz": ArchiveFormat.XZ,
     ".zst": ArchiveFormat.ZSTD,
     ".lz4": ArchiveFormat.LZ4,
+    ".zz": ArchiveFormat.ZLIB,
     ".br": ArchiveFormat.BROTLI,
     ".z": ArchiveFormat.UNIX_COMPRESS,
     ".zip": ArchiveFormat.ZIP,
