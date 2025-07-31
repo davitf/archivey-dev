@@ -3,6 +3,7 @@ import bz2
 import fnmatch
 import functools
 import gzip
+import zlib
 import io
 import logging
 import lzma
@@ -328,9 +329,29 @@ class _BrotliWriter(io.BufferedIOBase):
         super().close()
 
 
+class _ZlibWriter(io.BufferedIOBase):
+    def __init__(self, path: str) -> None:
+        self._f = open(path, "wb")
+        self._compressor = zlib.compressobj()
+
+    def write(self, data: bytes) -> int:
+        self._f.write(self._compressor.compress(data))
+        return len(data)
+
+    def close(self) -> None:
+        if not self._f.closed:
+            self._f.write(self._compressor.flush())
+            self._f.close()
+        super().close()
+
 def _brotli_open(path: str, mode: str = "wb") -> _BrotliWriter:
     assert mode == "wb"
     return _BrotliWriter(path)
+
+
+def _zlib_open(path: str, mode: str = "wb") -> _ZlibWriter:
+    assert mode == "wb"
+    return _ZlibWriter(path)
 
 
 SINGLE_FILE_LIBRARY_OPENERS = {
@@ -346,6 +367,7 @@ SINGLE_FILE_LIBRARY_OPENERS = {
     if pyzstd is not None
     else None,
     ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
+    ArchiveFormat.ZLIB: _zlib_open,
     ArchiveFormat.BROTLI: _brotli_open if brotli is not None else None,
 }
 
