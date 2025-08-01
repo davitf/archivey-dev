@@ -2,9 +2,9 @@ import abc
 import bz2
 import gzip
 import io
-import zlib
 import lzma
 import os
+import zlib
 from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Optional, cast
 
 from typing_extensions import Buffer
@@ -394,20 +394,16 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
         self._size: int | None = None
 
     @abc.abstractmethod
-    def _create_decompressor(self) -> Any:
-        ...
+    def _create_decompressor(self) -> Any: ...
 
     @abc.abstractmethod
-    def _decompress_chunk(self, chunk: bytes) -> bytes:
-        ...
+    def _decompress_chunk(self, chunk: bytes) -> bytes: ...
 
     @abc.abstractmethod
-    def _flush_decompressor(self) -> bytes:
-        ...
+    def _flush_decompressor(self) -> bytes: ...
 
     @abc.abstractmethod
-    def _is_decompressor_finished(self) -> bool:
-        ...
+    def _is_decompressor_finished(self) -> bool: ...
 
     def readable(self) -> bool:
         return True
@@ -531,7 +527,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
 
 
 class ZlibDecompressorStream(DecompressorStream):
-    def _create_decompressor(self) -> Any:
+    def _create_decompressor(self) -> "zlib._Decompress":
         return zlib.decompressobj()
 
     def _decompress_chunk(self, chunk: bytes) -> bytes:
