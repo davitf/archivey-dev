@@ -6,7 +6,7 @@ import pytest
 from archivey.config import ArchiveyConfig
 from archivey.core import open_compressed_stream
 from archivey.exceptions import ArchiveNotSupportedError
-from archivey.types import TAR_COMPRESSED_FORMATS
+from archivey.types import StreamCompressionFormat
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
@@ -38,7 +38,11 @@ def test_open_compressed_stream_from_file(
     else:
         config = ArchiveyConfig()
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(
+        sample_archive.creation_info.format,
+        sample_archive.creation_info.stream_format,
+        config,
+    )
 
     with open_compressed_stream(sample_archive_path, config=config) as f:
         data = f.read()
@@ -49,7 +53,11 @@ def test_open_compressed_stream_from_file(
 
 def test_open_compressed_stream_unsupported_format(tmp_path):
     sample_archive = BASIC_ZIP_ARCHIVE
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(
+        sample_archive.creation_info.format,
+        sample_archive.creation_info.stream_format,
+        None,
+    )
     path = sample_archive.get_archive_path()
     with pytest.raises(ArchiveNotSupportedError):
         open_compressed_stream(path)
@@ -74,7 +82,11 @@ def test_open_compressed_stream_from_stream(
     else:
         config = ArchiveyConfig()
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(
+        sample_archive.creation_info.format,
+        sample_archive.creation_info.stream_format,
+        config,
+    )
 
     compressed_data = open(sample_archive_path, "rb").read()
     compressed_stream = io.BytesIO(compressed_data)
@@ -138,12 +150,20 @@ def test_open_compressed_stream_from_archive(
     else:
         config = ArchiveyConfig()
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(
+        sample_archive.creation_info.format,
+        sample_archive.creation_info.stream_format,
+        config,
+    )
 
-    if sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS:
+    if (
+        sample_archive.creation_info.stream_format is not None
+        and sample_archive.creation_info.stream_format != StreamCompressionFormat.NONE
+    ):
         with open_compressed_stream(sample_archive_path, config=config) as f:
             data = f.read()
-            assert data[257 : 257 + 5] == b"ustar"
+            if sample_archive.creation_info.format == "tar":
+                assert data[257 : 257 + 5] == b"ustar"
     else:
         with pytest.raises(ArchiveNotSupportedError):
             open_compressed_stream(sample_archive_path, config=config)

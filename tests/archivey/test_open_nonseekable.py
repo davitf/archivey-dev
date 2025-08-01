@@ -6,7 +6,7 @@ import pytest
 from archivey.core import open_archive, open_compressed_stream
 from archivey.exceptions import ArchiveStreamNotSeekableError
 from archivey.internal.io_helpers import ensure_binaryio
-from archivey.types import ArchiveFormat
+from archivey.types import ArchiveFormat, StreamCompressionFormat
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
@@ -28,23 +28,25 @@ SKIPPABLE_FORMATS: set[ArchiveFormat] = {
 
 
 # Formats known to fail when opened from a non-seekable stream with default/alternative packages
-EXPECTED_NON_SEEKABLE_FAILURES: set[tuple[ArchiveFormat, bool]] = {
-    (ArchiveFormat.GZIP, True),
-    (ArchiveFormat.BZIP2, True),
-    (ArchiveFormat.XZ, True),
-    (ArchiveFormat.TAR_GZ, True),
-    (ArchiveFormat.TAR_BZ2, True),
-    (ArchiveFormat.TAR_XZ, True),
-    (ArchiveFormat.TAR_Z, False),
-    (ArchiveFormat.TAR_Z, True),
-    (ArchiveFormat.ZIP, False),
-    (ArchiveFormat.ZIP, True),
-    (ArchiveFormat.RAR, False),
-    (ArchiveFormat.RAR, True),
-    (ArchiveFormat.SEVENZIP, False),
-    (ArchiveFormat.SEVENZIP, True),
-    (ArchiveFormat.UNIX_COMPRESS, False),
-    (ArchiveFormat.UNIX_COMPRESS, True),
+EXPECTED_NON_SEEKABLE_FAILURES: set[
+    tuple[ArchiveFormat, Optional[StreamCompressionFormat], bool]
+] = {
+    (ArchiveFormat.RAW_STREAM, StreamCompressionFormat.GZIP, True),
+    (ArchiveFormat.RAW_STREAM, StreamCompressionFormat.BZIP2, True),
+    (ArchiveFormat.RAW_STREAM, StreamCompressionFormat.XZ, True),
+    (ArchiveFormat.TAR, StreamCompressionFormat.GZIP, True),
+    (ArchiveFormat.TAR, StreamCompressionFormat.BZIP2, True),
+    (ArchiveFormat.TAR, StreamCompressionFormat.XZ, True),
+    (ArchiveFormat.TAR, StreamCompressionFormat.UNIX_COMPRESS, False),
+    (ArchiveFormat.TAR, StreamCompressionFormat.UNIX_COMPRESS, True),
+    (ArchiveFormat.ZIP, StreamCompressionFormat.NONE, False),
+    (ArchiveFormat.ZIP, StreamCompressionFormat.NONE, True),
+    (ArchiveFormat.RAR, StreamCompressionFormat.NONE, False),
+    (ArchiveFormat.RAR, StreamCompressionFormat.NONE, True),
+    (ArchiveFormat.SEVENZIP, StreamCompressionFormat.NONE, False),
+    (ArchiveFormat.SEVENZIP, StreamCompressionFormat.NONE, True),
+    (ArchiveFormat.RAW_STREAM, StreamCompressionFormat.UNIX_COMPRESS, False),
+    (ArchiveFormat.RAW_STREAM, StreamCompressionFormat.UNIX_COMPRESS, True),
 }
 
 
@@ -76,7 +78,11 @@ def test_open_archive_nonseekable(
     """Ensure open_archive can read from non-seekable streams in streaming mode."""
     config = ALTERNATIVE_CONFIG if alternative_packages else None
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(
+        sample_archive.creation_info.format,
+        sample_archive.creation_info.stream_format,
+        config,
+    )
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -99,7 +105,11 @@ def test_open_archive_nonseekable(
     except (
         ArchiveStreamNotSeekableError
     ) as exc:  # pragma: no cover - environment dependent
-        key = (sample_archive.creation_info.format, alternative_packages)
+        key = (
+            sample_archive.creation_info.format,
+            sample_archive.creation_info.stream_format,
+            alternative_packages,
+        )
         if key in EXPECTED_NON_SEEKABLE_FAILURES:
             pytest.xfail(
                 f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
@@ -121,7 +131,11 @@ def test_open_compressed_stream_nonseekable(
 ):
     config = ALTERNATIVE_CONFIG if alternative_packages else None
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(
+        sample_archive.creation_info.format,
+        sample_archive.creation_info.stream_format,
+        config,
+    )
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -137,7 +151,11 @@ def test_open_compressed_stream_nonseekable(
     except (
         ArchiveStreamNotSeekableError
     ) as exc:  # pragma: no cover - environment dependent
-        key = (sample_archive.creation_info.format, alternative_packages)
+        key = (
+            sample_archive.creation_info.format,
+            sample_archive.creation_info.stream_format,
+            alternative_packages,
+        )
         logger.error(f"key: {key}")
         logger.error(f"EXPECTED_FAILURES: {EXPECTED_NON_SEEKABLE_FAILURES}")
         if key in EXPECTED_NON_SEEKABLE_FAILURES:

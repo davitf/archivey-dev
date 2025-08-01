@@ -1,7 +1,7 @@
 """Core functionality for opening and interacting with archives."""
 
 import os
-from typing import BinaryIO, Callable
+from typing import BinaryIO, Callable, Optional, Tuple
 
 from archivey.archive_reader import ArchiveReader
 from archivey.config import ArchiveyConfig, archivey_config, get_archivey_config
@@ -24,11 +24,7 @@ from archivey.internal.io_helpers import (
     is_stream,
 )
 from archivey.internal.utils import ensure_not_none
-from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
-    TAR_COMPRESSED_FORMATS,
-    ArchiveFormat,
-)
+from archivey.types import ArchiveFormat, StreamCompressionFormat
 
 
 def _normalize_path_or_stream(
@@ -52,13 +48,8 @@ _FORMAT_TO_READER: dict[ArchiveFormat, Callable[..., ArchiveReader]] = {
     ArchiveFormat.SEVENZIP: SevenZipReader,
     ArchiveFormat.TAR: TarReader,
     ArchiveFormat.FOLDER: FolderReader,
+    ArchiveFormat.RAW_STREAM: SingleFileReader,
 }
-
-for format in TAR_COMPRESSED_FORMATS:
-    _FORMAT_TO_READER[format] = TarReader
-
-for format in SINGLE_FILE_COMPRESSED_FORMATS:
-    _FORMAT_TO_READER[format] = SingleFileReader
 
 
 def open_archive(
@@ -67,7 +58,7 @@ def open_archive(
     config: ArchiveyConfig | None = None,
     streaming_only: bool = False,
     pwd: bytes | str | None = None,
-    format: ArchiveFormat | None = None,
+    format: Optional[Tuple[ArchiveFormat, StreamCompressionFormat]] = None,
 ) -> ArchiveReader:
     """
     Open an archive file and return an [ArchiveReader][archivey.ArchiveReader] instance.
@@ -88,6 +79,7 @@ def open_archive(
             raise a `ValueError`.
         pwd: Optional password used to decrypt the archive if it is encrypted.
         format: Optional archive format to use. If `None`, the format is auto-detected.
+            This should be a tuple of (`ArchiveFormat`, `StreamCompressionFormat`).
 
     Returns:
         An ArchiveReader instance for working with the archive.
@@ -140,25 +132,32 @@ def open_archive(
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
+    archive_format: ArchiveFormat
+    stream_format: StreamCompressionFormat
+
     if format is None:
         with archivey_config(config):
-            format = detect_archive_format(ensure_not_none(stream or path))
+            archive_format, stream_format = detect_archive_format(
+                ensure_not_none(stream or path)
+            )
+    else:
+        archive_format, stream_format = format
 
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
         assert not stream.closed
 
-    if format == ArchiveFormat.UNKNOWN:
+    if archive_format == ArchiveFormat.UNKNOWN:
         raise ArchiveNotSupportedError(
             f"Unknown archive format for {ensure_not_none(stream or path)}"
         )
 
-    if format not in _FORMAT_TO_READER:
+    if archive_format not in _FORMAT_TO_READER:
         raise ArchiveNotSupportedError(
-            f"Unsupported archive format: {format} (for {ensure_not_none(stream or path)})"
+            f"Unsupported archive format: {archive_format} (for {ensure_not_none(stream or path)})"
         )
 
-    reader_class = _FORMAT_TO_READER.get(format)
+    reader_class = _FORMAT_TO_READER.get(archive_format)
 
     if config is None:
         config = get_archivey_config()
@@ -166,11 +165,20 @@ def open_archive(
     if stream is not None:
         assert not stream.closed
 
+    input_path_or_stream = ensure_not_none(stream or path)
+
+    if stream_format != StreamCompressionFormat.NONE:
+        decompressed_stream = open_stream(
+            stream_format, input_path_or_stream, config
+        )
+        input_path_or_stream = decompressed_stream
+
     with archivey_config(config):
         assert reader_class is not None
         return reader_class(
-            format=format,
-            archive_path=ensure_not_none(stream or path),
+            format=archive_format,
+            stream_format=stream_format,
+            archive_path=input_path_or_stream,
             pwd=pwd,
             streaming_only=streaming_only,
         )
@@ -180,7 +188,7 @@ def open_compressed_stream(
     path_or_stream: BinaryIO | str | bytes | os.PathLike,
     *,
     config: ArchiveyConfig | None = None,
-    format: ArchiveFormat | None = None,
+    format: Optional[StreamCompressionFormat] = None,
 ) -> BinaryIO:
     """Open a single-file compressed stream and return the uncompressed stream.
 
@@ -196,7 +204,7 @@ def open_compressed_stream(
             behavior. If `None`, the default configuration (which may have been
             customized with [set_archivey_config][archivey.set_archivey_config]) is
             used.
-        format: Optional archive format to use. If `None`, the format is auto-detected.
+        format: Optional stream compression format to use. If `None`, the format is auto-detected.
 
     Returns:
         A binary file-like object containing the uncompressed data.
@@ -233,19 +241,23 @@ def open_compressed_stream(
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
-    format = detect_archive_format(
-        ensure_not_none(stream or path), detect_compressed_tar=False
-    )
+    stream_format: StreamCompressionFormat
+    if format is None:
+        _, stream_format = detect_archive_format(
+            ensure_not_none(stream or path), detect_compressed_tar=False
+        )
+    else:
+        stream_format = format
 
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
 
-    if format not in SINGLE_FILE_COMPRESSED_FORMATS:
+    if stream_format == StreamCompressionFormat.NONE:
         raise ArchiveNotSupportedError(
-            f"Unsupported single-file compressed format: {format}"
+            f"Not a compressed stream (or unsupported format): {stream_format}"
         )
 
     if config is None:
         config = get_archivey_config()
 
-    return open_stream(format, ensure_not_none(stream or path), config)
+    return open_stream(stream_format, ensure_not_none(stream or path), config)

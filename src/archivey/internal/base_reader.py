@@ -38,6 +38,7 @@ from archivey.types import (
     ExtractFilterFunc,
     IteratorFilterFunc,
     MemberType,
+    StreamCompressionFormat,
 )
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,7 @@ class BaseArchiveReader(ArchiveReader):
     def __init__(
         self,
         format: ArchiveFormat,
+        stream_format: StreamCompressionFormat,
         archive_path: BinaryIO | str | bytes | os.PathLike,
         pwd: bytes | str | None,
         streaming_only: bool,
@@ -129,6 +131,7 @@ class BaseArchiveReader(ArchiveReader):
 
         Args:
             format: The ArchiveFormat enum value for this archive type.
+            stream_format: The StreamCompressionFormat enum value for this archive type.
             archive_path: Path to the archive file or a file-like object.
             pwd: Default password for the archive.
             streaming_only: If True, the archive is treated as supporting only
@@ -148,6 +151,7 @@ class BaseArchiveReader(ArchiveReader):
                 through a significant portion of the archive if not already done.
         """
         super().__init__(archive_path, format)
+        self.stream_format = stream_format
         self.config: ArchiveyConfig = get_archivey_config()
 
         if pwd is not None and isinstance(pwd, str):

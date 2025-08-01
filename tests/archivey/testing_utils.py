@@ -12,9 +12,9 @@ from archivey.config import ArchiveyConfig
 from archivey.internal.dependency_checker import get_dependency_versions
 from archivey.internal.utils import set_file_mtime, set_file_permissions
 from archivey.types import (
-    TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,
     MemberType,
+    StreamCompressionFormat,
 )
 
 if TYPE_CHECKING:
@@ -79,8 +79,11 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
         subprocess.run(["ls", "-alF", "-R", dir])
 
 
-def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConfig]):
-    format = TAR_FORMAT_TO_COMPRESSION_FORMAT.get(format, format)
+def skip_if_package_missing(
+    format: ArchiveFormat,
+    stream_format: Optional[StreamCompressionFormat],
+    config: Optional[ArchiveyConfig],
+):
     if config is None:
         config = ArchiveyConfig()
 
@@ -90,21 +93,21 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         pytest.importorskip("rarfile")
         if get_dependency_versions().unrar_version is None:
             pytest.skip("unrar not installed, skipping RAR truncation test")
-    elif format == ArchiveFormat.LZ4:
+    elif stream_format == StreamCompressionFormat.LZ4:
         pytest.importorskip("lz4")
-    elif format == ArchiveFormat.GZIP and config.use_rapidgzip:
+    elif stream_format == StreamCompressionFormat.GZIP and config.use_rapidgzip:
         pytest.importorskip("rapidgzip")
-    elif format == ArchiveFormat.BZIP2 and config.use_indexed_bzip2:
+    elif stream_format == StreamCompressionFormat.BZIP2 and config.use_indexed_bzip2:
         pytest.importorskip("indexed_bzip2")
-    elif format == ArchiveFormat.XZ and config.use_python_xz:
+    elif stream_format == StreamCompressionFormat.XZ and config.use_python_xz:
         pytest.importorskip("xz")
-    elif format == ArchiveFormat.ZSTD and config.use_zstandard:
+    elif stream_format == StreamCompressionFormat.ZSTD and config.use_zstandard:
         pytest.importorskip("zstandard")
-    elif format == ArchiveFormat.ZSTD:
+    elif stream_format == StreamCompressionFormat.ZSTD:
         pytest.importorskip("pyzstd")
-    elif format == ArchiveFormat.BROTLI:
+    elif stream_format == StreamCompressionFormat.BROTLI:
         pytest.importorskip("brotli")
-    elif format == ArchiveFormat.UNIX_COMPRESS:
+    elif stream_format == StreamCompressionFormat.UNIX_COMPRESS:
         pytest.importorskip("uncompresspy")
 
 

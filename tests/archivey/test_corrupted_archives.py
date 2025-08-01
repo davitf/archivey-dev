@@ -9,10 +9,7 @@ from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
 )
-from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
-    ArchiveFormat,
-)
+from archivey.types import StreamCompressionFormat
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     ALTERNATIVE_PACKAGES_FORMATS,
@@ -84,22 +81,29 @@ def test_read_corrupted_archives(
             - "ffs": Byte range replaced with 0xFF
     """
     if alternative_packages:
-        if sample_archive.creation_info.format not in ALTERNATIVE_PACKAGES_FORMATS:
+        if (
+            sample_archive.creation_info.stream_format
+            not in ALTERNATIVE_PACKAGES_FORMATS
+        ):
             pytest.skip("No alternative package for this format, no need to test")
         config = ALTERNATIVE_CONFIG
     else:
         config = None
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(
+        sample_archive.creation_info.format,
+        sample_archive.creation_info.stream_format,
+        config,
+    )
 
     formats_without_redundancy_check = [
-        ArchiveFormat.LZ4,
-        ArchiveFormat.TAR,
-        ArchiveFormat.UNIX_COMPRESS,
-        ArchiveFormat.BROTLI,
+        StreamCompressionFormat.LZ4,
+        StreamCompressionFormat.NONE,
+        StreamCompressionFormat.UNIX_COMPRESS,
+        StreamCompressionFormat.BROTLI,
     ]
 
-    if sample_archive.creation_info.format == ArchiveFormat.FOLDER:
+    if sample_archive.creation_info.format == "folder":
         pytest.skip("Folder archives cannot be corrupted")
 
     corrupted_archive_path = _prepare_corrupted_archive(
@@ -125,8 +129,8 @@ def test_read_corrupted_archives(
                 # .corrupted_xxx suffix that doesn't match the name in sample_archive,
                 # so we need to remove it.
                 if (
-                    sample_archive.creation_info.format
-                    in SINGLE_FILE_COMPRESSED_FORMATS
+                    sample_archive.creation_info.stream_format
+                    != StreamCompressionFormat.NONE
                 ):
                     filename = os.path.splitext(filename)[0]
 
@@ -145,8 +149,9 @@ def test_read_corrupted_archives(
 
         if (
             not read_streams
-            and archive.format == ArchiveFormat.BZIP2
-            and sample_archive.creation_info.format == ArchiveFormat.TAR_BZ2
+            and archive.stream_format == StreamCompressionFormat.BZIP2
+            and sample_archive.creation_info.stream_format
+            == StreamCompressionFormat.BZIP2
         ):
             # In some corrupted archives, bz2 can uncompress the data stream, but it's
             # not a valid tar format. If we don't actually attempt to read the streams,
@@ -164,7 +169,8 @@ def test_read_corrupted_archives(
 
         if read_streams:
             assert (
-                sample_archive.creation_info.format in formats_without_redundancy_check
+                sample_archive.creation_info.stream_format
+                in formats_without_redundancy_check
             ), f"Archive {corrupted_archive_path} should have detected a corruption"
             # If we read the streams and an error wasn't raised, it means the compressed
             # stream was valid, but at least one member should have different data.
@@ -211,17 +217,24 @@ def test_read_truncated_archives(
     alternative_packages: bool,
 ):
     """Test that reading truncated archives raises appropriate errors."""
-    if sample_archive.creation_info.format == ArchiveFormat.FOLDER:
+    if sample_archive.creation_info.format == "folder":
         pytest.skip("Folder archives cannot be truncated")
 
     if alternative_packages:
-        if sample_archive.creation_info.format not in ALTERNATIVE_PACKAGES_FORMATS:
+        if (
+            sample_archive.creation_info.stream_format
+            not in ALTERNATIVE_PACKAGES_FORMATS
+        ):
             pytest.skip("No alternative package for this format, no need to test")
         config = ALTERNATIVE_CONFIG
     else:
         config = None
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(
+        sample_archive.creation_info.format,
+        sample_archive.creation_info.stream_format,
+        config,
+    )
 
     filename = sample_archive.get_archive_name(variant=f"truncated_{corrupted_length}")
     output_path = tmp_path_factory.mktemp("generated_archives") / filename

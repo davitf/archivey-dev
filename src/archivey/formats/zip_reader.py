@@ -29,6 +29,7 @@ from archivey.types import (
     ArchiveMember,
     CreateSystem,
     MemberType,
+    StreamCompressionFormat,
 )
 
 # Encoding fallbacks used when decoding strings stored in the ZIP metadata.
@@ -139,6 +140,7 @@ class ZipReader(BaseArchiveReader):
     def __init__(
         self,
         format: ArchiveFormat,
+        stream_format: StreamCompressionFormat,
         archive_path: BinaryIO | str | bytes | os.PathLike,
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
@@ -148,6 +150,7 @@ class ZipReader(BaseArchiveReader):
 
         super().__init__(
             format=format,
+            stream_format=stream_format,
             archive_path=archive_path,
             pwd=pwd,
             streaming_only=streaming_only,
@@ -256,6 +259,7 @@ class ZipReader(BaseArchiveReader):
         if self._format_info is None:
             self._format_info = ArchiveInfo(
                 format=self.format,
+                stream_format=self.stream_format,
                 is_solid=False,  # ZIP archives are never solid
                 comment=decode_bytes_with_fallback(
                     self._archive.comment, _ZIP_ENCODINGS

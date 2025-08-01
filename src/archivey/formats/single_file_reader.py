@@ -20,12 +20,12 @@ from archivey.internal.io_helpers import (  # Updated import
 
 # from archivey.internal.utils import open_if_file # Removed
 from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
     CreateSystem,
     MemberType,
+    StreamCompressionFormat,
 )
 
 logger = logging.getLogger(__name__)
@@ -212,6 +212,7 @@ class SingleFileReader(BaseArchiveReader):
     def __init__(
         self,
         format: ArchiveFormat,
+        stream_format: StreamCompressionFormat,
         archive_path: BinaryIO | str,
         *,
         pwd: bytes | str | None = None,
@@ -225,14 +226,15 @@ class SingleFileReader(BaseArchiveReader):
             format: The format of the archive. If None, will be detected from the file extension.
             **kwargs: Additional options (ignored)
         """
-        if format not in SINGLE_FILE_COMPRESSED_FORMATS:
-            raise ValueError(f"Unsupported archive format: {format}")
+        if stream_format == StreamCompressionFormat.NONE:
+            raise ValueError(f"Unsupported stream format: {stream_format}")
 
         if pwd is not None:
             raise ValueError("Compressed files do not support password protection")
 
         super().__init__(
             format=format,
+            stream_format=stream_format,
             archive_path=archive_path,
             streaming_only=streaming_only,
             members_list_supported=True,
@@ -268,21 +270,21 @@ class SingleFileReader(BaseArchiveReader):
             compress_size=compress_size,
             mtime_with_tz=mtime,
             type=MemberType.FILE,
-            compression_method=self.format.value,
+            compression_method=self.stream_format.value,
             crc32=None,
         )
 
         if isinstance(archive_path, str):
-            if self.format == ArchiveFormat.GZIP:
+            if self.stream_format == StreamCompressionFormat.GZIP:
                 read_gzip_metadata(archive_path, self.member, self.use_stored_metadata)
-            elif self.format == ArchiveFormat.XZ:
+            elif self.stream_format == StreamCompressionFormat.XZ:
                 read_xz_metadata(archive_path, self.member)
 
         # Open the file to see if it's supported by the library and valid.
         # To avoid opening the file twice, we'll store the reference and return it
         # on the first open() call.
         self._opener, self._exception_translator = get_stream_open_fn(
-            self.format, self.config
+            self.stream_format, self.config
         )
 
         self.fileobj: BinaryIO | None = run_with_exception_translation(
@@ -308,6 +310,7 @@ class SingleFileReader(BaseArchiveReader):
         """Get detailed information about the archive's format."""
         return ArchiveInfo(
             format=self.format,
+            stream_format=self.stream_format,
             is_solid=False,
         )
 

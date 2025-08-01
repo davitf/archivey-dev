@@ -15,6 +15,7 @@ from archivey.types import (
     ArchiveInfo,
     ArchiveMember,
     MemberType,
+    StreamCompressionFormat,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,13 +29,15 @@ class FolderReader(BaseArchiveReader):
     def __init__(
         self,
         format: ArchiveFormat,
+        stream_format: StreamCompressionFormat,
         archive_path: BinaryIO | str | bytes | os.PathLike,
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
     ):
         super().__init__(
-            ArchiveFormat.FOLDER,
-            archive_path,
+            format=ArchiveFormat.FOLDER,
+            stream_format=stream_format,
+            archive_path=archive_path,
             streaming_only=streaming_only,
             members_list_supported=True,
             pwd=None,
@@ -206,9 +209,7 @@ class FolderReader(BaseArchiveReader):
     def get_archive_info(self) -> ArchiveInfo:
         self.check_archive_open()
 
-        return ArchiveInfo(
-            format=self.format,
-        )
+        return ArchiveInfo(format=self.format, stream_format=self.stream_format)
 
     def _close_archive(self) -> None:
         """Close the archive and release any resources."""
