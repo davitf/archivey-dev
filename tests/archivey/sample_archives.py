@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any, Callable, Optional
 
 from archivey.config import ArchiveyConfig
-from archivey.types import ArchiveFormat, MemberType
+from archivey.types import ArchiveFormat, MemberType, StreamCompressionFormat
 
 
 class GenerationMethod(Enum):
@@ -179,6 +179,7 @@ class ArchiveCreationInfo:
     file_suffix: str  # e.g., ".zip", "py7zr.7z", "7zcmd.7z"
     format: ArchiveFormat  # The archive format enum
     generation_method: GenerationMethod  # How to generate the archive
+    stream_format: Optional[StreamCompressionFormat] = None
     generation_method_options: dict[str, Any] = field(
         default_factory=dict
     )  # Additional options for generation
@@ -331,6 +332,7 @@ _TAR_FORMAT_FEATURES_TARFILE = ArchiveFormatFeatures(
 TAR_PLAIN_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar",
     format=ArchiveFormat.TAR,
+    stream_format=StreamCompressionFormat.NONE,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
     features=_TAR_FORMAT_FEATURES_TARCMD,
 )
@@ -339,37 +341,43 @@ TAR_PLAIN_CMD = ArchiveCreationInfo(
 TAR_PLAIN_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar",
     format=ArchiveFormat.TAR,
+    stream_format=StreamCompressionFormat.NONE,
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 
 TAR_GZ_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar.gz",
-    format=ArchiveFormat.TAR_GZ,
+    format=ArchiveFormat.TAR,
+    stream_format=StreamCompressionFormat.GZIP,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
     features=_TAR_FORMAT_FEATURES_TARCMD,
 )
 TAR_GZ_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar.gz",
-    format=ArchiveFormat.TAR_GZ,
+    format=ArchiveFormat.TAR,
+    stream_format=StreamCompressionFormat.GZIP,
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 TAR_ZSTD_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar.zst",
-    format=ArchiveFormat.TAR_ZSTD,
+    format=ArchiveFormat.TAR,
+    stream_format=StreamCompressionFormat.ZSTD,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
     features=_TAR_FORMAT_FEATURES_TARCMD,
 )
 TAR_ZSTD_TARFILE = ArchiveCreationInfo(
     file_suffix="tarfile.tar.zst",
-    format=ArchiveFormat.TAR_ZSTD,
+    format=ArchiveFormat.TAR,
+    stream_format=StreamCompressionFormat.ZSTD,
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 TAR_Z_CMD = ArchiveCreationInfo(
     file_suffix="tarcmd.tar.Z",
-    format=ArchiveFormat.TAR_Z,
+    format=ArchiveFormat.TAR,
+    stream_format=StreamCompressionFormat.UNIX_COMPRESS,
     generation_method=GenerationMethod.TAR_COMMAND_LINE,
     features=_TAR_FORMAT_FEATURES_TARCMD,
 )
@@ -379,19 +387,22 @@ TAR_Z_CMD = ArchiveCreationInfo(
 # be significant differences that won't be caught by the gz format.
 TAR_BZ2 = ArchiveCreationInfo(
     file_suffix=".tar.bz2",
-    format=ArchiveFormat.TAR_BZ2,
+    format=ArchiveFormat.TAR,
+    stream_format=StreamCompressionFormat.BZIP2,
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 TAR_XZ = ArchiveCreationInfo(
     file_suffix=".tar.xz",
-    format=ArchiveFormat.TAR_XZ,
+    format=ArchiveFormat.TAR,
+    stream_format=StreamCompressionFormat.XZ,
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
 TAR_LZ4 = ArchiveCreationInfo(
     file_suffix=".tar.lz4",
-    format=ArchiveFormat.TAR_LZ4,
+    format=ArchiveFormat.TAR,
+    stream_format=StreamCompressionFormat.LZ4,
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
@@ -399,7 +410,8 @@ TAR_LZ4 = ArchiveCreationInfo(
 # Single file compression formats
 GZIP_CMD = ArchiveCreationInfo(
     file_suffix="cmd.gz",
-    format=ArchiveFormat.GZIP,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     # Dp not preserve filename and timestamp
     generation_method_options={"compression_cmd": "gzip", "cmd_args": ["-n"]},
@@ -407,14 +419,16 @@ GZIP_CMD = ArchiveCreationInfo(
 )
 GZIP_CMD_PRESERVE_METADATA = ArchiveCreationInfo(
     file_suffix="cmd.gz",
-    format=ArchiveFormat.GZIP,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "gzip", "cmd_args": ["-N"]},
     features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 UNIX_COMPRESS_CMD = ArchiveCreationInfo(
     file_suffix="cmd.Z",
-    format=ArchiveFormat.UNIX_COMPRESS,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.UNIX_COMPRESS,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "compress", "cmd_args": ["-f"]},
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
@@ -422,28 +436,32 @@ UNIX_COMPRESS_CMD = ArchiveCreationInfo(
 
 BZIP2_CMD = ArchiveCreationInfo(
     file_suffix="cmd.bz2",
-    format=ArchiveFormat.BZIP2,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.BZIP2,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "bzip2"},
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 XZ_CMD = ArchiveCreationInfo(
     file_suffix="cmd.xz",
-    format=ArchiveFormat.XZ,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.XZ,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "xz"},
     features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 ZSTD_CMD = ArchiveCreationInfo(
     file_suffix="cmd.zst",
-    format=ArchiveFormat.ZSTD,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.ZSTD,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "zstd"},
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 LZ4_CMD = ArchiveCreationInfo(
     file_suffix="cmd.lz4",
-    format=ArchiveFormat.LZ4,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.LZ4,
     generation_method=GenerationMethod.SINGLE_FILE_COMMAND_LINE,
     generation_method_options={"compression_cmd": "lz4"},
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
@@ -451,44 +469,51 @@ LZ4_CMD = ArchiveCreationInfo(
 
 GZIP_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.gz",
-    format=ArchiveFormat.GZIP,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.GZIP,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     generation_method_options={"opener_kwargs": {"mtime": 0}},
     features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 BZIP2_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.bz2",
-    format=ArchiveFormat.BZIP2,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.BZIP2,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 XZ_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.xz",
-    format=ArchiveFormat.XZ,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.XZ,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 ZSTD_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.zst",
-    format=ArchiveFormat.ZSTD,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.ZSTD,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 LZ4_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.lz4",
-    format=ArchiveFormat.LZ4,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.LZ4,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 ZLIB_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.zz",
-    format=ArchiveFormat.ZLIB,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.ZLIB,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
 BROTLI_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.br",
-    format=ArchiveFormat.BROTLI,
+    format=ArchiveFormat.RAW_STREAM,
+    stream_format=StreamCompressionFormat.BROTLI,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
@@ -1180,14 +1205,10 @@ ALTERNATIVE_CONFIG = ArchiveyConfig(
 )
 
 ALTERNATIVE_PACKAGES_FORMATS = (
-    ArchiveFormat.GZIP,
-    ArchiveFormat.BZIP2,
-    ArchiveFormat.XZ,
-    ArchiveFormat.ZSTD,
-    ArchiveFormat.TAR_GZ,
-    ArchiveFormat.TAR_BZ2,
-    ArchiveFormat.TAR_XZ,
-    ArchiveFormat.TAR_ZSTD,
+    StreamCompressionFormat.GZIP,
+    StreamCompressionFormat.BZIP2,
+    StreamCompressionFormat.XZ,
+    StreamCompressionFormat.ZSTD,
 )
 
 SAMPLE_ARCHIVES = (

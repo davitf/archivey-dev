@@ -15,7 +15,7 @@ import tempfile
 import zipfile
 import zlib
 from datetime import timezone
-from typing import Any, Generator
+from typing import Any, Generator, Optional
 
 try:
     import pyzstd
@@ -64,10 +64,9 @@ except ModuleNotFoundError:
 
 from archivey.exceptions import PackageNotInstalledError
 from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
-    TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,
     MemberType,
+    StreamCompressionFormat,
 )
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
@@ -265,7 +264,8 @@ def create_zip_archive_with_infozip_command_line(
 def create_tar_archive_with_command_line(
     archive_path: str,
     contents: ArchiveContents,
-    compression_format: ArchiveFormat,
+    format: ArchiveFormat,
+    stream_format: Optional[StreamCompressionFormat] = None,
 ):
     """
     Create a tar archive using the tar command line tool.
@@ -285,22 +285,20 @@ def create_tar_archive_with_command_line(
 
         command = ["tar", "-c", "--no-recursion", "-f", abs_archive_path]
 
-        # Add compression flag based on the compression_format
-        if compression_format == ArchiveFormat.TAR_GZ:
+        # Add compression flag based on the stream_format
+        if stream_format == StreamCompressionFormat.GZIP:
             command.append("-z")  # gzip
-        elif compression_format == ArchiveFormat.TAR_BZ2:
+        elif stream_format == StreamCompressionFormat.BZIP2:
             command.append("-j")  # bzip2
-        elif compression_format == ArchiveFormat.TAR_XZ:
+        elif stream_format == StreamCompressionFormat.XZ:
             command.append("-J")  # xz
-        elif compression_format == ArchiveFormat.TAR_ZSTD:
+        elif stream_format == StreamCompressionFormat.ZSTD:
             command.append("--zstd")
-        elif compression_format == ArchiveFormat.TAR_Z:
+        elif stream_format == StreamCompressionFormat.UNIX_COMPRESS:
             command.append("-Z")
-        elif compression_format != ArchiveFormat.TAR:
+        elif stream_format is not None and stream_format != StreamCompressionFormat.NONE:
             # This case should ideally not be reached if enums are used correctly
-            raise ValueError(
-                f"Unsupported tar compression format: {compression_format}"
-            )
+            raise ValueError(f"Unsupported tar compression format: {stream_format}")
 
         # Add file names to the command
         # These names must be relative to the temporary directory
@@ -356,10 +354,10 @@ def _zlib_open(path: str, mode: str = "wb") -> _ZlibWriter:
 
 
 SINGLE_FILE_LIBRARY_OPENERS = {
-    ArchiveFormat.GZIP: gzip.GzipFile,
-    ArchiveFormat.BZIP2: bz2.BZ2File,
-    ArchiveFormat.XZ: lzma.LZMAFile,
-    ArchiveFormat.ZSTD: functools.partial(
+    StreamCompressionFormat.GZIP: gzip.GzipFile,
+    StreamCompressionFormat.BZIP2: bz2.BZ2File,
+    StreamCompressionFormat.XZ: lzma.LZMAFile,
+    StreamCompressionFormat.ZSTD: functools.partial(
         pyzstd.open,
         level_or_option={
             pyzstd.CParameter.checksumFlag: 1,
@@ -367,16 +365,17 @@ SINGLE_FILE_LIBRARY_OPENERS = {
     )  # type: ignore[reportUnknownReturnType]
     if pyzstd is not None
     else None,
-    ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
-    ArchiveFormat.ZLIB: _zlib_open,
-    ArchiveFormat.BROTLI: _brotli_open if brotli is not None else None,
+    StreamCompressionFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
+    StreamCompressionFormat.ZLIB: _zlib_open,
+    StreamCompressionFormat.BROTLI: _brotli_open if brotli is not None else None,
 }
 
 
 def create_tar_archive_with_tarfile(
     archive_path: str,
     contents: ArchiveContents,
-    compression_format: ArchiveFormat,
+    format: ArchiveFormat,
+    stream_format: Optional[StreamCompressionFormat] = None,
 ):
     """
     Create a tar archive using Python's tarfile module.
@@ -388,7 +387,7 @@ def create_tar_archive_with_tarfile(
     )
 
     logger.info(
-        f"Creating TAR archive (tarfile) {archive_path} with compression format {compression_format}"
+        f"Creating TAR archive (tarfile) {archive_path} with stream format {stream_format}"
     )
 
     abs_archive_path = os.path.abspath(archive_path)
@@ -397,27 +396,25 @@ def create_tar_archive_with_tarfile(
 
     output_stream: io.BytesIO | None = None
 
-    if compression_format == ArchiveFormat.TAR:
+    if stream_format == StreamCompressionFormat.NONE:
         tar_mode = "w"  # plain tar
-    elif compression_format == ArchiveFormat.TAR_GZ:
+    elif stream_format == StreamCompressionFormat.GZIP:
         tar_mode = "w:gz"
-    elif compression_format == ArchiveFormat.TAR_BZ2:
+    elif stream_format == StreamCompressionFormat.BZIP2:
         tar_mode = "w:bz2"
-    elif compression_format == ArchiveFormat.TAR_XZ:
+    elif stream_format == StreamCompressionFormat.XZ:
         tar_mode = "w:xz"
-
-    elif compression_format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
-        stream_format = TAR_FORMAT_TO_COMPRESSION_FORMAT[compression_format]
-        opener = SINGLE_FILE_LIBRARY_OPENERS[stream_format]
+    elif stream_format is not None:
+        opener = SINGLE_FILE_LIBRARY_OPENERS.get(stream_format)
 
         if opener is None:
             raise PackageNotInstalledError(
-                f"Required library for {compression_format.name} is not installed"
+                f"Required library for {stream_format.name} is not installed"
             )
         output_stream = opener(abs_archive_path, "wb")
         tar_mode = "w"  # will compress manually below
     else:
-        raise ValueError(f"Unsupported tar compression format: {compression_format}")
+        raise ValueError(f"Unsupported tar compression format: {stream_format}")
 
     with tarfile.open(
         name=abs_archive_path, mode=tar_mode, fileobj=output_stream
@@ -476,13 +473,15 @@ def create_tar_archive_with_tarfile(
 def create_single_file_compressed_archive_with_library(
     archive_path: str,
     contents: ArchiveContents,
-    compression_format: ArchiveFormat,
+    format: ArchiveFormat,
+    stream_format: Optional[StreamCompressionFormat] = None,
     opener_kwargs: dict[str, Any] = {},
 ):
-    opener = SINGLE_FILE_LIBRARY_OPENERS[compression_format]
+    assert stream_format is not None
+    opener = SINGLE_FILE_LIBRARY_OPENERS[stream_format]
     if opener is None:
         raise PackageNotInstalledError(
-            f"Required library for {compression_format.name} is not installed"
+            f"Required library for {stream_format.name} is not installed"
         )
 
     assert not contents.solid, f"Single-file archives are not solid. ({archive_path})"
@@ -504,12 +503,13 @@ def create_single_file_compressed_archive_with_library(
 def create_single_file_compressed_archive_with_command_line(
     archive_path: str,
     contents: ArchiveContents,
-    compression_format: ArchiveFormat,
+    format: ArchiveFormat,
+    stream_format: Optional[StreamCompressionFormat] = None,
     compression_cmd: str = "gzip",
     cmd_args: list[str] = [],
 ):
-    assert compression_format in SINGLE_FILE_COMPRESSED_FORMATS, (
-        f"Only supported compression formats are supported, got {compression_format}"
+    assert stream_format is not None and stream_format != StreamCompressionFormat.NONE, (
+        f"Only supported compression formats are supported, got {stream_format}"
     )
     assert not contents.solid, f"{compression_cmd} archives are not solid"
     assert len(contents.files) == 1, (
@@ -874,7 +874,8 @@ def create_archive(archive_info: SampleArchive, base_dir: str) -> str:
         generator(
             full_path,
             contents=archive_info.contents,
-            compression_format=archive_info.creation_info.format,
+            format=archive_info.creation_info.format,
+            stream_format=archive_info.creation_info.stream_format,
             **archive_info.creation_info.generation_method_options,
         )
     except Exception as e:

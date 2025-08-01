@@ -28,59 +28,30 @@ from typing import Any, Optional, Tuple
 
 
 class ArchiveFormat(StrEnum):
-    """Supported archive and compression formats."""
+    """Container/archive formats."""
 
+    TAR = "tar"
     ZIP = "zip"
     RAR = "rar"
     SEVENZIP = "7z"
+    ISO = "iso"
+    FOLDER = "folder"
+    UNKNOWN = "unknown"
+    RAW_STREAM = "raw_stream"
 
+
+class StreamCompressionFormat(StrEnum):
+    """Single-file stream compression formats."""
+
+    NONE = "none"
     GZIP = "gz"
     BZIP2 = "bz2"
     XZ = "xz"
     ZSTD = "zstd"
     LZ4 = "lz4"
-    ZLIB = "zz"
     BROTLI = "br"
     UNIX_COMPRESS = "Z"
-
-    TAR = "tar"
-    TAR_GZ = "tar.gz"
-    TAR_BZ2 = "tar.bz2"
-    TAR_XZ = "tar.xz"
-    TAR_ZSTD = "tar.zstd"
-    TAR_LZ4 = "tar.lz4"
-    TAR_Z = "tar.Z"
-
-    ISO = "iso"
-    FOLDER = "folder"
-
-    UNKNOWN = "unknown"
-
-
-SINGLE_FILE_COMPRESSED_FORMATS = [
-    ArchiveFormat.GZIP,
-    ArchiveFormat.BZIP2,
-    ArchiveFormat.XZ,
-    ArchiveFormat.ZSTD,
-    ArchiveFormat.LZ4,
-    ArchiveFormat.ZLIB,
-    ArchiveFormat.BROTLI,
-    ArchiveFormat.UNIX_COMPRESS,
-]
-
-COMPRESSION_FORMAT_TO_TAR_FORMAT = {
-    ArchiveFormat.GZIP: ArchiveFormat.TAR_GZ,
-    ArchiveFormat.BZIP2: ArchiveFormat.TAR_BZ2,
-    ArchiveFormat.XZ: ArchiveFormat.TAR_XZ,
-    ArchiveFormat.ZSTD: ArchiveFormat.TAR_ZSTD,
-    ArchiveFormat.LZ4: ArchiveFormat.TAR_LZ4,
-    ArchiveFormat.UNIX_COMPRESS: ArchiveFormat.TAR_Z,
-}
-TAR_COMPRESSED_FORMATS = list(COMPRESSION_FORMAT_TO_TAR_FORMAT.values())
-
-TAR_FORMAT_TO_COMPRESSION_FORMAT = {
-    v: k for k, v in COMPRESSION_FORMAT_TO_TAR_FORMAT.items()
-}
+    ZLIB = "zz"
 
 
 class MemberType(StrEnum):
@@ -122,6 +93,10 @@ class ArchiveInfo:
     """Metadata about the archive format and container-level properties."""
 
     format: ArchiveFormat = field(metadata={"description": "The archive format type"})
+    stream_format: StreamCompressionFormat = field(
+        default=StreamCompressionFormat.NONE,
+        metadata={"description": "The stream compression format, if any"},
+    )
     version: Optional[str] = field(
         default=None,
         metadata={

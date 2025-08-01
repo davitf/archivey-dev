@@ -5,7 +5,7 @@ import pytest
 
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
-from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
+from archivey.types import ArchiveFormat, MemberType, StreamCompressionFormat
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     SYMLINK_ARCHIVES,
@@ -34,7 +34,11 @@ logger = logging.getLogger(__name__)
     ids=lambda a: a.filename,
 )
 def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: str):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(
+        sample_archive.creation_info.format,
+        sample_archive.creation_info.stream_format,
+        None,
+    )
 
     with open_archive(sample_archive_path) as archive:
         assert archive.has_random_access()
@@ -113,7 +117,11 @@ def test_streaming_only_mode(
     else:
         config = ArchiveyConfig()
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(
+        sample_archive.creation_info.format,
+        sample_archive.creation_info.stream_format,
+        config,
+    )
 
     first_file = _first_regular_file(sample_archive)
     with open_archive(
@@ -127,10 +135,7 @@ def test_streaming_only_mode(
             archive.open(first_file.name)
 
         info = archive.get_members_if_available()
-        if (
-            sample_archive.creation_info.format == ArchiveFormat.TAR
-            or sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS
-        ):
+        if sample_archive.creation_info.format == ArchiveFormat.TAR:
             assert info is None
         else:
             assert info is not None and len(info) >= 1
