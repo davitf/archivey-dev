@@ -491,7 +491,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
         self._pos += len(data)
         return data
 
-    def readinto(self, b: Buffer) -> int:
+    def readinto(self, b: bytearray | memoryview) -> int:
         data = self.read(len(b))
         b[: len(data)] = data
         return len(data)
@@ -531,7 +531,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
 
 
 class ZlibDecompressorStream(DecompressorStream):
-    def _create_decompressor(self) -> "zlib.Decompress":
+    def _create_decompressor(self) -> Any:
         return zlib.decompressobj()
 
     def _decompress_chunk(self, chunk: bytes) -> bytes:
