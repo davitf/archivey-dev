@@ -164,19 +164,30 @@ Tips:
 *   **Testing:** It's highly recommended to write tests that specifically trigger various error conditions in the underlying library to ensure your translator handles them correctly. This might involve creating corrupted or specially crafted archive files, passing wrong passwords etc. See the Testing section below.
 
 
-## Testing
+## Linting
 
-To run the full test suite use the same command as in CI:
+Ensure [Hatch](https://hatch.pypa.io/) and [uv](https://docs.astral.sh/uv/) are installed. The lint script runs
+[Ruff](https://docs.astral.sh/ruff/) and [Pyright](https://github.com/microsoft/pyright); the latter is executed via `npx`, so
+Node.js and `npm` must be available. Run the linters with:
 
 ```bash
-uv run --extra optional pytest
+hatch run lint
 ```
 
-You can run a subset of tests with the `-k` option, e.g. to run only ZIP related
-tests:
+On the first run `npx` may ask to download Pyright – answer `y` to continue.
+
+## Testing
+
+Run the tests through Hatch, which executes `pytest` via `uv` with the optional dependencies enabled:
 
 ```bash
-uv run --extra optional pytest -k .zip
+hatch run test
+```
+
+You can run a subset of tests with the `-k` option, e.g. to run only ZIP related tests:
+
+```bash
+hatch run test -k .zip
 ```
 
 Sample archives used by the tests are versioned in `tests/test_archives`.  If

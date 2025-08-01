@@ -9,29 +9,40 @@ versions and dependency sets (`tox -e <env>`).  Continuous integration executes
 these tox environments via the workflow in `.github/workflows/tox-tests.yml`.
 
 To help development, install **uv** and **hatch**. Also install the **unrar** tool
-and install tox via `uv` with the `tox-uv` plugin:
+and Node.js (required for `npx pyright` in the lint script). Install tox via `uv`
+with the `tox-uv` plugin:
 
 ```bash
 pip install uv hatch
 uv tool install tox --with tox-uv
-sudo apt-get install -y unrar
+sudo apt-get install -y unrar nodejs npm
 ```
 
 If you can't install unrar, the RAR-related tests may fail; just ignore them.
 
-## Running the tests
+## Linting and running tests
 
-To run the tests:
+Use the Hatch scripts defined in `pyproject.toml`.
+
+To run the linters (ruff and pyright):
 
 ```bash
-uv run --extra optional pytest
+hatch run lint
 ```
 
-To run a specific test or a subset of tests, pass `-k` with a pattern. For
-example, to run only tests related to zip archives:
+On the first run `npx` will download Pyright; accept the prompt if asked.
+
+To run the full test suite:
 
 ```bash
-uv run --extra optional pytest -k .zip
+hatch run test
+```
+
+To run a specific test or subset of tests, pass `-k` with a pattern. For example,
+to run only tests related to zip archives:
+
+```bash
+hatch run test -k .zip
 ```
 
 ## Updating test files
