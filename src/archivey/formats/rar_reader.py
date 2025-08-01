@@ -69,6 +69,7 @@ from archivey.types import (
     CreateSystem,
     IteratorFilterFunc,
     MemberType,
+    StreamCompressionFormat,
 )
 
 logger = logging.getLogger(__name__)
@@ -482,17 +483,21 @@ class RarReader(BaseArchiveReader):
 
     def __init__(
         self,
-        format: ArchiveFormat,
         archive_path: str | BinaryIO | os.PathLike,
         *,
+        format: ArchiveFormat = ArchiveFormat.RAR,
+        stream_format: StreamCompressionFormat = StreamCompressionFormat.NONE,
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
     ):
         if format != ArchiveFormat.RAR:
             raise ValueError(f"Unsupported archive format: {format}")
+        if stream_format != StreamCompressionFormat.NONE:
+            raise ValueError("RAR archives do not support stream compression")
 
         super().__init__(
             format=format,
+            stream_format=stream_format,
             archive_path=archive_path,
             streaming_only=streaming_only,
             members_list_supported=True,
@@ -691,6 +696,7 @@ class RarReader(BaseArchiveReader):
 
             self._format_info = ArchiveInfo(
                 format=self.format,
+                stream_format=self.stream_format,
                 version=version_str,
                 is_solid=getattr(
                     self._archive, "is_solid", lambda: False

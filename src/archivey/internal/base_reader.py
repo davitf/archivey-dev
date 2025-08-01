@@ -38,6 +38,7 @@ from archivey.types import (
     ExtractFilterFunc,
     IteratorFilterFunc,
     MemberType,
+    StreamCompressionFormat,
 )
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,7 @@ class BaseArchiveReader(ArchiveReader):
     def __init__(
         self,
         format: ArchiveFormat,
+        stream_format: StreamCompressionFormat,
         archive_path: BinaryIO | str | bytes | os.PathLike,
         pwd: bytes | str | None,
         streaming_only: bool,
@@ -147,7 +149,7 @@ class BaseArchiveReader(ArchiveReader):
                 full member list via `get_members()` might require iterating
                 through a significant portion of the archive if not already done.
         """
-        super().__init__(archive_path, format)
+        super().__init__(archive_path, format, stream_format)
         self.config: ArchiveyConfig = get_archivey_config()
 
         if pwd is not None and isinstance(pwd, str):

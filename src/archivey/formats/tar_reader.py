@@ -24,10 +24,9 @@ from archivey.internal.io_helpers import (
     run_with_exception_translation,
 )
 from archivey.types import (
-    TAR_COMPRESSED_FORMATS,
-    TAR_FORMAT_TO_COMPRESSION_FORMAT,
     ArchiveFormat,
     MemberType,
+    StreamCompressionFormat,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,8 +46,9 @@ class TarReader(BaseArchiveReader):
     def __init__(
         self,
         archive_path: BinaryIO | str,
-        format: ArchiveFormat,
         *,
+        stream_format: StreamCompressionFormat,
+        format: ArchiveFormat = ArchiveFormat.TAR,
         streaming_only: bool = False,
         pwd: bytes | str | None = None,
     ):
@@ -59,7 +59,7 @@ class TarReader(BaseArchiveReader):
             pwd: Password for decryption (not supported for TAR)
             format: The format of the archive. If None, will be detected from the file extension.
         """
-        if format != ArchiveFormat.TAR and format not in TAR_COMPRESSED_FORMATS:
+        if format != ArchiveFormat.TAR:
             raise ValueError(f"Unsupported archive format: {format}")
 
         if pwd is not None:
@@ -67,6 +67,7 @@ class TarReader(BaseArchiveReader):
 
         super().__init__(
             format=format,
+            stream_format=stream_format,
             archive_path=archive_path,
             streaming_only=streaming_only,
             members_list_supported=False,
@@ -84,10 +85,9 @@ class TarReader(BaseArchiveReader):
             streaming_only,
         )
 
-        if format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
-            compression_format = TAR_FORMAT_TO_COMPRESSION_FORMAT[format]
-            self.compression_method = str(compression_format)
-            self._fileobj = open_stream(compression_format, archive_path, self.config)
+        if stream_format != StreamCompressionFormat.NONE:
+            self.compression_method = stream_format.value
+            self._fileobj = open_stream(stream_format, archive_path, self.config)
             self._close_fileobj = True
             logger.debug(
                 "Compressed tar opened: %s seekable=%s",
@@ -97,10 +97,10 @@ class TarReader(BaseArchiveReader):
 
             if not streaming_only and not is_seekable(self._fileobj):
                 raise ArchiveError(
-                    f"Tried to open a random-access {format.value} file, but inner stream is not seekable ({self._fileobj})"
+                    f"Tried to open a random-access tar file, but inner stream is not seekable ({self._fileobj})"
                 )
 
-        elif format == ArchiveFormat.TAR:
+        else:
             self.compression_method = "store"
             if isinstance(archive_path, str):
                 self._fileobj = open(archive_path, "rb")
@@ -108,8 +108,6 @@ class TarReader(BaseArchiveReader):
             else:
                 self._fileobj = archive_path
                 self._close_fileobj = False
-        else:
-            raise ValueError(f"Unsupported archive format: {format}")
 
         open_mode = "r|" if streaming_only else "r:"
 
@@ -274,7 +272,8 @@ class TarReader(BaseArchiveReader):
             format = self.format
             self._format_info = ArchiveInfo(
                 format=format,
-                is_solid=format != ArchiveFormat.TAR,  # True for compressed TAR formats
+                stream_format=self.stream_format,
+                is_solid=self.stream_format != StreamCompressionFormat.NONE,
                 extra={
                     "format_version": self._archive.format
                     if hasattr(self._archive, "format")

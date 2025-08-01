@@ -10,6 +10,7 @@ from archivey.types import (
     ExtractFilterFunc,
     ExtractionFilter,
     IteratorFilterFunc,
+    StreamCompressionFormat,
 )
 
 
@@ -29,6 +30,7 @@ class ArchiveReader(abc.ABC):
         self,
         archive_path: BinaryIO | str | bytes | os.PathLike,
         format: ArchiveFormat,
+        stream_format: "StreamCompressionFormat",
     ):
         """
         Initialize the ArchiveReader with a file path or stream and detected format.
@@ -54,6 +56,7 @@ class ArchiveReader(abc.ABC):
             )
 
         self.format = format
+        self.stream_format = stream_format
 
     @abc.abstractmethod
     def close(self) -> None:
