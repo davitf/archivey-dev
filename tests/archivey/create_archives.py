@@ -3,7 +3,6 @@ import bz2
 import fnmatch
 import functools
 import gzip
-import zlib
 import io
 import logging
 import lzma
@@ -14,6 +13,7 @@ import subprocess
 import tarfile
 import tempfile
 import zipfile
+import zlib
 from datetime import timezone
 from typing import Any, Generator
 
@@ -343,6 +343,7 @@ class _ZlibWriter(io.BufferedIOBase):
             self._f.write(self._compressor.flush())
             self._f.close()
         super().close()
+
 
 def _brotli_open(path: str, mode: str = "wb") -> _BrotliWriter:
     assert mode == "wb"
