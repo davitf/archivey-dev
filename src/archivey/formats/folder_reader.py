@@ -15,36 +15,39 @@ from archivey.types import (
     ArchiveInfo,
     ArchiveMember,
     MemberType,
+    StreamCompressionFormat,
 )
 
 logger = logging.getLogger(__name__)
 
 
 class FolderReader(BaseArchiveReader):
-    """
-    Reads a folder on the filesystem as an archive.
-    """
+    """Reads a folder on the filesystem as an archive."""
 
     def __init__(
         self,
-        format: ArchiveFormat,
         archive_path: BinaryIO | str | bytes | os.PathLike,
+        *,
+        format: ArchiveFormat = ArchiveFormat.FOLDER,
+        stream_format: StreamCompressionFormat = StreamCompressionFormat.NONE,
         pwd: bytes | str | None = None,
         streaming_only: bool = False,
     ):
+        if format != ArchiveFormat.FOLDER:
+            raise ValueError(f"Unsupported archive format: {format}")
+        if stream_format != StreamCompressionFormat.NONE:
+            raise ValueError("Folders do not support stream compression")
+        if pwd is not None:
+            raise ValueError("Folders do not support password protection")
+
         super().__init__(
             ArchiveFormat.FOLDER,
+            stream_format,
             archive_path,
             streaming_only=streaming_only,
             members_list_supported=True,
             pwd=None,
         )
-
-        if format != ArchiveFormat.FOLDER:
-            raise ValueError(f"Unsupported archive format: {format}")
-
-        if pwd is not None:
-            raise ValueError("Folders do not support password protection")
 
         if self.path_str is None:
             raise ValueError("FolderReader cannot be opened from a stream")

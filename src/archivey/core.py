@@ -8,7 +8,7 @@ from archivey.config import ArchiveyConfig, archivey_config, get_archivey_config
 from archivey.exceptions import ArchiveNotSupportedError
 from archivey.formats.compressed_streams import open_stream
 from archivey.formats.folder_reader import FolderReader
-from archivey.formats.format_detection import detect_archive_format
+from archivey.formats.format_detection import detect_format
 from archivey.formats.rar_reader import RarReader
 from archivey.formats.sevenzip_reader import SevenZipReader
 from archivey.formats.single_file_reader import SingleFileReader
@@ -25,9 +25,8 @@ from archivey.internal.io_helpers import (
 )
 from archivey.internal.utils import ensure_not_none
 from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
-    TAR_COMPRESSED_FORMATS,
     ArchiveFormat,
+    StreamCompressionFormat,
 )
 
 
@@ -52,13 +51,8 @@ _FORMAT_TO_READER: dict[ArchiveFormat, Callable[..., ArchiveReader]] = {
     ArchiveFormat.SEVENZIP: SevenZipReader,
     ArchiveFormat.TAR: TarReader,
     ArchiveFormat.FOLDER: FolderReader,
+    ArchiveFormat.RAW_STREAM: SingleFileReader,
 }
-
-for format in TAR_COMPRESSED_FORMATS:
-    _FORMAT_TO_READER[format] = TarReader
-
-for format in SINGLE_FILE_COMPRESSED_FORMATS:
-    _FORMAT_TO_READER[format] = SingleFileReader
 
 
 def open_archive(
@@ -68,6 +62,7 @@ def open_archive(
     streaming_only: bool = False,
     pwd: bytes | str | None = None,
     format: ArchiveFormat | None = None,
+    stream_format: StreamCompressionFormat | None = None,
 ) -> ArchiveReader:
     """
     Open an archive file and return an [ArchiveReader][archivey.ArchiveReader] instance.
@@ -140,9 +135,21 @@ def open_archive(
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
-    if format is None:
+    if format is None or (
+        format in (ArchiveFormat.TAR, ArchiveFormat.RAW_STREAM)
+        and stream_format is None
+    ):
         with archivey_config(config):
-            format = detect_archive_format(ensure_not_none(stream or path))
+            detected_format, detected_stream = detect_format(
+                ensure_not_none(stream or path)
+            )
+        if format is None:
+            format = detected_format
+        if stream_format is None:
+            stream_format = detected_stream
+
+    if stream_format is None:
+        stream_format = StreamCompressionFormat.NONE
 
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
@@ -169,8 +176,9 @@ def open_archive(
     with archivey_config(config):
         assert reader_class is not None
         return reader_class(
-            format=format,
             archive_path=ensure_not_none(stream or path),
+            format=format,
+            stream_format=stream_format,
             pwd=pwd,
             streaming_only=streaming_only,
         )
@@ -180,7 +188,7 @@ def open_compressed_stream(
     path_or_stream: BinaryIO | str | bytes | os.PathLike,
     *,
     config: ArchiveyConfig | None = None,
-    format: ArchiveFormat | None = None,
+    format: StreamCompressionFormat | None = None,
 ) -> BinaryIO:
     """Open a single-file compressed stream and return the uncompressed stream.
 
@@ -233,14 +241,16 @@ def open_compressed_stream(
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
-    format = detect_archive_format(
-        ensure_not_none(stream or path), detect_compressed_tar=False
-    )
+    if format is None:
+        _, detected_stream = detect_format(
+            ensure_not_none(stream or path), detect_compressed_tar=False
+        )
+        format = detected_stream
 
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
 
-    if format not in SINGLE_FILE_COMPRESSED_FORMATS:
+    if format == StreamCompressionFormat.NONE:
         raise ArchiveNotSupportedError(
             f"Unsupported single-file compressed format: {format}"
         )
