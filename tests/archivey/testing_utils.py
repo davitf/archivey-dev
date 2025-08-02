@@ -104,6 +104,8 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         pytest.importorskip("brotli")
     elif format.stream == StreamFormat.UNIX_COMPRESS:
         pytest.importorskip("uncompresspy")
+    elif format.stream == StreamFormat.LZIP:
+        pytest.importorskip("lzip")
 
 
 def normalize_newlines(s: str | None) -> str | None:

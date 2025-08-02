@@ -10,7 +10,7 @@ from archivey.internal.io_helpers import (
     open_if_file,
     read_exact,
 )
-from archivey.types import ArchiveFormat, ContainerFormat
+from archivey.types import ArchiveFormat, ContainerFormat, StreamFormat
 
 if TYPE_CHECKING:
     import brotli
@@ -84,6 +84,7 @@ SIGNATURES: list[tuple[list[bytes], int, ArchiveFormat]] = [
     ([b"\xfd\x37\x7a\x58\x5a\x00"], 0, ArchiveFormat.XZ),
     ([b"\x28\xb5\x2f\xfd"], 0, ArchiveFormat.ZSTD),
     ([b"\x04\x22\x4d\x18"], 0, ArchiveFormat.LZ4),
+    ([b"\x4c\x5a\x49\x50"], 0, ArchiveFormat.LZIP),
     (
         [b"\x78\x01", b"\x78\x5e", b"\x78\x9c", b"\x78\xda"],
         0,
@@ -184,17 +185,20 @@ EXTENSION_TO_FORMAT = {
     ".tar.xz": ArchiveFormat.TAR_XZ,
     ".tar.zst": ArchiveFormat.TAR_ZSTD,
     ".tar.lz4": ArchiveFormat.TAR_LZ4,
+    ".tar.lz": ArchiveFormat(ContainerFormat.TAR, StreamFormat.LZIP),
     ".tar.Z": ArchiveFormat.TAR_Z,
     ".tgz": ArchiveFormat.TAR_GZ,
     ".tbz2": ArchiveFormat.TAR_BZ2,
     ".txz": ArchiveFormat.TAR_XZ,
     ".tzst": ArchiveFormat.TAR_ZSTD,
     ".tlz4": ArchiveFormat.TAR_LZ4,
+    ".tlz": ArchiveFormat(ContainerFormat.TAR, StreamFormat.LZIP),
     ".gz": ArchiveFormat.GZIP,
     ".bz2": ArchiveFormat.BZIP2,
     ".xz": ArchiveFormat.XZ,
     ".zst": ArchiveFormat.ZSTD,
     ".lz4": ArchiveFormat.LZ4,
+    ".lz": ArchiveFormat.LZIP,
     ".zz": ArchiveFormat.ZLIB,
     ".br": ArchiveFormat.BROTLI,
     ".z": ArchiveFormat.UNIX_COMPRESS,

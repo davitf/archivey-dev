@@ -48,6 +48,7 @@ class StreamFormat(StrEnum):
     XZ = "xz"
     ZSTD = "zstd"
     LZ4 = "lz4"
+    LZIP = "lz"
     ZLIB = "zz"
     BROTLI = "br"
     UNIX_COMPRESS = "Z"
@@ -85,6 +86,7 @@ class ArchiveFormat:
     XZ: ClassVar["ArchiveFormat"]
     ZSTD: ClassVar["ArchiveFormat"]
     LZ4: ClassVar["ArchiveFormat"]
+    LZIP: ClassVar["ArchiveFormat"]
     ZLIB: ClassVar["ArchiveFormat"]
     BROTLI: ClassVar["ArchiveFormat"]
     UNIX_COMPRESS: ClassVar["ArchiveFormat"]
@@ -110,6 +112,7 @@ ArchiveFormat.BZIP2 = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.BZI
 ArchiveFormat.XZ = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.XZ)
 ArchiveFormat.ZSTD = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.ZSTD)
 ArchiveFormat.LZ4 = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.LZ4)
+ArchiveFormat.LZIP = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.LZIP)
 ArchiveFormat.ZLIB = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.ZLIB)
 ArchiveFormat.BROTLI = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.BROTLI)
 ArchiveFormat.UNIX_COMPRESS = ArchiveFormat(

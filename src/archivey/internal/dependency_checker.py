@@ -15,6 +15,7 @@ class DependencyVersions:
     py7zr_version: Optional[str] = None
     cryptography_version: Optional[str] = None
     lz4_version: Optional[str] = None
+    lzip_version: Optional[str] = None
     zstandard_version: Optional[str] = None
     pycdlib_version: Optional[str] = None
     rapidgzip_version: Optional[str] = None
@@ -44,6 +45,7 @@ def get_dependency_versions() -> DependencyVersions:
         ("py7zr", "py7zr_version"),
         ("cryptography", "cryptography_version"),
         ("lz4", "lz4_version"),
+        ("lzip", "lzip_version"),
         ("zstandard", "zstandard_version"),
         ("pycdlib", "pycdlib_version"),
         ("rapidgzip", "rapidgzip_version"),
