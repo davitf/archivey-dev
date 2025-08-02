@@ -104,6 +104,8 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         pytest.importorskip("pyzstd")
     elif format == ArchiveFormat.BROTLI:
         pytest.importorskip("brotli")
+    elif format == ArchiveFormat.LZIP:
+        pytest.importorskip("lzip")
     elif format == ArchiveFormat.UNIX_COMPRESS:
         pytest.importorskip("uncompresspy")
 
