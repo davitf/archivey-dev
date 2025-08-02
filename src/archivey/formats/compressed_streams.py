@@ -23,11 +23,14 @@ if TYPE_CHECKING:
     import brotli
     import indexed_bzip2
     import lz4.frame
+    import lzip
     import pyzstd
     import rapidgzip
     import uncompresspy
     import xz
     import zstandard
+
+    _LzipDecoder: Any
 else:
     try:
         import lz4.frame
@@ -68,6 +71,16 @@ else:
         import brotli
     except ImportError:
         brotli = None
+
+    try:
+        from importlib import import_module
+
+        import lzip
+
+        _LzipDecoder = import_module("lzip.lzip").lzip_extension.Decoder
+    except ImportError:
+        lzip = None
+        _LzipDecoder = None
 
 
 import logging
@@ -359,6 +372,24 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
     return ensure_binaryio(cast("lz4.frame.LZ4FrameFile", lz4.frame.open(path)))
 
 
+def _translate_lzip_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, RuntimeError) and "Unexpected EOF" in str(e):
+        return ArchiveEOFError(f"Lzip file is truncated: {repr(e)}")
+    if isinstance(e, RuntimeError) and "Lzip error" in str(e):
+        return ArchiveCorruptedError(f"Error reading Lzip archive: {repr(e)}")
+    if lzip is not None and isinstance(e, lzip.RemainingBytesError):
+        return ArchiveCorruptedError(f"Error reading Lzip archive: {repr(e)}")
+    return None
+
+
+def open_lzip_stream(path: str | BinaryIO) -> BinaryIO:
+    if lzip is None:
+        raise PackageNotInstalledError(
+            "lzip package is not installed, required for Lzip archives",
+        ) from None
+    return ensure_binaryio(LzipDecompressorStream(path))
+
+
 def open_zlib_stream(path: str | BinaryIO) -> BinaryIO:
     return ensure_binaryio(ZlibDecompressorStream(path))
 
@@ -526,6 +557,26 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
         return self._pos
 
 
+class LzipDecompressorStream(DecompressorStream):
+    def _create_decompressor(self) -> Any:
+        assert _LzipDecoder is not None and lzip is not None
+        self._finished = False
+        return _LzipDecoder(lzip.default_word_size)
+
+    def _decompress_chunk(self, chunk: bytes) -> bytes:
+        return self._decompressor.decompress(chunk)
+
+    def _flush_decompressor(self) -> bytes:
+        decoded, remaining = self._decompressor.finish()
+        self._finished = True
+        if len(remaining) > 0:
+            raise lzip.RemainingBytesError(lzip.default_word_size, remaining)
+        return decoded
+
+    def _is_decompressor_finished(self) -> bool:
+        return getattr(self, "_finished", False)
+
+
 class ZlibDecompressorStream(DecompressorStream):
     def _create_decompressor(self) -> "zlib._Decompress":
         return zlib.decompressobj()
@@ -613,6 +664,9 @@ def get_stream_open_fn(
 
     if format == ArchiveFormat.LZ4:
         return open_lz4_stream, _translate_lz4_exception
+
+    if format == ArchiveFormat.LZIP:
+        return open_lzip_stream, _translate_lzip_exception
 
     if format == ArchiveFormat.ZLIB:
         return open_zlib_stream, _translate_zlib_exception

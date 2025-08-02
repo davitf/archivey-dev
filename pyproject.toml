@@ -37,6 +37,7 @@ optional = [
     # Not currently compatible with Python 3.14. Fix on the way, see
     # https://github.com/python-lz4/python-lz4/pull/303
     "lz4>=4.4.4 ; python_full_version < '3.14'",
+    "lzip>=1.2.0",
     "pycdlib>=1.14.0",
     "uncompresspy>=0.4.0; python_full_version >= '3.11'",
     "brotli>=1.1.0",
@@ -52,6 +53,7 @@ optional-freethreaded = [
     "python-xz>=0.5.0",
     "pyzstd>=0.17.0",
     "lz4>=4.4.4 ; python_full_version < '3.14'",
+    "lzip>=1.2.0",
     "pycdlib>=1.14.0",
     "uncompresspy>=0.4.0",
     "brotli>=1.1.0",
