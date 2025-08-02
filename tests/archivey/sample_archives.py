@@ -395,6 +395,12 @@ TAR_LZ4 = ArchiveCreationInfo(
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
+TAR_LZIP = ArchiveCreationInfo(
+    file_suffix=".tar.lz",
+    format=ArchiveFormat.TAR_LZIP,
+    generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
+)
 
 # Single file compression formats
 GZIP_CMD = ArchiveCreationInfo(
@@ -480,6 +486,12 @@ LZ4_LIBRARY = ArchiveCreationInfo(
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
+LZIP_LIBRARY = ArchiveCreationInfo(
+    file_suffix="lib.lz",
+    format=ArchiveFormat.LZIP,
+    generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
+)
 ZLIB_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.zz",
     format=ArchiveFormat.ZLIB,
@@ -552,6 +564,8 @@ ALL_TAR_FORMATS = BASIC_TAR_FORMATS + [
     TAR_LZ4,
     TAR_Z_CMD,
 ]
+
+LARGE_TAR_FORMATS = [f for f in ALL_TAR_FORMATS if f is not TAR_LZIP]
 
 ZIP_FORMATS = [
     ZIP_ZIPFILE_STORE,
@@ -1121,7 +1135,7 @@ LARGE_ARCHIVES = (
             files=LARGE_FILES,
             solid=True,
         ),
-        RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
+        RAR_FORMATS + SEVENZIP_FORMATS + LARGE_TAR_FORMATS,
     )
     + build_archive_infos(
         ArchiveContents(
