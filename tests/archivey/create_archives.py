@@ -48,6 +48,11 @@ except ModuleNotFoundError:
     brotli = None
 
 try:  # Optional dependency
+    import lzip  # type: ignore
+except ModuleNotFoundError:
+    lzip = None
+
+try:  # Optional dependency
     import py7zr  # type: ignore
 except ModuleNotFoundError:
     py7zr = None
@@ -355,6 +360,36 @@ def _zlib_open(path: str, mode: str = "wb") -> _ZlibWriter:
     return _ZlibWriter(path)
 
 
+class _LzipWriter(io.BufferedIOBase):
+    def __init__(self, path: str) -> None:
+        assert lzip is not None, "lzip is not installed"
+        self._encoder = lzip.FileEncoder(path)
+        self._pos = 0
+
+    def write(self, data: bytes) -> int:
+        self._encoder.compress(data)
+        self._pos += len(data)
+        return len(data)
+
+    def close(self) -> None:
+        if self._encoder is not None:
+            self._encoder.close()
+        super().close()
+
+    def tell(self) -> int:  # pragma: no cover - used by tarfile
+        return self._pos
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:  # pragma: no cover
+        if whence == io.SEEK_CUR and offset == 0:
+            return self._pos
+        raise io.UnsupportedOperation("seek")
+
+
+def _lzip_open(path: str, mode: str = "wb") -> _LzipWriter:
+    assert mode == "wb"
+    return _LzipWriter(path)
+
+
 SINGLE_FILE_LIBRARY_OPENERS = {
     ArchiveFormat.GZIP: gzip.GzipFile,
     ArchiveFormat.BZIP2: bz2.BZ2File,
@@ -368,6 +403,7 @@ SINGLE_FILE_LIBRARY_OPENERS = {
     if pyzstd is not None
     else None,
     ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
+    ArchiveFormat.LZIP: _lzip_open if lzip is not None else None,
     ArchiveFormat.ZLIB: _zlib_open,
     ArchiveFormat.BROTLI: _brotli_open if brotli is not None else None,
 }
@@ -396,6 +432,8 @@ def create_tar_archive_with_tarfile(
         os.remove(abs_archive_path)
 
     output_stream: io.BytesIO | None = None
+    compress_after = False
+    temp_tar_path = abs_archive_path
 
     if compression_format == ArchiveFormat.TAR:
         tar_mode = "w"  # plain tar
@@ -405,7 +443,15 @@ def create_tar_archive_with_tarfile(
         tar_mode = "w:bz2"
     elif compression_format == ArchiveFormat.TAR_XZ:
         tar_mode = "w:xz"
-
+    elif compression_format == ArchiveFormat.TAR_LZIP:
+        if lzip is None:
+            raise PackageNotInstalledError(
+                "lzip package is not installed, required for TAR.LZ archives"
+            )
+        tar_mode = "w"
+        temp_tar_fd, temp_tar_path = tempfile.mkstemp()
+        os.close(temp_tar_fd)
+        compress_after = True
     elif compression_format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
         stream_format = TAR_FORMAT_TO_COMPRESSION_FORMAT[compression_format]
         opener = SINGLE_FILE_LIBRARY_OPENERS[stream_format]
@@ -420,7 +466,7 @@ def create_tar_archive_with_tarfile(
         raise ValueError(f"Unsupported tar compression format: {compression_format}")
 
     with tarfile.open(
-        name=abs_archive_path, mode=tar_mode, fileobj=output_stream
+        name=temp_tar_path, mode=tar_mode, fileobj=output_stream
     ) as tf:  # type: ignore[reportArgumentType]
         for sample_file in contents.files:
             tarinfo = tarfile.TarInfo(name=sample_file.name)
@@ -471,6 +517,16 @@ def create_tar_archive_with_tarfile(
 
     if output_stream is not None:
         output_stream.close()
+
+    if compress_after:
+        assert lzip is not None
+        with open(temp_tar_path, "rb") as src, lzip.FileEncoder(abs_archive_path) as enc:
+            while True:
+                chunk = src.read(65536)
+                if not chunk:
+                    break
+                enc.compress(chunk)
+        os.remove(temp_tar_path)
 
 
 def create_single_file_compressed_archive_with_library(
