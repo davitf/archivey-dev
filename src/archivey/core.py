@@ -24,11 +24,7 @@ from archivey.internal.io_helpers import (
     is_stream,
 )
 from archivey.internal.utils import ensure_not_none
-from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
-    TAR_COMPRESSED_FORMATS,
-    ArchiveFormat,
-)
+from archivey.types import ArchiveFormat, ContainerFormat
 
 
 def _normalize_path_or_stream(
@@ -52,13 +48,23 @@ _FORMAT_TO_READER: dict[ArchiveFormat, Callable[..., ArchiveReader]] = {
     ArchiveFormat.SEVENZIP: SevenZipReader,
     ArchiveFormat.TAR: TarReader,
     ArchiveFormat.FOLDER: FolderReader,
+    # Compressed TAR formats
+    ArchiveFormat.TAR_GZ: TarReader,
+    ArchiveFormat.TAR_BZ2: TarReader,
+    ArchiveFormat.TAR_XZ: TarReader,
+    ArchiveFormat.TAR_ZSTD: TarReader,
+    ArchiveFormat.TAR_LZ4: TarReader,
+    ArchiveFormat.TAR_Z: TarReader,
+    # Single file compressed formats
+    ArchiveFormat.GZIP: SingleFileReader,
+    ArchiveFormat.BZIP2: SingleFileReader,
+    ArchiveFormat.XZ: SingleFileReader,
+    ArchiveFormat.ZSTD: SingleFileReader,
+    ArchiveFormat.LZ4: SingleFileReader,
+    ArchiveFormat.ZLIB: SingleFileReader,
+    ArchiveFormat.BROTLI: SingleFileReader,
+    ArchiveFormat.UNIX_COMPRESS: SingleFileReader,
 }
-
-for format in TAR_COMPRESSED_FORMATS:
-    _FORMAT_TO_READER[format] = TarReader
-
-for format in SINGLE_FILE_COMPRESSED_FORMATS:
-    _FORMAT_TO_READER[format] = SingleFileReader
 
 
 def open_archive(
@@ -240,7 +246,7 @@ def open_compressed_stream(
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
 
-    if format not in SINGLE_FILE_COMPRESSED_FORMATS:
+    if format.container != ContainerFormat.RAW_STREAM:
         raise ArchiveNotSupportedError(
             f"Unsupported single-file compressed format: {format}"
         )

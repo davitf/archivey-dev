@@ -63,12 +63,7 @@ except ModuleNotFoundError:
     zstandard = None
 
 from archivey.exceptions import PackageNotInstalledError
-from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
-    TAR_FORMAT_TO_COMPRESSION_FORMAT,
-    ArchiveFormat,
-    MemberType,
-)
+from archivey.types import ArchiveFormat, ContainerFormat, MemberType, StreamFormat
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     ArchiveContents,
@@ -406,13 +401,19 @@ def create_tar_archive_with_tarfile(
     elif compression_format == ArchiveFormat.TAR_XZ:
         tar_mode = "w:xz"
 
-    elif compression_format in TAR_FORMAT_TO_COMPRESSION_FORMAT:
-        stream_format = TAR_FORMAT_TO_COMPRESSION_FORMAT[compression_format]
+    elif (
+        compression_format.container == ContainerFormat.TAR
+        and compression_format.stream is not None
+        and compression_format.stream != StreamFormat.UNCOMPRESSED
+    ):
+        stream_format = ArchiveFormat(
+            ContainerFormat.RAW_STREAM, compression_format.stream
+        )
         opener = SINGLE_FILE_LIBRARY_OPENERS[stream_format]
 
         if opener is None:
             raise PackageNotInstalledError(
-                f"Required library for {compression_format.name} is not installed"
+                f"Required library for {compression_format.file_extension()} is not installed"
             )
         output_stream = opener(abs_archive_path, "wb")
         tar_mode = "w"  # will compress manually below
@@ -482,7 +483,7 @@ def create_single_file_compressed_archive_with_library(
     opener = SINGLE_FILE_LIBRARY_OPENERS[compression_format]
     if opener is None:
         raise PackageNotInstalledError(
-            f"Required library for {compression_format.name} is not installed"
+            f"Required library for {compression_format.file_extension()} is not installed"
         )
 
     assert not contents.solid, f"Single-file archives are not solid. ({archive_path})"
@@ -508,7 +509,7 @@ def create_single_file_compressed_archive_with_command_line(
     compression_cmd: str = "gzip",
     cmd_args: list[str] = [],
 ):
-    assert compression_format in SINGLE_FILE_COMPRESSED_FORMATS, (
+    assert compression_format.container == ContainerFormat.RAW_STREAM, (
         f"Only supported compression formats are supported, got {compression_format}"
     )
     assert not contents.solid, f"{compression_cmd} archives are not solid"

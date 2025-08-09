@@ -11,11 +11,7 @@ import pytest
 from archivey.config import ArchiveyConfig
 from archivey.internal.dependency_checker import get_dependency_versions
 from archivey.internal.utils import set_file_mtime, set_file_permissions
-from archivey.types import (
-    TAR_FORMAT_TO_COMPRESSION_FORMAT,
-    ArchiveFormat,
-    MemberType,
-)
+from archivey.types import ArchiveFormat, ContainerFormat, MemberType, StreamFormat
 
 if TYPE_CHECKING:
     from tests.archivey.sample_archives import (
@@ -80,7 +76,9 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
 
 
 def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConfig]):
-    format = TAR_FORMAT_TO_COMPRESSION_FORMAT.get(format, format)
+    if format.stream and format.stream != StreamFormat.UNCOMPRESSED:
+        format = ArchiveFormat(ContainerFormat.RAW_STREAM, format.stream)
+
     if config is None:
         config = ArchiveyConfig()
 

@@ -12,11 +12,7 @@ from archivey.internal.io_helpers import (
     open_if_file,
     read_exact,
 )
-from archivey.types import (
-    COMPRESSION_FORMAT_TO_TAR_FORMAT,
-    TAR_COMPRESSED_FORMATS,
-    ArchiveFormat,
-)
+from archivey.types import ArchiveFormat, ContainerFormat
 
 if TYPE_CHECKING:
     import brotli
@@ -148,14 +144,18 @@ def detect_archive_format_by_signature(
         # Check if it is a compressed tar file
         if (
             detect_compressed_tar
-            and detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT
+            and detected_format is not None
+            and detected_format.container == ContainerFormat.RAW_STREAM
+            and detected_format.stream is not None
         ):
             assert detected_format is not None
             with open_stream(
                 detected_format, f, get_archivey_config()
             ) as decompressed_stream:
                 if is_uncompressed_tarfile(decompressed_stream):
-                    detected_format = COMPRESSION_FORMAT_TO_TAR_FORMAT[detected_format]
+                    detected_format = ArchiveFormat(
+                        ContainerFormat.TAR, detected_format.stream
+                    )
 
             assert not f.closed
             f.seek(0)
@@ -208,9 +208,12 @@ EXTENSION_TO_FORMAT = {
 
 def has_tar_extension(filename: str) -> bool:
     base_filename, ext = os.path.splitext(filename.lower())
-    return EXTENSION_TO_FORMAT.get(
-        ext
-    ) in TAR_COMPRESSED_FORMATS or base_filename.endswith(".tar")
+    format = EXTENSION_TO_FORMAT.get(ext)
+    return (
+        format is not None
+        and format.container == ContainerFormat.TAR
+        and format.stream is not None
+    ) or base_filename.endswith(".tar")
 
 
 def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:

@@ -9,10 +9,7 @@ from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveEOFError,
 )
-from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
-    ArchiveFormat,
-)
+from archivey.types import ArchiveFormat, ContainerFormat
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     ALTERNATIVE_PACKAGES_FORMATS,
@@ -125,8 +122,8 @@ def test_read_corrupted_archives(
                 # .corrupted_xxx suffix that doesn't match the name in sample_archive,
                 # so we need to remove it.
                 if (
-                    sample_archive.creation_info.format
-                    in SINGLE_FILE_COMPRESSED_FORMATS
+                    sample_archive.creation_info.format.container
+                    == ContainerFormat.RAW_STREAM
                 ):
                     filename = os.path.splitext(filename)[0]
 

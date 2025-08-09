@@ -30,7 +30,7 @@ from tests.archivey.testing_utils import skip_if_package_missing
 def compress_file(src: str, dst: str, fmt: ArchiveFormat) -> str:
     opener = SINGLE_FILE_LIBRARY_OPENERS.get(fmt)
     if opener is None:
-        pytest.skip(f"Required library for {fmt.name} is not installed")
+        pytest.skip(f"Required library for {fmt.file_extension()} is not installed")
     with open(src, "rb") as f_in, opener(dst, "wb") as f_out:
         shutil.copyfileobj(f_in, f_out)
     return dst
@@ -107,7 +107,7 @@ def test_open_archive_from_compressed_stream(
 
     inner_path = inner_archive.get_archive_path()
     compressed_path = os.path.join(
-        tmp_path, os.path.basename(inner_path) + "." + outer_format.value
+        tmp_path, os.path.basename(inner_path) + "." + outer_format.file_extension()
     )
     compress_file(inner_path, compressed_path, outer_format)
 
@@ -161,7 +161,7 @@ def test_open_archive_from_member(
     skip_if_package_missing(inner_archive.creation_info.format, config)
 
     inner_path = inner_archive.get_archive_path()
-    outer_path = os.path.join(tmp_path, "outer." + outer_format.value)
+    outer_path = os.path.join(tmp_path, "outer." + outer_format.file_extension())
     try:
         create_archive_with_member(outer_format, inner_path, outer_path)
     except PackageNotInstalledError as exc:

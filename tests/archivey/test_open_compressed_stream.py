@@ -6,7 +6,7 @@ import pytest
 from archivey.config import ArchiveyConfig
 from archivey.core import open_compressed_stream
 from archivey.exceptions import ArchiveNotSupportedError
-from archivey.types import TAR_COMPRESSED_FORMATS
+from archivey.types import ContainerFormat
 from tests.archivey.sample_archives import (
     BASIC_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
@@ -140,7 +140,10 @@ def test_open_compressed_stream_from_archive(
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
-    if sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS:
+    if (
+        sample_archive.creation_info.format.container == ContainerFormat.TAR
+        and sample_archive.creation_info.format.stream is not None
+    ):
         with open_compressed_stream(sample_archive_path, config=config) as f:
             data = f.read()
             assert data[257 : 257 + 5] == b"ustar"
