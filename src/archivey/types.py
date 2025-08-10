@@ -27,30 +27,6 @@ from enum import IntEnum
 from typing import Any, ClassVar, Optional, Tuple
 
 
-class _ArchiveFormatBase:
-    ZIP: ClassVar["ArchiveFormat"]
-    RAR: ClassVar["ArchiveFormat"]
-    SEVENZIP: ClassVar["ArchiveFormat"]
-    GZIP: ClassVar["ArchiveFormat"]
-    BZIP2: ClassVar["ArchiveFormat"]
-    XZ: ClassVar["ArchiveFormat"]
-    ZSTD: ClassVar["ArchiveFormat"]
-    LZ4: ClassVar["ArchiveFormat"]
-    ZLIB: ClassVar["ArchiveFormat"]
-    BROTLI: ClassVar["ArchiveFormat"]
-    UNIX_COMPRESS: ClassVar["ArchiveFormat"]
-    TAR: ClassVar["ArchiveFormat"]
-    TAR_GZ: ClassVar["ArchiveFormat"]
-    TAR_BZ2: ClassVar["ArchiveFormat"]
-    TAR_XZ: ClassVar["ArchiveFormat"]
-    TAR_ZSTD: ClassVar["ArchiveFormat"]
-    TAR_LZ4: ClassVar["ArchiveFormat"]
-    TAR_Z: ClassVar["ArchiveFormat"]
-    ISO: ClassVar["ArchiveFormat"]
-    FOLDER: ClassVar["ArchiveFormat"]
-    UNKNOWN: ClassVar["ArchiveFormat"]
-
-
 class ContainerFormat(StrEnum):
     """Supported container formats."""
 
@@ -79,8 +55,30 @@ class StreamFormat(StrEnum):
 
 
 @dataclass(eq=True)
-class ArchiveFormat(_ArchiveFormatBase):
+class ArchiveFormat:
     """Supported archive and compression formats."""
+
+    ZIP: ClassVar["ArchiveFormat"]
+    RAR: ClassVar["ArchiveFormat"]
+    SEVENZIP: ClassVar["ArchiveFormat"]
+    GZIP: ClassVar["ArchiveFormat"]
+    BZIP2: ClassVar["ArchiveFormat"]
+    XZ: ClassVar["ArchiveFormat"]
+    ZSTD: ClassVar["ArchiveFormat"]
+    LZ4: ClassVar["ArchiveFormat"]
+    ZLIB: ClassVar["ArchiveFormat"]
+    BROTLI: ClassVar["ArchiveFormat"]
+    UNIX_COMPRESS: ClassVar["ArchiveFormat"]
+    TAR: ClassVar["ArchiveFormat"]
+    TAR_GZ: ClassVar["ArchiveFormat"]
+    TAR_BZ2: ClassVar["ArchiveFormat"]
+    TAR_XZ: ClassVar["ArchiveFormat"]
+    TAR_ZSTD: ClassVar["ArchiveFormat"]
+    TAR_LZ4: ClassVar["ArchiveFormat"]
+    TAR_Z: ClassVar["ArchiveFormat"]
+    ISO: ClassVar["ArchiveFormat"]
+    FOLDER: ClassVar["ArchiveFormat"]
+    UNKNOWN: ClassVar["ArchiveFormat"]
 
     container: ContainerFormat
     stream: Optional[StreamFormat] = None
