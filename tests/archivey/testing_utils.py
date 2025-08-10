@@ -82,27 +82,27 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
     if config is None:
         config = ArchiveyConfig()
 
-    if format == ArchiveFormat.SEVENZIP:
+    if format.container == ContainerFormat.SEVENZIP:
         pytest.importorskip("py7zr")
-    elif format == ArchiveFormat.RAR:
+    elif format.container == ContainerFormat.RAR:
         pytest.importorskip("rarfile")
         if get_dependency_versions().unrar_version is None:
             pytest.skip("unrar not installed, skipping RAR truncation test")
-    elif format == ArchiveFormat.LZ4:
+    elif format.stream == StreamFormat.LZ4:
         pytest.importorskip("lz4")
-    elif format == ArchiveFormat.GZIP and config.use_rapidgzip:
+    elif format.stream == StreamFormat.GZIP and config.use_rapidgzip:
         pytest.importorskip("rapidgzip")
-    elif format == ArchiveFormat.BZIP2 and config.use_indexed_bzip2:
+    elif format.stream == StreamFormat.BZIP2 and config.use_indexed_bzip2:
         pytest.importorskip("indexed_bzip2")
-    elif format == ArchiveFormat.XZ and config.use_python_xz:
+    elif format.stream == StreamFormat.XZ and config.use_python_xz:
         pytest.importorskip("xz")
-    elif format == ArchiveFormat.ZSTD and config.use_zstandard:
+    elif format.stream == StreamFormat.ZSTD and config.use_zstandard:
         pytest.importorskip("zstandard")
-    elif format == ArchiveFormat.ZSTD:
+    elif format.stream == StreamFormat.ZSTD:
         pytest.importorskip("pyzstd")
-    elif format == ArchiveFormat.BROTLI:
+    elif format.stream == StreamFormat.BROTLI:
         pytest.importorskip("brotli")
-    elif format == ArchiveFormat.UNIX_COMPRESS:
+    elif format.stream == StreamFormat.UNIX_COMPRESS:
         pytest.importorskip("uncompresspy")
 
 

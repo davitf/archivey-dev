@@ -24,7 +24,7 @@ from archivey.internal.io_helpers import (
     is_stream,
 )
 from archivey.internal.utils import ensure_not_none
-from archivey.types import ArchiveFormat, ContainerFormat
+from archivey.types import ArchiveFormat, ContainerFormat, StreamFormat
 
 
 def _normalize_path_or_stream(
@@ -186,7 +186,7 @@ def open_compressed_stream(
     path_or_stream: BinaryIO | str | bytes | os.PathLike,
     *,
     config: ArchiveyConfig | None = None,
-    format: ArchiveFormat | None = None,
+    format: ArchiveFormat | StreamFormat | None = None,
 ) -> BinaryIO:
     """Open a single-file compressed stream and return the uncompressed stream.
 
@@ -239,17 +239,20 @@ def open_compressed_stream(
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
-    format = detect_archive_format(
-        ensure_not_none(stream or path), detect_compressed_tar=False
-    )
+    if format is None:
+        format = detect_archive_format(
+            ensure_not_none(stream or path), detect_compressed_tar=False
+        )
 
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
 
-    if format.container != ContainerFormat.RAW_STREAM:
-        raise ArchiveNotSupportedError(
-            f"Unsupported single-file compressed format: {format}"
-        )
+    if isinstance(format, ArchiveFormat):
+        if format.container != ContainerFormat.RAW_STREAM:
+            raise ArchiveNotSupportedError(
+                f"Unsupported single-file compressed format: {format}"
+            )
+        format = format.stream
 
     if config is None:
         config = get_archivey_config()

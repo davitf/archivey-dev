@@ -509,7 +509,7 @@ def test_ensure_bufferedio_with_raw_compressed_stream(
 
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
-    open_fn, _ = get_stream_open_fn(sample_archive.creation_info.format, config)
+    open_fn, _ = get_stream_open_fn(sample_archive.creation_info.format.stream, config)
     with open_fn(sample_archive_path) as f:
         buffered = ensure_bufferedio(f)
         assert buffered.read() == sample_archive.contents.files[0].contents

@@ -54,9 +54,24 @@ class StreamFormat(StrEnum):
     UNCOMPRESSED = "uncompressed"
 
 
-@dataclass(eq=True)
+@dataclass(frozen=True)
 class ArchiveFormat:
     """Supported archive and compression formats."""
+
+    container: ContainerFormat
+    stream: StreamFormat
+
+    def file_extension(self) -> str:
+        """Return the file extension for the archive format."""
+        parts = []
+        if self.container != ContainerFormat.RAW_STREAM:
+            parts.append(self.container.value)
+        if self.stream != StreamFormat.UNCOMPRESSED:
+            parts.append(self.stream.value)
+        return ".".join(parts)
+
+    def __str__(self) -> str:
+        return self.file_extension()
 
     ZIP: ClassVar["ArchiveFormat"]
     RAR: ClassVar["ArchiveFormat"]
@@ -80,36 +95,13 @@ class ArchiveFormat:
     FOLDER: ClassVar["ArchiveFormat"]
     UNKNOWN: ClassVar["ArchiveFormat"]
 
-    container: ContainerFormat
-    stream: Optional[StreamFormat] = None
-
-    def file_extension(self) -> str:
-        """Return the file extension for the archive format."""
-        if (
-            self.container == ContainerFormat.TAR
-            and self.stream
-            and self.stream != StreamFormat.UNCOMPRESSED
-        ):
-            return f"{self.container.value}.{self.stream.value}"
-        if (
-            self.container == ContainerFormat.RAW_STREAM
-            and self.stream
-            and self.stream != StreamFormat.UNCOMPRESSED
-        ):
-            return self.stream.value
-        return self.container.value
-
-    def __str__(self) -> str:
-        return self.file_extension()
-
-    def __hash__(self) -> int:
-        return hash((self.container, self.stream))
-
 
 # For backward compatibility
-ArchiveFormat.ZIP = ArchiveFormat(ContainerFormat.ZIP)
-ArchiveFormat.RAR = ArchiveFormat(ContainerFormat.RAR)
-ArchiveFormat.SEVENZIP = ArchiveFormat(ContainerFormat.SEVENZIP)
+ArchiveFormat.ZIP = ArchiveFormat(ContainerFormat.ZIP, StreamFormat.UNCOMPRESSED)
+ArchiveFormat.RAR = ArchiveFormat(ContainerFormat.RAR, StreamFormat.UNCOMPRESSED)
+ArchiveFormat.SEVENZIP = ArchiveFormat(
+    ContainerFormat.SEVENZIP, StreamFormat.UNCOMPRESSED
+)
 ArchiveFormat.GZIP = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.GZIP)
 ArchiveFormat.BZIP2 = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.BZIP2)
 ArchiveFormat.XZ = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.XZ)
@@ -120,16 +112,18 @@ ArchiveFormat.BROTLI = ArchiveFormat(ContainerFormat.RAW_STREAM, StreamFormat.BR
 ArchiveFormat.UNIX_COMPRESS = ArchiveFormat(
     ContainerFormat.RAW_STREAM, StreamFormat.UNIX_COMPRESS
 )
-ArchiveFormat.TAR = ArchiveFormat(ContainerFormat.TAR)
+ArchiveFormat.TAR = ArchiveFormat(ContainerFormat.TAR, StreamFormat.UNCOMPRESSED)
 ArchiveFormat.TAR_GZ = ArchiveFormat(ContainerFormat.TAR, StreamFormat.GZIP)
 ArchiveFormat.TAR_BZ2 = ArchiveFormat(ContainerFormat.TAR, StreamFormat.BZIP2)
 ArchiveFormat.TAR_XZ = ArchiveFormat(ContainerFormat.TAR, StreamFormat.XZ)
 ArchiveFormat.TAR_ZSTD = ArchiveFormat(ContainerFormat.TAR, StreamFormat.ZSTD)
 ArchiveFormat.TAR_LZ4 = ArchiveFormat(ContainerFormat.TAR, StreamFormat.LZ4)
 ArchiveFormat.TAR_Z = ArchiveFormat(ContainerFormat.TAR, StreamFormat.UNIX_COMPRESS)
-ArchiveFormat.ISO = ArchiveFormat(ContainerFormat.ISO)
-ArchiveFormat.FOLDER = ArchiveFormat(ContainerFormat.FOLDER)
-ArchiveFormat.UNKNOWN = ArchiveFormat(ContainerFormat.UNKNOWN)
+ArchiveFormat.ISO = ArchiveFormat(ContainerFormat.ISO, StreamFormat.UNCOMPRESSED)
+ArchiveFormat.FOLDER = ArchiveFormat(ContainerFormat.FOLDER, StreamFormat.UNCOMPRESSED)
+ArchiveFormat.UNKNOWN = ArchiveFormat(
+    ContainerFormat.UNKNOWN, StreamFormat.UNCOMPRESSED
+)
 
 
 class MemberType(StrEnum):

@@ -29,7 +29,7 @@ else:
         brotli = None  # type: ignore[assignment]
 
 # Taken from the pycdlib code
-_ISO_MAGIC_BYTES = (
+_ISO_MAGIC_BYTES = [
     b"CD001",
     b"CDW02",
     b"BEA01",
@@ -37,7 +37,7 @@ _ISO_MAGIC_BYTES = (
     b"NSR03",
     b"TEA01",
     b"BOOT2",
-)
+]
 
 
 def _is_executable(stream: IO[bytes]) -> bool:
@@ -65,7 +65,7 @@ def is_uncompressed_tarfile(stream: IO[bytes]) -> bool:
 
 
 # [signature, ...], offset, format
-SIGNATURES = [
+SIGNATURES: list[tuple[list[bytes], int, ArchiveFormat]] = [
     ([b"\x50\x4b\x03\x04"], 0, ArchiveFormat.ZIP),
     (
         [
@@ -130,7 +130,7 @@ def detect_archive_format_by_signature(
         return ArchiveFormat.FOLDER
 
     with open_if_file(path_or_file) as f:
-        detected_format = None
+        detected_format: ArchiveFormat | None = None
         for magics, offset, fmt in SIGNATURES:
             bytes_to_read = max(len(magic) for magic in magics)
             f.seek(offset)
@@ -146,11 +146,10 @@ def detect_archive_format_by_signature(
             detect_compressed_tar
             and detected_format is not None
             and detected_format.container == ContainerFormat.RAW_STREAM
-            and detected_format.stream is not None
         ):
             assert detected_format is not None
             with open_stream(
-                detected_format, f, get_archivey_config()
+                detected_format.stream, f, get_archivey_config()
             ) as decompressed_stream:
                 if is_uncompressed_tarfile(decompressed_stream):
                     detected_format = ArchiveFormat(

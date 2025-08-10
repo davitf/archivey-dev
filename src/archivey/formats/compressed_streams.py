@@ -17,7 +17,7 @@ from archivey.internal.io_helpers import (
     is_seekable,
     is_stream,
 )
-from archivey.types import ArchiveFormat
+from archivey.types import StreamFormat
 
 if TYPE_CHECKING:
     import brotli
@@ -592,47 +592,47 @@ def open_uncompresspy_stream(path: str | BinaryIO) -> BinaryIO:
 
 
 def get_stream_open_fn(
-    format: ArchiveFormat, config: ArchiveyConfig | None = None
+    format: StreamFormat, config: ArchiveyConfig | None = None
 ) -> tuple[Callable[[str | BinaryIO], BinaryIO], ExceptionTranslatorFn]:
     if config is None:
         config = get_archivey_config()
-    if format == ArchiveFormat.GZIP:
+    if format == StreamFormat.GZIP:
         if config.use_rapidgzip:
             return open_rapidgzip_stream, _translate_rapidgzip_exception
         return open_gzip_stream, _translate_gzip_exception
 
-    if format == ArchiveFormat.BZIP2:
+    if format == StreamFormat.BZIP2:
         if config.use_indexed_bzip2:
             return open_indexed_bzip2_stream, _translate_indexed_bzip2_exception
         return open_bzip2_stream, _translate_bz2_exception
 
-    if format == ArchiveFormat.XZ:
+    if format == StreamFormat.XZ:
         if config.use_python_xz:
             return open_python_xz_stream, _translate_python_xz_exception
         return open_lzma_stream, _translate_lzma_exception
 
-    if format == ArchiveFormat.LZ4:
+    if format == StreamFormat.LZ4:
         return open_lz4_stream, _translate_lz4_exception
 
-    if format == ArchiveFormat.ZLIB:
+    if format == StreamFormat.ZLIB:
         return open_zlib_stream, _translate_zlib_exception
 
-    if format == ArchiveFormat.BROTLI:
+    if format == StreamFormat.BROTLI:
         return open_brotli_stream, _translate_brotli_exception
 
-    if format == ArchiveFormat.ZSTD:
+    if format == StreamFormat.ZSTD:
         if config.use_zstandard:
             return open_zstandard_stream, _translate_zstandard_exception
         return open_pyzstd_stream, _translate_pyzstd_exception
 
-    if format == ArchiveFormat.UNIX_COMPRESS:
+    if format == StreamFormat.UNIX_COMPRESS:
         return open_uncompresspy_stream, _translate_uncompresspy_exception
 
     raise ValueError(f"Unsupported archive format: {format}")  # pragma: no cover
 
 
 def open_stream(
-    format: ArchiveFormat,
+    format: StreamFormat,
     path_or_stream: str | BinaryIO,
     config: ArchiveyConfig,
 ) -> BinaryIO:

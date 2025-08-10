@@ -282,7 +282,7 @@ class SingleFileReader(BaseArchiveReader):
         # To avoid opening the file twice, we'll store the reference and return it
         # on the first open() call.
         self._opener, self._exception_translator = get_stream_open_fn(
-            self.format, self.config
+            self.format.stream, self.config
         )
 
         self.fileobj: BinaryIO | None = run_with_exception_translation(

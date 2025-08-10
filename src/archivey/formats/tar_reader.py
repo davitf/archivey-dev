@@ -79,10 +79,9 @@ class TarReader(BaseArchiveReader):
             streaming_only,
         )
 
-        if format.stream and format.stream != StreamFormat.UNCOMPRESSED:
+        if format.stream != StreamFormat.UNCOMPRESSED:
             self.compression_method = str(format.stream.value)
-            stream_format = ArchiveFormat(ContainerFormat.RAW_STREAM, format.stream)
-            self._fileobj = open_stream(stream_format, archive_path, self.config)
+            self._fileobj = open_stream(format.stream, archive_path, self.config)
             self._close_fileobj = True
             logger.debug(
                 "Compressed tar opened: %s seekable=%s",
