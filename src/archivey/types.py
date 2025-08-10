@@ -58,6 +58,10 @@ class StreamFormat(StrEnum):
 class ArchiveFormat:
     """Supported archive and compression formats."""
 
+    # Render the class variables as enum members in the docs
+    # (see scripts/griffe_extensions.py:EnumMembersAsTable)
+    __enum_like__ = True
+
     container: ContainerFormat
     stream: StreamFormat
 
@@ -96,7 +100,6 @@ class ArchiveFormat:
     UNKNOWN: ClassVar["ArchiveFormat"]
 
 
-# For backward compatibility
 ArchiveFormat.ZIP = ArchiveFormat(ContainerFormat.ZIP, StreamFormat.UNCOMPRESSED)
 ArchiveFormat.RAR = ArchiveFormat(ContainerFormat.RAR, StreamFormat.UNCOMPRESSED)
 ArchiveFormat.SEVENZIP = ArchiveFormat(
@@ -127,11 +130,18 @@ ArchiveFormat.UNKNOWN = ArchiveFormat(
 
 
 class MemberType(StrEnum):
+    """Possible types of archive members."""
+
     FILE = "file"
+    """A regular file."""
     DIR = "dir"
+    """A directory."""
     SYMLINK = "symlink"
+    """A symbolic link."""
     HARDLINK = "hardlink"
+    """A hard link."""
     OTHER = "other"
+    """An other type of member."""
 
 
 class CreateSystem(IntEnum):

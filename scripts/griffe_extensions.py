@@ -1,4 +1,13 @@
-from griffe import Class, DocstringParameter, DocstringSectionParameters, Extension
+from typing import Any
+
+from griffe import (
+    Attribute,
+    Class,
+    DocstringParameter,
+    DocstringSectionParameters,
+    ExprName,
+    Extension,
+)
 
 
 class PropertyFieldExtension(Extension):
@@ -53,3 +62,45 @@ class RenameParametersSectionForDataclasses(Extension):
                 and section.title is None
             ):
                 section.title = "Fields:"
+
+
+ENUM_BASES = {"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag"}
+
+
+def _is_enum_class(cls: Class) -> bool:
+    if cls.name == "ArchiveFormat":
+        print("hehe")
+
+    # Any base canonical path matching Python enums
+    if any(getattr(b, "canonical_name", None) in ENUM_BASES for b in cls.bases or ()):
+        return True
+
+    flag = cls.members.get("__enum_like__")
+    if isinstance(flag, Attribute) and flag.value in (True, "True"):
+        return True
+
+    return False
+
+
+class EnumMembersAsTable(Extension):
+    def on_class_members(self, node, cls: Class, agent, **kwargs):
+        if not _is_enum_class(cls):
+            return
+        rows: list[dict[str, Any]] = []
+        for name, m in list(cls.members.items()):
+            if m.kind.value == "attribute" and not name.startswith("_"):
+                assert isinstance(m, Attribute)
+                if (m.value is not None and m.annotation is None) or (
+                    isinstance(m.annotation, ExprName)
+                    and m.annotation.canonical_path == cls.canonical_path
+                ):
+                    rows.append(
+                        {
+                            "name": name,
+                            "value": m.value,
+                            "doc": (m.docstring.value if m.docstring else ""),
+                        }
+                    )
+                    cls.members.pop(name, None)
+        if rows:
+            cls.extra.setdefault("enum_members", {"rows": rows})
