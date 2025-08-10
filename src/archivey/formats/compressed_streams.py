@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Optional, cast
 from typing_extensions import Buffer
 
 from archivey.config import ArchiveyConfig, get_archivey_config
+from archivey.formats.registry import registry
+import archivey.formats
 from archivey.internal.archive_stream import ArchiveStream
 from archivey.internal.io_helpers import (
     ExceptionTranslatorFn,
@@ -63,11 +65,6 @@ else:
         import uncompresspy
     except ImportError:
         uncompresspy = None
-
-    try:
-        import brotli
-    except ImportError:
-        brotli = None
 
 
 import logging
@@ -540,39 +537,6 @@ class ZlibDecompressorStream(DecompressorStream):
         return self._decompressor.eof
 
 
-class BrotliDecompressorStream(DecompressorStream):
-    """Wrap a file-like object and decompress it using ``brotli``."""
-
-    def _create_decompressor(self) -> "brotli.Decompressor":
-        return brotli.Decompressor()
-
-    def _decompress_chunk(self, chunk: bytes) -> bytes:
-        return self._decompressor.process(chunk)
-
-    def _flush_decompressor(self) -> bytes:
-        # brotli's decompressor doesn't have a flush method.
-        # The remaining data is processed when `process` is called with an empty chunk,
-        # but our `_read_decompressed_chunk` in the base class handles the EOF case.
-        return b""
-
-    def _is_decompressor_finished(self) -> bool:
-        return self._decompressor.is_finished()
-
-
-def _translate_brotli_exception(e: Exception) -> Optional[ArchiveError]:
-    if isinstance(e, brotli.error):
-        return ArchiveCorruptedError(f"Error reading Brotli archive: {repr(e)}")
-    return None
-
-
-def open_brotli_stream(path: str | BinaryIO) -> BinaryIO:
-    if brotli is None:
-        raise PackageNotInstalledError(
-            "brotli package is not installed, required for Brotli archives"
-        ) from None
-    return ensure_binaryio(BrotliDecompressorStream(path))
-
-
 def _translate_uncompresspy_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, ValueError) and "must be seekable" in str(e):
         return ArchiveStreamNotSeekableError(
@@ -596,6 +560,12 @@ def get_stream_open_fn(
 ) -> tuple[Callable[[str | BinaryIO], BinaryIO], ExceptionTranslatorFn]:
     if config is None:
         config = get_archivey_config()
+
+    for format_info in registry.get_all():
+        if format_info.format.stream == format:
+            if format_info.open and format_info.exception_translator:
+                return format_info.open, format_info.exception_translator
+
     if format == StreamFormat.GZIP:
         if config.use_rapidgzip:
             return open_rapidgzip_stream, _translate_rapidgzip_exception
@@ -616,9 +586,6 @@ def get_stream_open_fn(
 
     if format == StreamFormat.ZLIB:
         return open_zlib_stream, _translate_zlib_exception
-
-    if format == StreamFormat.BROTLI:
-        return open_brotli_stream, _translate_brotli_exception
 
     if format == StreamFormat.ZSTD:
         if config.use_zstandard:
