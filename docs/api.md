@@ -10,6 +10,8 @@
       - ArchiveInfo
       - ArchiveMember
       - ArchiveFormat
+      - ContainerFormat
+      - StreamFormat
       - MemberType
       - ExtractionFilter
       - ArchiveyConfig

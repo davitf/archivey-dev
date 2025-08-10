@@ -115,7 +115,7 @@ dependencies = [
 features = ["optional"]
 
 [tool.hatch.envs.default.scripts]
-lint = "ruff check --fix . && ruff format . && npx pyright ."
+lint = "ruff check --fix . && ruff format . && npx pyright . && python scripts/check_api_doc.py"
 test = "uv run pytest --workers auto {args}"
 docs = "sh docs/generate_api_docs.sh"
 pyrefly = "uvx pyrefly check src/"
