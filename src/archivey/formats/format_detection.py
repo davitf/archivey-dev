@@ -12,11 +12,7 @@ from archivey.internal.io_helpers import (
     open_if_file,
     read_exact,
 )
-from archivey.types import (
-    COMPRESSION_FORMAT_TO_TAR_FORMAT,
-    TAR_COMPRESSED_FORMATS,
-    ArchiveFormat,
-)
+from archivey.types import ArchiveFormat, ContainerFormat
 
 if TYPE_CHECKING:
     import brotli
@@ -33,7 +29,7 @@ else:
         brotli = None  # type: ignore[assignment]
 
 # Taken from the pycdlib code
-_ISO_MAGIC_BYTES = (
+_ISO_MAGIC_BYTES = [
     b"CD001",
     b"CDW02",
     b"BEA01",
@@ -41,7 +37,7 @@ _ISO_MAGIC_BYTES = (
     b"NSR03",
     b"TEA01",
     b"BOOT2",
-)
+]
 
 
 def _is_executable(stream: IO[bytes]) -> bool:
@@ -69,7 +65,7 @@ def is_uncompressed_tarfile(stream: IO[bytes]) -> bool:
 
 
 # [signature, ...], offset, format
-SIGNATURES = [
+SIGNATURES: list[tuple[list[bytes], int, ArchiveFormat]] = [
     ([b"\x50\x4b\x03\x04"], 0, ArchiveFormat.ZIP),
     (
         [
@@ -134,7 +130,7 @@ def detect_archive_format_by_signature(
         return ArchiveFormat.FOLDER
 
     with open_if_file(path_or_file) as f:
-        detected_format = None
+        detected_format: ArchiveFormat | None = None
         for magics, offset, fmt in SIGNATURES:
             bytes_to_read = max(len(magic) for magic in magics)
             f.seek(offset)
@@ -148,14 +144,17 @@ def detect_archive_format_by_signature(
         # Check if it is a compressed tar file
         if (
             detect_compressed_tar
-            and detected_format in COMPRESSION_FORMAT_TO_TAR_FORMAT
+            and detected_format is not None
+            and detected_format.container == ContainerFormat.RAW_STREAM
         ):
             assert detected_format is not None
             with open_stream(
-                detected_format, f, get_archivey_config()
+                detected_format.stream, f, get_archivey_config()
             ) as decompressed_stream:
                 if is_uncompressed_tarfile(decompressed_stream):
-                    detected_format = COMPRESSION_FORMAT_TO_TAR_FORMAT[detected_format]
+                    detected_format = ArchiveFormat(
+                        ContainerFormat.TAR, detected_format.stream
+                    )
 
             assert not f.closed
             f.seek(0)
@@ -208,9 +207,12 @@ EXTENSION_TO_FORMAT = {
 
 def has_tar_extension(filename: str) -> bool:
     base_filename, ext = os.path.splitext(filename.lower())
-    return EXTENSION_TO_FORMAT.get(
-        ext
-    ) in TAR_COMPRESSED_FORMATS or base_filename.endswith(".tar")
+    format = EXTENSION_TO_FORMAT.get(ext)
+    return (
+        format is not None
+        and format.container == ContainerFormat.TAR
+        and format.stream is not None
+    ) or base_filename.endswith(".tar")
 
 
 def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:

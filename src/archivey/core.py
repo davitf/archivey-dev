@@ -24,11 +24,7 @@ from archivey.internal.io_helpers import (
     is_stream,
 )
 from archivey.internal.utils import ensure_not_none
-from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
-    TAR_COMPRESSED_FORMATS,
-    ArchiveFormat,
-)
+from archivey.types import ArchiveFormat, ContainerFormat, StreamFormat
 
 
 def _normalize_path_or_stream(
@@ -46,19 +42,14 @@ def _normalize_path_or_stream(
     raise TypeError(f"Invalid archive path type: {type(archive_path)} {archive_path}")
 
 
-_FORMAT_TO_READER: dict[ArchiveFormat, Callable[..., ArchiveReader]] = {
-    ArchiveFormat.RAR: RarReader,
-    ArchiveFormat.ZIP: ZipReader,
-    ArchiveFormat.SEVENZIP: SevenZipReader,
-    ArchiveFormat.TAR: TarReader,
-    ArchiveFormat.FOLDER: FolderReader,
+_FORMAT_TO_READER: dict[ContainerFormat, Callable[..., ArchiveReader]] = {
+    ContainerFormat.RAR: RarReader,
+    ContainerFormat.ZIP: ZipReader,
+    ContainerFormat.SEVENZIP: SevenZipReader,
+    ContainerFormat.TAR: TarReader,
+    ContainerFormat.FOLDER: FolderReader,
+    ContainerFormat.RAW_STREAM: SingleFileReader,
 }
-
-for format in TAR_COMPRESSED_FORMATS:
-    _FORMAT_TO_READER[format] = TarReader
-
-for format in SINGLE_FILE_COMPRESSED_FORMATS:
-    _FORMAT_TO_READER[format] = SingleFileReader
 
 
 def open_archive(
@@ -67,7 +58,7 @@ def open_archive(
     config: ArchiveyConfig | None = None,
     streaming_only: bool = False,
     pwd: bytes | str | None = None,
-    format: ArchiveFormat | None = None,
+    format: ArchiveFormat | ContainerFormat | StreamFormat | None = None,
 ) -> ArchiveReader:
     """
     Open an archive file and return an [ArchiveReader][archivey.ArchiveReader] instance.
@@ -144,6 +135,11 @@ def open_archive(
         with archivey_config(config):
             format = detect_archive_format(ensure_not_none(stream or path))
 
+    if isinstance(format, ContainerFormat):
+        format = ArchiveFormat(format, StreamFormat.UNCOMPRESSED)
+    elif isinstance(format, StreamFormat):
+        format = ArchiveFormat(ContainerFormat.RAW_STREAM, format)
+
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
         assert not stream.closed
@@ -153,12 +149,12 @@ def open_archive(
             f"Unknown archive format for {ensure_not_none(stream or path)}"
         )
 
-    if format not in _FORMAT_TO_READER:
+    if format.container not in _FORMAT_TO_READER:
         raise ArchiveNotSupportedError(
             f"Unsupported archive format: {format} (for {ensure_not_none(stream or path)})"
         )
 
-    reader_class = _FORMAT_TO_READER.get(format)
+    reader_class = _FORMAT_TO_READER.get(format.container)
 
     if config is None:
         config = get_archivey_config()
@@ -180,7 +176,7 @@ def open_compressed_stream(
     path_or_stream: BinaryIO | str | bytes | os.PathLike,
     *,
     config: ArchiveyConfig | None = None,
-    format: ArchiveFormat | None = None,
+    format: ArchiveFormat | StreamFormat | None = None,
 ) -> BinaryIO:
     """Open a single-file compressed stream and return the uncompressed stream.
 
@@ -233,17 +229,20 @@ def open_compressed_stream(
         if not os.path.exists(path):
             raise FileNotFoundError(f"Archive file not found: {path}")
 
-    format = detect_archive_format(
-        ensure_not_none(stream or path), detect_compressed_tar=False
-    )
+    if format is None:
+        format = detect_archive_format(
+            ensure_not_none(stream or path), detect_compressed_tar=False
+        )
 
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
 
-    if format not in SINGLE_FILE_COMPRESSED_FORMATS:
-        raise ArchiveNotSupportedError(
-            f"Unsupported single-file compressed format: {format}"
-        )
+    if isinstance(format, ArchiveFormat):
+        if format.container != ContainerFormat.RAW_STREAM:
+            raise ArchiveNotSupportedError(
+                f"Unsupported single-file compressed format: {format}"
+            )
+        format = format.stream
 
     if config is None:
         config = get_archivey_config()

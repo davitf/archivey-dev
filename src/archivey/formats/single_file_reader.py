@@ -20,10 +20,10 @@ from archivey.internal.io_helpers import (  # Updated import
 
 # from archivey.internal.utils import open_if_file # Removed
 from archivey.types import (
-    SINGLE_FILE_COMPRESSED_FORMATS,
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
+    ContainerFormat,
     CreateSystem,
     MemberType,
 )
@@ -225,7 +225,7 @@ class SingleFileReader(BaseArchiveReader):
             format: The format of the archive. If None, will be detected from the file extension.
             **kwargs: Additional options (ignored)
         """
-        if format not in SINGLE_FILE_COMPRESSED_FORMATS:
+        if format.container != ContainerFormat.RAW_STREAM:
             raise ValueError(f"Unsupported archive format: {format}")
 
         if pwd is not None:
@@ -268,7 +268,7 @@ class SingleFileReader(BaseArchiveReader):
             compress_size=compress_size,
             mtime_with_tz=mtime,
             type=MemberType.FILE,
-            compression_method=self.format.value,
+            compression_method=self.format.file_extension(),
             crc32=None,
         )
 
@@ -282,7 +282,7 @@ class SingleFileReader(BaseArchiveReader):
         # To avoid opening the file twice, we'll store the reference and return it
         # on the first open() call.
         self._opener, self._exception_translator = get_stream_open_fn(
-            self.format, self.config
+            self.format.stream, self.config
         )
 
         self.fileobj: BinaryIO | None = run_with_exception_translation(

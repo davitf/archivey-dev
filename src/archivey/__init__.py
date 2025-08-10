@@ -11,8 +11,10 @@ from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
+    ContainerFormat,
     ExtractionFilter,
     MemberType,
+    StreamFormat,
 )
 
 __all__ = [
@@ -24,6 +26,8 @@ __all__ = [
     "ArchiveMember",
     # Enums
     "ArchiveFormat",
+    "ContainerFormat",
+    "StreamFormat",
     "MemberType",
     "ExtractionFilter",
     # Config

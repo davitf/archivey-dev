@@ -5,7 +5,7 @@ import pytest
 
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
-from archivey.types import TAR_COMPRESSED_FORMATS, ArchiveFormat, MemberType
+from archivey.types import ContainerFormat, MemberType
 from tests.archivey.sample_archives import (
     SAMPLE_ARCHIVES,
     SYMLINK_ARCHIVES,
@@ -127,10 +127,7 @@ def test_streaming_only_mode(
             archive.open(first_file.name)
 
         info = archive.get_members_if_available()
-        if (
-            sample_archive.creation_info.format == ArchiveFormat.TAR
-            or sample_archive.creation_info.format in TAR_COMPRESSED_FORMATS
-        ):
+        if sample_archive.creation_info.format.container == ContainerFormat.TAR:
             assert info is None
         else:
             assert info is not None and len(info) >= 1
