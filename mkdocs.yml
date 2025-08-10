@@ -8,6 +8,7 @@ nav:
 plugins:
   - search
   - mkdocstrings:
+      custom_templates: docs_templates
       handlers:
         python:
           paths: [src]
