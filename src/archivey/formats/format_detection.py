@@ -5,6 +5,8 @@ import zipfile
 from typing import IO, TYPE_CHECKING
 
 from archivey.config import get_archivey_config
+from archivey.formats.registry import registry
+import archivey.formats
 from archivey.formats.compressed_streams import open_stream
 from archivey.internal.io_helpers import (
     ReadableStreamLikeOrSimilar,
@@ -130,6 +132,12 @@ def detect_archive_format_by_signature(
         return ArchiveFormat.FOLDER
 
     with open_if_file(path_or_file) as f:
+        # From registry
+        for format_info in registry.get_all():
+            if format_info.detector and format_info.detector(f):
+                return format_info.format
+            f.seek(0)
+
         detected_format: ArchiveFormat | None = None
         for magics, offset, fmt in SIGNATURES:
             bytes_to_read = max(len(magic) for magic in magics)
@@ -220,6 +228,13 @@ def detect_archive_format_by_filename(filename: str) -> ArchiveFormat:
     if os.path.isdir(filename):
         return ArchiveFormat.FOLDER
     filename_lower = filename.lower()
+
+    # From registry
+    for format_info in registry.get_all():
+        for ext in format_info.extensions:
+            if filename_lower.endswith(ext):
+                return format_info.format
+
     for ext, format in EXTENSION_TO_FORMAT.items():
         if filename_lower.endswith(ext):
             return format
