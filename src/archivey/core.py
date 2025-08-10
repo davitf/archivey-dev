@@ -42,28 +42,13 @@ def _normalize_path_or_stream(
     raise TypeError(f"Invalid archive path type: {type(archive_path)} {archive_path}")
 
 
-_FORMAT_TO_READER: dict[ArchiveFormat, Callable[..., ArchiveReader]] = {
-    ArchiveFormat.RAR: RarReader,
-    ArchiveFormat.ZIP: ZipReader,
-    ArchiveFormat.SEVENZIP: SevenZipReader,
-    ArchiveFormat.TAR: TarReader,
-    ArchiveFormat.FOLDER: FolderReader,
-    # Compressed TAR formats
-    ArchiveFormat.TAR_GZ: TarReader,
-    ArchiveFormat.TAR_BZ2: TarReader,
-    ArchiveFormat.TAR_XZ: TarReader,
-    ArchiveFormat.TAR_ZSTD: TarReader,
-    ArchiveFormat.TAR_LZ4: TarReader,
-    ArchiveFormat.TAR_Z: TarReader,
-    # Single file compressed formats
-    ArchiveFormat.GZIP: SingleFileReader,
-    ArchiveFormat.BZIP2: SingleFileReader,
-    ArchiveFormat.XZ: SingleFileReader,
-    ArchiveFormat.ZSTD: SingleFileReader,
-    ArchiveFormat.LZ4: SingleFileReader,
-    ArchiveFormat.ZLIB: SingleFileReader,
-    ArchiveFormat.BROTLI: SingleFileReader,
-    ArchiveFormat.UNIX_COMPRESS: SingleFileReader,
+_FORMAT_TO_READER: dict[ContainerFormat, Callable[..., ArchiveReader]] = {
+    ContainerFormat.RAR: RarReader,
+    ContainerFormat.ZIP: ZipReader,
+    ContainerFormat.SEVENZIP: SevenZipReader,
+    ContainerFormat.TAR: TarReader,
+    ContainerFormat.FOLDER: FolderReader,
+    ContainerFormat.RAW_STREAM: SingleFileReader,
 }
 
 
@@ -73,7 +58,7 @@ def open_archive(
     config: ArchiveyConfig | None = None,
     streaming_only: bool = False,
     pwd: bytes | str | None = None,
-    format: ArchiveFormat | None = None,
+    format: ArchiveFormat | ContainerFormat | StreamFormat | None = None,
 ) -> ArchiveReader:
     """
     Open an archive file and return an [ArchiveReader][archivey.ArchiveReader] instance.
@@ -150,6 +135,11 @@ def open_archive(
         with archivey_config(config):
             format = detect_archive_format(ensure_not_none(stream or path))
 
+    if isinstance(format, ContainerFormat):
+        format = ArchiveFormat(format, StreamFormat.UNCOMPRESSED)
+    elif isinstance(format, StreamFormat):
+        format = ArchiveFormat(ContainerFormat.RAW_STREAM, format)
+
     if rewindable_wrapper is not None:
         stream = rewindable_wrapper.get_rewinded_stream()
         assert not stream.closed
@@ -159,12 +149,12 @@ def open_archive(
             f"Unknown archive format for {ensure_not_none(stream or path)}"
         )
 
-    if format not in _FORMAT_TO_READER:
+    if format.container not in _FORMAT_TO_READER:
         raise ArchiveNotSupportedError(
             f"Unsupported archive format: {format} (for {ensure_not_none(stream or path)})"
         )
 
-    reader_class = _FORMAT_TO_READER.get(format)
+    reader_class = _FORMAT_TO_READER.get(format.container)
 
     if config is None:
         config = get_archivey_config()
