@@ -6,6 +6,7 @@ from typing import IO, TYPE_CHECKING
 
 from archivey.config import get_archivey_config
 from archivey.formats.compressed_streams import open_stream
+from archivey.formats.registry import stream_handlers
 from archivey.internal.io_helpers import (
     ReadableStreamLikeOrSimilar,
     is_seekable,
@@ -15,18 +16,12 @@ from archivey.internal.io_helpers import (
 from archivey.types import ArchiveFormat, ContainerFormat
 
 if TYPE_CHECKING:
-    import brotli
     import rarfile
 else:
     try:
         import rarfile
     except ImportError:
         rarfile = None  # type: ignore[assignment]
-
-    try:
-        import brotli
-    except ImportError:
-        brotli = None  # type: ignore[assignment]
 
 # Taken from the pycdlib code
 _ISO_MAGIC_BYTES = [
@@ -76,33 +71,15 @@ SIGNATURES: list[tuple[list[bytes], int, ArchiveFormat]] = [
         ArchiveFormat.RAR,
     ),
     ([b"\x37\x7a\xbc\xaf\x27\x1c"], 0, ArchiveFormat.SEVENZIP),
-    ([b"\x1f\x8b"], 0, ArchiveFormat.GZIP),
-    ([b"\x42\x5a\x68"], 0, ArchiveFormat.BZIP2),
-    ([b"\xfd\x37\x7a\x58\x5a\x00"], 0, ArchiveFormat.XZ),
-    ([b"\x28\xb5\x2f\xfd"], 0, ArchiveFormat.ZSTD),
-    ([b"\x04\x22\x4d\x18"], 0, ArchiveFormat.LZ4),
-    (
-        [b"\x78\x01", b"\x78\x5e", b"\x78\x9c", b"\x78\xda"],
-        0,
-        ArchiveFormat.ZLIB,
-    ),
-    ([b"\x1f\x9d"], 0, ArchiveFormat.UNIX_COMPRESS),
     ([b"ustar"], 257, ArchiveFormat.TAR),  # TAR "ustar" magic
     (_ISO_MAGIC_BYTES, 0x8001, ArchiveFormat.ISO),  # ISO9660
 ]
 
-
-def _is_brotli_stream(stream: IO[bytes]) -> bool:
-    """Attempt to decompress a small chunk to see if it is Brotli."""
-    if brotli is None:
-        return False
-    try:
-        sample = stream.read(256)
-        decompressor = brotli.Decompressor()
-        decompressor.process(sample)
-        return True
-    except brotli.error:
-        return False
+for fmt, handler in stream_handlers.items():
+    if handler.magic_bytes:
+        SIGNATURES.append(
+            (handler.magic_bytes, 0, ArchiveFormat(ContainerFormat.RAW_STREAM, fmt))
+        )
 
 
 _EXTRA_DETECTORS = [
@@ -112,8 +89,13 @@ _EXTRA_DETECTORS = [
     # zipfiles can have something prepended; is_zipfile checks the end of the file.
     # TODO: is this reading the whole stream for non-seekable streams?
     (zipfile.is_zipfile, ArchiveFormat.ZIP),
-    (_is_brotli_stream, ArchiveFormat.BROTLI),
 ]
+
+for fmt, handler in stream_handlers.items():
+    if handler.extra_detector is not None:
+        _EXTRA_DETECTORS.append(
+            (handler.extra_detector, ArchiveFormat(ContainerFormat.RAW_STREAM, fmt))
+        )
 
 _SFX_DETECTORS = []
 if rarfile is not None:
