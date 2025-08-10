@@ -83,6 +83,13 @@ def _is_enum_class(cls: Class) -> bool:
 
 
 class EnumMembersAsTable(Extension):
+    # The existing Griffe docstrings sections are not appropriate for enum classes.
+    # The closest would be DocstringSectionOtherParameters, but it renders a "Type"
+    # column instead of a "Value" one. So here we add the enum members to the extra
+    # information, and override the class template
+    # (see docs_templates/python/material/class.html.jinja)
+    # to add a new fragment that renders that info as a table.
+
     def on_class_members(self, node, cls: Class, agent, **kwargs):
         if not _is_enum_class(cls):
             return
@@ -90,6 +97,10 @@ class EnumMembersAsTable(Extension):
         for name, m in list(cls.members.items()):
             if m.kind.value == "attribute" and not name.startswith("_"):
                 assert isinstance(m, Attribute)
+                # The second condition is to handle ArchiveFormat, which is not an
+                # enum class, but has class variables that are like enum values.
+                # The rendering is not perfect as the values are empty, but it's
+                # better than nothing.
                 if (m.value is not None and m.annotation is None) or (
                     isinstance(m.annotation, ExprName)
                     and m.annotation.canonical_path == cls.canonical_path
