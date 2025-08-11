@@ -269,9 +269,6 @@ def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
     return BinaryIOWrapper(obj)
 
 
-StreamT = TypeVar("StreamT", bound=BinaryStreamLike)
-
-
 class NonClosingBufferedReader(io.BufferedReader):
     def close(self) -> None:
         self.detach()
