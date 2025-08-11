@@ -12,7 +12,7 @@ from archivey.core import open_archive
 from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
 from archivey.filters import create_filter
 from archivey.internal.dependency_checker import get_dependency_versions
-from archivey.types import ArchiveMember, CreateSystem, MemberType
+from archivey.types import ArchiveMember, ContainerFormat, CreateSystem, MemberType
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
@@ -370,15 +370,7 @@ logger = logging.getLogger(__name__)
     "sample_archive",
     filter_archives(
         SAMPLE_ARCHIVES,
-        extensions=[
-            "tar",
-            "tar.gz",
-            "tar.bz2",
-            "tar.xz",
-            "tar.zst",
-            "tar.lz4",
-            "tar.Z",
-        ],
+        custom_filter=lambda x: x.creation_info.format.container == ContainerFormat.TAR,
     ),
     ids=lambda x: x.filename,
 )
@@ -388,6 +380,8 @@ logger = logging.getLogger(__name__)
 def test_read_tar_archives(
     sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
 ):
+    logger.info(f"Testing {sample_archive.filename}; files at {sample_archive_path}")
+
     logger.info(
         f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
     )

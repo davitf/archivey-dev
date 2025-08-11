@@ -5,7 +5,7 @@ import io
 import lzma
 import os
 import zlib
-from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Optional, cast
+from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Generic, Optional, TypeVar, cast
 
 from typing_extensions import Buffer
 
@@ -24,13 +24,13 @@ if TYPE_CHECKING:
     import indexed_bzip2
     import lz4.frame
     import lzip
+    import lzip_extension
     import pyzstd
     import rapidgzip
     import uncompresspy
     import xz
     import zstandard
 
-    _LzipDecoder: Any
 else:
     try:
         import lz4.frame
@@ -73,14 +73,11 @@ else:
         brotli = None
 
     try:
-        from importlib import import_module
-
         import lzip
-
-        _LzipDecoder = import_module("lzip.lzip").lzip_extension.Decoder
+        import lzip_extension
     except ImportError:
         lzip = None
-        _LzipDecoder = None
+        lzip_extension = None
 
 
 import logging
@@ -387,6 +384,17 @@ def open_lzip_stream(path: str | BinaryIO) -> BinaryIO:
         raise PackageNotInstalledError(
             "lzip package is not installed, required for Lzip archives",
         ) from None
+    if lzip_extension is None:
+        raise PackageNotInstalledError(
+            "lzip_extension module not found, should be provided by the lzip package",
+        ) from None
+
+    # if is_stream(path):
+    #     return lzip.decompress_file_like_iter(path)
+    # assert isinstance(path, str)
+    # return lzip.decompress_file_iter(path)
+    
+    # lzip.decompress_file_like_iter
     return ensure_binaryio(LzipDecompressorStream(path))
 
 
@@ -404,7 +412,8 @@ def _translate_zlib_exception(e: Exception) -> Optional[ArchiveError]:
     return None
 
 
-class DecompressorStream(io.RawIOBase, BinaryIO):
+DecompressorT = TypeVar("DecompressorT")
+class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
     """
     A base class for decompressor streams that follow the `_compression.DecompressReader` model.
     It supports seeking by re-reading the stream from the beginning.
@@ -418,14 +427,14 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
         else:
             self._inner = ensure_bufferedio(path)
             self._should_close = False
-        self._decompressor = self._create_decompressor()
+        self._decompressor: DecompressorT = self._create_decompressor()
         self._buffer = bytearray()
         self._eof = False
         self._pos = 0
         self._size: int | None = None
 
     @abc.abstractmethod
-    def _create_decompressor(self) -> Any: ...
+    def _create_decompressor(self) -> DecompressorT: ...
 
     @abc.abstractmethod
     def _decompress_chunk(self, chunk: bytes) -> bytes: ...
@@ -455,12 +464,15 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
 
     def _read_decompressed_chunk(self) -> bytes:
         chunk = self._inner.read(65536)
+        logger.info(f"Read decompressed chunk (compressed: {len(chunk)}, data={chunk[:10]})")
         if not chunk:
             self._eof = True
             leftover = self._flush_decompressor()
+            logger.info("EOF reached, leftover: %d", len(leftover))
             if not self._is_decompressor_finished():
                 raise ArchiveEOFError("File is truncated")
             self._size = self._pos + len(self._buffer) + len(leftover)
+            logger.info("EOF reached, size: %d", self._size)
             return leftover
         return self._decompress_chunk(chunk)
 
@@ -469,6 +481,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
             return
 
         if pos < self._pos:
+            logger.info(f"Rewinding (pos: {pos}, current pos: {self._pos})")
             self._rewind()
             assert self._pos == 0
 
@@ -557,16 +570,24 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
         return self._pos
 
 
-class LzipDecompressorStream(DecompressorStream):
-    def _create_decompressor(self) -> Any:
-        assert _LzipDecoder is not None and lzip is not None
+class LzipDecompressorStream(DecompressorStream["lzip_extension.Decoder"]):
+    def __init__(self, path: str | BinaryIO) -> None:
+        super().__init__(path)
         self._finished = False
-        return _LzipDecoder(lzip.default_word_size)
+
+    def _create_decompressor(self) -> "lzip_extension.Decoder":
+        logger.info("Creating Lzip decompressor")
+        self._finished = False
+        return lzip_extension.Decoder(1)
 
     def _decompress_chunk(self, chunk: bytes) -> bytes:
-        return self._decompressor.decompress(chunk)
+        logger.info("Decompressing Lzip chunk %d", len(chunk))
+        decompressed = self._decompressor.decompress(chunk)
+        logger.info("Decompressed Lzip chunk %d -> %d (%r)", len(chunk), len(decompressed), chunk[:10])
+        return decompressed
 
     def _flush_decompressor(self) -> bytes:
+        logger.info("Flushing Lzip decompressor")
         decoded, remaining = self._decompressor.finish()
         self._finished = True
         if len(remaining) > 0:
@@ -574,7 +595,7 @@ class LzipDecompressorStream(DecompressorStream):
         return decoded
 
     def _is_decompressor_finished(self) -> bool:
-        return getattr(self, "_finished", False)
+        return self._finished
 
 
 class ZlibDecompressorStream(DecompressorStream):
