@@ -15,7 +15,7 @@ import tempfile
 import zipfile
 import zlib
 from datetime import timezone
-from typing import Any, Generator
+from typing import Any, Callable, Generator
 
 try:
     import pyzstd
@@ -350,11 +350,11 @@ def _zlib_open(path: str, mode: str = "wb") -> _ZlibWriter:
     return _ZlibWriter(path)
 
 
-SINGLE_FILE_LIBRARY_OPENERS = {
-    ArchiveFormat.GZIP: gzip.GzipFile,
-    ArchiveFormat.BZIP2: bz2.BZ2File,
-    ArchiveFormat.XZ: lzma.LZMAFile,
-    ArchiveFormat.ZSTD: functools.partial(
+SINGLE_FILE_LIBRARY_OPENERS: dict[StreamFormat, Callable[..., io.BytesIO]] = {
+    StreamFormat.GZIP: gzip.GzipFile,
+    StreamFormat.BZIP2: bz2.BZ2File,
+    StreamFormat.XZ: lzma.LZMAFile,
+    StreamFormat.ZSTD: functools.partial(
         pyzstd.open,
         level_or_option={
             pyzstd.CParameter.checksumFlag: 1,
@@ -362,9 +362,9 @@ SINGLE_FILE_LIBRARY_OPENERS = {
     )  # type: ignore[reportUnknownReturnType]
     if pyzstd is not None
     else None,
-    ArchiveFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
-    ArchiveFormat.ZLIB: _zlib_open,
-    ArchiveFormat.BROTLI: _brotli_open if brotli is not None else None,
+    StreamFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
+    StreamFormat.ZLIB: _zlib_open,
+    StreamFormat.BROTLI: _brotli_open if brotli is not None else None,
 }
 
 
@@ -406,17 +406,14 @@ def create_tar_archive_with_tarfile(
         and compression_format.stream is not None
         and compression_format.stream != StreamFormat.UNCOMPRESSED
     ):
-        stream_format = ArchiveFormat(
-            ContainerFormat.RAW_STREAM, compression_format.stream
-        )
-        opener = SINGLE_FILE_LIBRARY_OPENERS[stream_format]
+        opener = SINGLE_FILE_LIBRARY_OPENERS[compression_format.stream]
 
         if opener is None:
             raise PackageNotInstalledError(
                 f"Required library for {compression_format.file_extension()} is not installed"
             )
         output_stream = opener(abs_archive_path, "wb")
-        tar_mode = "w"  # will compress manually below
+        tar_mode = "w|"  # will compress manually below
     else:
         raise ValueError(f"Unsupported tar compression format: {compression_format}")
 
@@ -480,7 +477,10 @@ def create_single_file_compressed_archive_with_library(
     compression_format: ArchiveFormat,
     opener_kwargs: dict[str, Any] = {},
 ):
-    opener = SINGLE_FILE_LIBRARY_OPENERS[compression_format]
+    assert compression_format.container == ContainerFormat.RAW_STREAM, (
+        f"Only supported compression formats are supported, got {compression_format}"
+    )
+    opener = SINGLE_FILE_LIBRARY_OPENERS[compression_format.stream]
     if opener is None:
         raise PackageNotInstalledError(
             f"Required library for {compression_format.file_extension()} is not installed"

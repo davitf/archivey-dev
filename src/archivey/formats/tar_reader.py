@@ -10,6 +10,7 @@ from archivey.exceptions import (
     ArchiveEOFError,
     ArchiveError,
     ArchiveMemberCannotBeOpenedError,
+    ArchiveStreamNotSeekableError,
 )
 from archivey.formats.compressed_streams import open_stream
 from archivey.internal.base_reader import (
@@ -90,13 +91,11 @@ class TarReader(BaseArchiveReader):
             )
 
             if not streaming_only and not is_seekable(self._fileobj):
-                raise ArchiveError(
+                raise ArchiveStreamNotSeekableError(
                     f"Tried to open a random-access {format.file_extension()} file, but inner stream is not seekable ({self._fileobj})"
                 )
 
-        elif format.container == ContainerFormat.TAR and (
-            not format.stream or format.stream == StreamFormat.UNCOMPRESSED
-        ):
+        else:
             self.compression_method = "store"
             if isinstance(archive_path, str):
                 self._fileobj = open(archive_path, "rb")
@@ -104,8 +103,6 @@ class TarReader(BaseArchiveReader):
             else:
                 self._fileobj = archive_path
                 self._close_fileobj = False
-        else:
-            raise ValueError(f"Unsupported archive format: {format}")
 
         open_mode = "r|" if streaming_only else "r:"
 
