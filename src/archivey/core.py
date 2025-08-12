@@ -1,5 +1,6 @@
 """Core functionality for opening and interacting with archives."""
 
+import logging
 import os
 from typing import BinaryIO, Callable
 
@@ -25,6 +26,8 @@ from archivey.internal.io_helpers import (
 )
 from archivey.internal.utils import ensure_not_none
 from archivey.types import ArchiveFormat, ContainerFormat, StreamFormat
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_path_or_stream(
@@ -108,6 +111,10 @@ def open_archive(
             print(f"An archive error occurred: {e}")
         ```
     """
+    logger.debug(
+        f"open_archive({path_or_stream}, config={config}, streaming_only={streaming_only}, pwd={pwd}, format={format})"
+    )
+
     if pwd is not None and not isinstance(pwd, (str, bytes)):
         raise TypeError("Password must be a string or bytes")
 
@@ -161,6 +168,15 @@ def open_archive(
 
     if stream is not None:
         assert not stream.closed
+    logger.debug(
+        "open_archive: reader_class=%s stream=%s path=%s", reader_class, stream, path
+    )
+    if stream is not None:
+        logger.debug(
+            "open_archive: stream.seekable=%s stream.tell=%s",
+            stream.seekable(),
+            stream.tell() if stream.seekable() else "N/A",
+        )
 
     with archivey_config(config):
         assert reader_class is not None

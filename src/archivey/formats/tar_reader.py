@@ -90,11 +90,6 @@ class TarReader(BaseArchiveReader):
                 self._fileobj.seekable(),
             )
 
-            if not streaming_only and not is_seekable(self._fileobj):
-                raise ArchiveStreamNotSeekableError(
-                    f"Tried to open a random-access {format.file_extension()} file, but inner stream is not seekable ({self._fileobj})"
-                )
-
         else:
             self.compression_method = "store"
             if isinstance(archive_path, str):
@@ -103,6 +98,11 @@ class TarReader(BaseArchiveReader):
             else:
                 self._fileobj = archive_path
                 self._close_fileobj = False
+
+        if not streaming_only and not is_seekable(self._fileobj):
+            raise ArchiveStreamNotSeekableError(
+                f"Tried to open a random-access {format.file_extension()} file, but inner stream is not seekable ({self._fileobj})"
+            )
 
         open_mode = "r|" if streaming_only else "r:"
 

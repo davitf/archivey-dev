@@ -581,14 +581,53 @@ def _translate_uncompresspy_exception(e: Exception) -> Optional[ArchiveError]:
     return None
 
 
+if uncompresspy is not None:
+
+    class UncompresspyStream(uncompresspy.LZWFile):
+        def __init__(self, path: str | BinaryIO) -> None:
+            super().__init__(path)
+            self._total_size = None
+
+        def _find_total_size(self) -> int:
+            if self._total_size is not None:
+                return self._total_size
+
+            # uncompresspy keeps checkpoints, so we can jump directly to the last known
+            # position to avoid re-decompressing data before it.
+            current_pos = self.tell()
+            if self._checkpoints_uncompressed:
+                max_known_pos = self._checkpoints_uncompressed[-1]
+                if max_known_pos > current_pos:
+                    self.seek(max_known_pos)
+                    current_pos = max_known_pos
+
+            while True:
+                chunk = self.read(65536)
+                if not chunk:
+                    break
+                current_pos += len(chunk)
+
+            assert current_pos == self.tell()
+            self._total_size = current_pos
+            return self._total_size
+
+        def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+            # Override the seek method to allow seeking from the end.
+            if whence == io.SEEK_END:
+                # Find the end of the stream.
+                total_size = self._find_total_size()
+                return super().seek(total_size + offset)
+
+            return super().seek(offset, whence)
+
+
 def open_uncompresspy_stream(path: str | BinaryIO) -> BinaryIO:
     if uncompresspy is None:
         raise PackageNotInstalledError(
             "uncompresspy package is not installed, required for Unix compress archives"
         ) from None  # pragma: no cover -- uncompresspy is installed for main tests
 
-    lzwfile = cast("uncompresspy.LZWFile", uncompresspy.open(path))
-    return ensure_binaryio(lzwfile)
+    return ensure_binaryio(UncompresspyStream(path))
 
 
 def get_stream_open_fn(
@@ -636,6 +675,9 @@ def open_stream(
     path_or_stream: str | BinaryIO,
     config: ArchiveyConfig,
 ) -> BinaryIO:
+    logger.debug(
+        f"open_stream: format={format} path_or_stream={path_or_stream} config={config}"
+    )
     open_fn, exception_translator = get_stream_open_fn(format, config)
     return ArchiveStream(
         open_fn=lambda: open_fn(path_or_stream),

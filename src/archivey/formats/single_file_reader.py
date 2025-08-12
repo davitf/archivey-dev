@@ -8,11 +8,14 @@ from typing import BinaryIO, Iterator, Optional
 from archivey.exceptions import (
     ArchiveCorruptedError,
     ArchiveError,
+    ArchiveStreamNotSeekableError,
 )
 from archivey.formats.compressed_streams import get_stream_open_fn
 from archivey.formats.format_detection import EXTENSION_TO_FORMAT
 from archivey.internal.base_reader import BaseArchiveReader
 from archivey.internal.io_helpers import (  # Updated import
+    is_seekable,
+    is_stream,
     open_if_file,
     read_exact,
     run_with_exception_translation,
@@ -240,10 +243,12 @@ class SingleFileReader(BaseArchiveReader):
         )
 
         if self.path_str is None:
+            assert is_stream(self.path_or_stream)
             # Opening from a stream
             member_name = "uncompressed"
             mtime = None
             compress_size = None
+            seekable = is_seekable(self.path_or_stream)
 
         else:
             base_name = os.path.basename(self.path_str)
@@ -258,6 +263,12 @@ class SingleFileReader(BaseArchiveReader):
                 os.path.getmtime(self.path_str), tz=timezone.utc
             )
             compress_size = os.path.getsize(self.path_str)
+            seekable = True
+
+        if not seekable and not streaming_only:
+            raise ArchiveStreamNotSeekableError(
+                "Tried to open a random-access compressed file, but stream is not seekable"
+            )
 
         self.use_stored_metadata = self.config.use_single_file_stored_metadata
 
@@ -272,7 +283,7 @@ class SingleFileReader(BaseArchiveReader):
             crc32=None,
         )
 
-        if isinstance(archive_path, str):
+        if seekable:
             if self.format == ArchiveFormat.GZIP:
                 read_gzip_metadata(archive_path, self.member, self.use_stored_metadata)
             elif self.format == ArchiveFormat.XZ:

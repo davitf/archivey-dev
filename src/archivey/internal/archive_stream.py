@@ -60,6 +60,9 @@ class ArchiveStream(io.RawIOBase, BinaryIO):
 
         super().__init__()
 
+        logger.debug(
+            f"ArchiveStream.__init__: open_fn={open_fn} exception_translator={exception_translator} lazy={lazy} archive_path={archive_path} member_name={member_name} seekable={seekable}"
+        )
         self._translate = exception_translator
 
         self._inner: BinaryIO | None = None
@@ -138,6 +141,15 @@ class ArchiveStream(io.RawIOBase, BinaryIO):
             self._translate_exception(e)
 
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        if self.seekable():
+            logger.debug(
+                f"ArchiveStream for {self.archive_path}:{self.member_name} seek({offset}, {whence}) (prev_pos={self.tell()}) (inner={self._inner})"
+            )
+        else:
+            logger.debug(
+                f"ArchiveStream for {self.archive_path}:{self.member_name} seek({offset}, {whence}) (not seekable) (inner={self._inner})"
+            )
+
         try:
             return self._ensure_open().seek(offset, whence)
         except Exception as e:  # noqa: BLE001
@@ -166,6 +178,7 @@ class ArchiveStream(io.RawIOBase, BinaryIO):
         raise NotImplementedError("ArchiveStream is not writable.")
 
     def close(self) -> None:
+        logger.debug(f"ArchiveStream.close: inner={self._inner}")
         if self._inner is not None:
             try:
                 self._inner.close()

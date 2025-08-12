@@ -2,11 +2,13 @@ import logging
 import os
 import shutil
 import subprocess
+from contextlib import nullcontext
 
 import pytest
 
+from archivey.archive_reader import ArchiveReader
 from archivey.core import open_archive, open_compressed_stream
-from archivey.exceptions import PackageNotInstalledError
+from archivey.exceptions import ArchiveStreamNotSeekableError, PackageNotInstalledError
 from archivey.types import ArchiveFormat, ContainerFormat, StreamFormat
 from tests.archivey.create_archives import (
     SINGLE_FILE_LIBRARY_OPENERS,
@@ -79,6 +81,14 @@ def create_archive_with_member(
 logger = logging.getLogger(__name__)
 
 
+def check_archive_iter_members(archive: ArchiveReader):
+    for _, member_stream in archive.iter_members_with_streams():
+        has_member = True
+        if member_stream is not None:
+            member_stream.read()
+        assert has_member
+
+
 @pytest.mark.parametrize(
     "outer_stream_format",
     set(StreamFormat) - {StreamFormat.UNCOMPRESSED},
@@ -133,17 +143,19 @@ def test_open_archive_from_compressed_stream(
             stream, config=config, streaming_only=open_inner_streaming_only
         ) as archive:
             assert archive.format == inner_archive.creation_info.format
-            has_member = False
-            for _, member_stream in archive.iter_members_with_streams():
-                has_member = True
-                if member_stream is not None:
-                    member_stream.read()
-            assert has_member
+            check_archive_iter_members(archive)
 
 
 ALL_TAR_FORMATS = [
     ArchiveFormat(ContainerFormat.TAR, stream_format) for stream_format in StreamFormat
 ]
+
+
+def expect_raise_if(condition: bool, exc_type: type[Exception]):
+    if condition:
+        return pytest.raises(exc_type)
+
+    return nullcontext()
 
 
 @pytest.mark.parametrize(
@@ -172,18 +184,12 @@ ALL_TAR_FORMATS = [
     [False, True],
     ids=["outer_random", "outer_streaming"],
 )
-@pytest.mark.parametrize(
-    "open_inner_streaming_only",
-    [False, True],
-    ids=["inner_random", "inner_streaming"],
-)
 def test_open_archive_from_member(
     outer_format: ArchiveFormat,
     inner_archive: SampleArchive,
     tmp_path,
     alternative_packages: bool,
     open_outer_streaming_only: bool,
-    open_inner_streaming_only: bool,
 ):
     config = ALTERNATIVE_CONFIG if alternative_packages else None
 
@@ -197,24 +203,60 @@ def test_open_archive_from_member(
     except PackageNotInstalledError as exc:
         pytest.skip(str(exc))
 
+    expect_non_seekable_failure = (
+        inner_archive.creation_info.format,
+        alternative_packages,
+    ) in EXPECTED_NON_SEEKABLE_FAILURES
+
     with open_archive(
         outer_path, config=config, streaming_only=open_outer_streaming_only
     ) as outer:
+        assert outer.get_archive_info().format == outer_format
+
+        outer_has_member = False
         for member, stream in outer.iter_members_with_streams():
             assert member.filename.endswith(os.path.basename(inner_path))
             assert stream is not None
+            outer_has_member = True
 
-            if (
-                not stream.seekable()
-                and (inner_archive.creation_info.format, alternative_packages)
-                in EXPECTED_NON_SEEKABLE_FAILURES
+            if open_outer_streaming_only:
+                assert not stream.seekable()
+
+            with expect_raise_if(
+                not stream.seekable(),
+                ArchiveStreamNotSeekableError,
             ):
-                pytest.xfail("Non-seekable stream not supported")
+                with open_archive(
+                    stream, config=config, streaming_only=False
+                ) as archive:
+                    assert archive.format == inner_archive.creation_info.format
+                    assert archive.get_members() is not None
+                    check_archive_iter_members(archive)
 
-            with open_archive(
-                stream, config=config, streaming_only=open_inner_streaming_only
-            ) as archive:
-                assert archive.format == inner_archive.creation_info.format
-                for _ in archive.iter_members_with_streams():
-                    break
-            break
+        assert outer_has_member
+
+    with open_archive(
+        outer_path, config=config, streaming_only=open_outer_streaming_only
+    ) as outer:
+        assert outer.get_archive_info().format == outer_format
+
+        outer_has_member = False
+        for member, stream in outer.iter_members_with_streams():
+            assert member.filename.endswith(os.path.basename(inner_path))
+            assert stream is not None
+            outer_has_member = True
+
+            if open_outer_streaming_only:
+                assert not stream.seekable()
+
+            with expect_raise_if(
+                not stream.seekable() and expect_non_seekable_failure,
+                ArchiveStreamNotSeekableError,
+            ):
+                with open_archive(
+                    stream, config=config, streaming_only=True
+                ) as archive:
+                    assert archive.format == inner_archive.creation_info.format
+                    check_archive_iter_members(archive)
+
+        assert outer_has_member

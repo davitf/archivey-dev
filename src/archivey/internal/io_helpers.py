@@ -800,9 +800,18 @@ def fix_stream_start_position(stream: BinaryIO) -> BinaryIO:
 @contextmanager
 def open_if_file(
     path_or_stream: str | bytes | os.PathLike | ReadableStreamLikeOrSimilar,
+    rewind: bool = True,
 ) -> Iterator[BinaryIO]:
     if is_stream(path_or_stream):
+        if rewind:
+            # Using an assert here, as this should never be called with a non-seekable stream.
+            assert is_seekable(path_or_stream)
+            initial_pos = path_or_stream.tell()
+
         yield ensure_binaryio(path_or_stream)
+        if rewind:
+            path_or_stream.seek(initial_pos)
+
     elif is_filename(path_or_stream):
         with open(path_or_stream, "rb") as f:
             yield f
