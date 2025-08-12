@@ -208,6 +208,8 @@ def test_open_archive_from_member(
         alternative_packages,
     ) in EXPECTED_NON_SEEKABLE_FAILURES
 
+    # Try opening the inner archive in random mode. It should work if the outer
+    # archive is seekable and it provides seekable streams (only 7z doesn't).
     with open_archive(
         outer_path, config=config, streaming_only=open_outer_streaming_only
     ) as outer:
@@ -235,6 +237,9 @@ def test_open_archive_from_member(
 
         assert outer_has_member
 
+    # Try opening the inner archive in streaming mode. It should work if the stream is
+    # seekable or if the inner library support opening non-seekable streams in
+    # streaming mode.
     with open_archive(
         outer_path, config=config, streaming_only=open_outer_streaming_only
     ) as outer:
