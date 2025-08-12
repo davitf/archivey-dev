@@ -6,15 +6,14 @@ import os
 import posixpath
 import threading
 from collections import defaultdict
-from io import IOBase
 from typing import (
+    TYPE_CHECKING,
     BinaryIO,
     Callable,
     Collection,
     Iterator,
     List,
     Optional,
-    TypeVar,
     Union,
     cast,
 )
@@ -40,9 +39,10 @@ from archivey.types import (
     MemberType,
 )
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from io import IOBase
 
-IoType = TypeVar("IoType", bound=IOBase | BinaryIO)
+logger = logging.getLogger(__name__)
 
 
 def _build_member_included_func(

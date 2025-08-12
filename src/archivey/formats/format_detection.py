@@ -1,14 +1,12 @@
 import logging
 import os
 import tarfile
-import zipfile
 from typing import IO, TYPE_CHECKING
 
 from archivey.config import get_archivey_config
 from archivey.formats.compressed_streams import open_stream
 from archivey.internal.io_helpers import (
     ReadableStreamLikeOrSimilar,
-    is_seekable,
     open_if_file,
     read_exact,
 )
@@ -54,14 +52,19 @@ def _is_executable(stream: IO[bytes]) -> bool:
     return any(header.startswith(magic) for magic in EXECUTABLE_MAGICS.values())
 
 
-def is_uncompressed_tarfile(stream: IO[bytes]) -> bool:
-    if is_seekable(stream):
-        stream.seek(257)
-    else:
-        read_exact(stream, 257)
+def _is_uncompressed_tarfile(stream: IO[bytes]) -> bool:
+    # Based on tarfile.is_tarfile, but with the file handling and uncompressing logic
+    # removed. This will look at the first member header only.
+    # It will detect non-"ustar" files that don't have the signature in the list, but
+    # that can still be handled by tarfile.
 
-    data = read_exact(stream, 5)
-    return data == b"ustar"
+    try:
+        # Open as a stream so it only reads the first member header.
+        t = tarfile.open(fileobj=stream, mode="r|")
+        t.close()
+        return True
+    except tarfile.TarError:
+        return False
 
 
 # [signature, ...], offset, format
@@ -106,13 +109,8 @@ def _is_brotli_stream(stream: IO[bytes]) -> bool:
 
 
 _EXTRA_DETECTORS = [
-    # There may be other tar variants supported by tarfile.
-    # TODO: this tries decompressing with the builtin formats. Avoid it.
-    (tarfile.is_tarfile, ArchiveFormat.TAR),
-    # zipfiles can have something prepended; is_zipfile checks the end of the file.
-    # TODO: is this reading the whole stream for non-seekable streams?
-    (zipfile.is_zipfile, ArchiveFormat.ZIP),
     (_is_brotli_stream, ArchiveFormat.BROTLI),
+    (_is_uncompressed_tarfile, ArchiveFormat.TAR),
 ]
 
 _SFX_DETECTORS = []
@@ -139,6 +137,13 @@ def detect_archive_format_by_signature(
                 detected_format = fmt
                 break
 
+        if detected_format is None:
+            for detector, format in _EXTRA_DETECTORS:
+                f.seek(0)
+                if detector(f):
+                    detected_format = format
+                    break
+
         f.seek(0)
 
         # Check if it is a compressed tar file
@@ -151,7 +156,7 @@ def detect_archive_format_by_signature(
             with open_stream(
                 detected_format.stream, f, get_archivey_config()
             ) as decompressed_stream:
-                if is_uncompressed_tarfile(decompressed_stream):
+                if _is_uncompressed_tarfile(decompressed_stream):
                     detected_format = ArchiveFormat(
                         ContainerFormat.TAR, detected_format.stream
                     )
@@ -161,11 +166,6 @@ def detect_archive_format_by_signature(
 
         if detected_format is not None:
             return detected_format
-
-        for detector, format in _EXTRA_DETECTORS:
-            if detector(f):
-                return format
-            f.seek(0)
 
         # Check for SFX files
         if _is_executable(f):
