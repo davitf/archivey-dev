@@ -6,6 +6,7 @@ import datetime
 import logging
 import os
 import sys
+from dataclasses import dataclass
 from typing import TypeVar, overload
 
 from archivey.types import MemberType
@@ -125,3 +126,45 @@ def set_file_permissions(
 
     os.chmod(full_path, permissions, **kwargs)
     return True
+
+
+@dataclass
+class OwnershipInfo:
+    """Filesystem ownership information."""
+
+    uid: int | None
+    gid: int | None
+    uname: str | None
+    gname: str | None
+
+
+def get_ownership_from_stat(stat_result: os.stat_result) -> OwnershipInfo:
+    """Return ownership info from an ``os.stat_result``.
+
+    Platform-specific modules are imported lazily to avoid errors on unsupported
+    systems.
+    """
+
+    uid = getattr(stat_result, "st_uid", None)
+    gid = getattr(stat_result, "st_gid", None)
+
+    uname: str | None = None
+    gname: str | None = None
+
+    if uid is not None:
+        try:  # pragma: no cover - platform dependent
+            import pwd
+
+            uname = pwd.getpwuid(uid).pw_name
+        except (ImportError, KeyError):
+            uname = None
+
+    if gid is not None:
+        try:  # pragma: no cover - platform dependent
+            import grp
+
+            gname = grp.getgrgid(gid).gr_name
+        except (ImportError, KeyError):
+            gname = None
+
+    return OwnershipInfo(uid=uid, gid=gid, uname=uname, gname=gname)

@@ -155,6 +155,9 @@ class TarReader(BaseArchiveReader):
         if info.isdir() and not filename.endswith("/"):
             filename += "/"
 
+        uid = info.uid if info.uid != 0 else None
+        gid = info.gid if info.gid != 0 else None
+
         return ArchiveMember(
             filename=filename,
             file_size=info.size,
@@ -175,8 +178,8 @@ class TarReader(BaseArchiveReader):
                 else MemberType.OTHER
             ),
             mode=stat.S_IMODE(info.mode) if hasattr(info, "mode") else None,
-            uid=info.uid,
-            gid=info.gid,
+            uid=uid,
+            gid=gid,
             uname=info.uname or None,
             gname=info.gname or None,
             link_target=info.linkname if info.issym() or info.islnk() else None,

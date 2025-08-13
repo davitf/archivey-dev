@@ -10,6 +10,7 @@ from archivey.exceptions import (
     ArchiveMemberNotFoundError,
 )
 from archivey.internal.base_reader import BaseArchiveReader
+from archivey.internal.utils import get_ownership_from_stat
 from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
@@ -91,27 +92,7 @@ class FolderReader(BaseArchiveReader):
 
         member_type = self._get_member_type(stat_result)
 
-        uid = getattr(stat_result, "st_uid", None)
-        gid = getattr(stat_result, "st_gid", None)
-
-        uname: str | None = None
-        gname: str | None = None
-
-        if uid is not None:
-            try:  # pragma: no cover - platform dependent
-                import pwd
-
-                uname = pwd.getpwuid(uid).pw_name
-            except (ImportError, KeyError):
-                uname = None
-
-        if gid is not None:
-            try:  # pragma: no cover - platform dependent
-                import grp
-
-                gname = grp.getgrgid(gid).gr_name
-            except (ImportError, KeyError):
-                gname = None
+        ownership = get_ownership_from_stat(stat_result)
 
         # Check for hardlinks if this is a regular file and we're tracking inodes
         if member_type == MemberType.FILE and seen_inodes is not None:
@@ -146,10 +127,10 @@ class FolderReader(BaseArchiveReader):
             mtime_with_tz=datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc),
             type=member_type,
             mode=stat_result.st_mode & 0o7777,
-            uid=uid,
-            gid=gid,
-            uname=uname,
-            gname=gname,
+            uid=ownership.uid,
+            gid=ownership.gid,
+            uname=ownership.uname,
+            gname=ownership.gname,
             link_target=link_target,
         )
 

@@ -12,7 +12,7 @@ from archivey.core import open_archive
 from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
 from archivey.filters import create_filter
 from archivey.internal.dependency_checker import get_dependency_versions
-from archivey.types import ArchiveMember, ContainerFormat, CreateSystem, MemberType
+from archivey.types import ArchiveMember, CreateSystem, MemberType
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
@@ -106,12 +106,15 @@ def check_member_metadata(
             f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
         )
 
-    if sample_archive.creation_info.format.container in {
-        ContainerFormat.TAR,
-        ContainerFormat.FOLDER,
-    }:
-        assert member.uid is not None, f"UID not set for {member.filename}"
-        assert member.gid is not None, f"GID not set for {member.filename}"
+    if features.ownership:
+        if sample_file.uid is not None:
+            assert member.uid == sample_file.uid
+        if sample_file.gid is not None:
+            assert member.gid == sample_file.gid
+        if sample_file.uname is not None:
+            assert member.uname == sample_file.uname
+        if sample_file.gname is not None:
+            assert member.gname == sample_file.gname
     else:
         assert member.uid is None
         assert member.gid is None

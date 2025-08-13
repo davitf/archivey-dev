@@ -465,6 +465,15 @@ def create_tar_archive_with_tarfile(
             if sample_file.permissions is not None:
                 tarinfo.mode = sample_file.permissions
 
+            if sample_file.uid is not None:
+                tarinfo.uid = sample_file.uid
+            if sample_file.gid is not None:
+                tarinfo.gid = sample_file.gid
+            if sample_file.uname is not None:
+                tarinfo.uname = sample_file.uname
+            if sample_file.gname is not None:
+                tarinfo.gname = sample_file.gname
+
             file_contents_bytes = sample_file.contents
 
             if sample_file.type == MemberType.DIR:
