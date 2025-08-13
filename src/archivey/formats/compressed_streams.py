@@ -5,7 +5,15 @@ import io
 import lzma
 import os
 import zlib
-from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Optional, cast
+from typing import (
+    TYPE_CHECKING,
+    BinaryIO,
+    Callable,
+    Generic,
+    Optional,
+    TypeVar,
+    cast,
+)
 
 from typing_extensions import Buffer
 
@@ -23,11 +31,14 @@ if TYPE_CHECKING:
     import brotli
     import indexed_bzip2
     import lz4.frame
+    import lzip
+    import lzip_extension
     import pyzstd
     import rapidgzip
     import uncompresspy
     import xz
     import zstandard
+
 else:
     try:
         import lz4.frame
@@ -68,6 +79,13 @@ else:
         import brotli
     except ImportError:
         brotli = None
+
+    try:
+        import lzip
+        import lzip_extension
+    except ImportError:
+        lzip = None
+        lzip_extension = None
 
 
 import logging
@@ -359,8 +377,31 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
     return ensure_binaryio(cast("lz4.frame.LZ4FrameFile", lz4.frame.open(path)))
 
 
+def _translate_lzip_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, RuntimeError) and "Unexpected EOF" in str(e):
+        return ArchiveEOFError(f"Lzip file is truncated: {repr(e)}")
+    if isinstance(e, RuntimeError) and "Lzip error" in str(e):
+        return ArchiveCorruptedError(f"Error reading Lzip archive: {repr(e)}")
+    if lzip is not None and isinstance(e, lzip.RemainingBytesError):
+        return ArchiveCorruptedError(f"Error reading Lzip archive: {repr(e)}")
+    return None
+
+
+def open_lzip_stream(path: str | BinaryIO) -> BinaryIO:
+    if lzip is None:
+        raise PackageNotInstalledError(
+            "lzip package is not installed, required for Lzip archives",
+        ) from None
+    if lzip_extension is None:
+        raise PackageNotInstalledError(
+            "lzip_extension module not found, should be provided by the lzip package",
+        ) from None
+
+    return LzipDecompressorStream(path)
+
+
 def open_zlib_stream(path: str | BinaryIO) -> BinaryIO:
-    return ensure_binaryio(ZlibDecompressorStream(path))
+    return ZlibDecompressorStream(path)
 
 
 def _translate_zlib_exception(e: Exception) -> Optional[ArchiveError]:
@@ -373,7 +414,10 @@ def _translate_zlib_exception(e: Exception) -> Optional[ArchiveError]:
     return None
 
 
-class DecompressorStream(io.RawIOBase, BinaryIO):
+DecompressorT = TypeVar("DecompressorT")
+
+
+class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
     """
     A base class for decompressor streams that follow the `_compression.DecompressReader` model.
     It supports seeking by re-reading the stream from the beginning.
@@ -387,14 +431,14 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
         else:
             self._inner = ensure_bufferedio(path)
             self._should_close = False
-        self._decompressor = self._create_decompressor()
+        self._decompressor: DecompressorT = self._create_decompressor()
         self._buffer = bytearray()
         self._eof = False
         self._pos = 0
         self._size: int | None = None
 
     @abc.abstractmethod
-    def _create_decompressor(self) -> Any: ...
+    def _create_decompressor(self) -> DecompressorT: ...
 
     @abc.abstractmethod
     def _decompress_chunk(self, chunk: bytes) -> bytes: ...
@@ -427,9 +471,11 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
         if not chunk:
             self._eof = True
             leftover = self._flush_decompressor()
+            logger.info("EOF reached, leftover: %d", len(leftover))
             if not self._is_decompressor_finished():
                 raise ArchiveEOFError("File is truncated")
             self._size = self._pos + len(self._buffer) + len(leftover)
+            logger.info("EOF reached, size: %d", self._size)
             return leftover
         return self._decompress_chunk(chunk)
 
@@ -512,10 +558,6 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
         else:
             raise ValueError(f"Invalid whence: {whence}")
 
-        logger.info(
-            f"Seeking to {new_pos} (offset: {offset}, whence: {whence}, current pos: {self._pos})"
-        )
-
         if new_pos < 0:
             raise ValueError(f"Invalid offset: {offset}")
 
@@ -524,6 +566,30 @@ class DecompressorStream(io.RawIOBase, BinaryIO):
 
     def tell(self) -> int:
         return self._pos
+
+
+class LzipDecompressorStream(DecompressorStream["lzip_extension.Decoder"]):
+    def __init__(self, path: str | BinaryIO) -> None:
+        super().__init__(path)
+        self._finished = False
+
+    def _create_decompressor(self) -> "lzip_extension.Decoder":
+        self._finished = False
+        return lzip_extension.Decoder(1)
+
+    def _decompress_chunk(self, chunk: bytes) -> bytes:
+        return self._decompressor.decompress(chunk)
+
+    def _flush_decompressor(self) -> bytes:
+        decoded, remaining = self._decompressor.finish()
+        self._finished = True
+        # This shouldn't happen, as we set a minimum word size of 1.
+        if len(remaining) > 0:
+            raise lzip.RemainingBytesError(lzip.default_word_size, remaining)
+        return decoded
+
+    def _is_decompressor_finished(self) -> bool:
+        return self._finished
 
 
 class ZlibDecompressorStream(DecompressorStream):
@@ -570,7 +636,7 @@ def open_brotli_stream(path: str | BinaryIO) -> BinaryIO:
         raise PackageNotInstalledError(
             "brotli package is not installed, required for Brotli archives"
         ) from None
-    return ensure_binaryio(BrotliDecompressorStream(path))
+    return BrotliDecompressorStream(path)
 
 
 def _translate_uncompresspy_exception(e: Exception) -> Optional[ArchiveError]:
@@ -652,6 +718,9 @@ def get_stream_open_fn(
 
     if format == StreamFormat.LZ4:
         return open_lz4_stream, _translate_lz4_exception
+
+    if format == StreamFormat.LZIP:
+        return open_lzip_stream, _translate_lzip_exception
 
     if format == StreamFormat.ZLIB:
         return open_zlib_stream, _translate_zlib_exception

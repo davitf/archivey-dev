@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any, Callable, Optional
 
 from archivey.config import ArchiveyConfig
-from archivey.types import ArchiveFormat, MemberType
+from archivey.types import ArchiveFormat, ContainerFormat, MemberType, StreamFormat
 
 
 class GenerationMethod(Enum):
@@ -395,6 +395,24 @@ TAR_LZ4 = ArchiveCreationInfo(
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
+TAR_LZIP = ArchiveCreationInfo(
+    file_suffix=".tar.lz",
+    format=ArchiveFormat(ContainerFormat.TAR, StreamFormat.LZIP),
+    generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
+)
+TAR_BROTLI = ArchiveCreationInfo(
+    file_suffix=".tar.br",
+    format=ArchiveFormat(ContainerFormat.TAR, StreamFormat.BROTLI),
+    generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
+)
+TAR_ZLIB = ArchiveCreationInfo(
+    file_suffix=".tar.zz",
+    format=ArchiveFormat(ContainerFormat.TAR, StreamFormat.ZLIB),
+    generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
+)
 
 # Single file compression formats
 GZIP_CMD = ArchiveCreationInfo(
@@ -480,6 +498,12 @@ LZ4_LIBRARY = ArchiveCreationInfo(
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
     features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
 )
+LZIP_LIBRARY = ArchiveCreationInfo(
+    file_suffix="lib.lz",
+    format=ArchiveFormat.LZIP,
+    generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
+    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
+)
 ZLIB_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.zz",
     format=ArchiveFormat.ZLIB,
@@ -535,6 +559,7 @@ ALL_SINGLE_FILE_FORMATS = [
     LZ4_LIBRARY,
     ZLIB_LIBRARY,
     BROTLI_LIBRARY,
+    LZIP_LIBRARY,
 ]
 
 BASIC_TAR_FORMATS = [
@@ -550,8 +575,13 @@ ALL_TAR_FORMATS = BASIC_TAR_FORMATS + [
     TAR_BZ2,
     TAR_XZ,
     TAR_LZ4,
+    TAR_LZIP,
     TAR_Z_CMD,
+    TAR_BROTLI,
+    TAR_ZLIB,
 ]
+
+LARGE_TAR_FORMATS = ALL_TAR_FORMATS
 
 ZIP_FORMATS = [
     ZIP_ZIPFILE_STORE,
@@ -1121,7 +1151,7 @@ LARGE_ARCHIVES = (
             files=LARGE_FILES,
             solid=True,
         ),
-        RAR_FORMATS + SEVENZIP_FORMATS + ALL_TAR_FORMATS,
+        RAR_FORMATS + SEVENZIP_FORMATS + LARGE_TAR_FORMATS,
     )
     + build_archive_infos(
         ArchiveContents(

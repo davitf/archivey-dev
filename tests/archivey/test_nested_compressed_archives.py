@@ -134,7 +134,8 @@ def test_open_archive_from_compressed_stream(
 
     inner_path = inner_archive.get_archive_path()
     compressed_path = os.path.join(
-        tmp_path, os.path.basename(inner_path) + "." + outer_format.file_extension()
+        tmp_path,
+        os.path.basename(inner_path) + "." + outer_format.file_extension(),
     )
     compress_stream(inner_path, compressed_path, outer_stream_format)
 
