@@ -107,10 +107,18 @@ def _get_filtered_member(
         if for_data and member.is_other:
             raise ArchiveFilterError(f"{member.filename} is a special file")
 
-        # TODO: let's make sure to remove uid/gid if is_data=True when those fields
-        # are supported
-
         new_attrs: dict[str, Any] = {}
+        if for_data:
+            new_attrs["uid"] = None
+            new_attrs["gid"] = None
+            new_attrs["uname"] = None
+            new_attrs["gname"] = None
+            if member.extra:
+                extra = dict(member.extra)
+                for key in ("uid", "gid", "uname", "gname"):
+                    extra.pop(key, None)
+                new_attrs["extra"] = extra
+
         if sanitize_names:
             name = _sanitize_name(member, dest_path)
             if name != member.filename:

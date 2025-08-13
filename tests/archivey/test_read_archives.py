@@ -106,6 +106,18 @@ def check_member_metadata(
             f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
         )
 
+    if sample_archive.creation_info.format.container in {
+        ContainerFormat.TAR,
+        ContainerFormat.FOLDER,
+    }:
+        assert member.uid is not None, f"UID not set for {member.filename}"
+        assert member.gid is not None, f"GID not set for {member.filename}"
+    else:
+        assert member.uid is None
+        assert member.gid is None
+        assert member.uname is None
+        assert member.gname is None
+
     if not features.mtime:
         assert member.mtime is None
     elif not features.hardlink_mtime and member.type == MemberType.HARDLINK:

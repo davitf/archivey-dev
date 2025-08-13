@@ -231,6 +231,22 @@ class ArchiveMember:
     mode: Optional[int] = field(
         default=None, metadata={"description": "Unix permissions of the member."}
     )
+    uid: Optional[int] = field(
+        default=None,
+        metadata={"description": "Unix user ID of the member's owner, if known."},
+    )
+    gid: Optional[int] = field(
+        default=None,
+        metadata={"description": "Unix group ID of the member's owner, if known."},
+    )
+    uname: Optional[str] = field(
+        default=None,
+        metadata={"description": "Username of the member's owner, if known."},
+    )
+    gname: Optional[str] = field(
+        default=None,
+        metadata={"description": "Group name of the member's owner, if known."},
+    )
     crc32: Optional[int] = field(
         default=None,
         metadata={"description": "The CRC32 checksum of the member's data, if known."},
