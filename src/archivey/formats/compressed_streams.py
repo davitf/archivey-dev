@@ -397,11 +397,11 @@ def open_lzip_stream(path: str | BinaryIO) -> BinaryIO:
             "lzip_extension module not found, should be provided by the lzip package",
         ) from None
 
-    return ensure_binaryio(LzipDecompressorStream(path))
+    return LzipDecompressorStream(path)
 
 
 def open_zlib_stream(path: str | BinaryIO) -> BinaryIO:
-    return ensure_binaryio(ZlibDecompressorStream(path))
+    return ZlibDecompressorStream(path)
 
 
 def _translate_zlib_exception(e: Exception) -> Optional[ArchiveError]:
@@ -636,7 +636,7 @@ def open_brotli_stream(path: str | BinaryIO) -> BinaryIO:
         raise PackageNotInstalledError(
             "brotli package is not installed, required for Brotli archives"
         ) from None
-    return ensure_binaryio(BrotliDecompressorStream(path))
+    return BrotliDecompressorStream(path)
 
 
 def _translate_uncompresspy_exception(e: Exception) -> Optional[ArchiveError]:
