@@ -121,6 +121,7 @@ lint = "ruff check --fix . && ruff format . && npx pyright . && python scripts/c
 test = "uv run pytest --workers auto {args}"
 docs = "sh docs/generate_api_docs.sh"
 pyrefly = "uvx pyrefly check src/"
+ty = "uvx ty check src/"
 
 [tool.ruff]
 target-version = "py310"
