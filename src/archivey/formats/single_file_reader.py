@@ -3,7 +3,7 @@ import logging
 import os
 import struct
 from datetime import datetime, timezone
-from typing import BinaryIO, Iterator, Optional
+from typing import Any, BinaryIO, Iterator, Optional
 
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -59,7 +59,7 @@ def read_gzip_metadata(
     - extra field data
     """
 
-    extra_fields = {}
+    extra_fields: dict[str, Any] = {}
 
     with open_if_file(path) as f:
         # Read the fixed 10-byte GZIP header
