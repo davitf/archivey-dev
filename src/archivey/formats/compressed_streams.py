@@ -397,12 +397,6 @@ def open_lzip_stream(path: str | BinaryIO) -> BinaryIO:
             "lzip_extension module not found, should be provided by the lzip package",
         ) from None
 
-    # if is_stream(path):
-    #     return lzip.decompress_file_like_iter(path)
-    # assert isinstance(path, str)
-    # return lzip.decompress_file_iter(path)
-
-    # lzip.decompress_file_like_iter
     return ensure_binaryio(LzipDecompressorStream(path))
 
 
@@ -474,9 +468,6 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
 
     def _read_decompressed_chunk(self) -> bytes:
         chunk = self._inner.read(65536)
-        logger.info(
-            f"Read decompressed chunk (compressed: {len(chunk)}, data={chunk[:10]})"
-        )
         if not chunk:
             self._eof = True
             leftover = self._flush_decompressor()
@@ -493,7 +484,6 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             return
 
         if pos < self._pos:
-            logger.info(f"Rewinding (pos: {pos}, current pos: {self._pos})")
             self._rewind()
             assert self._pos == 0
 
@@ -568,10 +558,6 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
         else:
             raise ValueError(f"Invalid whence: {whence}")
 
-        logger.info(
-            f"Seeking to {new_pos} (offset: {offset}, whence: {whence}, current pos: {self._pos})"
-        )
-
         if new_pos < 0:
             raise ValueError(f"Invalid offset: {offset}")
 
@@ -588,25 +574,16 @@ class LzipDecompressorStream(DecompressorStream["lzip_extension.Decoder"]):
         self._finished = False
 
     def _create_decompressor(self) -> "lzip_extension.Decoder":
-        logger.info("Creating Lzip decompressor")
         self._finished = False
         return lzip_extension.Decoder(1)
 
     def _decompress_chunk(self, chunk: bytes) -> bytes:
-        logger.info("Decompressing Lzip chunk %d", len(chunk))
-        decompressed = self._decompressor.decompress(chunk)
-        logger.info(
-            "Decompressed Lzip chunk %d -> %d (%r)",
-            len(chunk),
-            len(decompressed),
-            chunk[:10],
-        )
-        return decompressed
+        return self._decompressor.decompress(chunk)
 
     def _flush_decompressor(self) -> bytes:
-        logger.info("Flushing Lzip decompressor")
         decoded, remaining = self._decompressor.finish()
         self._finished = True
+        # This shouldn't happen, as we set a minimum word size of 1.
         if len(remaining) > 0:
             raise lzip.RemainingBytesError(lzip.default_word_size, remaining)
         return decoded

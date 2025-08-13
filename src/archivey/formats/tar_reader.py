@@ -3,7 +3,7 @@ import os
 import stat
 import tarfile
 from datetime import datetime, timezone
-from typing import BinaryIO, Iterator, List, Optional, cast
+from typing import TYPE_CHECKING, BinaryIO, Iterator, List, Optional, cast
 
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -20,11 +20,15 @@ from archivey.internal.base_reader import (
 )
 from archivey.internal.io_helpers import (
     ensure_binaryio,
+    ensure_bufferedio,
     is_seekable,
     read_exact,
     run_with_exception_translation,
 )
 from archivey.types import ArchiveFormat, ContainerFormat, MemberType, StreamFormat
+
+if TYPE_CHECKING:
+    from io import BufferedIOBase
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +74,7 @@ class TarReader(BaseArchiveReader):
         )
         self._streaming_only = streaming_only
         self._format_info: ArchiveInfo | None = None
-        self._fileobj: BinaryIO | None = None
+        self._fileobj: BufferedIOBase | None = None
         self._close_fileobj: bool
 
         logger.debug(
@@ -82,7 +86,13 @@ class TarReader(BaseArchiveReader):
 
         if format.stream != StreamFormat.UNCOMPRESSED:
             self.compression_method = str(format.stream.value)
-            self._fileobj = open_stream(format.stream, archive_path, self.config)
+            # Ensure the stream is buffered. tarfile may fail when reading a file
+            # if read() returns fewer bytes than requested (specifically
+            # inside tarfile._FileInFile.read(), line 696 in Python 3.13.5).
+            self._fileobj = ensure_bufferedio(
+                open_stream(format.stream, archive_path, self.config)
+            )
+
             self._close_fileobj = True
             logger.debug(
                 "Compressed tar opened: %s seekable=%s",
@@ -96,7 +106,7 @@ class TarReader(BaseArchiveReader):
                 self._fileobj = open(archive_path, "rb")
                 self._close_fileobj = True
             else:
-                self._fileobj = archive_path
+                self._fileobj = ensure_bufferedio(archive_path)
                 self._close_fileobj = False
 
         if not streaming_only and not is_seekable(self._fileobj):
@@ -110,7 +120,7 @@ class TarReader(BaseArchiveReader):
             # Fail on any error.
             return tarfile.open(
                 name=archive_path if isinstance(archive_path, str) else None,
-                fileobj=self._fileobj,
+                fileobj=cast("BinaryIO", self._fileobj),
                 mode=open_mode,
                 errorlevel=2,
             )

@@ -401,6 +401,18 @@ TAR_LZIP = ArchiveCreationInfo(
     generation_method=GenerationMethod.TAR_LIBRARY,
     features=_TAR_FORMAT_FEATURES_TARFILE,
 )
+TAR_BROTLI = ArchiveCreationInfo(
+    file_suffix=".tar.br",
+    format=ArchiveFormat(ContainerFormat.TAR, StreamFormat.BROTLI),
+    generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
+)
+TAR_ZLIB = ArchiveCreationInfo(
+    file_suffix=".tar.zz",
+    format=ArchiveFormat(ContainerFormat.TAR, StreamFormat.ZLIB),
+    generation_method=GenerationMethod.TAR_LIBRARY,
+    features=_TAR_FORMAT_FEATURES_TARFILE,
+)
 
 # Single file compression formats
 GZIP_CMD = ArchiveCreationInfo(
@@ -565,6 +577,8 @@ ALL_TAR_FORMATS = BASIC_TAR_FORMATS + [
     TAR_LZ4,
     TAR_LZIP,
     TAR_Z_CMD,
+    TAR_BROTLI,
+    TAR_ZLIB,
 ]
 
 LARGE_TAR_FORMATS = ALL_TAR_FORMATS

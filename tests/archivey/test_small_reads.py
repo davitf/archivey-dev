@@ -9,6 +9,7 @@ from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
+    LARGE_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
     SampleArchive,
     filter_archives,
@@ -18,9 +19,10 @@ from tests.archivey.testing_utils import skip_if_package_missing
 logger = logging.getLogger(__name__)
 
 
-class OneByteReader(io.RawIOBase):
-    def __init__(self, data: bytes):
+class SizeLimitedReader(io.RawIOBase):
+    def __init__(self, data: bytes, max_bytes: int = 1):
         self._stream = io.BytesIO(data)
+        self._max_bytes = max_bytes
 
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
         return self._stream.seek(offset, whence)
@@ -35,13 +37,13 @@ class OneByteReader(io.RawIOBase):
         return True
 
     def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
-        data = ensure_not_none(self._stream.read(min(len(b), 1)))
+        data = ensure_not_none(self._stream.read(min(len(b), self._max_bytes)))
         n = len(data)
         b[:n] = data
         return n
 
     def read(self, n: int = -1, /) -> bytes:
-        return ensure_not_none(self._stream.read(min(n, 1)))
+        return ensure_not_none(self._stream.read(min(n, self._max_bytes)))
 
     def close(self) -> None:
         # logger.error("Closing OneByteReader", stack_info=True)
@@ -52,7 +54,7 @@ class OneByteReader(io.RawIOBase):
 @pytest.mark.parametrize(
     "sample_archive",
     filter_archives(
-        BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES,
+        BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES + LARGE_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
     ),
     ids=lambda a: a.filename,
@@ -73,7 +75,10 @@ def test_open_archive_small_reads(
     with open(sample_archive_path, "rb") as f:
         data = f.read()
 
-    stream = OneByteReader(data)
+    # It's too slow to test single-byte reads for large archives. This chunk size
+    # should be enough to test incomplete reads while reading the member contents.
+    max_bytes = 250 if "large" in sample_archive_path else 1
+    stream = SizeLimitedReader(data, max_bytes=max_bytes)
 
     with open_archive(stream, streaming_only=streaming_only, config=config) as archive:
         has_member = False
