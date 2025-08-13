@@ -5,7 +5,15 @@ import io
 import lzma
 import os
 import zlib
-from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Generic, Optional, TypeVar, cast
+from typing import (
+    TYPE_CHECKING,
+    BinaryIO,
+    Callable,
+    Generic,
+    Optional,
+    TypeVar,
+    cast,
+)
 
 from typing_extensions import Buffer
 
@@ -393,7 +401,7 @@ def open_lzip_stream(path: str | BinaryIO) -> BinaryIO:
     #     return lzip.decompress_file_like_iter(path)
     # assert isinstance(path, str)
     # return lzip.decompress_file_iter(path)
-    
+
     # lzip.decompress_file_like_iter
     return ensure_binaryio(LzipDecompressorStream(path))
 
@@ -413,6 +421,8 @@ def _translate_zlib_exception(e: Exception) -> Optional[ArchiveError]:
 
 
 DecompressorT = TypeVar("DecompressorT")
+
+
 class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
     """
     A base class for decompressor streams that follow the `_compression.DecompressReader` model.
@@ -464,7 +474,9 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
 
     def _read_decompressed_chunk(self) -> bytes:
         chunk = self._inner.read(65536)
-        logger.info(f"Read decompressed chunk (compressed: {len(chunk)}, data={chunk[:10]})")
+        logger.info(
+            f"Read decompressed chunk (compressed: {len(chunk)}, data={chunk[:10]})"
+        )
         if not chunk:
             self._eof = True
             leftover = self._flush_decompressor()
@@ -583,7 +595,12 @@ class LzipDecompressorStream(DecompressorStream["lzip_extension.Decoder"]):
     def _decompress_chunk(self, chunk: bytes) -> bytes:
         logger.info("Decompressing Lzip chunk %d", len(chunk))
         decompressed = self._decompressor.decompress(chunk)
-        logger.info("Decompressed Lzip chunk %d -> %d (%r)", len(chunk), len(decompressed), chunk[:10])
+        logger.info(
+            "Decompressed Lzip chunk %d -> %d (%r)",
+            len(chunk),
+            len(decompressed),
+            chunk[:10],
+        )
         return decompressed
 
     def _flush_decompressor(self) -> bytes:

@@ -118,9 +118,7 @@ def test_open_archive_from_compressed_stream(
     config = ALTERNATIVE_CONFIG if alternative_packages else None
     outer_format = ArchiveFormat(ContainerFormat.RAW_STREAM, outer_stream_format)
 
-    skip_if_package_missing(
-        ArchiveFormat(ContainerFormat.RAW_STREAM, outer_format), config
-    )
+    skip_if_package_missing(outer_format, config)
     skip_if_package_missing(inner_archive.creation_info.format, config)
 
     if (
@@ -137,9 +135,7 @@ def test_open_archive_from_compressed_stream(
     inner_path = inner_archive.get_archive_path()
     compressed_path = os.path.join(
         tmp_path,
-        os.path.basename(inner_path)
-        + "."
-        + ArchiveFormat(ContainerFormat.RAW_STREAM, outer_format).file_extension(),
+        os.path.basename(inner_path) + "." + outer_format.file_extension(),
     )
     compress_stream(inner_path, compressed_path, outer_stream_format)
 

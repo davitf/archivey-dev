@@ -526,12 +526,9 @@ def create_single_file_compressed_archive_with_library(
     compression_format: ArchiveFormat,
     opener_kwargs: dict[str, Any] = {},
 ):
-<<<<<<< HEAD
     assert compression_format.container == ContainerFormat.RAW_STREAM, (
         f"Only supported compression formats are supported, got {compression_format}"
     )
-=======
->>>>>>> c5d581f (Remove lzip sample archives and references)
     opener = SINGLE_FILE_LIBRARY_OPENERS[compression_format.stream]
     if opener is None:
         raise PackageNotInstalledError(
