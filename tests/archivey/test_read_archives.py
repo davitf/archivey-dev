@@ -640,8 +640,11 @@ def test_read_archives_with_libarchive(
         pytest.xfail("File comments not supported by libarchive")
     if any(f.compression_method is not None for f in sample_archive.contents.files):
         pytest.xfail("Compression methods not reported by libarchive")
-    if sample_archive.creation_info.features.mtime_with_tz:
-        pytest.xfail("Timezone metadata not supported by libarchive")
+    if (
+        sample_archive.creation_info.format.container == ContainerFormat.ZIP
+        and sample_archive.creation_info.features.mtime_with_tz
+    ):
+        pytest.xfail("Timezone metadata not supported by libarchive for ZIP archives")
 
     check_iter_members(
         sample_archive,

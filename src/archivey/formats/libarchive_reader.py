@@ -82,7 +82,11 @@ class LibArchiveReader(BaseArchiveReader):
         filename = entry.pathname
         if entry.isdir and not filename.endswith("/"):
             filename += "/"
-        tzinfo = timezone.utc if self.format.container == ContainerFormat.TAR else None
+        tzinfo = (
+            timezone.utc
+            if self.format.container in {ContainerFormat.TAR, ContainerFormat.SEVENZIP}
+            else None
+        )
         mtime_raw = entry.mtime
         mtime_val = float(mtime_raw) if mtime_raw is not None else 0.0
         mtime = (
