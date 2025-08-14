@@ -6,9 +6,21 @@ import datetime
 import logging
 import os
 import sys
-from typing import TypeVar, overload
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, TypeVar, overload
 
 from archivey.types import MemberType
+
+if TYPE_CHECKING:
+    import grp
+    import pwd
+else:
+    try:
+        import grp
+        import pwd
+    except ImportError:
+        grp = None
+        pwd = None
 
 
 @overload
@@ -125,3 +137,45 @@ def set_file_permissions(
 
     os.chmod(full_path, permissions, **kwargs)
     return True
+
+
+@dataclass
+class OwnershipInfo:
+    """Filesystem ownership information."""
+
+    uid: int | None
+    gid: int | None
+    uname: str | None
+    gname: str | None
+
+
+def get_ownership_from_stat(stat_result: os.stat_result) -> OwnershipInfo:
+    """Return ownership info from an ``os.stat_result``.
+
+    Platform-specific modules are imported lazily to avoid errors on unsupported
+    systems.
+    """
+
+    uid = stat_result.st_uid
+    gid = stat_result.st_gid
+
+    uname: str | None = None
+    gname: str | None = None
+
+    if uid is not None:
+        uname = pwd.getpwuid(uid).pw_name if pwd else None
+
+    if gid is not None:
+        gname = grp.getgrgid(gid).gr_name if grp else None
+
+    return OwnershipInfo(uid=uid, gid=gid, uname=uname, gname=gname)
+
+
+def get_current_user_and_group() -> OwnershipInfo:
+    """Return the current user and group."""
+    return OwnershipInfo(
+        uid=os.getuid(),
+        gid=os.getgid(),
+        uname=pwd.getpwuid(os.getuid()).pw_name if pwd else None,
+        gname=grp.getgrgid(os.getgid()).gr_name if grp else None,
+    )

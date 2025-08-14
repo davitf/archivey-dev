@@ -12,7 +12,13 @@ from archivey.core import open_archive
 from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
 from archivey.filters import create_filter
 from archivey.internal.dependency_checker import get_dependency_versions
-from archivey.types import ArchiveMember, ContainerFormat, CreateSystem, MemberType
+from archivey.internal.utils import get_current_user_and_group
+from archivey.types import (
+    ArchiveMember,
+    ContainerFormat,
+    CreateSystem,
+    MemberType,
+)
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
@@ -105,6 +111,27 @@ def check_member_metadata(
         ), (
             f"Encrypted mismatch for {member.filename}: got {member.encrypted}, expected {sample_file.password is not None}"
         )
+
+    if features.ownership:
+        if sample_file.uid is not None:
+            assert member.uid == sample_file.uid
+        if sample_file.gid is not None:
+            assert member.gid == sample_file.gid
+        if sample_file.uname is not None:
+            assert member.uname == sample_file.uname
+        if sample_file.gname is not None:
+            assert member.gname == sample_file.gname
+    elif sample_archive.creation_info.format.container == ContainerFormat.FOLDER:
+        current_user_and_group = get_current_user_and_group()
+        assert member.uid == current_user_and_group.uid
+        assert member.gid == current_user_and_group.gid
+        assert member.uname == current_user_and_group.uname
+        assert member.gname == current_user_and_group.gname
+    else:
+        assert member.uid is None
+        assert member.gid is None
+        assert member.uname is None
+        assert member.gname is None
 
     if not features.mtime:
         assert member.mtime is None
@@ -250,16 +277,6 @@ def check_iter_members(
             logger.info(
                 f"member: {member.filename} [{member.type}] [{member.member_id}] {stream=}"
             )
-
-            if skip_member_contents:
-                assert not member._edited_by_filter, (
-                    f"Member {member.filename} was edited by filter"
-                )
-            else:
-                assert member._edited_by_filter, (
-                    f"Member {member.filename} was not edited by filter"
-                )
-
             filekey = member.filename
             if member.is_dir:
                 assert member.filename.endswith("/"), (

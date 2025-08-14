@@ -8,7 +8,7 @@ from archivey.filters import (
     fully_trusted,
     tar_filter,
 )
-from archivey.types import ArchiveMember, MemberType
+from archivey.types import ArchiveMember, ContainerFormat, MemberType
 from tests.archivey.sample_archives import SANITIZE_ARCHIVES, SampleArchive
 from tests.archivey.testing_utils import skip_if_package_missing
 
@@ -39,6 +39,8 @@ def test_fully_trusted_filter(sample_archive: SampleArchive, sample_archive_path
             expected_filenames = {
                 name.replace("\\", "/") for name in expected_filenames
             }
+
+        assert all(not m._edited_by_filter for m, _ in members)
         assert filenames == expected_filenames
 
 
@@ -98,17 +100,70 @@ def test_filter_with_raise_on_error_false(
         raise_on_error=False,
     )
 
+    archive_filenames = {
+        f.name for f in sample_archive.contents.files if f.type != MemberType.DIR
+    }
+    expected_missing_filenames = {
+        "/absfile.txt",
+        "../outside.txt",
+        "link_outside",
+        "hardlink_outside",
+    }
+    # Only keep filenames that are present in the archive
+    expected_missing_filenames &= archive_filenames
+    expected_extra_filenames = set()
+    if (
+        "/absfile.txt" in expected_missing_filenames
+        # Even if the file was written to the disk while generating the test folder,
+        # it won't be present in the pseudo-archive, as it's outside the root folder.
+        and sample_archive.creation_info.format.container != ContainerFormat.FOLDER
+    ):
+        expected_extra_filenames.add("absfile.txt")
+
+    if sample_archive.creation_info.features.replace_backslash_with_slash:
+        # The backslash in the filename is replaced with a slash, so the final filename
+        # is rewritten as good.txt.
+        expected_missing_filenames.add("backslash/..\\good.txt")
+
     with open_archive(sample_archive_path) as archive:
         # Should not raise an error, but should filter out problematic members
-        members = list(archive.iter_members_with_streams(filter=custom_filter))
+        members = [
+            m
+            for m, _ in archive.iter_members_with_streams(filter=custom_filter)
+            if m.type != MemberType.DIR
+        ]
 
         # Should get some members (the safe ones)
         assert len(members) > 0
 
         # Check that problematic files are filtered out
-        filenames = {m.filename for m, _ in members}
-        assert "/absfile.txt" not in filenames
-        assert "../outside.txt" not in filenames
+        filtered_filenames = {m.filename for m in members}
+
+        assert archive_filenames - filtered_filenames == expected_missing_filenames
+        assert filtered_filenames - archive_filenames == expected_extra_filenames
+
+        if sample_archive.creation_info.features.replace_backslash_with_slash:
+            # There should be two good.txt files.
+            good_txt_files = [m for m in members if m.filename == "good.txt"]
+            assert {archive.open(m).read() for m in good_txt_files} == {
+                b"good",
+                b"not the same as good.txt",
+            }
+
+        if "absfile.txt" in filtered_filenames:
+            # Opening the member should work, even though the filename was sanitized.
+            absfile = next(m for m in members if m.filename == "absfile.txt")
+            assert absfile._edited_by_filter
+            assert archive.open(absfile).read() == b"abs"
+
+        if "hardlink_absfile" in filtered_filenames:
+            # Even though the target of the hardlink has had its name sanitized,
+            # opening it should still work.
+            hardlink_absfile = next(
+                m for m in members if m.filename == "hardlink_absfile"
+            )
+            assert hardlink_absfile._edited_by_filter
+            assert archive.open(hardlink_absfile).read() == b"abs"
 
 
 @pytest.mark.parametrize(
@@ -222,6 +277,11 @@ def test_data_filter_with_permission_changes(
 
         # Check that executable files have permissions changed
         for member, _ in members:
+            assert member.uid is None
+            assert member.gid is None
+            assert member.uname is None
+            assert member.gname is None
+
             if member.is_file and "exec.sh" in member.filename:
                 # The filter removes executable bits but keeps owner permissions as 0o644
                 # Original mode is 493 (0o755), should become 420 (0o644)

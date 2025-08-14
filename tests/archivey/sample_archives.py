@@ -40,6 +40,10 @@ class FileInfo:
     link_target_type: MemberType | None = MemberType.FILE
     compression_method: str | None = None
     permissions: Optional[int] = None
+    uid: int | None = None
+    gid: int | None = None
+    uname: str | None = None
+    gname: str | None = None
 
 
 def File(
@@ -50,6 +54,10 @@ def File(
     comment: str | None = None,
     compression_method: str | None = None,
     permissions: Optional[int] = None,
+    uid: int | None = None,
+    gid: int | None = None,
+    uname: str | None = None,
+    gname: str | None = None,
 ) -> FileInfo:
     if isinstance(mtime, int):
         mtime = _fake_mtime(mtime)
@@ -62,6 +70,10 @@ def File(
         comment=comment,
         compression_method=compression_method,
         permissions=permissions,
+        uid=uid,
+        gid=gid,
+        uname=uname,
+        gname=gname,
     )
 
 
@@ -169,6 +181,7 @@ class ArchiveFormatFeatures:
     mtime_with_tz: bool = False
     link_targets_in_header: bool = True
     replace_backslash_with_slash: bool = False
+    ownership: bool = False
 
 
 DEFAULT_FORMAT_FEATURES = ArchiveFormatFeatures()
@@ -322,9 +335,9 @@ RAR4_CMD = ArchiveCreationInfo(
     ),
 )
 
-_TAR_FORMAT_FEATURES_TARCMD = ArchiveFormatFeatures(mtime_with_tz=True)
+_TAR_FORMAT_FEATURES_TARCMD = ArchiveFormatFeatures(mtime_with_tz=True, ownership=True)
 _TAR_FORMAT_FEATURES_TARFILE = ArchiveFormatFeatures(
-    duplicate_files=True, hardlink_mtime=True, mtime_with_tz=True
+    duplicate_files=True, hardlink_mtime=True, mtime_with_tz=True, ownership=True
 )
 
 # TAR formats
@@ -829,7 +842,7 @@ LARGE_FILES = [
 
 # Files with potentially unsafe names or permissions for filter testing
 SANITIZE_FILES_WITHOUT_ABSOLUTE_PATHS = [
-    File("good.txt", 1, b"good"),
+    File("good.txt", 1, b"good", uid=1001, gid=1002, uname="the_user", gname="a_group"),
     File("exec.sh", 4, b"#!/bin/sh\n", permissions=0o755),
     Symlink("subdir/good_link.txt", 5, "../good.txt", contents=b"good"),
     Symlink("link_abs", 6, "/etc/passwd", contents=None),
@@ -839,7 +852,7 @@ SANITIZE_FILES_WITHOUT_ABSOLUTE_PATHS = [
 
 # Files with potentially unsafe names or permissions for filter testing
 SANITIZE_FILES_WITHOUT_HARDLINKS = [
-    File("good.txt", 1, b"good"),
+    File("good.txt", 1, b"good", uid=1001, gid=1002, uname="the_user", gname="a_group"),
     File("/absfile.txt", 2, b"abs"),
     File("../outside.txt", 3, b"outside"),
     File("exec.sh", 4, b"#!/bin/sh\n", permissions=0o755),
@@ -852,7 +865,7 @@ SANITIZE_FILES_WITHOUT_HARDLINKS = [
 
 # Files with potentially unsafe names or permissions for filter testing
 SANITIZE_FILES_FULL = [
-    File("good.txt", 1, b"good"),
+    File("good.txt", 1, b"good", uid=1001, gid=1002, uname="the_user", gname="a_group"),
     File("/absfile.txt", 2, b"abs"),
     File("C:/windows_absfile.txt", 2, b"abs"),
     File("../outside.txt", 3, b"outside"),

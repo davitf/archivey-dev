@@ -155,6 +155,9 @@ class TarReader(BaseArchiveReader):
         if info.isdir() and not filename.endswith("/"):
             filename += "/"
 
+        uid = info.uid if info.uid != 0 else None
+        gid = info.gid if info.gid != 0 else None
+
         return ArchiveMember(
             filename=filename,
             file_size=info.size,
@@ -175,18 +178,17 @@ class TarReader(BaseArchiveReader):
                 else MemberType.OTHER
             ),
             mode=stat.S_IMODE(info.mode) if hasattr(info, "mode") else None,
+            uid=uid,
+            gid=gid,
+            uname=info.uname or None,
+            gname=info.gname or None,
             link_target=info.linkname if info.issym() or info.islnk() else None,
             crc32=None,  # TAR doesn't have CRC
             compression_method=self.compression_method,
             extra={
                 "type": info.type,
                 "mode": info.mode,
-                "uid": info.uid,
-                "gid": info.gid,
-                "uname": info.uname,
-                "gname": info.gname,
                 "linkname": info.linkname,
-                "linkpath": info.linkpath,
                 "devmajor": info.devmajor,
                 "devminor": info.devminor,
             },
