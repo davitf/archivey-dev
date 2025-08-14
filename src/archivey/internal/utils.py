@@ -19,8 +19,8 @@ else:
         import grp
         import pwd
     except ImportError:
-        pwd = None
         grp = None
+        pwd = None
 
 
 @overload
@@ -176,6 +176,6 @@ def get_current_user_and_group() -> OwnershipInfo:
     return OwnershipInfo(
         uid=os.getuid(),
         gid=os.getgid(),
-        uname=os.getlogin(),
+        uname=pwd.getpwuid(os.getuid()).pw_name if pwd else None,
         gname=grp.getgrgid(os.getgid()).gr_name if grp else None,
     )
