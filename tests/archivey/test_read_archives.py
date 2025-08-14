@@ -11,7 +11,14 @@ from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
 from archivey.internal.dependency_checker import get_dependency_versions
-from archivey.types import ArchiveMember, CreateSystem, ExtractionFilter, MemberType
+from archivey.internal.utils import get_current_user_and_group
+from archivey.types import (
+    ArchiveMember,
+    ContainerFormat,
+    CreateSystem,
+    ExtractionFilter,
+    MemberType,
+)
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
@@ -108,6 +115,12 @@ def check_member_metadata(
             assert member.uname == sample_file.uname
         if sample_file.gname is not None:
             assert member.gname == sample_file.gname
+    elif sample_archive.creation_info.format.container == ContainerFormat.FOLDER:
+        current_user_and_group = get_current_user_and_group()
+        assert member.uid == current_user_and_group.uid
+        assert member.gid == current_user_and_group.gid
+        assert member.uname == current_user_and_group.uname
+        assert member.gname == current_user_and_group.gname
     else:
         assert member.uid is None
         assert member.gid is None

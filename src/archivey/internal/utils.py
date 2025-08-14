@@ -7,9 +7,20 @@ import logging
 import os
 import sys
 from dataclasses import dataclass
-from typing import TypeVar, overload
+from typing import TYPE_CHECKING, TypeVar, overload
 
 from archivey.types import MemberType
+
+if TYPE_CHECKING:
+    import grp
+    import pwd
+
+try:
+    import grp
+    import pwd
+except ImportError:
+    pwd = None
+    grp = None
 
 
 @overload
@@ -145,26 +156,26 @@ def get_ownership_from_stat(stat_result: os.stat_result) -> OwnershipInfo:
     systems.
     """
 
-    uid = getattr(stat_result, "st_uid", None)
-    gid = getattr(stat_result, "st_gid", None)
+    uid = stat_result.st_uid
+    gid = stat_result.st_gid
 
     uname: str | None = None
     gname: str | None = None
 
     if uid is not None:
-        try:  # pragma: no cover - platform dependent
-            import pwd
-
-            uname = pwd.getpwuid(uid).pw_name
-        except (ImportError, KeyError):
-            uname = None
+        uname = pwd.getpwuid(uid).pw_name if pwd else None
 
     if gid is not None:
-        try:  # pragma: no cover - platform dependent
-            import grp
-
-            gname = grp.getgrgid(gid).gr_name
-        except (ImportError, KeyError):
-            gname = None
+        gname = grp.getgrgid(gid).gr_name if grp else None
 
     return OwnershipInfo(uid=uid, gid=gid, uname=uname, gname=gname)
+
+
+def get_current_user_and_group() -> OwnershipInfo:
+    """Return the current user and group."""
+    return OwnershipInfo(
+        uid=os.getuid(),
+        gid=os.getgid(),
+        uname=os.getlogin(),
+        gname=grp.getgrgid(os.getgid()).gr_name if grp else None,
+    )

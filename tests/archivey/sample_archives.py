@@ -544,7 +544,6 @@ FOLDER_FORMAT = ArchiveCreationInfo(
         duplicate_files=False,
         mtime_with_tz=True,
         hardlink_mtime=False,  # Hardlinks get the timestamp of the original file
-        ownership=True,
     ),
 )
 # ISO format
@@ -843,7 +842,7 @@ LARGE_FILES = [
 
 # Files with potentially unsafe names or permissions for filter testing
 SANITIZE_FILES_WITHOUT_ABSOLUTE_PATHS = [
-    File("good.txt", 1, b"good", uid=1000, gid=1000, uname="user", gname="group"),
+    File("good.txt", 1, b"good", uid=1001, gid=1002, uname="the_user", gname="a_group"),
     File("exec.sh", 4, b"#!/bin/sh\n", permissions=0o755),
     Symlink("subdir/good_link.txt", 5, "../good.txt", contents=b"good"),
     Symlink("link_abs", 6, "/etc/passwd", contents=None),
@@ -853,7 +852,7 @@ SANITIZE_FILES_WITHOUT_ABSOLUTE_PATHS = [
 
 # Files with potentially unsafe names or permissions for filter testing
 SANITIZE_FILES_WITHOUT_HARDLINKS = [
-    File("good.txt", 1, b"good", uid=1000, gid=1000, uname="user", gname="group"),
+    File("good.txt", 1, b"good", uid=1001, gid=1002, uname="the_user", gname="a_group"),
     File("/absfile.txt", 2, b"abs"),
     File("../outside.txt", 3, b"outside"),
     File("exec.sh", 4, b"#!/bin/sh\n", permissions=0o755),
@@ -866,7 +865,7 @@ SANITIZE_FILES_WITHOUT_HARDLINKS = [
 
 # Files with potentially unsafe names or permissions for filter testing
 SANITIZE_FILES_FULL = [
-    File("good.txt", 1, b"good", uid=1000, gid=1000, uname="user", gname="group"),
+    File("good.txt", 1, b"good", uid=1001, gid=1002, uname="the_user", gname="a_group"),
     File("/absfile.txt", 2, b"abs"),
     File("C:/windows_absfile.txt", 2, b"abs"),
     File("../outside.txt", 3, b"outside"),
