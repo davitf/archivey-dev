@@ -168,14 +168,16 @@ def open_archive(
 
     if stream is not None:
         assert not stream.closed
-    logger.debug(
-        "open_archive: reader_class=%s stream=%s path=%s", reader_class, stream, path
-    )
     if stream is not None:
+        stream_seekable = stream.seekable()
+        stream_position = stream.tell() if stream_seekable else "N/A"
         logger.debug(
-            "open_archive: stream.seekable=%s stream.tell=%s",
-            stream.seekable(),
-            stream.tell() if stream.seekable() else "N/A",
+            "open_archive: reader_class=%s stream=%s path=%s stream.seekable=%s stream.tell=%s",
+            reader_class,
+            stream,
+            path,
+            stream_seekable,
+            stream_position,
         )
 
     with archivey_config(config):

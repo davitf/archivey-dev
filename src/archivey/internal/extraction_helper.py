@@ -398,11 +398,6 @@ class ExtractionHelper:
         logger.error("Unexpected member type: %s", member.type)
         return False
 
-    # def process_external_extraction(self, member: ArchiveMember, rel_path: str) -> None:
-    #     """Called for files that were extracted by an external library."""
-    #     full_path = os.path.realpath(os.path.join(self.root_path, rel_path))
-    #     self.process_file_extracted(member, full_path)
-
     def get_pending_extractions(self) -> list[ArchiveMember]:
         logger.info(
             "Getting pending extractions: %s",
