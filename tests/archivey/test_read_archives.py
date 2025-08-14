@@ -10,13 +10,13 @@ import pytest
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
+from archivey.filters import create_filter
 from archivey.internal.dependency_checker import get_dependency_versions
 from archivey.internal.utils import get_current_user_and_group
 from archivey.types import (
     ArchiveMember,
     ContainerFormat,
     CreateSystem,
-    ExtractionFilter,
     MemberType,
 )
 from tests.archivey.sample_archives import (
@@ -38,7 +38,13 @@ def _has_unicode_non_bmp_chars(s: str) -> bool:
     return any(ord(c) >= 0x10000 for c in s)
 
 
-TESTING_FILTER = ExtractionFilter.FULLY_TRUSTED
+TESTING_FILTER = create_filter(
+    for_data=False,
+    sanitize_names=False,
+    sanitize_link_targets=False,
+    sanitize_permissions=False,
+    raise_on_error=True,
+)
 
 
 def check_member_metadata(
@@ -271,7 +277,6 @@ def check_iter_members(
             logger.info(
                 f"member: {member.filename} [{member.type}] [{member.member_id}] {stream=}"
             )
-
             filekey = member.filename
             if member.is_dir:
                 assert member.filename.endswith("/"), (

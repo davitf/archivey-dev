@@ -109,15 +109,14 @@ def _get_filtered_member(
 
         new_attrs: dict[str, Any] = {}
         if for_data:
-            new_attrs["uid"] = None
-            new_attrs["gid"] = None
-            new_attrs["uname"] = None
-            new_attrs["gname"] = None
-            if member.extra:
-                extra = dict(member.extra)
-                for key in ("uid", "gid", "uname", "gname"):
-                    extra.pop(key, None)
-                new_attrs["extra"] = extra
+            if member.uid:
+                new_attrs["uid"] = None
+            if member.gid:
+                new_attrs["gid"] = None
+            if member.uname:
+                new_attrs["uname"] = None
+            if member.gname:
+                new_attrs["gname"] = None
 
         if sanitize_names:
             name = _sanitize_name(member, dest_path)
@@ -144,7 +143,12 @@ def _get_filtered_member(
     except ArchiveFilterError as e:
         if raise_on_error:
             raise
-        logger.warning("Filter error for %s: %s", member.filename, e)
+        logger.warning(
+            "Filter error for %s (type=%s), skipping: %s",
+            member.filename,
+            member.type,
+            e,
+        )
         return None
 
 

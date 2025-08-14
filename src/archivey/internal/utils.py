@@ -14,13 +14,13 @@ from archivey.types import MemberType
 if TYPE_CHECKING:
     import grp
     import pwd
-
-try:
-    import grp
-    import pwd
-except ImportError:
-    pwd = None
-    grp = None
+else:
+    try:
+        import grp
+        import pwd
+    except ImportError:
+        pwd = None
+        grp = None
 
 
 @overload

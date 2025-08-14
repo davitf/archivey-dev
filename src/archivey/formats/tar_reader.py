@@ -188,12 +188,7 @@ class TarReader(BaseArchiveReader):
             extra={
                 "type": info.type,
                 "mode": info.mode,
-                "uid": info.uid,
-                "gid": info.gid,
-                "uname": info.uname,
-                "gname": info.gname,
                 "linkname": info.linkname,
-                "linkpath": info.linkpath,
                 "devmajor": info.devmajor,
                 "devminor": info.devminor,
             },
