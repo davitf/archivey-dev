@@ -180,8 +180,12 @@ def check_iter_members(
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
     config: Optional[ArchiveyConfig] = None,
+    *,
+    streaming_only: bool = False,
+    skip_package_check: bool = False,
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    if not skip_package_check:
+        skip_if_package_missing(sample_archive.creation_info.format, config)
 
     if (
         archive_path.endswith(".tar.zst")
@@ -243,6 +247,7 @@ def check_iter_members(
         archive_path_resolved,
         pwd=constructor_password,
         config=config,
+        streaming_only=streaming_only,
     ) as archive:
         assert archive.format == sample_archive.creation_info.format
         format_info = archive.get_archive_info()
@@ -605,3 +610,43 @@ def test_read_hardlinks_archives(
 def test_read_folder_archives(sample_archive: SampleArchive, sample_archive_path: str):
     logger.info(f"Testing {sample_archive.filename}; files at {sample_archive_path}")
     check_iter_members(sample_archive, archive_path=sample_archive_path)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    SAMPLE_ARCHIVES,
+    ids=lambda x: x.filename,
+)
+def test_read_archives_with_libarchive(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    pytest.importorskip("libarchive")
+    config = ArchiveyConfig(use_libarchive=True)
+
+    if sample_archive.creation_info.format.container in {
+        ContainerFormat.FOLDER,
+        ContainerFormat.RAW_STREAM,
+        ContainerFormat.RAR,
+    }:
+        pytest.xfail("Format not supported by libarchive")
+    if (
+        sample_archive.contents.has_password()
+        or sample_archive.contents.header_password is not None
+    ):
+        pytest.xfail("Encrypted archives not supported by libarchive")
+    if sample_archive.contents.solid:
+        pytest.xfail("Solid archives not supported by libarchive")
+    if sample_archive.contents.archive_comment:
+        pytest.xfail("Archive comments not supported by libarchive")
+    if any(f.comment is not None for f in sample_archive.contents.files):
+        pytest.xfail("File comments not supported by libarchive")
+    if any(f.compression_method is not None for f in sample_archive.contents.files):
+        pytest.xfail("Compression methods not reported by libarchive")
+
+    check_iter_members(
+        sample_archive,
+        archive_path=sample_archive_path,
+        config=config,
+        streaming_only=True,
+        skip_package_check=True,
+    )

@@ -44,6 +44,9 @@ class ArchiveyConfig:
     use_single_file_stored_metadata: bool = False
     "If set, data stored in compressed stream headers is set in the ArchiveMember object for single-file compressed archives, instead of basing it only on the file itself. (filename and modification time for gzip archives only)"
 
+    use_libarchive: bool = False
+    "Use libarchive as the backend for reading archives. Only supported when opening archives with `streaming_only=True`."
+
     tar_check_integrity: bool = True
     "If a tar archive is corrupted in a metadata section, tarfile simply stops reading further and acts as if the file has ended. If set, we perform a check that the tar archive has actually been read fully, and raise an error if it's actually corrupted."
 
@@ -67,6 +70,7 @@ class ConfigOverrides(TypedDict, total=False):
     use_zstandard: bool | None
     use_rar_stream: bool | None
     use_single_file_stored_metadata: bool | None
+    use_libarchive: bool | None
     tar_check_integrity: bool | None
     overwrite_mode: OverwriteMode | OverwriteModeLiteral | None
     extraction_filter: ExtractionFilter | FilterFunc | ExtractionFilterLiteral | None
