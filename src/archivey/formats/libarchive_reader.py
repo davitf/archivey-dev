@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Optional
 from archivey.exceptions import ArchiveError, ArchiveReadError, PackageNotInstalledError
 from archivey.internal.base_reader import ArchiveInfo, ArchiveMember, BaseArchiveReader
 from archivey.internal.io_helpers import ensure_binaryio, is_stream
-from archivey.types import ArchiveFormat, CreateSystem, MemberType
+from archivey.types import ArchiveFormat, ContainerFormat, CreateSystem, MemberType
 
 if TYPE_CHECKING:
     import libarchive
@@ -82,7 +82,14 @@ class LibArchiveReader(BaseArchiveReader):
         filename = entry.pathname
         if entry.isdir and not filename.endswith("/"):
             filename += "/"
-        mtime = datetime.fromtimestamp(entry.mtime, tz=timezone.utc)
+        tzinfo = timezone.utc if self.format.container == ContainerFormat.TAR else None
+        mtime_raw = entry.mtime
+        mtime_val = float(mtime_raw) if mtime_raw is not None else 0.0
+        mtime = (
+            datetime.fromtimestamp(mtime_val, tz=tzinfo)
+            if tzinfo is not None
+            else datetime.fromtimestamp(mtime_val)
+        )
         if entry.isdir:
             member_type = MemberType.DIR
         elif entry.issym:
@@ -91,14 +98,18 @@ class LibArchiveReader(BaseArchiveReader):
             member_type = MemberType.HARDLINK
         else:
             member_type = MemberType.FILE
-        link_target = (
+        link_target_raw = (
             entry.linkpath
             if member_type in {MemberType.SYMLINK, MemberType.HARDLINK}
             else None
         )
+        if isinstance(link_target_raw, bytes):
+            link_target = link_target_raw.decode("utf-8")
+        else:
+            link_target = link_target_raw
         uid = entry.uid if entry.uid != 0 else None
         gid = entry.gid if entry.gid != 0 else None
-        mode = entry.mode if entry.mode != 0 else None
+        mode = entry.mode & 0o7777 if entry.mode != 0 else None
         return ArchiveMember(
             filename=filename,
             file_size=entry.size if entry.isfile else None,

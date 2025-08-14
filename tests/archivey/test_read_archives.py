@@ -634,14 +634,14 @@ def test_read_archives_with_libarchive(
         or sample_archive.contents.header_password is not None
     ):
         pytest.xfail("Encrypted archives not supported by libarchive")
-    if sample_archive.contents.solid:
-        pytest.xfail("Solid archives not supported by libarchive")
     if sample_archive.contents.archive_comment:
         pytest.xfail("Archive comments not supported by libarchive")
     if any(f.comment is not None for f in sample_archive.contents.files):
         pytest.xfail("File comments not supported by libarchive")
     if any(f.compression_method is not None for f in sample_archive.contents.files):
         pytest.xfail("Compression methods not reported by libarchive")
+    if sample_archive.creation_info.features.mtime_with_tz:
+        pytest.xfail("Timezone metadata not supported by libarchive")
 
     check_iter_members(
         sample_archive,
