@@ -277,6 +277,11 @@ def test_data_filter_with_permission_changes(
 
         # Check that executable files have permissions changed
         for member, _ in members:
+            assert member.uid is None
+            assert member.gid is None
+            assert member.uname is None
+            assert member.gname is None
+
             if member.is_file and "exec.sh" in member.filename:
                 # The filter removes executable bits but keeps owner permissions as 0o644
                 # Original mode is 493 (0o755), should become 420 (0o644)
