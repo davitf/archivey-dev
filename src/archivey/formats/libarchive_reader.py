@@ -20,6 +20,65 @@ else:
 logger = logging.getLogger(__name__)
 
 
+class _LibArchiveEntryStream(io.RawIOBase, BinaryIO):
+    """Wrap ``libarchive`` entry blocks as a streaming file-like object."""
+
+    def __init__(self, entry: "libarchive.ArchiveEntry") -> None:
+        super().__init__()
+        self._blocks = entry.get_blocks()
+        self._buffer = bytearray()
+        self._eof = False
+
+    def readable(self) -> bool:  # pragma: no cover - trivial
+        return True
+
+    def writable(self) -> bool:  # pragma: no cover - trivial
+        return False
+
+    def seekable(self) -> bool:  # pragma: no cover - trivial
+        return False
+
+    def _fill_buffer(self, size: int) -> None:
+        while not self._eof and (size < 0 or len(self._buffer) < size):
+            try:
+                self._buffer.extend(next(self._blocks))
+            except StopIteration:
+                self._eof = True
+                break
+
+    def read(self, size: int = -1) -> bytes:
+        if size == 0:
+            return b""
+        self._fill_buffer(size)
+        if size < 0:
+            data = bytes(self._buffer)
+            self._buffer.clear()
+        else:
+            data = bytes(self._buffer[:size])
+            del self._buffer[:size]
+        return data
+
+    def readinto(self, b: bytearray | memoryview) -> int:
+        data = self.read(len(b))
+        b[: len(data)] = data
+        return len(data)
+
+    def close(self) -> None:  # pragma: no cover - simple
+        if not self._eof:
+            for _ in self._blocks:
+                pass
+            self._eof = True
+        super().close()
+
+    def seek(
+        self, offset: int, whence: int = io.SEEK_SET
+    ) -> int:  # pragma: no cover - trivial
+        raise io.UnsupportedOperation("seek")
+
+    def tell(self) -> int:  # pragma: no cover - trivial
+        raise io.UnsupportedOperation("tell")
+
+
 class LibArchiveReader(BaseArchiveReader):
     """ArchiveReader implementation using libarchive.
 
@@ -139,8 +198,8 @@ class LibArchiveReader(BaseArchiveReader):
         self, member: ArchiveMember, pwd: bytes | str | None, for_iteration: bool
     ) -> BinaryIO:
         assert self._current_entry is not None
-        data = b"".join(self._current_entry.get_blocks())
-        return io.BytesIO(data)
+        stream = _LibArchiveEntryStream(self._current_entry)
+        return ensure_binaryio(stream)
 
     def get_archive_info(self) -> ArchiveInfo:
         return ArchiveInfo(format=self.format, comment=None, is_solid=False, extra={})
