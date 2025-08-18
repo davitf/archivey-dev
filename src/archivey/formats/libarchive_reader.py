@@ -1,13 +1,23 @@
 # pyright: reportMissingImports=false
+import contextlib
 import io
+import itertools
 import logging
+import os
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Optional
+from typing import TYPE_CHECKING, BinaryIO, Iterator, Optional, cast
 
 from archivey.exceptions import ArchiveError, ArchiveReadError, PackageNotInstalledError
 from archivey.internal.base_reader import ArchiveInfo, ArchiveMember, BaseArchiveReader
 from archivey.internal.io_helpers import ensure_binaryio, is_stream
-from archivey.types import ArchiveFormat, ContainerFormat, CreateSystem, MemberType
+from archivey.internal.utils import bytes_to_str
+from archivey.types import (
+    ArchiveFormat,
+    ContainerFormat,
+    CreateSystem,
+    MemberType,
+    StreamFormat,
+)
 
 if TYPE_CHECKING:
     import libarchive
@@ -79,10 +89,34 @@ class _LibArchiveEntryStream(io.RawIOBase, BinaryIO):
         raise io.UnsupportedOperation("tell")
 
 
+LIBARCHIVE_FORMAT_TO_CONTAINER_FORMAT = {
+    "RAR5": ContainerFormat.RAR,
+    "RAR": ContainerFormat.RAR,
+    "7-Zip": ContainerFormat.SEVENZIP,
+    "GNU tar format": ContainerFormat.TAR,  # tarcmd files
+    "POSIX ustar format": ContainerFormat.TAR,  # tarfile archives
+    "POSIX pax interchange format": ContainerFormat.TAR,  # encoding__tarfile.tar
+    "raw": ContainerFormat.RAW_STREAM,
+}
+
+LIBARCHIVE_FORMAT_TO_VERSION = {
+    "RAR5": "5",
+    "RAR": "3",
+    # "7-Zip": "22.00",
+    # "GNU tar format": "1.34",
+    # "POSIX ustar format": "1.34",
+    # "POSIX pax interchange format": "1.34",
+}
+
+
 class LibArchiveReader(BaseArchiveReader):
     """ArchiveReader implementation using libarchive.
 
     This reader only supports streaming access via ``iter_members_with_streams``.
+
+    For some reason, some py7zr archives result in a "Truncated 7-zip file body error"
+    which seems related to https://github.com/libarchive/libarchive/issues/2106
+
     """
 
     def __init__(
@@ -106,17 +140,15 @@ class LibArchiveReader(BaseArchiveReader):
             members_list_supported=False,
         )
 
-        self._pwd = pwd.encode("utf-8") if isinstance(pwd, str) else pwd
+        self._context_manager, self._archive = self._open_archive()
+        self._members_iter = iter(self._archive)
+        self._first_entry = next(self._members_iter)
 
-        if is_stream(archive_path):
-            stream = ensure_binaryio(archive_path)
-            self._ctx: Any = libarchive.stream_reader(stream, passphrase=self._pwd)
-        else:
-            self._ctx = libarchive.file_reader(str(archive_path), passphrase=self._pwd)
-
-        self._archive = self._ctx.__enter__()
-        self._entry_iter: Iterator[Any] = iter(self._archive)
-        self._current_entry: Any = None
+        self.format_name = bytes_to_str(self._archive.format_name)
+        self.detected_container_format = LIBARCHIVE_FORMAT_TO_CONTAINER_FORMAT.get(
+            self.format_name, ContainerFormat.UNKNOWN
+        )
+        self.filter_names = self._archive.filter_names
 
     def _translate_exception(
         self, e: Exception
@@ -126,50 +158,111 @@ class LibArchiveReader(BaseArchiveReader):
         return None
 
     def _close_archive(self) -> None:
-        if getattr(self, "_ctx", None) is not None:
-            self._ctx.__exit__(None, None, None)
-            self._archive = None
-            self._ctx = None
+        pass
+        # self._context_manager.__exit__(None, None, None)
+
+    def _open_archive(
+        self,
+        format_name: str | None = None,
+    ) -> tuple[
+        contextlib.AbstractContextManager["libarchive.read.ArchiveRead"],
+        "libarchive.read.ArchiveRead",
+    ]:
+        try:
+            logger.info("Opening archive with format_name: %s", format_name)
+            if is_stream(self.path_or_stream):
+                stream = ensure_binaryio(self.path_or_stream)
+                context_manager = libarchive.stream_reader(
+                    stream,
+                    passphrase=self._archive_password,
+                    format_name=format_name or "all",
+                )
+            else:
+                assert isinstance(self.path_or_stream, str)
+                context_manager = libarchive.file_reader(
+                    self.path_or_stream,
+                    passphrase=self._archive_password,
+                    format_name=format_name or "all",
+                )
+
+            return context_manager, context_manager.__enter__()
+
+        except libarchive.exception.ArchiveError as e:
+            logger.error("Error opening archive: %s", e)
+            if format_name is None and "Unrecognized archive format" in str(e):
+                logger.error("Unrecognized archive format, trying raw stream")
+                # Try to open as a raw stream
+                return self._open_archive(format_name="raw")
+
+            raise
 
     def iter_members_for_registration(self) -> Iterator[ArchiveMember]:
-        for entry in self._entry_iter:
-            self._current_entry = entry
+        for entry in itertools.chain([self._first_entry], self._members_iter):
+            logger.info("entry: %s", entry)
+            logger.info("archive.format_name: %s", self.format_name)
+            logger.info("archive.filter_names: %s", self.filter_names)
+            logger.info("archive.bytes_read: %s", self._archive.bytes_read)
             yield self._entry_to_member(entry)
-        self._close_archive()
+
+        self._context_manager.__exit__(None, None, None)
 
     def _entry_to_member(self, entry: "libarchive.ArchiveEntry") -> ArchiveMember:
         filename = entry.pathname
+        if (
+            filename == "data"
+            and self.detected_container_format == ContainerFormat.RAW_STREAM
+        ):
+            if self.path_str is not None:
+                base_name, ext = os.path.splitext(os.path.basename(self.path_str))
+                if ext == "":
+                    filename = base_name + ".uncompressed"
+                else:
+                    filename = base_name
+
+            else:
+                filename = "uncompressed"
+
         if entry.isdir and not filename.endswith("/"):
             filename += "/"
+
         tzinfo = (
             timezone.utc
-            if self.format.container in {ContainerFormat.TAR, ContainerFormat.SEVENZIP}
+            if self.detected_container_format
+            in (ContainerFormat.TAR, ContainerFormat.SEVENZIP)
+            or self.format_name == "RAR5"
             else None
         )
-        mtime_raw = entry.mtime
-        mtime_val = float(mtime_raw) if mtime_raw is not None else 0.0
         mtime = (
-            datetime.fromtimestamp(mtime_val, tz=tzinfo)
-            if tzinfo is not None
-            else datetime.fromtimestamp(mtime_val)
+            datetime.fromtimestamp(entry.mtime, tz=tzinfo)
+            if entry.mtime is not None
+            else None
         )
+        if (
+            mtime is None
+            and self.detected_container_format == ContainerFormat.RAW_STREAM
+            and self.path_str is not None
+        ):
+            mtime = datetime.fromtimestamp(
+                os.path.getmtime(self.path_str), tz=timezone.utc
+            )
+
         if entry.isdir:
             member_type = MemberType.DIR
         elif entry.issym:
             member_type = MemberType.SYMLINK
         elif entry.islnk:
             member_type = MemberType.HARDLINK
-        else:
+        # py7zr archives have a filetype of 0 for files for some reason, which result in
+        # entry.isfile being False.
+        elif entry.isfile or entry.filetype == 0:
             member_type = MemberType.FILE
-        link_target_raw = (
-            entry.linkpath
+        else:
+            member_type = MemberType.OTHER
+        link_target = (
+            bytes_to_str(entry.linkpath)
             if member_type in {MemberType.SYMLINK, MemberType.HARDLINK}
             else None
         )
-        if isinstance(link_target_raw, bytes):
-            link_target = link_target_raw.decode("utf-8")
-        else:
-            link_target = link_target_raw
         uid = entry.uid if entry.uid != 0 else None
         gid = entry.gid if entry.gid != 0 else None
         mode = entry.mode & 0o7777 if entry.mode != 0 else None
@@ -197,9 +290,21 @@ class LibArchiveReader(BaseArchiveReader):
     def _open_member(
         self, member: ArchiveMember, pwd: bytes | str | None, for_iteration: bool
     ) -> BinaryIO:
-        assert self._current_entry is not None
-        stream = _LibArchiveEntryStream(self._current_entry)
+        stream = _LibArchiveEntryStream(
+            cast("libarchive.ArchiveEntry", member.raw_info)
+        )
         return ensure_binaryio(stream)
 
     def get_archive_info(self) -> ArchiveInfo:
-        return ArchiveInfo(format=self.format, comment=None, is_solid=False, extra={})
+        return ArchiveInfo(
+            format=ArchiveFormat(
+                self.detected_container_format, StreamFormat.UNCOMPRESSED
+            ),
+            version=LIBARCHIVE_FORMAT_TO_VERSION.get(self.format_name, None),
+            comment=None,
+            is_solid=self.detected_container_format == ContainerFormat.TAR,
+            extra={
+                "libarchive_format_name": self.format_name,
+                "libarchive_filter_names": self.filter_names,
+            },
+        )

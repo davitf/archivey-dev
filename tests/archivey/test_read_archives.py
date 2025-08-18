@@ -630,20 +630,22 @@ def test_read_archives_with_libarchive(
 
     if sample_archive.creation_info.format.container in {
         ContainerFormat.FOLDER,
-        ContainerFormat.RAW_STREAM,
-        ContainerFormat.RAR,
-        ContainerFormat.SEVENZIP,
+        # ContainerFormat.RAW_STREAM,
+        # ContainerFormat.RAR,
+        # ContainerFormat.SEVENZIP,
     }:
         pytest.xfail("Format not supported by libarchive")
-    if (
-        sample_archive.contents.has_password()
-        or sample_archive.contents.header_password is not None
-    ):
-        pytest.xfail("Encrypted archives not supported by libarchive")
+    # if (
+    #     sample_archive.contents.has_password()
+    #     or sample_archive.contents.header_password is not None
+    # ):
+    #     pytest.xfail("Encrypted archives not supported by libarchive")
+
     if sample_archive.contents.archive_comment:
         pytest.xfail("Archive comments not supported by libarchive")
     if any(f.comment is not None for f in sample_archive.contents.files):
         pytest.xfail("File comments not supported by libarchive")
+
     if (
         sample_archive.creation_info.format.container == ContainerFormat.ZIP
         and sample_archive.creation_info.features.mtime_with_tz
