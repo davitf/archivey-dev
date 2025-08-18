@@ -18,6 +18,7 @@ from archivey.types import (
     ContainerFormat,
     CreateSystem,
     MemberType,
+    StreamFormat,
 )
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
@@ -52,6 +53,8 @@ def check_member_metadata(
     sample_file: FileInfo | None,
     sample_archive: SampleArchive,
     archive_path: str | None = None,
+    *,
+    skip_compression_method: bool = False,
 ):
     if sample_file is None:
         return
@@ -74,7 +77,7 @@ def check_member_metadata(
             f"CRC32 mismatch for {member.filename}: got {member.crc32}, expected {sample_crc32}"
         )
 
-    if sample_file.compression_method is not None:
+    if sample_file.compression_method is not None and not skip_compression_method:
         assert member.compression_method == sample_file.compression_method
 
     if features.file_comments:
@@ -179,6 +182,7 @@ def check_iter_members(
     archive_path: str,
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
+    skip_compression_method: bool = False,
     config: Optional[ArchiveyConfig] = None,
     *,
     streaming_only: bool = False,
@@ -348,6 +352,7 @@ def check_iter_members(
                     sample_file,
                     sample_archive,
                     archive_path=archive_path_resolved,
+                    skip_compression_method=skip_compression_method,
                 )
 
                 if sample_file.type == MemberType.FILE and not skip_member_contents:
@@ -627,6 +632,7 @@ def test_read_archives_with_libarchive(
         ContainerFormat.FOLDER,
         ContainerFormat.RAW_STREAM,
         ContainerFormat.RAR,
+        ContainerFormat.SEVENZIP,
     }:
         pytest.xfail("Format not supported by libarchive")
     if (
@@ -638,13 +644,16 @@ def test_read_archives_with_libarchive(
         pytest.xfail("Archive comments not supported by libarchive")
     if any(f.comment is not None for f in sample_archive.contents.files):
         pytest.xfail("File comments not supported by libarchive")
-    if any(f.compression_method is not None for f in sample_archive.contents.files):
-        pytest.xfail("Compression methods not reported by libarchive")
     if (
         sample_archive.creation_info.format.container == ContainerFormat.ZIP
         and sample_archive.creation_info.features.mtime_with_tz
     ):
         pytest.xfail("Timezone metadata not supported by libarchive for ZIP archives")
+    if sample_archive.creation_info.format.stream in {
+        StreamFormat.BROTLI,
+        StreamFormat.ZLIB,
+    }:
+        pytest.xfail("Compression format not supported by libarchive")
 
     check_iter_members(
         sample_archive,
@@ -652,4 +661,5 @@ def test_read_archives_with_libarchive(
         config=config,
         streaming_only=True,
         skip_package_check=True,
+        skip_compression_method=True,
     )
