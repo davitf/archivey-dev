@@ -41,6 +41,7 @@ optional = [
     "pycdlib>=1.14.0",
     "uncompresspy>=0.4.0; python_full_version >= '3.11'",
     "brotli>=1.1.0",
+    "libarchive-c>=5.3",
 ]
 
 optional-freethreaded = [
@@ -57,6 +58,7 @@ optional-freethreaded = [
     "pycdlib>=1.14.0",
     "uncompresspy>=0.4.0",
     "brotli>=1.1.0",
+    "libarchive-c>=5.3",
 ]
 
 [build-system]

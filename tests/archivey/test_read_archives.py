@@ -18,6 +18,7 @@ from archivey.types import (
     ContainerFormat,
     CreateSystem,
     MemberType,
+    StreamFormat,
 )
 from tests.archivey.sample_archives import (
     ALTERNATIVE_CONFIG,
@@ -52,6 +53,8 @@ def check_member_metadata(
     sample_file: FileInfo | None,
     sample_archive: SampleArchive,
     archive_path: str | None = None,
+    *,
+    skip_compression_method: bool = False,
 ):
     if sample_file is None:
         return
@@ -74,7 +77,7 @@ def check_member_metadata(
             f"CRC32 mismatch for {member.filename}: got {member.crc32}, expected {sample_crc32}"
         )
 
-    if sample_file.compression_method is not None:
+    if sample_file.compression_method is not None and not skip_compression_method:
         assert member.compression_method == sample_file.compression_method
 
     if features.file_comments:
@@ -179,9 +182,14 @@ def check_iter_members(
     archive_path: str,
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
+    skip_compression_method: bool = False,
     config: Optional[ArchiveyConfig] = None,
+    *,
+    streaming_only: bool = False,
+    skip_package_check: bool = False,
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    if not skip_package_check:
+        skip_if_package_missing(sample_archive.creation_info.format, config)
 
     if (
         archive_path.endswith(".tar.zst")
@@ -243,6 +251,7 @@ def check_iter_members(
         archive_path_resolved,
         pwd=constructor_password,
         config=config,
+        streaming_only=streaming_only,
     ) as archive:
         assert archive.format == sample_archive.creation_info.format
         format_info = archive.get_archive_info()
@@ -343,6 +352,7 @@ def check_iter_members(
                     sample_file,
                     sample_archive,
                     archive_path=archive_path_resolved,
+                    skip_compression_method=skip_compression_method,
                 )
 
                 if sample_file.type == MemberType.FILE and not skip_member_contents:
@@ -605,3 +615,53 @@ def test_read_hardlinks_archives(
 def test_read_folder_archives(sample_archive: SampleArchive, sample_archive_path: str):
     logger.info(f"Testing {sample_archive.filename}; files at {sample_archive_path}")
     check_iter_members(sample_archive, archive_path=sample_archive_path)
+
+
+@pytest.mark.parametrize(
+    "sample_archive",
+    SAMPLE_ARCHIVES,
+    ids=lambda x: x.filename,
+)
+def test_read_archives_with_libarchive(
+    sample_archive: SampleArchive, sample_archive_path: str
+):
+    pytest.importorskip("libarchive")
+    config = ArchiveyConfig(use_libarchive=True)
+
+    if sample_archive.creation_info.format.container in {
+        ContainerFormat.FOLDER,
+        # ContainerFormat.RAW_STREAM,
+        # ContainerFormat.RAR,
+        # ContainerFormat.SEVENZIP,
+    }:
+        pytest.xfail("Format not supported by libarchive")
+    # if (
+    #     sample_archive.contents.has_password()
+    #     or sample_archive.contents.header_password is not None
+    # ):
+    #     pytest.xfail("Encrypted archives not supported by libarchive")
+
+    if sample_archive.contents.archive_comment:
+        pytest.xfail("Archive comments not supported by libarchive")
+    if any(f.comment is not None for f in sample_archive.contents.files):
+        pytest.xfail("File comments not supported by libarchive")
+
+    if (
+        sample_archive.creation_info.format.container == ContainerFormat.ZIP
+        and sample_archive.creation_info.features.mtime_with_tz
+    ):
+        pytest.xfail("Timezone metadata not supported by libarchive for ZIP archives")
+    if sample_archive.creation_info.format.stream in {
+        StreamFormat.BROTLI,
+        StreamFormat.ZLIB,
+    }:
+        pytest.xfail("Compression format not supported by libarchive")
+
+    check_iter_members(
+        sample_archive,
+        archive_path=sample_archive_path,
+        config=config,
+        streaming_only=True,
+        skip_package_check=True,
+        skip_compression_method=True,
+    )
