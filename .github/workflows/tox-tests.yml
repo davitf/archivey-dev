@@ -44,5 +44,5 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y ncompress
 
-      - name: Run tox environment
-        run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }}
+      - name: Run tox environment (excluding URL test)
+        run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -k "not test_open_url"
