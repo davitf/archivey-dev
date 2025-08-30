@@ -46,3 +46,6 @@ jobs:
 
       - name: Run tox environment (excluding URL test)
         run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -k "not test_open_url"
+
+      - name: Run URL test
+        run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- tests/archivey/test_open_url.py
