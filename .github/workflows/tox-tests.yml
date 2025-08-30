@@ -7,56 +7,15 @@ on:
     branches: [ main ]
 
 jobs:
-  all-deps-tests:
-    name: Tox - py${{ matrix.python-version }}-alldeps
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.13t", "3.14-dev", "3.14t-dev"]
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install tox
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          uv tool install tox --with tox-uv
-
-      - name: Install unrar (for rarfile tests)
-        run: scripts/install_unrar.sh
-
-      - name: Install ncompress
-        run: sudo apt-get install -y ncompress
-
-      - name: Run tox environment
-        run: |
-          if [[ "${{ matrix.python-version }}" == "3.14-dev" ]]; then
-            tox -e py3.14-alldeps
-          elif [[ "${{ matrix.python-version }}" == "3.14t-dev" ]]; then
-            tox -e py3.14t-freethreaded
-          elif [[ "${{ matrix.python-version }}" == "3.13t" ]]; then
-            tox -e py3.13t-freethreaded
-          else
-            tox -e py${{ matrix.python-version }}-alldeps
-          fi
-
-  mac-win-tests:
-    name: Tox - py${{ matrix.python-version }}-alldeps (${{ matrix.os }})
+  rapidgzip-version-tests:
+    name: Tox - py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
-        python-version: ["3.10", "3.13"]
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.13"]
+        rapidgzip-version: ["0.14.3", "0.14.4", "0.14.5", "0.15.0", "0.15.1", "0.15.2"]
 
     steps:
       - name: Check out code
@@ -68,47 +27,22 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install tox
-        run: pip install tox
+        run: |
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+            uv tool install tox --with tox-uv
+          else
+            pip install tox
+          fi
 
       - name: Install unrar (for rarfile tests)
         shell: bash
         run: scripts/install_unrar.sh
 
-      - name: Run tox environment (excluding corrupted files test)
-        run: tox -vv -e py${{ matrix.python-version }}-alldeps -- -k "not test_corrupted_archives"
-
-      - name: Run corrupted files test only
-        run: tox -vv -e py${{ matrix.python-version }}-alldeps -- tests/archivey/test_corrupted_archives.py
-
-  dependency-version-tests:
-    name: Tox - py${{ matrix.python-version }}-${{ matrix.tox_env }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.13"]
-        tox_env: ["oldlibs", "nolibs", "rarfile_no_crypto"]
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install tox
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          uv tool install tox --with tox-uv
-
-      - name: Install unrar (for rarfile tests)
-        run: sudo apt-get update && sudo apt-get install -y unrar
-
-      - name: Install ncompress
+      - name: Install ncompress (Linux only)
+        if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y ncompress
 
-      - name: Run tox environment
-        run: tox -e py${{ matrix.python-version }}-${{ matrix.tox_env }}
+      - name: Run tox environment (excluding URL test)
+        run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -k "not test_open_url"

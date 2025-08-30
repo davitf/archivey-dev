@@ -27,14 +27,14 @@ optional = [
     "cryptography>=45.0.3",
     "rarfile>=4.2",
     "py7zr>=1.0.0",
-    "rapidgzip==0.14.5",  # 0.15.0 is causing CI failures on Mac
+    "rapidgzip>=0.15.2",  # 0.15.0 is causing CI failures on Mac
     "indexed_bzip2>=1.6.0",
     "python-xz>=0.5.0",
     "pyzstd>=0.17.0",
-    # Not currently compatible with Python 3.14. Fix on the way, see
+    # Only 0.24.0 is compatible with Python 3.14, see
     # https://github.com/indygreg/python-zstandard/pull/262
     "zstandard>=0.23.0 ; python_full_version < '3.14'",
-    # Not currently compatible with Python 3.14. Fix on the way, see
+    "zstandard>=0.24.0 ; python_full_version >= '3.14'",
     # https://github.com/python-lz4/python-lz4/pull/303
     "lz4>=4.4.4 ; python_full_version < '3.14'",
     "lzip>=1.2.0",
