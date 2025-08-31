@@ -44,8 +44,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y ncompress
 
-      # - name: Run tox environment (excluding URL test)
-      #   run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -k "not test_open_url"
+      - name: Run tox environment (excluding tests likely to fail)
+        run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives"
 
       - name: Run URL test
-        run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- tests/archivey/test_open_url.py
+        run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_open_url.py
+
+      - name: Run corrupted files test
+        run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_corrupted_archives.py
+
+      - name: Run nested archives test
+        run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_nested_compressed_archives.py
