@@ -30,6 +30,7 @@ from archivey.exceptions import (
 from archivey.filters import DEFAULT_FILTERS
 from archivey.internal.archive_stream import ArchiveStream
 from archivey.internal.extraction_helper import ExtractionHelper
+from archivey.internal.utils import str_to_bytes
 from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
@@ -150,10 +151,7 @@ class BaseArchiveReader(ArchiveReader):
         super().__init__(archive_path, format)
         self.config: ArchiveyConfig = get_archivey_config()
 
-        if pwd is not None and isinstance(pwd, str):
-            self._archive_password: bytes | None = pwd.encode("utf-8")
-        else:
-            self._archive_password: bytes | None = pwd
+        self._archive_password: bytes | None = str_to_bytes(pwd)
 
         self._members: list[ArchiveMember] = []
         self._filename_to_members: dict[str, list[ArchiveMember]] = defaultdict(list)

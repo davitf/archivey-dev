@@ -156,15 +156,22 @@ def open_archive(
             f"Unknown archive format for {ensure_not_none(stream or path)}"
         )
 
-    if format.container not in _FORMAT_TO_READER:
-        raise ArchiveNotSupportedError(
-            f"Unsupported archive format: {format} (for {ensure_not_none(stream or path)})"
-        )
-
-    reader_class = _FORMAT_TO_READER.get(format.container)
-
     if config is None:
         config = get_archivey_config()
+
+    if config.use_libarchive:
+        if not streaming_only:
+            raise ValueError("libarchive reader only supports streaming_only=True")
+        from archivey.formats.libarchive_reader import LibArchiveReader
+
+        reader_class = LibArchiveReader
+    else:
+        if format.container not in _FORMAT_TO_READER:
+            raise ArchiveNotSupportedError(
+                f"Unsupported archive format: {format} (for {ensure_not_none(stream or path)})"
+            )
+
+        reader_class = _FORMAT_TO_READER.get(format.container)
 
     if stream is not None:
         assert not stream.closed
