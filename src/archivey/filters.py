@@ -56,8 +56,6 @@ def _sanitize_name(
     member: ArchiveMember,
     dest_path: str | None,
 ) -> str:
-    # if member.is_dir:
-    #     assert member.filename.endswith("/")
     name = posixpath.normpath(member.filename.lstrip("/\\"))
     _check_target_inside_archive_root(name, dest_path, "Path")
 

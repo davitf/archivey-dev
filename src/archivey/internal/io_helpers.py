@@ -235,23 +235,6 @@ def is_stream(obj: Any) -> TypeGuard[BinaryIO]:
     missing_properties = {p for p in ALL_IO_PROPERTIES if not hasattr(obj, p)}
     has_all_interface = not missing_methods and not missing_properties
 
-    if not isinstance(obj, (str, bytes, os.PathLike)) and not has_all_interface:
-        logger.debug(
-            "Object %r does not match the BinaryIO protocol: missing methods %r, "
-            "missing properties %r",
-            obj,
-            missing_methods,
-            missing_properties,
-        )
-
-    if is_iobase != has_all_interface:
-        logger.debug(
-            "Object %r : is_iobase=%r, has_all_interface=%r",
-            obj,
-            is_iobase,
-            has_all_interface,
-        )
-
     return is_iobase or has_all_interface
 
 
@@ -262,10 +245,6 @@ def ensure_binaryio(obj: BinaryStreamLike) -> BinaryIO:
     if is_stream(obj):
         return obj
 
-    logger.debug(
-        "Object %r does not match the BinaryIO protocol, wrapping in BinaryIOWrapper.",
-        obj,
-    )
     return BinaryIOWrapper(obj)
 
 
@@ -347,11 +326,6 @@ def run_with_exception_translation(
         if translated is not None:
             translated.archive_path = archive_path
             translated.member_name = member_name
-            logger.debug(
-                "Translated exception: %r -> %r",
-                e,
-                translated,
-            )
             raise translated from e
         raise e
 

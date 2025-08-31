@@ -13,15 +13,13 @@ from archivey.exceptions import (
 from archivey.formats.compressed_streams import get_stream_open_fn
 from archivey.formats.format_detection import EXTENSION_TO_FORMAT
 from archivey.internal.base_reader import BaseArchiveReader
-from archivey.internal.io_helpers import (  # Updated import
+from archivey.internal.io_helpers import (
     is_seekable,
     is_stream,
     open_if_file,
     read_exact,
     run_with_exception_translation,
 )
-
-# from archivey.internal.utils import open_if_file # Removed
 from archivey.types import (
     ArchiveFormat,
     ArchiveInfo,
@@ -204,9 +202,6 @@ def read_xz_metadata(path: str | BinaryIO, member: ArchiveMember):
             total_uncompressed_size += uncompressed_size
 
         member.file_size = total_uncompressed_size
-        logger.debug(
-            f"XZ metadata: total_size={total_uncompressed_size}, num_blocks={number_of_blocks}, blocks={blocks}"
-        )
 
 
 class SingleFileReader(BaseArchiveReader):
