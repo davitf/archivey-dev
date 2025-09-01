@@ -57,7 +57,6 @@ jobs:
               tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} \
               -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives"
           else
-            brew install llvm || true
             lldb -Q -- \
               tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} \
               -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives" \
