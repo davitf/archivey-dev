@@ -8,7 +8,7 @@ on:
 
 jobs:
   rapidgzip-version-tests:
-    name: Tox - py${{ matrix.python-version }}-rapidgzip-${{ matrix['rapidgzip-version'] }} (${{ matrix.os }})
+    name: Tox - py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     env:
       PYTHONFAULTHANDLER: "1"
@@ -58,13 +58,13 @@ jobs:
         run: brew install llvm
 
       - name: Run tox environment (excluding tests likely to fail)
-        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix['rapidgzip-version'] }} -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives"
+        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives"
 
       - name: Run URL test
-        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix['rapidgzip-version'] }} -- -vv tests/archivey/test_open_url.py
+        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_open_url.py
 
       - name: Run corrupted files test
-        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix['rapidgzip-version'] }} -- -vv tests/archivey/test_corrupted_archives.py
+        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_corrupted_archives.py
 
       - name: Run nested archives test
-        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix['rapidgzip-version'] }} -- -vv tests/archivey/test_nested_compressed_archives.py
+        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_nested_compressed_archives.py
