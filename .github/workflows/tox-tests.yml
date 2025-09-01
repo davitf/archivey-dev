@@ -57,8 +57,8 @@ jobs:
               tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} \
               -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives"
           else
-            lldb -Q -- \
-              tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} \
+            lldb -- \
+              python -m tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} \
               -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives" \
               -o "run" -o "bt" -o "quit"
           fi
