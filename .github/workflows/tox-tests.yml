@@ -1,5 +1,10 @@
 name: Run Tox Tests
 
+env:
+  PYTHONFAULTHANDLER: "1"
+  PYTHONMALLOC: "debug"
+  MallocNanoZone: "0"
+
 on:
   push:
     branches: [ main ]
