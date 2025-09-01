@@ -8,7 +8,7 @@ on:
 
 jobs:
   rapidgzip-version-tests:
-    name: Tox - py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} (${{ matrix.os }})
+    name: Tox - py${{ matrix.python-version }}-rapidgzip-${{ matrix['rapidgzip-version'] }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     env:
       PYTHONFAULTHANDLER: "1"
@@ -30,15 +30,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install tox
+      - name: Install tox (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            curl -LsSf https://astral.sh/uv/install.sh | sh
-            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-            uv tool install tox --with tox-uv
-          else
-            pip install tox
-          fi
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          uv tool install tox --with tox-uv
+
+      - name: Install tox (macOS)
+        if: matrix.os == 'macos-latest'
+        run: pip install tox
 
       - name: Install unrar (for rarfile tests)
         shell: bash
@@ -48,38 +49,22 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y ncompress
 
-      - name: Install llvm for lldb (macOS only)
+      - name: Install lldb (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get install -y lldb
+
+      - name: Install lldb (macOS)
         if: matrix.os == 'macos-latest'
         run: brew install llvm
 
       - name: Run tox environment (excluding tests likely to fail)
-        run: |
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives"
-          else
-            tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives"
-          fi
+        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix['rapidgzip-version'] }} -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives"
 
       - name: Run URL test
-        run: |
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_open_url.py
-          else
-            tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_open_url.py
-          fi
+        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix['rapidgzip-version'] }} -- -vv tests/archivey/test_open_url.py
 
       - name: Run corrupted files test
-        run: |
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_corrupted_archives.py
-          else
-            tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_corrupted_archives.py
-          fi
+        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix['rapidgzip-version'] }} -- -vv tests/archivey/test_corrupted_archives.py
 
       - name: Run nested archives test
-        run: |
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_nested_compressed_archives.py
-          else
-            tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_nested_compressed_archives.py
-          fi
+        run: lldb --batch -o run -o "thread backtrace all" -- tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix['rapidgzip-version'] }} -- -vv tests/archivey/test_nested_compressed_archives.py
