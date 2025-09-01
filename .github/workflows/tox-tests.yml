@@ -20,7 +20,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.13"]
-        rapidgzip-version: ["0.14.3", "0.14.4", "0.14.5", "0.15.0", "0.15.1", "0.15.2"]
+        rapidgzip-version: ["0.14.5", "0.15.2"]
 
     steps:
       - name: Check out code
