@@ -49,8 +49,20 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y ncompress
 
-      - name: Run tox environment (excluding tests likely to fail)
-        run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives"
+      - name: Run tox environment under debugger
+        run: |
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            sudo apt-get update && sudo apt-get install -y gdb
+            gdb -q -ex "run" -ex "bt" -ex "quit" --args \
+              tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} \
+              -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives"
+          else
+            brew install llvm || true
+            lldb -Q -- \
+              tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} \
+              -- -vv -k "not test_open_url and not test_corrupted_archives and not test_nested_compressed_archives" \
+              -o "run" -o "bt" -o "quit"
+          fi
 
       - name: Run URL test
         run: tox -e py${{ matrix.python-version }}-rapidgzip-${{ matrix.rapidgzip-version }} -- -vv tests/archivey/test_open_url.py
