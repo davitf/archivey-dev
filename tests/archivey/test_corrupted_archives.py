@@ -12,9 +12,8 @@ from archivey.exceptions import (
 )
 from archivey.types import ArchiveFormat, ContainerFormat
 from tests.archivey.sample_archives import (
-    SAMPLE_ARCHIVES,
+    LARGE_ARCHIVES,
     SampleArchive,
-    filter_archives,
 )
 from tests.archivey.testing_utils import skip_if_package_missing
 from tests.create_corrupted_archives import corrupt_archive
@@ -48,12 +47,7 @@ def _prepare_corrupted_archive(
     return corrupted_archive_path
 
 
-@pytest.mark.sample_archives(
-    filter_archives(
-        SAMPLE_ARCHIVES,
-        prefixes=["large_files_nonsolid", "large_files_solid", "large_single_file"],
-    )
-)
+@pytest.mark.sample_archives(LARGE_ARCHIVES)
 @pytest.mark.parametrize("corruption_type", ["random", "zeroes", "ffs"])
 @pytest.mark.parametrize("read_streams", [True, False], ids=["read", "noread"])
 def test_read_corrupted_archives(
@@ -173,14 +167,7 @@ def test_read_corrupted_archives(
 
 
 @pytest.mark.parametrize("corrupted_length", [16, 47, 0.1, 0.9])
-@pytest.mark.sample_archives(
-    filter_archives(
-        SAMPLE_ARCHIVES,
-        prefixes=["large_files_nonsolid", "large_files_solid", "large_single_file"],
-        # Tar files don't have any kind of error detection, so we skip them.
-        # custom_filter=lambda a: a.creation_info.format != ArchiveFormat.TAR,
-    )
-)
+@pytest.mark.sample_archives(LARGE_ARCHIVES)
 @pytest.mark.parametrize("read_streams", [True, False], ids=["read", "noread"])
 def test_read_truncated_archives(
     sample_archive: SampleArchive,

@@ -11,7 +11,7 @@ from archivey.internal.dependency_checker import (
     format_dependency_versions,
     get_dependency_versions,
 )
-from archivey.types import StreamFormat
+from archivey.types import ArchiveFormat, StreamFormat
 from tests.archivey.create_archives import create_archive
 from tests.archivey.sample_archives import SampleArchive
 
@@ -30,6 +30,9 @@ def archive_configs_for(sample_archive: SampleArchive) -> list[ArchiveyConfig]:
     elif stream_format == StreamFormat.ZSTD:
         cfgs.append(ArchiveyConfig(use_zstandard=True))
 
+    if sample_archive.creation_info.format == ArchiveFormat.RAR:
+        cfgs.append(ArchiveyConfig(use_rar_stream=True))
+
     return cfgs
 
 
@@ -44,6 +47,8 @@ def _cfg_id(cfg: ArchiveyConfig) -> str:
         bits.append("python_xz")
     if getattr(cfg, "use_zstandard", False):
         bits.append("zstandard")
+    if getattr(cfg, "use_rar_stream", False):
+        bits.append("rar_stream")
     return ",".join(bits) or "default"
 
 
@@ -51,9 +56,19 @@ def pytest_generate_tests(metafunc: Metafunc):
     if "archive_config" in metafunc.fixturenames:
         marker = metafunc.definition.get_closest_marker("sample_archives")
         if not marker:
-            return
+            pytest.fail(
+                "Test function requested 'archive_config' fixture but is not marked "
+                "with '@pytest.mark.sample_archives'"
+            )
 
-        sample_archives_list = marker.args[0]
+        sample_archives_list = list(marker.args[0])
+        if marker.kwargs.get("exclude_folders"):
+            sample_archives_list = [
+                s
+                for s in sample_archives_list
+                if s.creation_info.format != ArchiveFormat.FOLDER
+            ]
+
         params = []
         for sa in sample_archives_list:
             if sa.skip_test:

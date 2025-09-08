@@ -1,5 +1,6 @@
 import io
 import logging
+from pathlib import Path
 
 import pytest
 
@@ -35,7 +36,7 @@ def test_open_compressed_stream_from_file(
     assert data == expected
 
 
-def test_open_compressed_stream_unsupported_format(tmp_path):
+def test_open_compressed_stream_unsupported_format(tmp_path: Path):
     sample_archive = BASIC_ZIP_ARCHIVE
     skip_if_package_missing(sample_archive.creation_info.format, None)
     path = sample_archive.get_archive_path()

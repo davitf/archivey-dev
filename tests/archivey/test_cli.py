@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 
 from tests.archivey.sample_archives import BASIC_ARCHIVES
 from tests.archivey.testing_utils import skip_if_package_missing
@@ -23,7 +24,7 @@ def test_cli_list(capsys):
     assert SAMPLE.contents.files[0].name.split("/")[0] in result.stdout
 
 
-def test_cli_extract(tmp_path):
+def test_cli_extract(tmp_path: Path):
     archive = _archive_path(None)
     skip_if_package_missing(SAMPLE.creation_info.format, None)
     dest = tmp_path / "out"

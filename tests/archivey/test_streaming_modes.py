@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import IO
 
 import pytest
@@ -251,7 +252,7 @@ def test_iter_members_list_filter(
     )
 )
 def test_streaming_only_allows_single_iteration(
-    tmp_path,
+    tmp_path: Path,
     sample_archive: SampleArchive,
     sample_archive_path: str,
     archive_config: ArchiveyConfig,
@@ -278,7 +279,7 @@ def test_streaming_only_allows_single_iteration(
     )
 )
 def test_random_access_allows_multiple_iterations(
-    tmp_path,
+    tmp_path: Path,
     sample_archive: SampleArchive,
     sample_archive_path: str,
     archive_config: ArchiveyConfig,

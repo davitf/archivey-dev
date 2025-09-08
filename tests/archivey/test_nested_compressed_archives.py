@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 from contextlib import nullcontext
+from pathlib import Path
 
 import pytest
 
@@ -25,7 +26,6 @@ from tests.archivey.sample_archives import (
     ArchiveContents,
     File,
     SampleArchive,
-    filter_archives,
 )
 from tests.archivey.test_open_nonseekable import EXPECTED_NON_SEEKABLE_FAILURES
 from tests.archivey.testing_utils import skip_if_package_missing
@@ -94,10 +94,7 @@ def check_archive_iter_members(archive: ArchiveReader):
     set(StreamFormat) - {StreamFormat.UNCOMPRESSED},
 )
 @pytest.mark.sample_archives(
-    filter_archives(
-        BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES,
-        custom_filter=lambda a: a.creation_info.format != ArchiveFormat.FOLDER,
-    )
+    BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES, exclude_folders=True
 )
 @pytest.mark.parametrize(
     "open_inner_streaming_only",
@@ -106,7 +103,7 @@ def check_archive_iter_members(archive: ArchiveReader):
 def test_open_archive_from_compressed_stream(
     outer_stream_format: StreamFormat,
     sample_archive: SampleArchive,
-    tmp_path,
+    tmp_path: Path,
     archive_config: ArchiveyConfig,
     open_inner_streaming_only: bool,
 ):
@@ -164,10 +161,7 @@ def expect_raise_if(condition: bool, exc_type: type[Exception]):
     ids=lambda a: a.file_extension(),
 )
 @pytest.mark.sample_archives(
-    filter_archives(
-        BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES,
-        custom_filter=lambda a: a.creation_info.format != ArchiveFormat.FOLDER,
-    )
+    BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES, exclude_folders=True
 )
 @pytest.mark.parametrize(
     "open_outer_streaming_only",
@@ -177,7 +171,7 @@ def expect_raise_if(condition: bool, exc_type: type[Exception]):
 def test_open_archive_from_member(
     outer_format: ArchiveFormat,
     sample_archive: SampleArchive,
-    tmp_path,
+    tmp_path: Path,
     archive_config: ArchiveyConfig,
     open_outer_streaming_only: bool,
 ):
