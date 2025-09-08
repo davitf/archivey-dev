@@ -1215,13 +1215,6 @@ SANITIZE_ARCHIVES = (
     )
 )
 
-ALTERNATIVE_CONFIG = ArchiveyConfig(
-    use_rapidgzip=True,
-    use_indexed_bzip2=True,
-    use_python_xz=True,
-    use_zstandard=True,
-)
-
 ALTERNATIVE_PACKAGES_FORMATS = (
     ArchiveFormat.GZIP,
     ArchiveFormat.BZIP2,

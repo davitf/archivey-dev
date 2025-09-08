@@ -9,8 +9,8 @@ from archivey.exceptions import (
     PackageNotInstalledError,
 )
 from archivey.internal.dependency_checker import get_dependency_versions
+from archivey.config import ArchiveyConfig
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     SAMPLE_ARCHIVES,
     SampleArchive,
     filter_archives,
@@ -69,26 +69,29 @@ BASIC_UNIX_COMPRESS_ARCHIVE = filter_archives(
 
 
 @pytest.mark.parametrize(
-    ["library_name", "sample_archive", "alternative_packages"],
+    ["library_name", "sample_archive", "config"],
     [
         # ("pycdlib", BASIC_ISO_ARCHIVE.get_archive_path(), None),
-        ("rarfile", BASIC_RAR_ARCHIVE, False),
-        ("py7zr", BASIC_7Z_ARCHIVE, False),
-        ("rapidgzip", BASIC_GZIP_ARCHIVE, True),
-        ("indexed_bzip2", BASIC_BZIP2_ARCHIVE, True),
-        ("python-xz", BASIC_XZ_ARCHIVE, True),
-        ("pyzstd", BASIC_ZSTD_ARCHIVE, False),
-        ("zstandard", BASIC_ZSTD_ARCHIVE, True),
-        ("lz4", BASIC_LZ4_ARCHIVE, False),
-        ("brotli", BASIC_BROTLI_ARCHIVE, False),
-        ("uncompresspy", BASIC_UNIX_COMPRESS_ARCHIVE, False),
+        ("rarfile", BASIC_RAR_ARCHIVE, None),
+        ("py7zr", BASIC_7Z_ARCHIVE, None),
+        ("rapidgzip", BASIC_GZIP_ARCHIVE, ArchiveyConfig(use_rapidgzip=True)),
+        (
+            "indexed_bzip2",
+            BASIC_BZIP2_ARCHIVE,
+            ArchiveyConfig(use_indexed_bzip2=True),
+        ),
+        ("python-xz", BASIC_XZ_ARCHIVE, ArchiveyConfig(use_python_xz=True)),
+        ("pyzstd", BASIC_ZSTD_ARCHIVE, None),
+        ("zstandard", BASIC_ZSTD_ARCHIVE, ArchiveyConfig(use_zstandard=True)),
+        ("lz4", BASIC_LZ4_ARCHIVE, None),
+        ("brotli", BASIC_BROTLI_ARCHIVE, None),
+        ("uncompresspy", BASIC_UNIX_COMPRESS_ARCHIVE, None),
     ],
     ids=lambda x: os.path.basename(x) if isinstance(x, str) else x,
 )
 def test_missing_package_raises_exception(
-    library_name: str, sample_archive: SampleArchive, alternative_packages: bool
+    library_name: str, sample_archive: SampleArchive, config: ArchiveyConfig | None
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
     archive_path = sample_archive.get_archive_path()
     dependencies = get_dependency_versions()
     library_version = getattr(dependencies, f"{library_name.replace('-', '_')}_version")

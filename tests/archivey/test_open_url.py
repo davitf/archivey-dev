@@ -12,8 +12,8 @@ import pytest
 from archivey.core import open_archive
 from archivey.exceptions import ArchiveStreamNotSeekableError
 from archivey.types import ArchiveFormat
+from archivey.config import ArchiveyConfig
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
     filter_archives,
@@ -75,37 +75,39 @@ def serve_dir(path: str):
     ),
     ids=lambda a: a.filename,
 )
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
-)
-def test_open_archive_via_http(sample_archive, alternative_packages):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+def test_open_archive_via_http(sample_archive, archive_configs: list[ArchiveyConfig]):
+    for config in archive_configs:
+        skip_if_package_missing(sample_archive.creation_info.format, config)
 
-    path = sample_archive.get_archive_path()
-    with serve_dir(os.path.dirname(path)) as base_url:
-        url = f"{base_url}/{os.path.basename(path)}"
-        logger.info(f"Opening URL: {url}")
-        with urlopen(url, timeout=2) as response:
-            try:
-                with open_archive(
-                    response, streaming_only=True, config=config
-                ) as archive:
-                    has_member = False
-                    for member, stream in archive.iter_members_with_streams():
-                        has_member = True
-                        if stream is not None:
-                            stream.read()
-                    assert has_member
-            except (
-                ArchiveStreamNotSeekableError
-            ) as exc:  # pragma: no cover - env dependent
-                key = (sample_archive.creation_info.format, alternative_packages)
-                if key in EXPECTED_NON_SEEKABLE_FAILURES:
-                    pytest.xfail(
-                        f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
+        path = sample_archive.get_archive_path()
+        with serve_dir(os.path.dirname(path)) as base_url:
+            url = f"{base_url}/{os.path.basename(path)}"
+            logger.info(f"Opening URL: {url}")
+            with urlopen(url, timeout=2) as response:
+                try:
+                    with open_archive(
+                        response, streaming_only=True, config=config
+                    ) as archive:
+                        has_member = False
+                        for member, stream in archive.iter_members_with_streams():
+                            has_member = True
+                            if stream is not None:
+                                stream.read()
+                        assert has_member
+                except (
+                    ArchiveStreamNotSeekableError
+                ) as exc:  # pragma: no cover - env dependent
+                    alternative_packages = any(
+                        v
+                        for k, v in config.__dict__.items()
+                        if k != "use_single_file_stored_metadata"
                     )
-                else:
-                    assert False, (
-                        f"Expected format {key} to work with HTTP streams, but it failed with {exc!r}"
-                    )
+                    key = (sample_archive.creation_info.format, alternative_packages)
+                    if key in EXPECTED_NON_SEEKABLE_FAILURES:
+                        pytest.xfail(
+                            f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
+                        )
+                    else:
+                        assert False, (
+                            f"Expected format {key} to work with HTTP streams, but it failed with {exc!r}"
+                        )

@@ -18,9 +18,10 @@ from archivey.internal.io_helpers import (
     is_stream,
     read_exact,
 )
-from tests.archivey.sample_archives import ALTERNATIVE_CONFIG, SINGLE_FILE_ARCHIVES
+from tests.archivey.sample_archives import SINGLE_FILE_ARCHIVES
 from tests.archivey.test_open_nonseekable import NonSeekableBytesIO
 from tests.archivey.testing_utils import skip_if_package_missing
+from archivey.config import ArchiveyConfig
 
 
 # SlicingStream tests
@@ -469,62 +470,56 @@ def test_ensure_bufferedio():
 @pytest.mark.parametrize(
     "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
 )
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "altlibs"]
-)
 def test_ensure_bufferedio_with_compressed_stream(
-    sample_archive, sample_archive_path, alternative_packages
+    sample_archive, sample_archive_path, archive_configs: list[ArchiveyConfig]
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
+    for config in archive_configs:
+        skip_if_package_missing(sample_archive.creation_info.format, config)
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+        with open_compressed_stream(sample_archive_path, config=config) as f:
+            buffered = ensure_bufferedio(f)
+            assert buffered.read() == sample_archive.contents.files[0].contents
 
-    with open_compressed_stream(sample_archive_path, config=config) as f:
-        buffered = ensure_bufferedio(f)
-        assert buffered.read() == sample_archive.contents.files[0].contents
-
-    buffer = bytearray(1024)
-    with open_compressed_stream(sample_archive_path, config=config) as f:
-        buffered = ensure_bufferedio(f)
-        bytes_read = buffered.readinto(buffer)
-        assert bytes_read == min(
-            len(buffer), len(sample_archive.contents.files[0].contents)
-        )
-        assert (
-            buffer[:bytes_read]
-            == sample_archive.contents.files[0].contents[:bytes_read]
-        )
+        buffer = bytearray(1024)
+        with open_compressed_stream(sample_archive_path, config=config) as f:
+            buffered = ensure_bufferedio(f)
+            bytes_read = buffered.readinto(buffer)
+            assert bytes_read == min(
+                len(buffer), len(sample_archive.contents.files[0].contents)
+            )
+            assert (
+                buffer[:bytes_read]
+                == sample_archive.contents.files[0].contents[:bytes_read]
+            )
 
 
 @pytest.mark.parametrize(
     "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
 )
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "altlibs"]
-)
 def test_ensure_bufferedio_with_raw_compressed_stream(
-    sample_archive, sample_archive_path, alternative_packages
+    sample_archive, sample_archive_path, archive_configs: list[ArchiveyConfig]
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
+    for config in archive_configs:
+        skip_if_package_missing(sample_archive.creation_info.format, config)
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
-
-    open_fn, _ = get_stream_open_fn(sample_archive.creation_info.format.stream, config)
-    with open_fn(sample_archive_path) as f:
-        buffered = ensure_bufferedio(f)
-        assert buffered.read() == sample_archive.contents.files[0].contents
-
-    buffer = bytearray(1024)
-    with open_fn(sample_archive_path) as f:
-        buffered = ensure_bufferedio(f)
-        bytes_read = buffered.readinto(buffer)
-        assert bytes_read == min(
-            len(buffer), len(sample_archive.contents.files[0].contents)
+        open_fn, _ = get_stream_open_fn(
+            sample_archive.creation_info.format.stream, config
         )
-        assert (
-            buffer[:bytes_read]
-            == sample_archive.contents.files[0].contents[:bytes_read]
-        )
+        with open_fn(sample_archive_path) as f:
+            buffered = ensure_bufferedio(f)
+            assert buffered.read() == sample_archive.contents.files[0].contents
+
+        buffer = bytearray(1024)
+        with open_fn(sample_archive_path) as f:
+            buffered = ensure_bufferedio(f)
+            bytes_read = buffered.readinto(buffer)
+            assert bytes_read == min(
+                len(buffer), len(sample_archive.contents.files[0].contents)
+            )
+            assert (
+                buffer[:bytes_read]
+                == sample_archive.contents.files[0].contents[:bytes_read]
+            )
 
 
 def test_is_stream(tmp_path: Path):

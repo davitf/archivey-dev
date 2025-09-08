@@ -6,8 +6,8 @@ import pytest
 from archivey.core import open_archive
 from archivey.internal.utils import ensure_not_none
 from archivey.types import ArchiveFormat
+from archivey.config import ArchiveyConfig
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     LARGE_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
@@ -59,31 +59,30 @@ class SizeLimitedReader(io.RawIOBase):
     ),
     ids=lambda a: a.filename,
 )
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "alternative"]
-)
 @pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
 def test_open_archive_small_reads(
     sample_archive: SampleArchive,
     sample_archive_path: str,
-    alternative_packages: bool,
     streaming_only: bool,
+    archive_configs: list[ArchiveyConfig],
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    for config in archive_configs:
+        skip_if_package_missing(sample_archive.creation_info.format, config)
 
-    with open(sample_archive_path, "rb") as f:
-        data = f.read()
+        with open(sample_archive_path, "rb") as f:
+            data = f.read()
 
-    # It's too slow to test single-byte reads for large archives. This chunk size
-    # should be enough to test incomplete reads while reading the member contents.
-    max_bytes = 250 if "large" in sample_archive_path else 1
-    stream = SizeLimitedReader(data, max_bytes=max_bytes)
+        # It's too slow to test single-byte reads for large archives. This chunk size
+        # should be enough to test incomplete reads while reading the member contents.
+        max_bytes = 250 if "large" in sample_archive_path else 1
+        stream = SizeLimitedReader(data, max_bytes=max_bytes)
 
-    with open_archive(stream, streaming_only=streaming_only, config=config) as archive:
-        has_member = False
-        for member, member_stream in archive.iter_members_with_streams():
-            has_member = True
-            if member_stream is not None:
-                member_stream.read()
-        assert has_member
+        with open_archive(
+            stream, streaming_only=streaming_only, config=config
+        ) as archive:
+            has_member = False
+            for member, member_stream in archive.iter_members_with_streams():
+                has_member = True
+                if member_stream is not None:
+                    member_stream.read()
+            assert has_member

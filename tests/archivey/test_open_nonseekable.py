@@ -7,8 +7,8 @@ from archivey.core import open_archive, open_compressed_stream
 from archivey.exceptions import ArchiveStreamNotSeekableError
 from archivey.internal.io_helpers import ensure_binaryio
 from archivey.types import ArchiveFormat
+from archivey.config import ArchiveyConfig
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     LARGE_ARCHIVES,
     SampleArchive,
@@ -67,87 +67,95 @@ class NonSeekableBytesIO(io.BytesIO):
     ),
     ids=lambda a: a.filename,
 )
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
-)
 def test_open_archive_nonseekable(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_configs: list[ArchiveyConfig],
 ):
     """Ensure open_archive can read from non-seekable streams in streaming mode."""
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
+    for config in archive_configs:
+        skip_if_package_missing(sample_archive.creation_info.format, config)
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+        with open(sample_archive_path, "rb") as f:
+            data = f.read()
 
-    with open(sample_archive_path, "rb") as f:
-        data = f.read()
+        stream = NonSeekableBytesIO(data)
 
-    stream = NonSeekableBytesIO(data)
+        try:
+            with open_archive(stream, streaming_only=True, config=config) as archive:
+                members = []
+                for member, member_stream in archive.iter_members_with_streams():
+                    members.append(member)
+                    if member_stream is not None:
+                        member_stream.read()
+                # The file names may not match in case of single-file archives, as we take
+                # the name from the compressed file name which is not available when reading
+                # from a stream. But checking the number of members should ensure that
+                # we read all the members.
+                assert len(members) == len(
+                    [f.name for f in sample_archive.contents.files]
+                )
 
-    try:
-        with open_archive(stream, streaming_only=True, config=config) as archive:
-            members = []
-            for member, member_stream in archive.iter_members_with_streams():
-                members.append(member)
-                if member_stream is not None:
-                    member_stream.read()
-            # The file names may not match in case of single-file archives, as we take
-            # the name from the compressed file name which is not available when reading
-            # from a stream. But checking the number of members should ensure that
-            # we read all the members.
-            assert len(members) == len([f.name for f in sample_archive.contents.files])
-
-    except (
-        ArchiveStreamNotSeekableError
-    ) as exc:  # pragma: no cover - environment dependent
-        key = (sample_archive.creation_info.format, alternative_packages)
-        if key in EXPECTED_NON_SEEKABLE_FAILURES:
-            pytest.xfail(
-                f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
+        except (
+            ArchiveStreamNotSeekableError
+        ) as exc:  # pragma: no cover - environment dependent
+            alternative_packages = any(
+                v
+                for k, v in config.__dict__.items()
+                if k != "use_single_file_stored_metadata"
             )
-        else:
-            assert False, (
-                f"Expected format {key} to work with non-seekable streams, but it failed with {exc!r}"
-            )
+            key = (sample_archive.creation_info.format, alternative_packages)
+            if key in EXPECTED_NON_SEEKABLE_FAILURES:
+                pytest.xfail(
+                    f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
+                )
+            else:
+                assert False, (
+                    f"Expected format {key} to work with non-seekable streams, but it failed with {exc!r}"
+                )
 
 
 @pytest.mark.parametrize(
     "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
 )
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
-)
 def test_open_compressed_stream_nonseekable(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_configs: list[ArchiveyConfig],
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
+    for config in archive_configs:
+        skip_if_package_missing(sample_archive.creation_info.format, config)
 
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+        with open(sample_archive_path, "rb") as f:
+            data = f.read()
 
-    with open(sample_archive_path, "rb") as f:
-        data = f.read()
+        stream = ensure_binaryio(NonSeekableBytesIO(data))
 
-    stream = ensure_binaryio(NonSeekableBytesIO(data))
+        try:
+            with open_compressed_stream(stream, config=config) as f:
+                assert not f.seekable()
 
-    try:
-        with open_compressed_stream(stream, config=config) as f:
-            assert not f.seekable()
+                out = f.read()
 
-            out = f.read()
-
-    except (
-        ArchiveStreamNotSeekableError
-    ) as exc:  # pragma: no cover - environment dependent
-        key = (sample_archive.creation_info.format, alternative_packages)
-        logger.error(f"key: {key}")
-        logger.error(f"EXPECTED_FAILURES: {EXPECTED_NON_SEEKABLE_FAILURES}")
-        if key in EXPECTED_NON_SEEKABLE_FAILURES:
-            pytest.xfail(
-                f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
+        except (
+            ArchiveStreamNotSeekableError
+        ) as exc:  # pragma: no cover - environment dependent
+            alternative_packages = any(
+                v
+                for k, v in config.__dict__.items()
+                if k != "use_single_file_stored_metadata"
             )
-        else:
-            assert False, (
-                f"Expected format {key} to work with non-seekable streams, but it failed with {exc!r}"
-            )
+            key = (sample_archive.creation_info.format, alternative_packages)
+            logger.error(f"key: {key}")
+            logger.error(f"EXPECTED_FAILURES: {EXPECTED_NON_SEEKABLE_FAILURES}")
+            if key in EXPECTED_NON_SEEKABLE_FAILURES:
+                pytest.xfail(
+                    f"Non-seekable {sample_archive.creation_info.format} are not supported with {alternative_packages=}: {exc}"
+                )
+            else:
+                assert False, (
+                    f"Expected format {key} to work with non-seekable streams, but it failed with {exc!r}"
+                )
 
-    expected = sample_archive.contents.files[0].contents
-    assert out == expected
+        expected = sample_archive.contents.files[0].contents
+        assert out == expected
