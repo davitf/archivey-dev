@@ -4,6 +4,7 @@ from venv import logger
 
 import pytest
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -11,8 +12,6 @@ from archivey.exceptions import (
 )
 from archivey.types import ArchiveFormat, ContainerFormat
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
-    ALTERNATIVE_PACKAGES_FORMATS,
     SAMPLE_ARCHIVES,
     SampleArchive,
     filter_archives,
@@ -49,25 +48,20 @@ def _prepare_corrupted_archive(
     return corrupted_archive_path
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         prefixes=["large_files_nonsolid", "large_files_solid", "large_single_file"],
-    ),
-    ids=lambda a: a.filename,
+    )
 )
 @pytest.mark.parametrize("corruption_type", ["random", "zeroes", "ffs"])
 @pytest.mark.parametrize("read_streams", [True, False], ids=["read", "noread"])
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
-)
 def test_read_corrupted_archives(
     sample_archive: SampleArchive,
     sample_archive_path: str,
     tmp_path_factory: pytest.TempPathFactory,
     read_streams: bool,
-    alternative_packages: bool,
+    archive_config: ArchiveyConfig,
     corruption_type: str,
 ):
     """Test that reading generally corrupted archives raises ArchiveCorruptedError.
@@ -80,14 +74,7 @@ def test_read_corrupted_archives(
             - "zeroes": Byte range replaced with zeros
             - "ffs": Byte range replaced with 0xFF
     """
-    if alternative_packages:
-        if sample_archive.creation_info.format not in ALTERNATIVE_PACKAGES_FORMATS:
-            pytest.skip("No alternative package for this format, no need to test")
-        config = ALTERNATIVE_CONFIG
-    else:
-        config = None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     formats_without_redundancy_check = [
         ArchiveFormat.LZ4,
@@ -111,7 +98,7 @@ def test_read_corrupted_archives(
         found_member_data = {}
 
         with open_archive(
-            corrupted_archive_path, config=config, streaming_only=True
+            corrupted_archive_path, config=archive_config, streaming_only=True
         ) as archive:
             for member, stream in archive.iter_members_with_streams():
                 logger.info(f"Reading member {member.filename}")
@@ -186,39 +173,27 @@ def test_read_corrupted_archives(
 
 
 @pytest.mark.parametrize("corrupted_length", [16, 47, 0.1, 0.9])
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         prefixes=["large_files_nonsolid", "large_files_solid", "large_single_file"],
         # Tar files don't have any kind of error detection, so we skip them.
         # custom_filter=lambda a: a.creation_info.format != ArchiveFormat.TAR,
-    ),
-    ids=lambda a: a.filename,
+    )
 )
 @pytest.mark.parametrize("read_streams", [True, False], ids=["read", "noread"])
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
-)
 def test_read_truncated_archives(
     sample_archive: SampleArchive,
     corrupted_length: int | float,
     tmp_path_factory: pytest.TempPathFactory,
     read_streams: bool,
-    alternative_packages: bool,
+    archive_config: ArchiveyConfig,
 ):
     """Test that reading truncated archives raises appropriate errors."""
     if sample_archive.creation_info.format == ArchiveFormat.FOLDER:
         pytest.skip("Folder archives cannot be truncated")
 
-    if alternative_packages:
-        if sample_archive.creation_info.format not in ALTERNATIVE_PACKAGES_FORMATS:
-            pytest.skip("No alternative package for this format, no need to test")
-        config = ALTERNATIVE_CONFIG
-    else:
-        config = None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     filename = sample_archive.get_archive_name(variant=f"truncated_{corrupted_length}")
     output_path = tmp_path_factory.mktemp("generated_archives") / filename
@@ -235,7 +210,9 @@ def test_read_truncated_archives(
         f.write(data[:corrupted_length])
 
     try:
-        with open_archive(output_path, config=config, streaming_only=True) as archive:
+        with open_archive(
+            output_path, config=archive_config, streaming_only=True
+        ) as archive:
             for member, stream in archive.iter_members_with_streams():
                 if stream is not None and read_streams:
                     stream.read()

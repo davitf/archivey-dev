@@ -9,13 +9,14 @@ from urllib.request import urlopen
 
 import pytest
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.exceptions import ArchiveStreamNotSeekableError
 from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
+    SampleArchive,
     filter_archives,
 )
 from tests.archivey.test_open_nonseekable import EXPECTED_NON_SEEKABLE_FAILURES
@@ -67,29 +68,31 @@ def serve_dir(path: str):
         t.join()
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format != ArchiveFormat.FOLDER,
-    ),
-    ids=lambda a: a.filename,
+    )
 )
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
-)
-def test_open_archive_via_http(sample_archive, alternative_packages):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+def test_open_archive_via_http(
+    sample_archive: SampleArchive, archive_config: ArchiveyConfig
+):
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     path = sample_archive.get_archive_path()
     with serve_dir(os.path.dirname(path)) as base_url:
         url = f"{base_url}/{os.path.basename(path)}"
         logger.info(f"Opening URL: {url}")
         with urlopen(url, timeout=2) as response:
+            alternative_packages = (
+                archive_config.use_rapidgzip
+                or archive_config.use_indexed_bzip2
+                or archive_config.use_python_xz
+                or archive_config.use_zstandard
+            )
             try:
                 with open_archive(
-                    response, streaming_only=True, config=config
+                    response, streaming_only=True, config=archive_config
                 ) as archive:
                     has_member = False
                     for member, stream in archive.iter_members_with_streams():

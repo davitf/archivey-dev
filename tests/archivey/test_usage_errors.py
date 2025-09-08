@@ -2,6 +2,7 @@ import logging
 
 import pytest
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.exceptions import ArchiveMemberCannotBeOpenedError
 from archivey.types import ArchiveMember, MemberType
@@ -15,14 +16,16 @@ from tests.archivey.testing_utils import skip_if_package_missing
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize("sample_archive", BASIC_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(BASIC_ARCHIVES)
 def test_get_operations_after_close(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ) -> None:
     """Calling get_archive_info after closing should raise an error."""
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
-    archive = open_archive(sample_archive_path)
+    archive = open_archive(sample_archive_path, config=archive_config)
     assert archive.get_archive_info() is not None
     archive.close()
 
@@ -39,16 +42,18 @@ def test_get_operations_after_close(
         list(archive.extractall(path="/tmp"))
 
 
-@pytest.mark.parametrize("sample_archive", BASIC_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(BASIC_ARCHIVES)
 def test_open_member_from_another_archive(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ) -> None:
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     # Open the archive twice
     with (
-        open_archive(sample_archive_path) as archive1,
-        open_archive(sample_archive_path) as archive2,
+        open_archive(sample_archive_path, config=archive_config) as archive1,
+        open_archive(sample_archive_path, config=archive_config) as archive2,
     ):
         first_file = archive1.get_member("file1.txt")
         assert first_file.type == MemberType.FILE
@@ -57,13 +62,15 @@ def test_open_member_from_another_archive(
             archive2.open(first_file)
 
 
-@pytest.mark.parametrize("sample_archive", BASIC_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(BASIC_ARCHIVES)
 def test_open_dir_member(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ) -> None:
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
-    with open_archive(sample_archive_path) as archive:
+    with open_archive(sample_archive_path, config=archive_config) as archive:
         first_dir = archive.get_member("subdir/")
         assert first_dir.type == MemberType.DIR
 
@@ -71,13 +78,15 @@ def test_open_dir_member(
             archive.open(first_dir)
 
 
-@pytest.mark.parametrize("sample_archive", SYMLINK_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(SYMLINK_ARCHIVES)
 def test_resolve_link_non_registered_member(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ) -> None:
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
-    with open_archive(sample_archive_path) as archive:
+    with open_archive(sample_archive_path, config=archive_config) as archive:
         member = ArchiveMember(
             filename="dangling",
             file_size=None,
