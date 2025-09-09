@@ -483,13 +483,10 @@ def test_ensure_bufferedio_with_compressed_stream(
     with open_compressed_stream(sample_archive_path, config=archive_config) as f:
         buffered = ensure_bufferedio(f)
         bytes_read = buffered.readinto(buffer)
-        assert bytes_read == min(
-            len(buffer), len(sample_archive.contents.files[0].contents)
-        )
-        assert (
-            buffer[:bytes_read]
-            == sample_archive.contents.files[0].contents[:bytes_read]
-        )
+        sample_file_contents = sample_archive.contents.files[0].contents
+        assert sample_file_contents is not None
+        assert bytes_read == min(len(buffer), len(sample_file_contents))
+        assert buffer[:bytes_read] == sample_file_contents[:bytes_read]
 
 
 @pytest.mark.sample_archives(SINGLE_FILE_ARCHIVES)
@@ -511,13 +508,10 @@ def test_ensure_bufferedio_with_raw_compressed_stream(
     with open_fn(sample_archive_path) as f:
         buffered = ensure_bufferedio(f)
         bytes_read = buffered.readinto(buffer)
-        assert bytes_read == min(
-            len(buffer), len(sample_archive.contents.files[0].contents)
-        )
-        assert (
-            buffer[:bytes_read]
-            == sample_archive.contents.files[0].contents[:bytes_read]
-        )
+        sample_file_contents = sample_archive.contents.files[0].contents
+        assert sample_file_contents is not None
+        assert bytes_read == min(len(buffer), len(sample_file_contents))
+        assert buffer[:bytes_read] == sample_file_contents[:bytes_read]
 
 
 def test_is_stream(tmp_path: Path):

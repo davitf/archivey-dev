@@ -2,7 +2,6 @@ import logging
 import pathlib
 
 import pytest
-from _pytest.main import Session
 from _pytest.python import Metafunc
 
 from archivey.config import ArchiveyConfig
@@ -82,7 +81,9 @@ def pytest_generate_tests(metafunc: Metafunc):
                 )
                 continue
             for cfg in archive_configs_for(sa):
-                params.append(pytest.param(sa, cfg, id=f"{sa.filename}::{_cfg_id(cfg)}"))
+                params.append(
+                    pytest.param(sa, cfg, id=f"{sa.filename}::{_cfg_id(cfg)}")
+                )
         metafunc.parametrize("sample_archive,archive_config", params)
 
 

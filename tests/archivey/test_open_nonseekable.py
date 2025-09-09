@@ -86,7 +86,9 @@ def test_open_archive_nonseekable(
     )
 
     try:
-        with open_archive(stream, streaming_only=True, config=archive_config) as archive:
+        with open_archive(
+            stream, streaming_only=True, config=archive_config
+        ) as archive:
             members = []
             for member, member_stream in archive.iter_members_with_streams():
                 members.append(member)

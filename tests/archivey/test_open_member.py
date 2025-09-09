@@ -12,9 +12,7 @@ from tests.archivey.sample_archives import (
 from tests.archivey.testing_utils import remove_duplicate_files, skip_if_package_missing
 
 
-@pytest.mark.sample_archives(
-    BASIC_ARCHIVES + SYMLINK_ARCHIVES + HARDLINK_ARCHIVES
-)
+@pytest.mark.sample_archives(BASIC_ARCHIVES + SYMLINK_ARCHIVES + HARDLINK_ARCHIVES)
 def test_open_member(
     sample_archive: SampleArchive,
     sample_archive_path: str,

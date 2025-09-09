@@ -3,7 +3,6 @@ import logging
 import os
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Optional
 
 import pytest
 
@@ -541,7 +540,9 @@ def test_read_symlinks_archives(
     )
 
 
-@pytest.mark.sample_archives(filter_archives(SAMPLE_ARCHIVES, prefixes=["symlink_loop"]))
+@pytest.mark.sample_archives(
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["symlink_loop"])
+)
 def test_symlink_loop_archives(
     sample_archive: SampleArchive,
     sample_archive_path: str,
@@ -563,9 +564,7 @@ def test_symlink_loop_archives(
 
 
 @pytest.mark.sample_archives(
-    filter_archives(
-        SAMPLE_ARCHIVES, prefixes=["hardlinks_nonsolid", "hardlinks_solid"]
-    )
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["hardlinks_nonsolid", "hardlinks_solid"])
 )
 def test_read_hardlinks_archives(
     sample_archive: SampleArchive,

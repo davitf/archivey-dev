@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
-from archivey.config import ArchiveyConfig
 from archivey.types import ArchiveFormat, ContainerFormat, MemberType, StreamFormat
 
 
