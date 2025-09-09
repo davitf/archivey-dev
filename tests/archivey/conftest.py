@@ -75,15 +75,13 @@ def pytest_generate_tests(metafunc: Metafunc):
                     pytest.param(
                         sa,
                         ArchiveyConfig(),
-                        id=f"{sa.filename}::skipped",
+                        id=f"{sa.filename}-skipped",
                         marks=pytest.mark.skip,
                     )
                 )
                 continue
             for cfg in archive_configs_for(sa):
-                params.append(
-                    pytest.param(sa, cfg, id=f"{sa.filename}::{_cfg_id(cfg)}")
-                )
+                params.append(pytest.param(sa, cfg, id=f"{sa.filename}-{_cfg_id(cfg)}"))
         metafunc.parametrize("sample_archive,archive_config", params)
 
 
