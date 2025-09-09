@@ -367,15 +367,11 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         if self.closed:
             return
         try:
-            with self._lock:
-                while self._remaining > 0:
-                    chunk = self.read(min(65536, self._remaining))
-                    if not chunk:
-                        raise EOFError(
-                            f"Unexpected EOF while skipping {self._filename}"
-                        )
+            while self._remaining > 0:
+                chunk = self.read(min(65536, self._remaining))
+                if not chunk:
+                    raise EOFError(f"Unexpected EOF while skipping {self._filename}")
 
-            self._check_crc()
         finally:
             super().close()
 
