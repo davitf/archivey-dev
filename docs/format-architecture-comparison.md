@@ -13,12 +13,12 @@ architecture should evolve.
 
 | Property | ZIP | TAR | RAR | 7z | ISO |
 |---|---|---|---|---|---|
-| `members_list_supported` | True | False | True | True | True |
-| `streaming_only` default | False | Configurable¹ | False | False | False |
-| Central directory | Yes (EOCD) | No | Yes | Yes | Yes (VDs) |
+| `members_list_supported` | True⁵ | False | True | True | True |
+| `streaming_only` default | False (not optional⁶) | Configurable¹ | False | False | False |
+| Central directory | Yes (EOCD at EOF) | No | Yes (at EOF) | Yes (at EOF) | Yes (VDs at sector 16) |
 | Compression granularity | Per-member | Whole-archive² | Per-member + groups (solid) | Per-folder (solid) | None (stored only) |
 | Encryption granularity | Per-member (ZipCrypto) | None | Per-member + header | Per-folder | None |
-| Solid support | No | Yes (compressed) | Optional | Almost always | No |
+| Solid support | No | Yes (compressed, but see §4) | Optional | Almost always | No |
 | Hardlinks | No | Yes (native) | No | No | No |
 | Symlinks | Yes (Unix `external_attr`) | Yes (native) | Rarely³ | Yes | Yes (Rock Ridge only) |
 | Duplicate filenames | No | Yes | No | Yes | No |
@@ -27,7 +27,8 @@ architecture should evolve.
 | Library used | `zipfile` (stdlib) | `tarfile` (stdlib) | `rarfile` (third-party) | `py7zr` (third-party) | `pycdlib` (third-party, test-only) |
 
 ¹ Forced streaming when TAR is inside a non-seekable compressed stream; always
-  streaming for piped stdin usage.
+  streaming for piped stdin usage.  With indexed backends the compressed stream
+  becomes seekable and streaming mode is unnecessary.
 
 ² "Whole-archive" because a compressed TAR is a single compression stream
   wrapping all members; individual members are not compressed independently.
@@ -37,6 +38,16 @@ architecture should evolve.
 
 ⁴ TAR format has no checksum for file data; only the header has a simple
   checksum (sum of header bytes mod 256).
+
+⁵ ZIP's central directory is at the **end** of the file.  `members_list_supported=True`
+  means the list can be obtained without reading file data — but only once the
+  **entire** archive is available and the stream is seekable.  Non-seekable ZIP
+  input is rejected at construction; ZIP cannot stream at all.
+
+⁶ ZIP does not support `streaming_only=True` because the central directory is
+  at EOF; there is no way to list or open members while the archive is still
+  arriving.  The `False` default is therefore a hard constraint, not a
+  preference.
 
 ---
 
@@ -49,27 +60,55 @@ members before reading any file data.
 
 | Format | Flag | Reason |
 |---|---|---|
-| ZIP | True | Central directory at EOF; all ZipInfo metadata parsed on `ZipFile()` open |
-| TAR | False | No central directory; entries interleaved with data; must scan sequentially |
-| RAR | True | End-of-archive block; rarfile reads all `RarInfo` objects at open time |
-| 7z | True | End-header + Streams Info; py7zr reads all metadata at open |
-| ISO | True | Volume Descriptor → root directory record; entire directory tree can be walked before reading data |
+| ZIP | True | Central directory at EOF; `zipfile` seeks to EOCD and reads all ZipInfo records at open time — but requires seekable + complete input (see below) |
+| TAR | False | No central directory; member headers are interleaved with data; can only scan sequentially |
+| RAR | True | End-of-archive block at EOF; rarfile reads all `RarInfo` objects at open time |
+| 7z | True | End-header + Streams Info at EOF; py7zr reads all metadata at open time |
+| ISO | True | Volume Descriptor at sector 16; entire directory tree can be walked from root before reading any file data |
 
-TAR is the outlier.  The base class handles this via the `_early_members_list_supported` path: when both `streaming_only=True` and `members_list_supported=False`, `get_members_if_available()` returns `None`.
+**ZIP vs TAR streaming asymmetry**: TAR and ZIP are on opposite ends of the
+streaming spectrum.  TAR has no index at all — but because each entry's header
+immediately precedes its data, a TAR can be read in one forward pass without
+buffering the whole file.  ZIP has a full central directory — but it is at the
+*end* of the file, so `zipfile` must seek to EOF before it can read any member
+metadata.  This makes ZIP completely hostile to streaming: non-seekable ZIP
+input is rejected at construction time in archivey.  For the other formats with
+end-of-file indices (RAR, 7z), streaming is similarly impossible — they require
+the full file to be available to read the index.
+
+The base class handles the TAR case via the `_early_members_list_supported`
+path: when both `streaming_only=True` and `members_list_supported=False`,
+`get_members_if_available()` returns `None`.
 
 ### 2.2 `streaming_only`
 
 This flag has two sources of truth that are currently conflated:
 
-- **Format capability**: Can the format support random access at all?  ZIP, RAR, 7z, ISO always can. TAR can only if the underlying stream is seekable (plain TAR on disk, or compressed with an indexed backend like rapidgzip).
-- **User preference**: The caller may pass `streaming_only=True` to `open_archive()` to force sequential mode even when the format supports random access, for efficiency.
+- **Format capability**: Can the format support random access at all?  ZIP,
+  RAR, 7z, ISO always can (given a seekable source).  Plain TAR can if the
+  source is seekable.  Compressed TAR depends on the decompressor backend: the
+  stdlib backends (gzip, bz2, lzma) expose forward-seekable-only streams;
+  rapidgzip and indexed_bzip2 expose fully seekable streams with index-based
+  random access (see §4.1).
+- **User preference**: The caller may pass `streaming_only=True` to
+  `open_archive()` to force sequential mode even when the format supports
+  random access, for efficiency.
 
 Currently both are encoded in the single `_streaming_only` boolean on
-`BaseArchiveReader`. The TarReader sets `streaming_only` based on the stream
-type at construction time:
+`BaseArchiveReader`.  `TarReader` sets it based on whether the decompressed
+stream is seekable:
+
 ```python
-streaming_only = streaming_only or (not is_seekable(archive_path) and ...)
+if not streaming_only and not is_seekable(self._fileobj):
+    raise ArchiveStreamNotSeekableError(...)
+open_mode = "r|" if streaming_only else "r:"
 ```
+
+When an indexed backend (rapidgzip, indexed_bzip2, python-xz) is configured,
+the decompressed stream reports `seekable() == True`, so `TarReader` opens in
+`"r:"` (random-access) mode automatically.  The compressed TAR behaves like a
+non-solid archive for practical purposes — individual member opens are
+efficient — even though the underlying data is still in one compression stream.
 
 The conflation means `get_members()` raises `ValueError` in streaming mode
 even for TAR-on-disk where random access *would* work but was not requested.
@@ -119,7 +158,9 @@ Returns a `BinaryIO` for a single member's uncompressed data.
 | Format | Random access | Notes |
 |---|---|---|
 | ZIP | O(1) seek | `ZipFile.open(name)` seeks to local file header |
-| TAR | O(N) or O(1) | `tarfile.extractfile(info)` works if stream is seekable; otherwise must re-scan from start |
+| TAR (stdlib backend) | O(N) per backward seek | `tarfile.extractfile(info)` re-decompresses from position 0 on backward seek |
+| TAR (rapidgzip) | O(checkpoint) ≈ O(1–4 MB) | rapidgzip checkpoint index limits rewind distance |
+| TAR (indexed_bzip2/python-xz) | O(1) per block | True index-based; no rewind needed after initial scan |
 | RAR non-solid | O(1) | rarfile's "extract-hack": temp `.rar` file with one member, run unrar |
 | RAR solid | O(N) | Without `use_rar_stream`: re-decompresses all preceding members each call |
 | 7z | O(N) | py7zr must extract all folder members to reach target; thread+queue approach |
@@ -149,14 +190,50 @@ A "solid" archive is one where extracting member N requires decompressing
 members 0..N-1.  Each format handles this differently; the workarounds
 expose the main limitation of the `_open_member()` per-call contract.
 
-### 4.1 Compressed TAR (always solid)
+### 4.1 Compressed TAR — default backends (always solid)
 
-The entire file is one decompressed stream.  `TarReader` stores the
-decompressed stream and lets `tarfile` position it at each member's data
-offset.  Random access means re-decompressing from the start (unless an
-indexed backend like rapidgzip is used).
+The entire file is one decompressed stream.  `TarReader` passes this stream
+to `tarfile.open(mode="r:")` (random-access) or `"r|"` (streaming only).
+Random access requires backward seeks; with stdlib backends these restarts
+are done by rewinding to position 0 and re-decompressing forward.
 
-Strategy: sequential iteration natural; random access by stream rewind.
+The `DecompressorStream` base class in `compressed_streams.py` implements
+seek-by-rewind for Lzip, Zlib, Brotli, and uncompresspy backends:
+- **Forward seek**: reads and discards bytes.
+- **Backward seek**: calls `_rewind()`, then reads forward.
+- **Cost**: O(target_offset) per backward seek.
+
+Strategy: sequential iteration is O(N); random member access is O(N·M) for
+M random opens on an N-byte decompressed stream.
+
+### 4.1a Compressed TAR — indexed backends (quasi-random access)
+
+Three optional backends rewrite the cost model:
+
+| Backend | Config flag | Compression | Mechanism | Seek cost after index |
+|---|---|---|---|---|
+| `rapidgzip` | `use_rapidgzip` | gzip | Builds gzip-block checkpoint index; each block is a restart point | O(block_size) ≈ O(1–4 MB) per backward seek |
+| `indexed_bzip2` | `use_indexed_bzip2` | bzip2 | Finds all bzip2 block boundaries (each block ~900 KB, independently decompressible) | O(1) once index is built |
+| `python-xz` | `use_python_xz` | xz | Uses XZ's native block index at end of file | O(1) per block seek |
+| `zstandard` | `use_zstandard` | zstd | `ZstandardReopenOnBackwardsSeekIO`: reopens from position 0 on backward seek | O(target_offset) — same as stdlib |
+
+With rapidgzip and indexed_bzip2, the decompressed stream is fully seekable;
+`is_seekable()` returns True; `TarReader` opens in `"r:"` (random-access)
+mode and `streaming_only` is False.  The archive is no longer effectively
+solid:
+
+- **members_list_supported** remains False (no central directory).
+- **streaming_only** becomes False — individual members can be opened directly.
+- **is_solid** in `ArchiveInfo` is still True (format has no per-member
+  compression), but practical random-access cost is sub-linear.
+
+The index is built lazily during the first sequential scan.  After the first
+`get_members()` call, any subsequent `open(member)` call costs only a seek to
+the nearest checkpoint, not a full re-decompression.
+
+Zstandard with the reopen wrapper does not benefit from this: every backward
+seek still restarts from byte 0.  A streaming-only `.tar.zst` is effectively
+as solid as one with any stdlib backend.
 
 ### 4.2 RAR solid archives
 
@@ -183,17 +260,29 @@ Strategy:
 
 ### 4.4 Comparison
 
-| Strategy | Cost model | Random access | Works with `open()` |
+| Strategy | Cost model | streaming_only | `open()` works |
 |---|---|---|---|
-| TAR rewind | O(N) per random open | Slow but correct | Yes |
-| TAR indexed (rapidgzip) | O(log N) | Fast | Yes |
-| RAR `use_rar_stream` | O(N) total streaming | No (streaming only) | No |
-| RAR default | O(N²) total | Yes (expensive) | Yes |
-| 7z thread+queue | O(folder_size) per folder | Only via `iter_members_with_streams` | Via queue drain |
+| TAR + stdlib gzip/bz2/lzma (rewind) | O(N) per backward seek | True (non-seekable) or False | Yes (expensive) |
+| TAR + rapidgzip | O(checkpoint_distance) ≈ O(1–4 MB) per seek | False | Yes |
+| TAR + indexed_bzip2 / python-xz | O(1) per block after initial scan | False | Yes |
+| TAR + zstandard (reopen wrapper) | O(target_offset) per backward seek | False (if file seekable) | Yes (expensive) |
+| RAR non-solid | O(1) per member | False | Yes |
+| RAR solid (default) | O(N²) total over all members | False | Yes (expensive) |
+| RAR solid (`use_rar_stream`) | O(N) total, sequential only | True (effectively) | No |
+| 7z thread+queue | O(folder_size) per folder | False | Via queue drain |
 
-The 7z approach (thread+queue) is the most sophisticated: it correctly handles
-solid extraction while fitting into the archivey iterator protocol.  The RAR
-stream approach is simpler but only works sequentially.
+Key observations:
+
+- **indexed_bzip2 and python-xz** effectively break compressed TAR out of the
+  "solid" cost class after the first scan.  A `.tar.bz2` with indexed_bzip2
+  behaves comparably to a non-solid format for random member access.
+- **rapidgzip** is nearly as good — checkpoint granularity is a few MB, not
+  the full file.  Parallel decompression also makes the initial scan faster.
+- **zstandard** with the reopen wrapper provides forward-only efficiency; it
+  is not better than the stdlib backends for random access.
+- The 7z thread+queue approach is the most sophisticated for truly solid
+  archives where sequential extraction is unavoidable.  The RAR stream approach
+  is simpler but only works when iterating all members in order.
 
 ---
 
@@ -308,13 +397,20 @@ As noted in §2.2, `streaming_only` combines two orthogonal facts:
 1. "This format/stream doesn't support random access" — a format invariant.
 2. "The user wants sequential processing" — a runtime preference.
 
-Currently TAR sets `streaming_only=True` when the underlying stream is
-non-seekable; the user cannot override this.  A user might want to force
-streaming mode on a ZIP file even though ZIP supports random access.
+Currently TarReader sets `streaming_only=True` when the decompressed stream is
+non-seekable.  The outcome depends on which backend is configured:
+
+- Stdlib gzip/bz2/lzma on a piped input → non-seekable → `streaming_only=True`
+- Stdlib gzip/bz2/lzma on a file → seekable (via rewind) → `streaming_only=False`
+- rapidgzip or indexed_bzip2 → always seekable → `streaming_only=False`
+
+ZIP cannot use streaming mode at all (central directory at EOF); passing
+`streaming_only=True` to `open_archive()` for a ZIP would fail or be
+meaningless.
 
 Proposal: split into `format_supports_random_access: bool` (class attribute)
-and `streaming_only: bool` (runtime flag that can be True only if the format
-supports both modes, or always True for non-seekable streams).
+and `streaming_only: bool` (runtime flag that can be True only when the format
+and backend both support sequential-only access).
 
 ### 7.3 Duplicate filenames (7z, TAR)
 
