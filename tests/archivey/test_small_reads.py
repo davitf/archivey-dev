@@ -3,11 +3,11 @@ import logging
 
 import pytest
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.internal.utils import ensure_not_none
 from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     LARGE_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
@@ -51,26 +51,20 @@ class SizeLimitedReader(io.RawIOBase):
         super().close()
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES + LARGE_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "alternative"]
+    )
 )
 @pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
 def test_open_archive_small_reads(
     sample_archive: SampleArchive,
     sample_archive_path: str,
-    alternative_packages: bool,
+    archive_config: ArchiveyConfig,
     streaming_only: bool,
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -80,7 +74,9 @@ def test_open_archive_small_reads(
     max_bytes = 250 if "large" in sample_archive_path else 1
     stream = SizeLimitedReader(data, max_bytes=max_bytes)
 
-    with open_archive(stream, streaming_only=streaming_only, config=config) as archive:
+    with open_archive(
+        stream, streaming_only=streaming_only, config=archive_config
+    ) as archive:
         has_member = False
         for member, member_stream in archive.iter_members_with_streams():
             has_member = True

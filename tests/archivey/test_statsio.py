@@ -8,7 +8,6 @@ from archivey.core import open_archive, open_compressed_stream
 from archivey.internal.io_helpers import IOStats, StatsIO, ensure_binaryio
 from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     LARGE_ARCHIVES,
     SampleArchive,
@@ -20,32 +19,19 @@ from tests.archivey.testing_utils import skip_if_package_missing
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         BASIC_ARCHIVES + LARGE_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+    )
 )
 def test_open_archive_statsio(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     """Ensure open_archive can read from StatsIO-wrapped streams and tracks statistics correctly."""
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -59,7 +45,7 @@ def test_open_archive_statsio(
     initial_seek_calls = stats.seek_calls
     initial_read_ranges = len(stats.read_ranges)
 
-    with open_archive(stream, config=config) as archive:
+    with open_archive(stream, config=archive_config) as archive:
         has_member = False
         total_member_bytes = 0
 
@@ -79,24 +65,19 @@ def test_open_archive_statsio(
     assert len(stats.read_ranges) > initial_read_ranges, "No read ranges were tracked"
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         BASIC_ARCHIVES + LARGE_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+    )
 )
 def test_open_archive_statsio_streaming_mode(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     """Ensure open_archive can read from StatsIO-wrapped streams in streaming mode."""
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -110,7 +91,7 @@ def test_open_archive_statsio_streaming_mode(
     initial_seek_calls = stats.seek_calls
     initial_read_ranges = len(stats.read_ranges)
 
-    with open_archive(stream, streaming_only=True, config=config) as archive:
+    with open_archive(stream, streaming_only=True, config=archive_config) as archive:
         has_member = False
         total_member_bytes = 0
 
@@ -135,19 +116,14 @@ def test_open_archive_statsio_streaming_mode(
     )
 
 
-@pytest.mark.parametrize(
-    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
-)
+@pytest.mark.sample_archives(SINGLE_FILE_ARCHIVES)
 def test_open_compressed_stream_statsio(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     """Ensure open_compressed_stream can read from StatsIO-wrapped streams and tracks statistics correctly."""
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -161,7 +137,7 @@ def test_open_compressed_stream_statsio(
     initial_seek_calls = stats.seek_calls
     initial_read_ranges = len(stats.read_ranges)
 
-    with open_compressed_stream(stream, config=config) as f:
+    with open_compressed_stream(stream, config=archive_config) as f:
         out = f.read()
 
     # Verify that statistics were tracked
@@ -183,24 +159,19 @@ def test_open_compressed_stream_statsio(
     assert out == expected
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         BASIC_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+    )
 )
 def test_open_archive_statsio_seek_operations(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     """Test that seek operations are properly tracked by StatsIO when opening archives."""
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -213,7 +184,7 @@ def test_open_archive_statsio_seek_operations(
     initial_seek_calls = stats.seek_calls
     initial_read_ranges = len(stats.read_ranges)
 
-    with open_archive(stream, config=config) as archive:
+    with open_archive(stream, config=archive_config) as archive:
         # Get member list first (this may trigger seeks)
         members = archive.get_members()
         assert len(members) > 0
@@ -235,24 +206,19 @@ def test_open_archive_statsio_seek_operations(
         assert read_range[1] >= 0
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         BASIC_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+    )
 )
 def test_open_archive_statsio_readinto_operations(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     """Test that readinto operations are properly tracked by StatsIO when opening archives."""
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -265,7 +231,7 @@ def test_open_archive_statsio_readinto_operations(
     initial_bytes_read = stats.bytes_read
     initial_read_ranges = len(stats.read_ranges)
 
-    with open_archive(stream, config=config) as archive:
+    with open_archive(stream, config=archive_config) as archive:
         # Read members using readinto to test that operation
         for member in archive.get_members():
             if member.type.value == "file":  # Only try to open file members
@@ -284,24 +250,19 @@ def test_open_archive_statsio_readinto_operations(
     assert len(stats.read_ranges) > initial_read_ranges, "No read ranges were tracked"
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         BASIC_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+    )
 )
 def test_open_archive_statsio_multiple_opens(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     """Test that StatsIO properly tracks statistics across multiple archive opens."""
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -311,7 +272,7 @@ def test_open_archive_statsio_multiple_opens(
     stream = StatsIO(io.BytesIO(data), stats)
 
     # First open
-    with open_archive(stream, config=config) as archive:
+    with open_archive(stream, config=archive_config) as archive:
         members = archive.get_members()
         assert len(members) > 0
 
@@ -320,7 +281,7 @@ def test_open_archive_statsio_multiple_opens(
     first_open_ranges = len(stats.read_ranges)
 
     # Second open (should accumulate stats)
-    with open_archive(stream, config=config) as archive:
+    with open_archive(stream, config=archive_config) as archive:
         members = archive.get_members()
         assert len(members) > 0
 
@@ -334,32 +295,19 @@ def test_open_archive_statsio_multiple_opens(
     )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         BASIC_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+    )
 )
 def test_open_archive_statsio_io_methods(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     """Test that StatsIO properly delegates IO methods to the underlying stream."""
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -375,7 +323,7 @@ def test_open_archive_statsio_io_methods(
     assert stream.seekable() == underlying_stream.seekable()
 
     # Test that we can still open the archive normally
-    with open_archive(stream, config=config) as archive:
+    with open_archive(stream, config=archive_config) as archive:
         members = archive.get_members()
         assert len(members) > 0
 

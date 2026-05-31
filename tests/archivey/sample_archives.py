@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
-from archivey.config import ArchiveyConfig
 from archivey.types import ArchiveFormat, ContainerFormat, MemberType, StreamFormat
 
 
@@ -1213,24 +1212,6 @@ SANITIZE_ARCHIVES = (
         ),
         [FOLDER_FORMAT, SEVENZIP_7ZCMD] + RAR_FORMATS,
     )
-)
-
-ALTERNATIVE_CONFIG = ArchiveyConfig(
-    use_rapidgzip=True,
-    use_indexed_bzip2=True,
-    use_python_xz=True,
-    use_zstandard=True,
-)
-
-ALTERNATIVE_PACKAGES_FORMATS = (
-    ArchiveFormat.GZIP,
-    ArchiveFormat.BZIP2,
-    ArchiveFormat.XZ,
-    ArchiveFormat.ZSTD,
-    ArchiveFormat.TAR_GZ,
-    ArchiveFormat.TAR_BZ2,
-    ArchiveFormat.TAR_XZ,
-    ArchiveFormat.TAR_ZSTD,
 )
 
 SAMPLE_ARCHIVES = (

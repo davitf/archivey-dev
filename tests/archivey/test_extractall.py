@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.internal.utils import (
     ensure_not_none,
@@ -54,22 +55,23 @@ def _check_file_metadata(path: Path, info: FileInfo, sample: SampleArchive):
         assert actual == info.mtime, (path, info)
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES + SYMLINK_ARCHIVES + HARDLINK_ARCHIVES,
-    ids=lambda x: x.filename,
+@pytest.mark.sample_archives(
+    BASIC_ARCHIVES + DUPLICATE_FILES_ARCHIVES + SYMLINK_ARCHIVES + HARDLINK_ARCHIVES
 )
 def test_extractall(
-    tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
+    tmp_path: Path,
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     dest = tmp_path / "out"
     dest.mkdir()
 
     logger.info(f"Extracting {sample_archive_path} to {dest}")
 
-    with open_archive(sample_archive_path) as archive:
+    with open_archive(sample_archive_path, config=archive_config) as archive:
         extractall_result = archive.extractall(dest)
         members_by_filename = {
             m.filename: m for m in ensure_not_none(archive.get_members_if_available())
@@ -132,20 +134,19 @@ def test_extractall(
     assert expected_extractall_result == extractall_result
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    BASIC_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(BASIC_ARCHIVES)
 def test_extractall_filter(
-    tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
+    tmp_path: Path,
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     dest = tmp_path / "out"
     dest.mkdir()
 
-    with open_archive(sample_archive_path) as archive:
+    with open_archive(sample_archive_path, config=archive_config) as archive:
         archive.extractall(dest, members=lambda m: m.filename.endswith("file2.txt"))
 
     path = dest / "subdir" / "file2.txt"
@@ -161,20 +162,19 @@ def test_extractall_filter(
     assert not (dest / "implicit_subdir" / "file3.txt").exists()
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    BASIC_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(BASIC_ARCHIVES)
 def test_extractall_members(
-    tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
+    tmp_path: Path,
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     dest = tmp_path / "out"
     dest.mkdir()
 
-    with open_archive(sample_archive_path) as archive:
+    with open_archive(sample_archive_path, config=archive_config) as archive:
         member_obj = archive.get_member("file1.txt")
         archive.extractall(dest, members=[member_obj, "subdir/file2.txt"])
 

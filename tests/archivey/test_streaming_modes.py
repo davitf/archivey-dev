@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import IO
 
 import pytest
@@ -25,18 +26,20 @@ def _first_regular_file(sample: SampleArchive):
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         prefixes=["large_files_nonsolid", "large_files_solid"],
-    ),
-    ids=lambda a: a.filename,
+    )
 )
-def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: str):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+def test_random_access_mode(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
+):
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
-    with open_archive(sample_archive_path) as archive:
+    with open_archive(sample_archive_path, config=archive_config) as archive:
         assert archive.has_random_access()
         members_if_available = archive.get_members_if_available()
         members = archive.get_members()
@@ -84,40 +87,24 @@ def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: 
             f.read()
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         prefixes=["large_files_nonsolid", "large_files_solid"],
-    ),
-    ids=lambda a: a.filename,
+    )
 )
 @pytest.mark.parametrize("close_streams", [False, True], ids=["noclose", "close"])
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "alternative"]
-)
 def test_streaming_only_mode(
     sample_archive: SampleArchive,
     sample_archive_path: str,
     close_streams: bool,
-    alternative_packages: bool,
+    archive_config: ArchiveyConfig,
 ):
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rar_stream=True,
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-        )
-    else:
-        config = ArchiveyConfig()
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     first_file = _first_regular_file(sample_archive)
     with open_archive(
-        sample_archive_path, streaming_only=True, config=config
+        sample_archive_path, streaming_only=True, config=archive_config
     ) as archive:
         assert not archive.has_random_access()
 
@@ -170,25 +157,28 @@ def test_streaming_only_mode(
                 stream.close()  # Should be a no-op, not raise anything
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         prefixes=["large_files_nonsolid", "large_files_solid"],
-    ),
-    ids=lambda a: a.filename,
+    )
 )
 @pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
 def test_iter_members_partial_reads(
-    sample_archive: SampleArchive, sample_archive_path: str, streaming_only: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    streaming_only: bool,
+    archive_config: ArchiveyConfig,
 ):
     """Reading some members fully, partially or not at all should not break iteration."""
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     files = [f for f in sample_archive.contents.files if f.type == MemberType.FILE]
     assert len(files) == 5
 
-    with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
+    with open_archive(
+        sample_archive_path, streaming_only=streaming_only, config=archive_config
+    ) as archive:
         for i, (member, stream) in enumerate(
             archive.iter_members_with_streams(
                 members=lambda m: m.type == MemberType.FILE
@@ -210,8 +200,7 @@ def test_iter_members_partial_reads(
                 pass
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         prefixes=[
@@ -219,15 +208,17 @@ def test_iter_members_partial_reads(
             "basic_solid",
             "duplicate_files",
         ],
-    ),
-    ids=lambda a: a.filename,
+    )
 )
 @pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
 def test_iter_members_list_filter(
-    sample_archive: SampleArchive, sample_archive_path: str, streaming_only: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    streaming_only: bool,
+    archive_config: ArchiveyConfig,
 ):
     """Ensure iter_members_with_streams honours the filter callable."""
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
     if (
         sample_archive.filename.startswith("duplicate_files")
         and not sample_archive.creation_info.features.duplicate_files
@@ -242,7 +233,9 @@ def test_iter_members_list_filter(
     ]
     read_contents = []
 
-    with open_archive(sample_archive_path, streaming_only=streaming_only) as archive:
+    with open_archive(
+        sample_archive_path, streaming_only=streaming_only, config=archive_config
+    ) as archive:
         for member, stream in archive.iter_members_with_streams(members=file_names):
             assert member.filename in file_names
             read_contents.append(
@@ -252,21 +245,24 @@ def test_iter_members_list_filter(
     assert sorted(file_contents) == sorted(read_contents), file_names
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         prefixes=["large_files_nonsolid", "large_files_solid"],
-    ),
-    ids=lambda a: a.filename,
+    )
 )
 def test_streaming_only_allows_single_iteration(
-    tmp_path, sample_archive: SampleArchive, sample_archive_path: str
+    tmp_path: Path,
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     """Ensure streaming-only archives can be consumed only once."""
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
-    with open_archive(sample_archive_path, streaming_only=True) as archive:
+    with open_archive(
+        sample_archive_path, streaming_only=True, config=archive_config
+    ) as archive:
         next(archive.iter_members_with_streams())
 
         with pytest.raises(ValueError):
@@ -276,33 +272,36 @@ def test_streaming_only_allows_single_iteration(
             archive.extractall(tmp_path)
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         prefixes=["large_files_nonsolid", "large_files_solid"],
-    ),
-    ids=lambda a: a.filename,
+    )
 )
 def test_random_access_allows_multiple_iterations(
-    tmp_path, sample_archive: SampleArchive, sample_archive_path: str
+    tmp_path: Path,
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     """Random access readers should allow multiple iterations."""
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
-    with open_archive(sample_archive_path) as archive:
+    with open_archive(sample_archive_path, config=archive_config) as archive:
         next(archive.iter_members_with_streams())
         list(archive.iter_members_with_streams())
         list(archive.iter_members_with_streams())
 
 
-@pytest.mark.parametrize("sample_archive", SYMLINK_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(SYMLINK_ARCHIVES)
 def test_resolve_link_symlink_without_target(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ) -> None:
-    skip_if_package_missing(sample_archive.creation_info.format, None)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
-    with open_archive(sample_archive_path) as archive:
+    with open_archive(sample_archive_path, config=archive_config) as archive:
         for sample_file in sample_archive.contents.files:
             member = archive.get_member(sample_file.name)
             resolved = archive.resolve_link(member)

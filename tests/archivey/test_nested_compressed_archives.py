@@ -3,12 +3,18 @@ import os
 import shutil
 import subprocess
 from contextlib import nullcontext
+from pathlib import Path
 
 import pytest
 
 from archivey.archive_reader import ArchiveReader
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive, open_compressed_stream
-from archivey.exceptions import ArchiveStreamNotSeekableError, PackageNotInstalledError
+from archivey.exceptions import (
+    ArchiveStreamNotSeekableError,
+    ArchiveStreamNotSupportedError,
+    PackageNotInstalledError,
+)
 from archivey.types import ArchiveFormat, ContainerFormat, StreamFormat
 from tests.archivey.create_archives import (
     SINGLE_FILE_LIBRARY_OPENERS,
@@ -19,13 +25,11 @@ from tests.archivey.create_archives import (
     create_zip_archive_with_zipfile,
 )
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
     ArchiveContents,
     File,
     SampleArchive,
-    filter_archives,
 )
 from tests.archivey.test_open_nonseekable import EXPECTED_NON_SEEKABLE_FAILURES
 from tests.archivey.testing_utils import skip_if_package_missing
@@ -93,16 +97,8 @@ def check_archive_iter_members(archive: ArchiveReader):
     "outer_stream_format",
     set(StreamFormat) - {StreamFormat.UNCOMPRESSED},
 )
-@pytest.mark.parametrize(
-    "inner_archive",
-    filter_archives(
-        BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES,
-        custom_filter=lambda a: a.creation_info.format != ArchiveFormat.FOLDER,
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "altlibs"]
+@pytest.mark.sample_archives(
+    BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES, exclude_folders=True
 )
 @pytest.mark.parametrize(
     "open_inner_streaming_only",
@@ -110,40 +106,39 @@ def check_archive_iter_members(archive: ArchiveReader):
 )
 def test_open_archive_from_compressed_stream(
     outer_stream_format: StreamFormat,
-    inner_archive: SampleArchive,
-    tmp_path,
-    alternative_packages: bool,
+    sample_archive: SampleArchive,
+    tmp_path: Path,
+    archive_config: ArchiveyConfig,
     open_inner_streaming_only: bool,
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
     outer_format = ArchiveFormat(ContainerFormat.RAW_STREAM, outer_stream_format)
 
-    skip_if_package_missing(outer_format, config)
-    skip_if_package_missing(inner_archive.creation_info.format, config)
+    skip_if_package_missing(outer_format, archive_config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     if (
-        alternative_packages
+        archive_config.use_indexed_bzip2
         and outer_stream_format == StreamFormat.BZIP2
-        and inner_archive.filename.endswith(".bz2")
+        and sample_archive.filename.endswith(".bz2")
     ):
         pytest.xfail("prevent segfault")
 
     logger.info(
-        f"alternative_packages: {alternative_packages}, outer_format: {outer_stream_format}, inner_archive.filename: {inner_archive.filename}"
+        f"archive_config: {archive_config}, outer_format: {outer_stream_format}, inner_archive.filename: {sample_archive.filename}"
     )
 
-    inner_path = inner_archive.get_archive_path()
+    inner_path = sample_archive.get_archive_path()
     compressed_path = os.path.join(
         tmp_path,
         os.path.basename(inner_path) + "." + outer_format.file_extension(),
     )
     compress_stream(inner_path, compressed_path, outer_stream_format)
 
-    with open_compressed_stream(compressed_path, config=config) as stream:
+    with open_compressed_stream(compressed_path, config=archive_config) as stream:
         with open_archive(
-            stream, config=config, streaming_only=open_inner_streaming_only
+            stream, config=archive_config, streaming_only=open_inner_streaming_only
         ) as archive:
-            assert archive.format == inner_archive.creation_info.format
+            assert archive.format == sample_archive.creation_info.format
             check_archive_iter_members(archive)
 
 
@@ -169,16 +164,8 @@ def expect_raise_if(condition: bool, exc_type: type[Exception]):
     + ALL_TAR_FORMATS,
     ids=lambda a: a.file_extension(),
 )
-@pytest.mark.parametrize(
-    "inner_archive",
-    filter_archives(
-        BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES,
-        custom_filter=lambda a: a.creation_info.format != ArchiveFormat.FOLDER,
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "altlibs"]
+@pytest.mark.sample_archives(
+    BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES, exclude_folders=True
 )
 @pytest.mark.parametrize(
     "open_outer_streaming_only",
@@ -187,32 +174,40 @@ def expect_raise_if(condition: bool, exc_type: type[Exception]):
 )
 def test_open_archive_from_member(
     outer_format: ArchiveFormat,
-    inner_archive: SampleArchive,
-    tmp_path,
-    alternative_packages: bool,
+    sample_archive: SampleArchive,
+    tmp_path: Path,
+    archive_config: ArchiveyConfig,
     open_outer_streaming_only: bool,
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
+    skip_if_package_missing(outer_format, archive_config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
-    skip_if_package_missing(outer_format, config)
-    skip_if_package_missing(inner_archive.creation_info.format, config)
-
-    inner_path = inner_archive.get_archive_path()
+    inner_path = sample_archive.get_archive_path()
     outer_path = os.path.join(tmp_path, "outer." + outer_format.file_extension())
     try:
         create_archive_with_member(outer_format, inner_path, outer_path)
     except PackageNotInstalledError as exc:
         pytest.skip(str(exc))
 
+    alternative_packages = (
+        archive_config.use_rapidgzip
+        or archive_config.use_indexed_bzip2
+        or archive_config.use_python_xz
+        or archive_config.use_zstandard
+    )
     expect_non_seekable_failure = (
-        inner_archive.creation_info.format,
+        sample_archive.creation_info.format,
         alternative_packages,
     ) in EXPECTED_NON_SEEKABLE_FAILURES
+    expect_stream_not_supported_failure = (
+        sample_archive.creation_info.format == ArchiveFormat.RAR
+        and archive_config.use_rar_stream
+    )
 
     # Try opening the inner archive in random mode. It should work if the outer
     # archive is seekable and it provides seekable streams (only 7z doesn't).
     with open_archive(
-        outer_path, config=config, streaming_only=open_outer_streaming_only
+        outer_path, config=archive_config, streaming_only=open_outer_streaming_only
     ) as outer:
         assert outer.get_archive_info().format == outer_format
 
@@ -225,14 +220,20 @@ def test_open_archive_from_member(
             if open_outer_streaming_only:
                 assert not stream.seekable()
 
-            with expect_raise_if(
-                not stream.seekable(),
-                ArchiveStreamNotSeekableError,
+            with (
+                expect_raise_if(
+                    not stream.seekable(),  # and not expect_stream_not_supported_failure,
+                    ArchiveStreamNotSeekableError,
+                ),
+                expect_raise_if(
+                    expect_stream_not_supported_failure,
+                    ArchiveStreamNotSupportedError,
+                ),
             ):
                 with open_archive(
-                    stream, config=config, streaming_only=False
+                    stream, config=archive_config, streaming_only=False
                 ) as archive:
-                    assert archive.format == inner_archive.creation_info.format
+                    assert archive.format == sample_archive.creation_info.format
                     assert archive.get_members() is not None
                     check_archive_iter_members(archive)
 
@@ -242,7 +243,7 @@ def test_open_archive_from_member(
     # seekable or if the inner library support opening non-seekable streams in
     # streaming mode.
     with open_archive(
-        outer_path, config=config, streaming_only=open_outer_streaming_only
+        outer_path, config=archive_config, streaming_only=open_outer_streaming_only
     ) as outer:
         assert outer.get_archive_info().format == outer_format
 
@@ -255,14 +256,20 @@ def test_open_archive_from_member(
             if open_outer_streaming_only:
                 assert not stream.seekable()
 
-            with expect_raise_if(
-                not stream.seekable() and expect_non_seekable_failure,
-                ArchiveStreamNotSeekableError,
+            with (
+                expect_raise_if(
+                    not stream.seekable() and expect_non_seekable_failure,
+                    ArchiveStreamNotSeekableError,
+                ),
+                expect_raise_if(
+                    expect_stream_not_supported_failure,
+                    ArchiveStreamNotSupportedError,
+                ),
             ):
                 with open_archive(
-                    stream, config=config, streaming_only=True
+                    stream, config=archive_config, streaming_only=True
                 ) as archive:
-                    assert archive.format == inner_archive.creation_info.format
+                    assert archive.format == sample_archive.creation_info.format
                     check_archive_iter_members(archive)
 
         assert outer_has_member

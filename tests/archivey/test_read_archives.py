@@ -3,7 +3,6 @@ import logging
 import os
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Optional
 
 import pytest
 
@@ -20,7 +19,6 @@ from archivey.types import (
     MemberType,
 )
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
     SAMPLE_ARCHIVES,
     FileInfo,
@@ -177,9 +175,9 @@ def check_member_metadata(
 def check_iter_members(
     sample_archive: SampleArchive,
     archive_path: str,
+    config: ArchiveyConfig,
     set_file_password_in_constructor: bool = True,
     skip_member_contents: bool = False,
-    config: Optional[ArchiveyConfig] = None,
 ):
     skip_if_package_missing(sample_archive.creation_info.format, config)
 
@@ -237,7 +235,7 @@ def check_iter_members(
         )
 
     archive_path_resolved = archive_path or sample_archive.get_archive_path()
-    config = replace(config or ArchiveyConfig(), extraction_filter=TESTING_FILTER)
+    config = replace(config, extraction_filter=TESTING_FILTER)
 
     with open_archive(
         archive_path_resolved,
@@ -368,34 +366,30 @@ def check_iter_members(
                     archive.open(filename)
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
-        SAMPLE_ARCHIVES,
-        extensions=["zip"],
-    ),
-    ids=lambda x: x.filename,
-)
-def test_read_zip_archives(sample_archive: SampleArchive, sample_archive_path: str):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+@pytest.mark.sample_archives(filter_archives(SAMPLE_ARCHIVES, extensions=["zip"]))
+def test_read_zip_archives(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
+):
+    check_iter_members(
+        sample_archive, archive_path=sample_archive_path, config=archive_config
+    )
 
 
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         custom_filter=lambda x: x.creation_info.format.container == ContainerFormat.TAR,
-    ),
-    ids=lambda x: x.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+    )
 )
 def test_read_tar_archives(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     logger.info(f"Testing {sample_archive.filename}; files at {sample_archive_path}")
 
@@ -403,26 +397,21 @@ def test_read_tar_archives(
         f"Testing {sample_archive.filename} with format {sample_archive.creation_info.format}"
     )
 
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
         skip_member_contents=True,
-        config=config,
+        config=archive_config,
     )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, extensions=["rar"]),
-    ids=lambda x: x.filename,
-)
-@pytest.mark.parametrize("use_rar_stream", [True, False])
+@pytest.mark.sample_archives(filter_archives(SAMPLE_ARCHIVES, extensions=["rar"]))
 def test_read_rar_archives(
-    sample_archive: SampleArchive, sample_archive_path: str, use_rar_stream: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     deps = get_dependency_versions()
     if (
@@ -431,10 +420,9 @@ def test_read_rar_archives(
     ):
         pytest.skip("Cryptography is not installed, skipping RAR encrypted-header test")
 
+    use_rar_stream = archive_config.use_rar_stream
     if use_rar_stream and deps.unrar_version is None:
         pytest.skip("unrar not installed, skipping RarStreamReader test")
-
-    config = ArchiveyConfig(use_rar_stream=use_rar_stream)
 
     has_password = sample_archive.contents.has_password()
     has_multiple_passwords = sample_archive.contents.has_multiple_passwords()
@@ -454,123 +442,114 @@ def test_read_rar_archives(
             check_iter_members(
                 sample_archive,
                 archive_path=sample_archive_path,
-                config=config,
+                config=archive_config,
             )
     else:
         check_iter_members(
             sample_archive,
             archive_path=sample_archive_path,
-            config=config,
+            config=archive_config,
             skip_member_contents=deps.unrar_version is None,
         )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         extensions=["rar"],
         custom_filter=lambda x: x.contents.has_password()
         and not x.contents.has_multiple_passwords()
         and x.contents.header_password is None,
-    ),
-    ids=lambda x: x.filename,
+    )
 )
-@pytest.mark.parametrize("use_rar_stream", [True, False])
 def test_read_rar_archives_with_password_in_constructor(
-    sample_archive: SampleArchive, sample_archive_path: str, use_rar_stream: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     deps = get_dependency_versions()
-    if use_rar_stream and deps.unrar_version is None:
+    if archive_config.use_rar_stream and deps.unrar_version is None:
         pytest.skip("unrar not installed, skipping RarStreamReader test")
 
-    config = ArchiveyConfig(use_rar_stream=use_rar_stream)
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
-        config=config,
+        config=archive_config,
         set_file_password_in_constructor=True,
         skip_member_contents=deps.unrar_version is None,
     )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         extensions=["zip", "7z"],
         custom_filter=lambda x: x.contents.has_password()
         and not x.contents.has_multiple_passwords()
         and x.contents.header_password is None,
-    ),
-    ids=lambda x: x.filename,
+    )
 )
 def test_read_zip_and_7z_archives_with_password_in_constructor(
     sample_archive: SampleArchive,
     sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     check_iter_members(
         sample_archive,
         archive_path=sample_archive_path,
+        config=archive_config,
         set_file_password_in_constructor=True,
     )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, extensions=["7z"]),
-    ids=lambda x: x.filename,
-)
-def test_read_7z_archives(sample_archive: SampleArchive, sample_archive_path: str):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+@pytest.mark.sample_archives(filter_archives(SAMPLE_ARCHIVES, extensions=["7z"]))
+def test_read_7z_archives(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
+):
+    check_iter_members(
+        sample_archive, archive_path=sample_archive_path, config=archive_config
+    )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         SAMPLE_ARCHIVES, prefixes=["single_file", "single_file_with_metadata"]
-    ),
-    ids=lambda x: x.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+    )
 )
 def test_read_single_file_compressed_archives(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_python_xz=True,
-            use_zstandard=True,
-            use_single_file_stored_metadata=True,
-        )
-    else:
-        config = ArchiveyConfig(use_single_file_stored_metadata=True)
-
+    config = replace(archive_config, use_single_file_stored_metadata=True)
     check_iter_members(sample_archive, archive_path=sample_archive_path, config=config)
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, prefixes=["symlinks", "symlinks_solid"]),
-    ids=lambda x: x.filename,
+@pytest.mark.sample_archives(
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["symlinks", "symlinks_solid"])
 )
 def test_read_symlinks_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    check_iter_members(
+        sample_archive, archive_path=sample_archive_path, config=archive_config
+    )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, prefixes=["symlink_loop"]),
-    ids=lambda x: x.filename,
+@pytest.mark.sample_archives(
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["symlink_loop"])
 )
-def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_path: str):
+def test_symlink_loop_archives(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
+):
     """Ensure that archives with symlink loops do not cause infinite loops."""
-    with open_archive(sample_archive_path) as archive:
+    with open_archive(sample_archive_path, config=archive_config) as archive:
         for member in archive.get_members():
             if member.type == MemberType.SYMLINK:
                 if member.link_target == "file5.txt":
@@ -584,24 +563,26 @@ def test_symlink_loop_archives(sample_archive: SampleArchive, sample_archive_pat
                     fh.read()
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
-        SAMPLE_ARCHIVES, prefixes=["hardlinks_nonsolid", "hardlinks_solid"]
-    ),
-    ids=lambda x: x.filename,
+@pytest.mark.sample_archives(
+    filter_archives(SAMPLE_ARCHIVES, prefixes=["hardlinks_nonsolid", "hardlinks_solid"])
 )
 def test_read_hardlinks_archives(
-    sample_archive: SampleArchive, sample_archive_path: str
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    check_iter_members(
+        sample_archive, archive_path=sample_archive_path, config=archive_config
+    )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(SAMPLE_ARCHIVES, extensions=["_folder/"]),
-    ids=lambda x: x.filename,
-)
-def test_read_folder_archives(sample_archive: SampleArchive, sample_archive_path: str):
+@pytest.mark.sample_archives(filter_archives(SAMPLE_ARCHIVES, extensions=["_folder/"]))
+def test_read_folder_archives(
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
+):
     logger.info(f"Testing {sample_archive.filename}; files at {sample_archive_path}")
-    check_iter_members(sample_archive, archive_path=sample_archive_path)
+    check_iter_members(
+        sample_archive, archive_path=sample_archive_path, config=archive_config
+    )

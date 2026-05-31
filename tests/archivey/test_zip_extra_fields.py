@@ -1,11 +1,12 @@
 import struct
 import zipfile
 from datetime import datetime, timezone
+from pathlib import Path
 
 from archivey.core import open_archive
 
 
-def test_zip_extra_field_before_timestamp(tmp_path) -> None:
+def test_zip_extra_field_before_timestamp(tmp_path: Path) -> None:
     path = tmp_path / "extra.zip"
     modtime = int(datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc).timestamp())
     zi = zipfile.ZipInfo("file.txt", date_time=(2020, 1, 2, 3, 4, 5))

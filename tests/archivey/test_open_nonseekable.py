@@ -3,12 +3,12 @@ import logging
 
 import pytest
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive, open_compressed_stream
 from archivey.exceptions import ArchiveStreamNotSeekableError
 from archivey.internal.io_helpers import ensure_binaryio
 from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     LARGE_ARCHIVES,
     SampleArchive,
@@ -59,32 +59,36 @@ class NonSeekableBytesIO(io.BytesIO):
         raise io.UnsupportedOperation("tell")
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
+@pytest.mark.sample_archives(
     filter_archives(
         BASIC_ARCHIVES + LARGE_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
-    ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+    )
 )
 def test_open_archive_nonseekable(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
     """Ensure open_archive can read from non-seekable streams in streaming mode."""
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
 
     stream = NonSeekableBytesIO(data)
 
+    alternative_packages = (
+        archive_config.use_rapidgzip
+        or archive_config.use_indexed_bzip2
+        or archive_config.use_python_xz
+        or archive_config.use_zstandard
+    )
+
     try:
-        with open_archive(stream, streaming_only=True, config=config) as archive:
+        with open_archive(
+            stream, streaming_only=True, config=archive_config
+        ) as archive:
             members = []
             for member, member_stream in archive.iter_members_with_streams():
                 members.append(member)
@@ -110,26 +114,28 @@ def test_open_archive_nonseekable(
             )
 
 
-@pytest.mark.parametrize(
-    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
-)
+@pytest.mark.sample_archives(SINGLE_FILE_ARCHIVES)
 def test_open_compressed_stream_nonseekable(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archive_config: ArchiveyConfig,
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    skip_if_package_missing(sample_archive.creation_info.format, archive_config)
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
 
     stream = ensure_binaryio(NonSeekableBytesIO(data))
 
+    alternative_packages = (
+        archive_config.use_rapidgzip
+        or archive_config.use_indexed_bzip2
+        or archive_config.use_python_xz
+        or archive_config.use_zstandard
+    )
+
     try:
-        with open_compressed_stream(stream, config=config) as f:
+        with open_compressed_stream(stream, config=archive_config) as f:
             assert not f.seekable()
 
             out = f.read()
