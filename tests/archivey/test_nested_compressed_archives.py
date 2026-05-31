@@ -10,7 +10,11 @@ import pytest
 from archivey.archive_reader import ArchiveReader
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive, open_compressed_stream
-from archivey.exceptions import ArchiveStreamNotSeekableError, PackageNotInstalledError
+from archivey.exceptions import (
+    ArchiveStreamNotSeekableError,
+    ArchiveStreamNotSupportedError,
+    PackageNotInstalledError,
+)
 from archivey.types import ArchiveFormat, ContainerFormat, StreamFormat
 from tests.archivey.create_archives import (
     SINGLE_FILE_LIBRARY_OPENERS,
@@ -195,6 +199,10 @@ def test_open_archive_from_member(
         sample_archive.creation_info.format,
         alternative_packages,
     ) in EXPECTED_NON_SEEKABLE_FAILURES
+    expect_stream_not_supported_failure = (
+        sample_archive.creation_info.format == ArchiveFormat.RAR
+        and archive_config.use_rar_stream
+    )
 
     # Try opening the inner archive in random mode. It should work if the outer
     # archive is seekable and it provides seekable streams (only 7z doesn't).
@@ -212,9 +220,15 @@ def test_open_archive_from_member(
             if open_outer_streaming_only:
                 assert not stream.seekable()
 
-            with expect_raise_if(
-                not stream.seekable(),
-                ArchiveStreamNotSeekableError,
+            with (
+                expect_raise_if(
+                    not stream.seekable(),  # and not expect_stream_not_supported_failure,
+                    ArchiveStreamNotSeekableError,
+                ),
+                expect_raise_if(
+                    expect_stream_not_supported_failure,
+                    ArchiveStreamNotSupportedError,
+                ),
             ):
                 with open_archive(
                     stream, config=archive_config, streaming_only=False
@@ -242,9 +256,15 @@ def test_open_archive_from_member(
             if open_outer_streaming_only:
                 assert not stream.seekable()
 
-            with expect_raise_if(
-                not stream.seekable() and expect_non_seekable_failure,
-                ArchiveStreamNotSeekableError,
+            with (
+                expect_raise_if(
+                    not stream.seekable() and expect_non_seekable_failure,
+                    ArchiveStreamNotSeekableError,
+                ),
+                expect_raise_if(
+                    expect_stream_not_supported_failure,
+                    ArchiveStreamNotSupportedError,
+                ),
             ):
                 with open_archive(
                     stream, config=archive_config, streaming_only=True

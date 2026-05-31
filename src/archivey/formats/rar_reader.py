@@ -47,6 +47,7 @@ from archivey.exceptions import (
     ArchiveEncryptedError,
     ArchiveError,
     ArchiveStreamNotSeekableError,
+    ArchiveStreamNotSupportedError,
     PackageNotInstalledError,
 )
 from archivey.internal.base_reader import BaseArchiveReader, _build_filter
@@ -364,7 +365,11 @@ class RarStreamMemberFile(io.RawIOBase, BinaryIO):
         raise io.UnsupportedOperation("writelines")  # pragma: no cover
 
     def close(self) -> None:
-        if self.closed:
+        # TODO: reading all the rest of the file when closing it is inneficient and
+        # may result in unexpected side effects. It would be better for us to keep
+        # track of the position in the inner stream, and advance it if needed when
+        # opening the next file.
+        if self.closed or self._stream.closed:
             return
         try:
             while self._remaining > 0:
@@ -795,7 +800,9 @@ class RarReader(BaseArchiveReader):
             assert members is not None
 
             if self.path_str is None:
-                raise ValueError("RAR stream reader cannot be opened from a stream")
+                raise ArchiveStreamNotSupportedError(
+                    "RAR stream reader cannot be opened from a stream"
+                )
 
             stream_reader = RarStreamReader(self.path_str, members, pwd=pwd_to_use)
             filter_func = _build_filter(

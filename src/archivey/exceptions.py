@@ -64,6 +64,14 @@ class ArchiveStreamNotSeekableError(ArchiveReadError):
     pass
 
 
+class ArchiveStreamNotSupportedError(ArchiveReadError):
+    """
+    Raised when a stream is not supported by the archive format or backend library.
+    """
+
+    pass
+
+
 # Errors related to archive members
 class ArchiveMemberError(ArchiveError):
     """Base class for errors related to archive members."""
