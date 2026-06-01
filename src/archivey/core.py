@@ -10,6 +10,7 @@ from archivey.exceptions import ArchiveNotSupportedError, ArchiveStreamNotSeekab
 from archivey.formats.compressed_streams import open_stream
 from archivey.formats.folder_reader import FolderReader
 from archivey.formats.format_detection import detect_archive_format
+from archivey.formats.iso_reader import IsoReader
 from archivey.formats.rar_reader import RarReader
 from archivey.formats.sevenzip_reader import SevenZipReader
 from archivey.formats.single_file_reader import SingleFileReader
@@ -50,6 +51,7 @@ _FORMAT_TO_READER: dict[ContainerFormat, Callable[..., ArchiveReader]] = {
     ContainerFormat.ZIP: ZipReader,
     ContainerFormat.SEVENZIP: SevenZipReader,
     ContainerFormat.TAR: TarReader,
+    ContainerFormat.ISO: IsoReader,
     ContainerFormat.FOLDER: FolderReader,
     ContainerFormat.RAW_STREAM: SingleFileReader,
 }

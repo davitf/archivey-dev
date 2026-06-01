@@ -86,6 +86,8 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
 
     if format.container == ContainerFormat.SEVENZIP:
         pytest.importorskip("py7zr")
+    elif format.container == ContainerFormat.ISO:
+        pytest.importorskip("pycdlib")
     elif format.container == ContainerFormat.RAR:
         pytest.importorskip("rarfile")
         if get_dependency_versions().unrar_version is None:
