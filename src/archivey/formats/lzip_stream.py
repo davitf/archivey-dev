@@ -147,13 +147,10 @@ class _LzipState:
     """
     Streaming state machine for multi-member lzip decompression.
 
-    Call feed(chunk) repeatedly with successive compressed chunks; it returns
-    the corresponding decompressed bytes.  When the underlying stream is
-    exhausted, call flush() to finalise and detect truncation.
-
-    completed_members records (decompressed_size, compressed_size) for every
-    member whose trailer has been fully verified.  LzipDecompressorStream reads
-    this list to build its persistent member index.
+    feed(chunk) returns (decompressed_bytes, new_members) where new_members is
+    a list of (decompressed_size, compressed_size) tuples for every member
+    whose trailer was fully verified during this call.  flush() does the same
+    for the end-of-stream case.
 
     The state machine cycles through three phases per member:
 
@@ -184,32 +181,28 @@ class _LzipState:
         self._crc = 0
         self._member_size = 0
         self._finished = False
-        # Populated in _verify_trailer; read by LzipDecompressorStream to build its index.
-        self.completed_members: list[
-            tuple[int, int]
-        ] = []  # (decompressed_size, compressed_size)
 
-    def feed(self, data: bytes) -> bytes:
+    def feed(self, data: bytes) -> tuple[bytes, list[tuple[int, int]]]:
         self._buf.extend(data)
         return self._process()
 
-    def flush(self) -> bytes:
+    def flush(self) -> tuple[bytes, list[tuple[int, int]]]:
         """Called when the compressed stream is exhausted.
 
-        Succeeds (sets finished=True, returns b"") only if we are cleanly
-        between members with no buffered bytes.  Any other state means the
-        stream was truncated.
+        Succeeds (sets finished=True) only if we are cleanly between members
+        with no buffered bytes.  Any other state means the stream was truncated.
         """
         if self._state == self._NEED_HEADER and not self._buf:
             self._finished = True
-            return b""
+            return b"", []
         raise ArchiveEOFError("Lzip file is truncated")
 
     def is_finished(self) -> bool:
         return self._finished
 
-    def _process(self) -> bytes:
+    def _process(self) -> tuple[bytes, list[tuple[int, int]]]:
         output = bytearray()
+        new_members: list[tuple[int, int]] = []
         while True:
             if self._state == self._NEED_HEADER:
                 if len(self._buf) < _HEADER_SIZE:
@@ -246,10 +239,10 @@ class _LzipState:
                     break
                 trailer = bytes(self._buf[:_TRAILER_SIZE])
                 del self._buf[:_TRAILER_SIZE]
-                self._verify_trailer(trailer)
+                new_members.append(self._verify_trailer(trailer))
                 self._state = self._NEED_HEADER
 
-        return bytes(output)
+        return bytes(output), new_members
 
     def _start_member(self, header: bytes) -> None:
         if header[:4] != _MAGIC:
@@ -270,7 +263,7 @@ class _LzipState:
         self._crc = 0
         self._member_size = 0
 
-    def _verify_trailer(self, trailer: bytes) -> None:
+    def _verify_trailer(self, trailer: bytes) -> tuple[int, int]:
         crc32_stored, data_size, member_size = struct.unpack_from("<IQQ", trailer, 0)
         if (self._crc & 0xFFFFFFFF) != crc32_stored:
             raise ArchiveCorruptedError(
@@ -281,4 +274,4 @@ class _LzipState:
             raise ArchiveCorruptedError(
                 f"Lzip size mismatch: stored {data_size}, actual {self._member_size}"
             )
-        self.completed_members.append((int(data_size), int(member_size)))
+        return (int(data_size), int(member_size))

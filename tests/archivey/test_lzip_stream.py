@@ -171,10 +171,9 @@ def test_forward_seek_skips_intermediate_members():
         f.seek(0)
         target = len(parts[0]) + len(parts[1])
         f.seek(target)
-        # Only member 2 should have been decompressed by the current decompressor
-        completed = f._decompressor.completed_members  # type: ignore[attr-defined]
-        # We jumped to member 2; members 0 and 1 were skipped
-        assert len(completed) == 0  # jumped directly, member 2 not finished yet
+        # _current_member_idx == 2 confirms we jumped directly to member 2;
+        # members 0 and 1 were not decompressed.
+        assert f._current_member_idx == 2  # type: ignore[attr-defined]
         assert f.read() == parts[2]
 
 
@@ -241,8 +240,8 @@ def test_seek_end_does_not_decompress():
     data = make_multi_member(parts)
     with open_lzip(data) as f:
         f.seek(0, io.SEEK_END)
-        # The backward scan should not have decompressed any members
-        assert f._decompressor.completed_members == []  # type: ignore[attr-defined]
+        # _current_member_idx == 0 confirms the backward scan decompressed nothing.
+        assert f._current_member_idx == 0  # type: ignore[attr-defined]
         assert f._index_complete  # type: ignore[attr-defined]
 
 

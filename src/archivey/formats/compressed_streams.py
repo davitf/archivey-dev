@@ -1,4 +1,5 @@
 import abc
+import bisect
 import bz2
 import gzip
 import io
@@ -566,11 +567,9 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
         # invokes _create_decompressor(), which references these attributes.
         self._member_index: list[_MemberBounds] = []
         self._index_complete: bool = False
-        # Which slot in _member_index the current _LzipState started at.
+        # Absolute index of the member the current _LzipState is processing.
+        # Incremented by _update_index as each member completes.
         self._current_member_idx: int = 0
-        # How many entries in _decompressor.completed_members have already been
-        # processed for index updates.
-        self._last_completed_count: int = 0
         super().__init__(path)
 
     # ------------------------------------------------------------------
@@ -580,20 +579,19 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
     def _create_decompressor(self) -> _LzipState:
         # Called by super().__init__() and by _rewind().
         self._current_member_idx = 0
-        self._last_completed_count = 0
         return _LzipState()
 
     def _decompress_chunk(self, chunk: bytes) -> bytes:
-        result = self._decompressor.feed(chunk)
-        self._update_index()
-        return result
+        data, new_members = self._decompressor.feed(chunk)
+        self._update_index(new_members)
+        return data
 
     def _flush_decompressor(self) -> bytes:
-        result = self._decompressor.flush()
-        self._update_index()
+        data, new_members = self._decompressor.flush()
+        self._update_index(new_members)
         if self._decompressor.is_finished():
             self._index_complete = True
-        return result
+        return data
 
     def _is_decompressor_finished(self) -> bool:
         return self._decompressor.is_finished()
@@ -602,13 +600,10 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
     # Member index management
     # ------------------------------------------------------------------
 
-    def _update_index(self) -> None:
-        """Append any newly completed members to the persistent index."""
-        completed = self._decompressor.completed_members
-        for i in range(self._last_completed_count, len(completed)):
-            decompressed_size, compressed_size = completed[i]
-            absolute_idx = self._current_member_idx + i
-            if absolute_idx >= len(self._member_index):
+    def _update_index(self, new_members: list[tuple[int, int]]) -> None:
+        """Extend the persistent index with newly completed members."""
+        for decompressed_size, compressed_size in new_members:
+            if self._current_member_idx >= len(self._member_index):
                 if self._member_index:
                     last = self._member_index[-1]
                     cs = last.compressed_start + last.compressed_size
@@ -618,7 +613,7 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
                 self._member_index.append(
                     _MemberBounds(cs, ds, compressed_size, decompressed_size)
                 )
-        self._last_completed_count = len(completed)
+            self._current_member_idx += 1
 
     def _build_index_backwards(self) -> None:
         """Scan trailers to build the complete index without decompressing."""
@@ -635,11 +630,15 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
 
     def _find_member_idx_for(self, pos: int) -> int | None:
         """Return the index of the last member with decompressed_start <= pos."""
-        best: int | None = None
-        for i, m in enumerate(self._member_index):
-            if m.decompressed_start <= pos:
-                best = i
-        return best
+        if not self._member_index:
+            return None
+        i = (
+            bisect.bisect_right(
+                self._member_index, pos, key=lambda m: m.decompressed_start
+            )
+            - 1
+        )
+        return i if i >= 0 else None
 
     # ------------------------------------------------------------------
     # Seek overrides
@@ -659,7 +658,6 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
         # Use direct assignment (not _create_decompressor) so we can set
         # _current_member_idx ourselves without it being overwritten.
         self._current_member_idx = member_idx
-        self._last_completed_count = 0
         self._decompressor = _LzipState()
         self._buffer.clear()
         self._eof = False
@@ -685,14 +683,13 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
 
         best_idx = self._find_member_idx_for(pos)
         if best_idx is not None:
-            current_member = self._current_member_idx + self._last_completed_count
             if pos < self._pos:
                 # Backward seek: jump to the best member.
                 if best_idx > 0:
                     self._reset_to_member(best_idx)
                 else:
                     self._rewind()
-            elif best_idx > current_member:
+            elif best_idx > self._current_member_idx:
                 # Forward seek past one or more already-indexed members: skip them.
                 self._reset_to_member(best_idx)
             # else: target is within or just ahead of the current member; read forward.
