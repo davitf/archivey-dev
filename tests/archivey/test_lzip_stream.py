@@ -2,6 +2,7 @@
 
 import io
 import struct
+from typing import BinaryIO, cast
 
 import pytest
 
@@ -271,7 +272,9 @@ def test_forward_seek_triggers_index_build():
     # are indexed one at a time (the default 65536-byte read would index them all
     # at once for this small test data, making _index_complete True immediately).
     chunk_size = max(len(m) for m in member_bytes)
-    with LzipDecompressorStream(_LimitedReadStream(data, chunk_size)) as f:
+    with LzipDecompressorStream(
+        cast("BinaryIO", _LimitedReadStream(data, chunk_size))
+    ) as f:
         # Read only the first member's content
         f.read(len(parts[0]))
         assert not f._index_complete  # type: ignore[attr-defined]
@@ -293,7 +296,9 @@ def test_member_index_built_progressively():
     data = b"".join(member_bytes)
     # Limit compressed reads to one member at a time so the index grows step-by-step.
     chunk_size = max(len(m) for m in member_bytes)
-    with LzipDecompressorStream(_LimitedReadStream(data, chunk_size)) as f:
+    with LzipDecompressorStream(
+        cast("BinaryIO", _LimitedReadStream(data, chunk_size))
+    ) as f:
         # No members indexed yet
         assert len(f._member_index) == 0  # type: ignore[attr-defined]
 

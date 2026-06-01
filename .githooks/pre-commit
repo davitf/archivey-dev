@@ -1,0 +1,8 @@
+#!/bin/sh
+# Pre-commit: run the same lint checks as CI.
+# To activate: git config core.hooksPath .githooks
+set -e
+uv sync --extra optional
+uv run ruff check --fix .
+uv run ruff format .
+npx --yes pyright .
