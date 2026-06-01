@@ -13,8 +13,8 @@ architecture should evolve.
 
 | Property | ZIP | TAR | RAR | 7z | ISO |
 |---|---|---|---|---|---|
-| `members_list_supported` | True⁵ | False | True | True | True |
-| `streaming_only` default | False (not optional⁶) | Configurable¹ | False | False | False |
+| `members_list_supported` | True (seekable) / False (streaming)⁵ | False | True | True | True |
+| `streaming_only` default | False (current impl)⁶ | Configurable¹ | False | False | False |
 | Central directory | Yes (EOCD at EOF) | No | Yes (at EOF) | Yes (at EOF) | Yes (VDs at sector 16) |
 | Compression granularity | Per-member | Whole-archive² | Per-member + groups (solid) | Per-folder (solid) | None (stored only) |
 | Encryption granularity | Per-member (ZipCrypto) | None | Per-member + header | Per-folder | None |
@@ -39,15 +39,15 @@ architecture should evolve.
 ⁴ TAR format has no checksum for file data; only the header has a simple
   checksum (sum of header bytes mod 256).
 
-⁵ ZIP's central directory is at the **end** of the file.  `members_list_supported=True`
-  means the list can be obtained without reading file data — but only once the
-  **entire** archive is available and the stream is seekable.  Non-seekable ZIP
-  input is rejected at construction; ZIP cannot stream at all.
+⁵ With seekable input, `zipfile` seeks to the EOCD and reads the full central
+  directory, giving `members_list_supported=True`.  With a streaming (non-seekable)
+  reader that uses local file headers directly, members are discovered
+  sequentially just like TAR and `members_list_supported=False`.  Some metadata
+  is only in the central directory and not available in streaming mode (see §2.1).
 
-⁶ ZIP does not support `streaming_only=True` because the central directory is
-  at EOF; there is no way to list or open members while the archive is still
-  arriving.  The `False` default is therefore a hard constraint, not a
-  preference.
+⁶ The current archivey `ZipReader` (backed by stdlib `zipfile`) rejects
+  non-seekable input at construction.  This is a library limitation, not a
+  format limitation — see §2.1 for what a streaming ZIP reader would look like.
 
 ---
 
@@ -58,27 +58,53 @@ architecture should evolve.
 If True, the archive has a "directory" structure that allows listing all
 members before reading any file data.
 
-| Format | Flag | Reason |
-|---|---|---|
-| ZIP | True | Central directory at EOF; `zipfile` seeks to EOCD and reads all ZipInfo records at open time — but requires seekable + complete input (see below) |
-| TAR | False | No central directory; member headers are interleaved with data; can only scan sequentially |
-| RAR | True | End-of-archive block at EOF; rarfile reads all `RarInfo` objects at open time |
-| 7z | True | End-header + Streams Info at EOF; py7zr reads all metadata at open time |
-| ISO | True | Volume Descriptor at sector 16; entire directory tree can be walked from root before reading any file data |
+| Format | Flag (seekable) | Flag (streaming) | Reason |
+|---|---|---|---|
+| ZIP | True | False (format supports; stdlib doesn't) | Central dir at EOF for seekable; local headers before data enable streaming |
+| TAR | False | False | No central directory; entries discovered sequentially |
+| RAR | True | N/A | End-of-archive block at EOF; rarfile reads all `RarInfo` objects at open time |
+| 7z | True | N/A | End-header + Streams Info at EOF; py7zr reads all metadata at open time |
+| ISO | True | N/A | VD at sector 16; full directory tree walkable before any file data |
 
-**ZIP vs TAR streaming asymmetry**: TAR and ZIP are on opposite ends of the
-streaming spectrum.  TAR has no index at all — but because each entry's header
-immediately precedes its data, a TAR can be read in one forward pass without
-buffering the whole file.  ZIP has a full central directory — but it is at the
-*end* of the file, so `zipfile` must seek to EOF before it can read any member
-metadata.  This makes ZIP completely hostile to streaming: non-seekable ZIP
-input is rejected at construction time in archivey.  For the other formats with
-end-of-file indices (RAR, 7z), streaming is similarly impossible — they require
-the full file to be available to read the index.
+**ZIP can be streamed at the format level**: each ZIP entry has a local file
+header immediately before its compressed data, identical in concept to a TAR
+entry header.  A streaming ZIP reader processes these local headers in order —
+filename, compression method, and flags are all present — without ever needing
+the central directory.
 
-The base class handles the TAR case via the `_early_members_list_supported`
-path: when both `streaming_only=True` and `members_list_supported=False`,
-`get_members_if_available()` returns `None`.
+The **data descriptor** (flag bit 3) complicates sizing for streaming writes:
+when a ZIP is written to a pipe the writer doesn't know the CRC or sizes at the
+time the local header is written, so it puts them in a trailing data descriptor
+record after the compressed data.  For compressed methods (deflate, bzip2,
+lzma) this is handled naturally — each decompressor has an end-of-stream
+marker so the reader knows when the data ends without needing the size.  For
+stored (uncompressed) entries with bit 3 set, the end must be found by scanning
+for the data-descriptor signature `PK\x07\x08`, which is ambiguous if that
+byte sequence appears in the payload.
+
+What streaming mode **cannot** provide (central-directory-only fields):
+
+| Field | Notes |
+|---|---|
+| `external_attr` | Unix mode bits (permissions) and symlink detection — not in local header |
+| `create_system` | Needed to interpret `external_attr` — not in local header |
+| Per-file comment | Only in central directory |
+
+Everything else — filename (with UTF-8 detection via bit 11), compression
+method, DOS timestamp, and the Extended Timestamp extra field (0x5455) — is
+present in the local header and available in streaming mode.
+
+The current archivey `ZipReader` (stdlib `zipfile`) cannot stream: it seeks
+to EOCD at open time and rejects non-seekable input.  This is a **stdlib
+limitation**, not a format one.  Implementing a streaming ZIP reader would
+require parsing local headers directly.
+
+For RAR and 7z, streaming is not possible at all: the end-of-file index is the
+only place member metadata lives.
+
+The base class handles the TAR (and streaming ZIP) case via the
+`_early_members_list_supported` path: when both `streaming_only=True` and
+`members_list_supported=False`, `get_members_if_available()` returns `None`.
 
 ### 2.2 `streaming_only`
 
@@ -404,9 +430,12 @@ non-seekable.  The outcome depends on which backend is configured:
 - Stdlib gzip/bz2/lzma on a file → seekable (via rewind) → `streaming_only=False`
 - rapidgzip or indexed_bzip2 → always seekable → `streaming_only=False`
 
-ZIP cannot use streaming mode at all (central directory at EOF); passing
-`streaming_only=True` to `open_archive()` for a ZIP would fail or be
-meaningless.
+The current archivey `ZipReader` (stdlib `zipfile`) cannot use streaming mode;
+passing `streaming_only=True` to `open_archive()` for a ZIP raises an error at
+construction.  The ZIP format itself does support streaming via local file
+headers (see §2.1); a future streaming `ZipReader` would expose
+`streaming_only=True` just like `TarReader`, at the cost of losing
+`external_attr` (permissions, symlinks) and per-file comments.
 
 Proposal: split into `format_supports_random_access: bool` (class attribute)
 and `streaming_only: bool` (runtime flag that can be True only when the format

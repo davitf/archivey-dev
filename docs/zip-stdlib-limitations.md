@@ -249,9 +249,42 @@ low bits could produce a spurious mode value (the DOS attribute byte in the low
 ```
 Scans all members for the encryption flag.
 
-### 3.9 Non-seekable streams
+### 3.9 Non-seekable streams (streaming mode)
 
-Architecturally impossible with `zipfile`; rejected at construction.
+`zipfile` requires a seekable stream and rejects non-seekable input at
+construction.  This is a **library limitation, not a format limitation**.
+
+The ZIP format was designed from the beginning to support streaming writes: each
+entry has a 30-byte local file header immediately before its compressed data,
+containing the filename, compression method, and flags.  A streaming reader can
+process these local headers in order, identical in concept to a TAR reader.
+
+When an archive is written to a pipe or network socket (the "streaming" writing
+case), the writer does not know the CRC32 or sizes at the time the local header
+is written.  It sets flag bit 3 (`_MASK_USE_DATA_DESCRIPTOR`) and writes the
+CRC32, compressed size, and uncompressed size in a trailing data descriptor
+record after the compressed data.  Compressed methods (deflate, bzip2, lzma)
+have end-of-stream markers so the decompressor knows when the data ends without
+needing the size field.  Stored (uncompressed) entries with bit 3 set require
+scanning for the `PK\x07\x08` data-descriptor signature, which is ambiguous if
+that byte sequence appears in the payload.
+
+**What a streaming ZIP reader would lose** (central-directory-only fields):
+
+| Field | Impact |
+|---|---|
+| `external_attr` | Unix mode bits lost; symlink detection unavailable |
+| `create_system` | Cannot determine if archive was created on Unix |
+| Per-file comment | Not available in streaming mode |
+
+Everything else — filename (UTF-8 via flag bit 11), compression method, DOS
+timestamp, and the Extended Timestamp extra field (`0x5455`) — is present in
+the local file header.
+
+Implementing a streaming `ZipReader` would require parsing local file headers
+directly rather than relying on `zipfile`.  The resulting reader would set
+`members_list_supported=False` and `streaming_only=True`, analogous to
+`TarReader` with a non-seekable compressed stream.
 
 ---
 
