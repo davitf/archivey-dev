@@ -113,14 +113,32 @@ archivey distribution.  A conservative legal reading says the code that bridges
 archivey to lzip must be GPL-3.0, and distributing it under MIT creates a
 license conflict.
 
-### What the `lzip` Python package actually wraps
+### What the `lzip` Python package actually wraps — two separate licenses
 
 The `lzip` PyPI package (by neuromorphicsystems) bundles a compiled C extension
-(`lzip_extension.so`) that wraps **lzlib 1.13** — a C library by the same
-author as the `lzip` tool (Antonio Diaz Diaz).  lzlib is also GPL-2+, not
-BSD-licensed.  So neither the Python package nor its bundled C library offers
-an escape from the GPL issue via a "wrap the C library ourselves" approach
-using the same underlying code.
+(`lzip_extension.so`) that wraps **lzlib 1.13**, a C library by Antonio Diaz
+Diaz.  The package contains **two distinct licenses**:
+
+| Path in repo | What it covers | License |
+|---|---|---|
+| `LICENSE` (root) | The Python wrapper/packaging code | **GPL-3.0** |
+| `third_party/lzlib/COPYING` | The lzlib C library itself | **BSD-2-Clause** |
+
+The lzlib C library's license (from `lzlib.h` and `COPYING`) reads:
+
+> *"This library is free software. Redistribution and use in source and binary
+> forms, with or without modification, are permitted provided that the following
+> conditions are met: 1. Redistributions of source code must retain the above
+> copyright notice… 2. Redistributions in binary form must reproduce the above
+> copyright notice…"*
+
+This is a standard BSD-2-Clause (no advertising clause, no endorsement clause).
+The GPL-3.0 applies only to the neuromorphicsystems Python wrapper code, not to
+lzlib itself.
+
+**Implication**: writing an independent ctypes or CFFI wrapper directly against
+lzlib is fully permitted under its BSD-2-Clause license and would be compatible
+with archivey's MIT license.  See Option C below.
 
 ### Recommended fix (in order of preference)
 
@@ -177,17 +195,22 @@ Requires users to install `lzip` via their OS package manager (`apt install lzip
 tool dependency.  Viable if Option A proves difficult for any reason, but Option A
 is simpler.
 
-**Option C — Write a ctypes/CFFI wrapper around a BSD-licensed C library**
+**Option C — Write a ctypes/CFFI wrapper directly against lzlib (BSD-2-Clause)**
 
-If a BSD-2-Clause lzip C library exists (separate from lzlib, which is GPL-2+),
-writing a ctypes or CFFI wrapper would be a valid option — the wrapper would be
-archivey-owned MIT code calling BSD-2-Clause C.  This is the same pattern as
-`libarchive-c` (CC0 code calling BSD-2-Clause C).
+Since lzlib itself is BSD-2-Clause (see above), archivey could ship its own
+minimal Python binding — either a ctypes wrapper (no compiler needed at install
+time) or a small C extension — against the system-installed `lzlib`.  The
+wrapper code would be MIT-licensed archivey code calling BSD-2-Clause C, the
+same pattern as `libarchive-c` (CC0 Python calling BSD-2-Clause C).
 
-Caution: verify the specific library carefully.  The main known lzip C library
-(lzlib by Antonio Diaz Diaz) is GPL-2+, not BSD.  Given that Option A (pure
-Python, stdlib only) already works correctly, a C wrapper adds complexity and a
-new compile-time dependency for no benefit.
+This would deliver better streaming performance than a subprocess (no process
+spawn, no pipe overhead) and more control than the subprocess approach.  The
+trade-off is that users would need `lzlib` installed (`apt install liblzma-dev`
+or similar), and archivey gains a compile-time or ctypes dependency.
+
+Given that Option A (pure Python, stdlib only) already works correctly and was
+verified, a C wrapper adds complexity for marginal benefit.  It remains a
+fully valid option if performance on large `.tar.lz` files becomes a concern.
 
 **Option D — Remove lzip support**
 
