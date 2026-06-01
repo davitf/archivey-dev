@@ -36,6 +36,9 @@ FA_REPARSE_POINT = 0x0400
 FA_COMPRESSED = 0x0800
 FA_ENCRYPTED = 0x4000
 
+# Key used in ArchiveMember.extra to mark Windows NTFS junction points
+EXTRA_IS_JUNCTION = "is_junction"
+
 
 class ContainerFormat(StrEnum):
     """Supported container formats."""
@@ -239,10 +242,10 @@ class ArchiveMember:
     )
     type: MemberType = field(metadata={"description": "The type of the member."})
     # Optional fields below — all default to None / False / empty
-    raw_filename: str = field(
-        default="",
+    raw_filename: Optional[str] = field(
+        default=None,
         metadata={
-            "description": "The filename exactly as stored in the archive, without normalization."
+            "description": "The filename exactly as stored in the archive, without normalization. None if the format does not store a separate raw filename."
         },
     )
     atime: Optional[datetime] = field(
@@ -400,7 +403,7 @@ class ArchiveMember:
 
         Junction points are represented as ``MemberType.SYMLINK`` with ``extra["is_junction"] == True``.
         """
-        return bool(self.extra.get("is_junction"))
+        return bool(self.extra.get(EXTRA_IS_JUNCTION))
 
     @property
     def CRC(self) -> Optional[int]:

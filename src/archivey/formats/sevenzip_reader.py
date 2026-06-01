@@ -454,6 +454,18 @@ class SevenZipReader(BaseArchiveReader):
                 else None
             )
 
+            # py7zr stores Windows FILE_ATTRIBUTE_* in the upper bits of its
+            # internal 'attributes' field, combined with a Unix-extension flag
+            # (0x8000) and POSIX mode (bits 16+).  We expose windows_attrs only
+            # when the Unix extension bit is absent, meaning the archive was
+            # created on Windows.
+            _7z_attrs: int | None = file._get_property("attributes")
+            _7z_windows_attrs = (
+                _7z_attrs & 0x07FFF
+                if _7z_attrs is not None and not (_7z_attrs & 0x8000)
+                else None
+            )
+
             member = ArchiveMember(
                 filename=filename,
                 raw_filename=file.filename,
@@ -470,6 +482,7 @@ class SevenZipReader(BaseArchiveReader):
                 crc32=crc32,
                 compression_method=None,  # Not exposed by py7zr
                 encrypted=self._is_member_encrypted(file),
+                windows_attrs=_7z_windows_attrs,
                 raw_info=file,
                 extra={
                     "extract_filename": extract_filename,

@@ -620,6 +620,13 @@ class BaseArchiveReader(ArchiveReader):
 
         This method is called by ``iter_members_with_streams`` after filter setup.
         Filtering is applied by the caller; this method yields all members.
+
+        The stream returned for each file member is **lazy**: the underlying
+        ``_open_member`` call is deferred until the first read.  This means that
+        if ``iter_members_with_streams`` filters out a member (or the caller
+        never reads from the stream), no actual file-open occurs.  Subclasses
+        that override this method should ensure the same laziness where possible,
+        so that filtered-out members incur no I/O cost.
         """
         for member in self.iter_members():
             stream = (

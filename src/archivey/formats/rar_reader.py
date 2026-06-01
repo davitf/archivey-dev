@@ -637,7 +637,7 @@ class RarReader(BaseArchiveReader):
             corrected_filename = get_non_corrupted_filename(info) or ""
             member = ArchiveMember(
                 filename=corrected_filename,
-                raw_filename=info.filename or "",
+                raw_filename=info.filename or None,
                 file_size=info.file_size,
                 compress_size=info.compress_size,
                 mtime_with_tz=self._get_timestamp(info),
@@ -663,6 +663,11 @@ class RarReader(BaseArchiveReader):
                     info.host_os, CreateSystem.UNKNOWN
                 )
                 if info.host_os is not None
+                else None,
+                windows_attrs=info.mode
+                if hasattr(info, "mode")
+                and isinstance(info.mode, int)
+                and getattr(info, "host_os", None) == rarfile.RAR_OS_WIN32
                 else None,
                 raw_info=info,
                 link_target=self._get_link_target(info),

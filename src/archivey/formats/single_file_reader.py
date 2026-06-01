@@ -103,11 +103,11 @@ def read_gzip_metadata(
         if flg & 0x08:  # FNAME
             # The filename is a null-terminated string
             name_bytes = _read_null_terminated_bytes(f)
-            extra_fields["original_filename"] = name_bytes.decode(
-                "utf-8", errors="replace"
-            )
+            stored_name = name_bytes.decode("utf-8", errors="replace")
+            extra_fields["original_filename"] = stored_name
+            member.raw_filename = stored_name  # always record what the archive stored
             if use_stored_metadata:
-                member.filename = extra_fields["original_filename"]
+                member.filename = stored_name
 
         if flg & 0x10:  # FCOMMENT
             comment_bytes = _read_null_terminated_bytes(f)
@@ -203,7 +203,7 @@ class SingleFileReader(BaseArchiveReader):
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
             filename=member_name,
-            raw_filename=member_name,
+            raw_filename=None,  # single-file formats generally don't store the filename
             file_size=None,  # Not available for all formats
             compress_size=compress_size,
             mtime_with_tz=mtime,
