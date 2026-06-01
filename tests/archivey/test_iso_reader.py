@@ -1,19 +1,16 @@
 """Tests for the IsoReader — ISO 9660 with Rock Ridge and Joliet support."""
 
 import io
-import stat
-import tempfile
 import os
-from typing import Iterator
+import tempfile
 
 import pytest
 
 pycdlib = pytest.importorskip("pycdlib")
 
-from archivey.core import open_archive
-from archivey.exceptions import ArchiveStreamNotSeekableError, PackageNotInstalledError
-from archivey.types import ArchiveFormat, MemberType
-
+from archivey.core import open_archive  # noqa: E402
+from archivey.exceptions import ArchiveStreamNotSeekableError  # noqa: E402
+from archivey.types import ArchiveFormat, MemberType  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,7 +50,7 @@ def _make_iso(
             try:
                 iso.get_record(iso_path=iso_partial)
                 # already exists
-            except Exception:
+            except pycdlib.pycdlibexception.PyCdlibException:
                 kwargs: dict = {"iso_path": iso_partial}
                 if rock_ridge:
                     kwargs["rr_name"] = parts[i]
@@ -70,7 +67,7 @@ def _make_iso(
             iso_partial_d = partial_d.upper()
             try:
                 iso.get_record(iso_path=iso_partial_d)
-            except Exception:
+            except pycdlib.pycdlibexception.PyCdlibException:
                 kw: dict = {"iso_path": iso_partial_d}
                 if rock_ridge:
                     kw["rr_name"] = parts_f[i]
@@ -161,7 +158,7 @@ class TestIsoBasic:
         """streaming=True with seekable source: should work, no random-access."""
         with open_archive(tmp_iso_rr, streaming=True) as ar:
             assert not ar.has_random_access()
-            members = list(ar.iter_members())
+            members = [m for m, _ in ar.iter_members_with_streams()]
             assert any(m.filename == "file1.txt" for m in members)
 
 

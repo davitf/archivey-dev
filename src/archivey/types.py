@@ -250,7 +250,9 @@ class ArchiveMember:
     )
     atime: Optional[datetime] = field(
         default=None,
-        metadata={"description": "Last access time of the member, if recorded by the format."},
+        metadata={
+            "description": "Last access time of the member, if recorded by the format."
+        },
     )
     ctime: Optional[datetime] = field(
         default=None,

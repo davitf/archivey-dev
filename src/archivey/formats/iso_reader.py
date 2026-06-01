@@ -5,7 +5,7 @@ import logging
 import os
 import stat as _stat
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, BinaryIO, Iterator, Optional, Any
+from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Optional
 
 if TYPE_CHECKING:
     import pycdlib
@@ -80,7 +80,7 @@ class _PyCdlibStream(io.RawIOBase, BinaryIO):
         if not self.closed:
             try:
                 self._raw.__exit__(None, None, None)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 pass
         super().close()
 
@@ -92,7 +92,9 @@ def _dr_date_to_datetime(d) -> datetime:
     """Convert a pycdlib DirectoryRecordDate to a timezone-aware datetime."""
     year = 1900 + d.years_since_1900
     tz = timezone(timedelta(minutes=d.gmtoffset * 15))
-    return datetime(year, d.month, d.day_of_month, d.hour, d.minute, d.second, tzinfo=tz)
+    return datetime(
+        year, d.month, d.day_of_month, d.hour, d.minute, d.second, tzinfo=tz
+    )
 
 
 def _safe_dr_date(d) -> Optional[datetime]:
@@ -160,7 +162,7 @@ class IsoReader(BaseArchiveReader):
         self._format_info: Optional[ArchiveInfo] = None
 
         try:
-            self._iso = pycdlib.PyCdlib()
+            self._iso = pycdlib.PyCdlib()  # type: ignore[attr-defined]
             if is_stream(archive_path):
                 self._iso.open_fp(archive_path)
             else:
@@ -182,7 +184,10 @@ class IsoReader(BaseArchiveReader):
 
         logger.debug(
             "IsoReader: rr=%s joliet=%s udf=%s ns=%s",
-            self._has_rr, self._has_joliet, self._has_udf, self._ns_key,
+            self._has_rr,
+            self._has_joliet,
+            self._has_udf,
+            self._ns_key,
         )
 
     def _close_archive(self) -> None:
@@ -274,7 +279,7 @@ class IsoReader(BaseArchiveReader):
                 target_bytes = rr.symlink_path()
                 if target_bytes:
                     link_target = target_bytes.decode("utf-8", errors="replace")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 pass
 
         file_size = getattr(record, "data_length", 0)
@@ -306,12 +311,13 @@ class IsoReader(BaseArchiveReader):
                 # Yield a directory member for every directory except the root.
                 if dirpath != "/":
                     rel_dir = dirpath.lstrip("/")
-                    basename = self._strip_version(rel_dir.rsplit("/", 1)[-1])
                     try:
                         dr = self._iso.get_record(**self._ns(dirpath))
                         yield self._dr_to_member(dr, rel_dir + "/", dirpath)
-                    except Exception as e:
-                        logger.warning("Could not get record for dir %s: %s", dirpath, e)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning(
+                            "Could not get record for dir %s: %s", dirpath, e
+                        )
 
                 # Yield file (and symlink) members.
                 for raw_name in filenames:
@@ -327,7 +333,7 @@ class IsoReader(BaseArchiveReader):
                     try:
                         dr = self._iso.get_record(**self._ns(full_path))
                         yield self._dr_to_member(dr, rel_path, full_path)
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         logger.warning("Could not get record for %s: %s", full_path, e)
 
         except pycdlib.pycdlibexception.PyCdlibException as e:
@@ -356,9 +362,7 @@ class IsoReader(BaseArchiveReader):
 
         if self._format_info is None:
             pvd = self._iso.pvd
-            volume_id = (
-                pvd.volume_identifier.decode("ascii", errors="replace").rstrip()
-            )
+            volume_id = pvd.volume_identifier.decode("ascii", errors="replace").rstrip()
             interchange_level = getattr(pvd, "interchange_level", 1)
 
             self._format_info = ArchiveInfo(
