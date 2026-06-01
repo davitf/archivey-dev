@@ -23,8 +23,9 @@ ENCRYPTED_ARCHIVES = filter_archives(
         "encryption_with_symlinks",
     ],
     extensions=["zip", "rar", "7z"],
-    custom_filter=lambda a: not a.contents.has_multiple_passwords()
-    and a.contents.header_password is None,
+    custom_filter=lambda a: (
+        not a.contents.has_multiple_passwords() and a.contents.header_password is None
+    ),
 )
 
 

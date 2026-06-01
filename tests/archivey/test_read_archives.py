@@ -470,9 +470,11 @@ def test_read_rar_archives(
     filter_archives(
         SAMPLE_ARCHIVES,
         extensions=["rar"],
-        custom_filter=lambda x: x.contents.has_password()
-        and not x.contents.has_multiple_passwords()
-        and x.contents.header_password is None,
+        custom_filter=lambda x: (
+            x.contents.has_password()
+            and not x.contents.has_multiple_passwords()
+            and x.contents.header_password is None
+        ),
     ),
     ids=lambda x: x.filename,
 )
@@ -499,9 +501,11 @@ def test_read_rar_archives_with_password_in_constructor(
     filter_archives(
         SAMPLE_ARCHIVES,
         extensions=["zip", "7z"],
-        custom_filter=lambda x: x.contents.has_password()
-        and not x.contents.has_multiple_passwords()
-        and x.contents.header_password is None,
+        custom_filter=lambda x: (
+            x.contents.has_password()
+            and not x.contents.has_multiple_passwords()
+            and x.contents.header_password is None
+        ),
     ),
     ids=lambda x: x.filename,
 )

@@ -332,7 +332,10 @@ def test_read_index_backwards():
     assert members[0].decompressed_size == len(parts[0])
     assert members[1].decompressed_start == len(parts[0])
     assert members[1].decompressed_size == len(parts[1])
-    assert members[0].compressed_start + members[0].compressed_size == members[1].compressed_start
+    assert (
+        members[0].compressed_start + members[0].compressed_size
+        == members[1].compressed_start
+    )
     assert members[1].compressed_start + members[1].compressed_size == len(data)
 
 
