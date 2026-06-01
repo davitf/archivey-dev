@@ -22,11 +22,41 @@ logger = logging.getLogger(__name__)
 
 
 def apply_member_metadata(member: ArchiveMember, target_path: str) -> None:
-    if member.mtime:
+    # Set atime + mtime via os.utime when atime is available; otherwise fall back
+    # to the existing set_file_mtime helper (which uses member.mtime — a naive
+    # datetime — to preserve the same round-trip behaviour as the old code).
+    if member.atime is not None and member.mtime is not None:
+        # atime: strip timezone and use as naive local time, consistent with mtime.
+        atime_naive = member.atime.replace(tzinfo=None)
+        kwargs: dict = {}
+        if member.type == MemberType.SYMLINK:
+            if os.utime not in os.supports_follow_symlinks:
+                atime_naive = None  # type: ignore[assignment]
+            else:
+                kwargs["follow_symlinks"] = False
+        if atime_naive is not None and member.type != MemberType.HARDLINK:
+            try:
+                os.utime(
+                    target_path,
+                    (atime_naive.timestamp(), member.mtime.timestamp()),
+                    **kwargs,
+                )
+            except OSError:
+                pass
+    elif member.mtime:
         set_file_mtime(target_path, member.mtime, member.type)
 
     if member.mode:
         set_file_permissions(target_path, member.mode, member.type)
+
+    # Apply Windows read-only attribute by stripping write bits
+    if member.windows_attrs is not None and (member.windows_attrs & 0x0001):
+        try:
+            current_stat = os.stat(target_path)
+            new_mode = current_stat.st_mode & ~0o222
+            os.chmod(target_path, new_mode)
+        except OSError:
+            pass
 
 
 class ExtractionHelper:

@@ -203,6 +203,7 @@ class SingleFileReader(BaseArchiveReader):
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
             filename=member_name,
+            raw_filename=member_name,
             file_size=None,  # Not available for all formats
             compress_size=compress_size,
             mtime_with_tz=mtime,

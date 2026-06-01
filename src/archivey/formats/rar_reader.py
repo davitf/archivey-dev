@@ -634,9 +634,10 @@ class RarReader(BaseArchiveReader):
             else:
                 has_encrypted_crc = False
 
+            corrected_filename = get_non_corrupted_filename(info) or ""
             member = ArchiveMember(
-                filename=get_non_corrupted_filename(info)
-                or "",  # Will never actually be None
+                filename=corrected_filename,
+                raw_filename=info.filename or "",
                 file_size=info.file_size,
                 compress_size=info.compress_size,
                 mtime_with_tz=self._get_timestamp(info),

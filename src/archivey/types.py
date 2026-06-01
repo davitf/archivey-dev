@@ -26,6 +26,16 @@ from datetime import datetime
 from enum import IntEnum
 from typing import Any, ClassVar, Optional, Tuple
 
+# Windows FILE_ATTRIBUTE_* constants (stored in windows_attrs field)
+FA_READONLY = 0x0001
+FA_HIDDEN = 0x0002
+FA_SYSTEM = 0x0004
+FA_DIRECTORY = 0x0010
+FA_ARCHIVE = 0x0020
+FA_REPARSE_POINT = 0x0400
+FA_COMPRESSED = 0x0800
+FA_ENCRYPTED = 0x4000
+
 
 class ContainerFormat(StrEnum):
     """Supported container formats."""
@@ -211,7 +221,7 @@ class ArchiveMember:
 
     filename: str = field(
         metadata={
-            "description": "The name of the member. Directory names always end with a slash."
+            "description": "The name of the member, normalized: forward slashes, directory names end with /."
         }
     )
     file_size: Optional[int] = field(
@@ -228,6 +238,23 @@ class ArchiveMember:
         }
     )
     type: MemberType = field(metadata={"description": "The type of the member."})
+    # Optional fields below — all default to None / False / empty
+    raw_filename: str = field(
+        default="",
+        metadata={
+            "description": "The filename exactly as stored in the archive, without normalization."
+        },
+    )
+    atime: Optional[datetime] = field(
+        default=None,
+        metadata={"description": "Last access time of the member, if recorded by the format."},
+    )
+    ctime: Optional[datetime] = field(
+        default=None,
+        metadata={
+            "description": "Creation time (Windows) or inode-change time (Unix) of the member, if recorded by the format."
+        },
+    )
     mode: Optional[int] = field(
         default=None, metadata={"description": "Unix permissions of the member."}
     )
@@ -267,6 +294,12 @@ class ArchiveMember:
         default=None,
         metadata={
             "description": "The operating system on which the member was created, if known."
+        },
+    )
+    windows_attrs: Optional[int] = field(
+        default=None,
+        metadata={
+            "description": "Windows FILE_ATTRIBUTE_* bitmask, if recorded by the format. See FA_* constants."
         },
     )
     encrypted: bool = field(
@@ -360,6 +393,14 @@ class ArchiveMember:
     def is_other(self) -> bool:
         """Convenience property returning ``True`` if the member's type is neither file, directory nor link."""
         return self.type == MemberType.OTHER
+
+    @property
+    def is_junction(self) -> bool:
+        """Convenience property returning ``True`` if the member is a Windows NTFS junction point.
+
+        Junction points are represented as ``MemberType.SYMLINK`` with ``extra["is_junction"] == True``.
+        """
+        return bool(self.extra.get("is_junction"))
 
     @property
     def CRC(self) -> Optional[int]:

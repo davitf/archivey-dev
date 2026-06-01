@@ -190,6 +190,7 @@ class ZipReader(BaseArchiveReader):
 
         return ArchiveMember(
             filename=info.filename.replace("\\", "/"),
+            raw_filename=info.filename,
             file_size=info.file_size,
             compress_size=info.compress_size,
             mtime_with_tz=get_zipinfo_timestamp(info),

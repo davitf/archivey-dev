@@ -602,6 +602,37 @@ class BaseArchiveReader(ArchiveReader):
             raise ValueError("Streaming-only archive can only be iterated once")
         self._streaming_iteration_started = True
 
+    def _iter_members_and_streams_internal(
+        self,
+        pwd: bytes | str | None = None,
+    ) -> Iterator[tuple[ArchiveMember, BinaryIO | None]]:
+        """Yield (member, stream) pairs in archive order for all members.
+
+        The default implementation opens each file member individually via
+        ``_open_internal``. Solid-archive readers (7z, RAR solid) SHOULD override
+        this to drive a single decompression pass rather than one-per-member.
+
+        Subclasses that override this method own the full iteration and are
+        responsible for:
+        - Yielding every registered member (including dirs and links with stream=None)
+        - Closing each stream before yielding the next member
+        - Calling ``self._register_member`` / driving member registration if needed
+
+        This method is called by ``iter_members_with_streams`` after filter setup.
+        Filtering is applied by the caller; this method yields all members.
+        """
+        for member in self.iter_members():
+            stream = (
+                self._open_internal(member, pwd=pwd, for_iteration=True)
+                if member.is_file
+                else None
+            )
+            try:
+                yield member, stream
+            finally:
+                if stream is not None:
+                    stream.close()
+
     def iter_members_with_streams(
         self,
         members: Collection[ArchiveMember | str]
@@ -643,24 +674,16 @@ class BaseArchiveReader(ArchiveReader):
             members, filter or self.config.extraction_filter, None
         )
 
-        for member in self.iter_members():
+        for member, stream in self._iter_members_and_streams_internal(pwd=pwd):
             logger.debug("iter_members_with_streams member: %s", member)
             filtered_member = filter_func(member)
             if filtered_member is None:
                 logger.debug("skipping %s", member.filename)
-                continue
-
-            try:
-                stream = (
-                    self._open_internal(member, pwd=pwd, for_iteration=True)
-                    if member.is_file
-                    else None
-                )
-                yield filtered_member, stream
-
-            finally:
                 if stream is not None:
                     stream.close()
+                continue
+
+            yield filtered_member, stream
 
     def has_random_access(self) -> bool:
         """Check if opening members is possible (i.e. not streaming-only access)."""

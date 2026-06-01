@@ -160,6 +160,7 @@ class TarReader(BaseArchiveReader):
 
         return ArchiveMember(
             filename=filename,
+            raw_filename=info.name,
             file_size=info.size,
             compress_size=None,
             # TAR files store times in UTC.

@@ -82,6 +82,7 @@ class FolderReader(BaseArchiveReader):
             # Create a placeholder member
             return ArchiveMember(
                 filename=filename,
+                raw_filename=filename,
                 file_size=0,
                 compress_size=0,
                 mtime_with_tz=None,
@@ -121,6 +122,7 @@ class FolderReader(BaseArchiveReader):
         logger.info("filename: %s member_type: %s", filename, member_type)
         return ArchiveMember(
             filename=filename,
+            raw_filename=filename,
             file_size=stat_result.st_size,
             compress_size=stat_result.st_size,  # No compression for folders
             # st_mtime is in seconds since the epoch, so UTC.

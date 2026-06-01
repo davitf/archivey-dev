@@ -456,6 +456,7 @@ class SevenZipReader(BaseArchiveReader):
 
             member = ArchiveMember(
                 filename=filename,
+                raw_filename=file.filename,
                 # The uncompressed field is wrongly typed in py7zr as list[int].
                 # It's actually an int.
                 file_size=file.uncompressed,  # type: ignore
