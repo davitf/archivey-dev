@@ -4,7 +4,6 @@ import gzip
 import io
 import lzma
 import os
-import struct
 import zlib
 from typing import (
     TYPE_CHECKING,
@@ -89,6 +88,7 @@ from archivey.exceptions import (
     ArchiveStreamNotSeekableError,
     PackageNotInstalledError,
 )
+from archivey.formats.lzip_stream import _LzipState
 from archivey.internal.io_helpers import ensure_binaryio
 
 logger = logging.getLogger(__name__)
@@ -543,112 +543,6 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
 
     def tell(self) -> int:
         return self._pos
-
-
-_LZIP_MAGIC = b"LZIP"
-_LZIP_HEADER_SIZE = 6
-_LZIP_TRAILER_SIZE = 20
-# lzip always uses lc=3, lp=0, pb=2: props_byte = (pb*5+lp)*9+lc = 0x5D
-_LZIP_PROPS_BYTE = bytes([0x5D])
-
-
-class _LzipState:
-    """State machine for streaming multi-member lzip decompression (no external package)."""
-
-    _NEED_HEADER = 0
-    _IN_MEMBER = 1
-    _NEED_TRAILER = 2
-
-    def __init__(self) -> None:
-        self._state = self._NEED_HEADER
-        self._buf = bytearray()
-        self._dec: lzma.LZMADecompressor | None = None
-        self._crc = 0
-        self._member_size = 0
-        self._finished = False
-
-    def reset(self) -> None:
-        self.__init__()
-
-    def feed(self, data: bytes) -> bytes:
-        self._buf.extend(data)
-        return self._process()
-
-    def _process(self) -> bytes:
-        output = bytearray()
-        while True:
-            if self._state == self._NEED_HEADER:
-                if len(self._buf) < _LZIP_HEADER_SIZE:
-                    break
-                header = bytes(self._buf[:_LZIP_HEADER_SIZE])
-                del self._buf[:_LZIP_HEADER_SIZE]
-                self._start_member(header)
-                self._state = self._IN_MEMBER
-
-            elif self._state == self._IN_MEMBER:
-                if not self._buf:
-                    break
-                chunk = bytes(self._buf)
-                self._buf.clear()
-                try:
-                    assert self._dec is not None
-                    plain = self._dec.decompress(chunk)
-                except lzma.LZMAError as e:
-                    raise ArchiveCorruptedError(
-                        f"Error reading Lzip archive: {e}"
-                    ) from e
-                if plain:
-                    self._crc = zlib.crc32(plain, self._crc)
-                    self._member_size += len(plain)
-                    output.extend(plain)
-                if self._dec.eof:
-                    unused = self._dec.unused_data
-                    self._dec = None
-                    self._buf[0:0] = unused
-                    self._state = self._NEED_TRAILER
-
-            elif self._state == self._NEED_TRAILER:
-                if len(self._buf) < _LZIP_TRAILER_SIZE:
-                    break
-                trailer = bytes(self._buf[:_LZIP_TRAILER_SIZE])
-                del self._buf[:_LZIP_TRAILER_SIZE]
-                self._verify_trailer(trailer)
-                self._state = self._NEED_HEADER
-
-        return bytes(output)
-
-    def flush(self) -> bytes:
-        if self._state == self._NEED_HEADER and not self._buf:
-            self._finished = True
-            return b""
-        raise ArchiveEOFError("Lzip file is truncated")
-
-    def is_finished(self) -> bool:
-        return self._finished
-
-    def _start_member(self, header: bytes) -> None:
-        if header[:4] != _LZIP_MAGIC:
-            raise ArchiveCorruptedError(f"Invalid lzip magic: {header[:4]!r}")
-        if header[4] != 1:
-            raise ArchiveCorruptedError(f"Unsupported lzip version: {header[4]}")
-        dict_size = 1 << (header[5] & 0x1F)
-        lzma_header = _LZIP_PROPS_BYTE + struct.pack("<I", dict_size) + b"\xff" * 8
-        self._dec = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE)
-        self._dec.decompress(lzma_header)
-        self._crc = 0
-        self._member_size = 0
-
-    def _verify_trailer(self, trailer: bytes) -> None:
-        crc32_stored, data_size, _member_size = struct.unpack_from("<IQQ", trailer, 0)
-        if (self._crc & 0xFFFFFFFF) != crc32_stored:
-            raise ArchiveCorruptedError(
-                f"Lzip CRC32 mismatch: stored {crc32_stored:#010x}, "
-                f"computed {self._crc & 0xFFFFFFFF:#010x}"
-            )
-        if self._member_size != data_size:
-            raise ArchiveCorruptedError(
-                f"Lzip size mismatch: stored {data_size}, actual {self._member_size}"
-            )
 
 
 class LzipDecompressorStream(DecompressorStream[_LzipState]):
