@@ -113,43 +113,86 @@ archivey distribution.  A conservative legal reading says the code that bridges
 archivey to lzip must be GPL-3.0, and distributing it under MIT creates a
 license conflict.
 
+### What the `lzip` Python package actually wraps
+
+The `lzip` PyPI package (by neuromorphicsystems) bundles a compiled C extension
+(`lzip_extension.so`) that wraps **lzlib 1.13** — a C library by the same
+author as the `lzip` tool (Antonio Diaz Diaz).  lzlib is also GPL-2+, not
+BSD-licensed.  So neither the Python package nor its bundled C library offers
+an escape from the GPL issue via a "wrap the C library ourselves" approach
+using the same underlying code.
+
 ### Recommended fix (in order of preference)
 
-**Option A — Call the `lzip` CLI binary via subprocess** (preferred)
+**Option A — Pure-Python decompression using stdlib `lzma` only** ✅ **(verified)**
 
-Replace the Python-package import with a subprocess call to the `lzip` system
-tool, exactly as archivey calls `unrar` for RAR decompression.  The `lzip`
-binary tool itself is also GPL, but using a GPL binary as an external
-tool invoked via subprocess does not require your own code to be GPL —
-only bundling or linking the GPL code does.
+The lzip format is LZMA1 with a 6-byte header and 20-byte trailer.  Python's
+built-in `lzma` stdlib module already implements LZMA1 decompression
+(`FORMAT_ALONE`); lzip support requires only ~30 lines of pure Python on top of
+it to handle the header, multi-member concatenation, and CRC32 trailer
+verification (using stdlib `zlib`).  This has been verified:
 
 ```python
-# Instead of: import lzip
-# Do: subprocess.Popen(["lzip", "-d", "-c", archive_path], stdout=PIPE)
+# Proof-of-concept (single member, from testing):
+import lzma, struct, zlib
+
+LZIP_MAGIC = b'LZIP'
+
+def decompress_lzip_member(data: bytes, offset: int) -> tuple[bytes, int]:
+    coded_dict_size = data[offset + 5]
+    dict_size = 1 << (coded_dict_size & 0x1f)
+    lc, lp, pb = 3, 0, 2
+    props = bytes([(pb * 5 + lp) * 9 + lc])
+    lzma_raw = data[offset + 6:]
+    dec = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE)
+    plaintext = dec.decompress(
+        props + struct.pack('<I', dict_size) + b'\xff' * 8 + lzma_raw
+    )
+    trailer_offset = offset + 6 + (len(lzma_raw) - len(dec.unused_data))
+    crc32_stored, data_size, member_size = struct.unpack_from('<IQQ', data, trailer_offset)
+    assert len(plaintext) == data_size
+    assert zlib.crc32(plaintext) & 0xFFFFFFFF == crc32_stored
+    return plaintext, member_size
 ```
 
-This approach requires users to install the system `lzip` tool, which is
-universally available in Linux package managers (`apt install lzip`,
-`brew install lzip`).
+Test results (single-member, multi-member, and CRC corruption detection all
+pass): confirmed correct output and no false negatives.
 
-**Option B — Implement pure-Python lzip decompression**
+**Benefits**: zero new dependencies, no license concerns, slightly faster than a
+subprocess (no process spawn), works on all platforms without any system package.
+This is the recommended path.
 
-The lzip format is documented and relatively simple (LZMA stream with a small
-lzip header).  A small pure-Python reader using Python's `lzma` stdlib module
-(which implements LZMA) would eliminate the external dependency entirely and
-have no license concerns.
+**Option B — Call the `lzip` CLI binary via subprocess**
 
-**Option C — Separate the lzip adapter into a GPL plug-in**
+Replace the Python-package import with a subprocess call to the system `lzip`
+binary, the same way archivey calls `unrar` for RAR.  Using a GPL binary as an
+external process does not require the calling code to be GPL.
 
-Move the lzip Python-package integration to a separately distributed GPL-3.0
-"adapter" package (`archivey-lzip`).  archivey itself remains MIT and exposes
-a registration point for external codec providers.  This is significant
-architectural work.
+```python
+# subprocess.Popen(["lzip", "-d", "-c", archive_path], stdout=PIPE)
+```
+
+Requires users to install `lzip` via their OS package manager (`apt install lzip`,
+`brew install lzip`).  Slightly more complex than Option A and adds an external
+tool dependency.  Viable if Option A proves difficult for any reason, but Option A
+is simpler.
+
+**Option C — Write a ctypes/CFFI wrapper around a BSD-licensed C library**
+
+If a BSD-2-Clause lzip C library exists (separate from lzlib, which is GPL-2+),
+writing a ctypes or CFFI wrapper would be a valid option — the wrapper would be
+archivey-owned MIT code calling BSD-2-Clause C.  This is the same pattern as
+`libarchive-c` (CC0 code calling BSD-2-Clause C).
+
+Caution: verify the specific library carefully.  The main known lzip C library
+(lzlib by Antonio Diaz Diaz) is GPL-2+, not BSD.  Given that Option A (pure
+Python, stdlib only) already works correctly, a C wrapper adds complexity and a
+new compile-time dependency for no benefit.
 
 **Option D — Remove lzip support**
 
-`.lz` and `.tar.lz` are a niche format.  Removing it entirely eliminates the
-concern.
+`.lz` and `.tar.lz` are a niche format.  Removing it entirely is a fallback if
+none of the above approaches are taken.
 
 ---
 
