@@ -49,6 +49,18 @@ no copyleft conditions.
 | `uncompresspy` | ≥0.4.0 | BSD-3-Clause | ✅ Yes | Permissive |
 | `brotli` | ≥1.1.0 | MIT | ✅ Yes | Google's official Brotli Python binding |
 
+### libarchive (proposed optional backend — PR #200)
+
+There are **two completely separate PyPI packages** for libarchive.  This matters
+because they have very different licenses:
+
+| Package | PyPI name | License | Notes |
+|---|---|---|---|
+| **`libarchive-c`** | `libarchive-c` | **CC0** (public domain) | What PR #200 adds; effectively no restrictions at all |
+| **`libarchive`** | `libarchive` | **GPL-2** | A different, unrelated wrapper; archivey does NOT use this |
+
+PR #200 adds `libarchive-c>=5.3` to `pyproject.toml`.  See §5a for full analysis.
+
 ### External binary tool (not a Python package)
 
 | Tool | License | Compatible? | Notes |
@@ -241,7 +253,7 @@ The rewrite is described in the spec docs added in PR #207:
 | `inflate64` | BSD-3-Clause | New (Deflate64 in ZIP + 7z) | ✅ Permissive |
 | `pyppmd` | BSD-3-Clause | New (PPMd in 7z) | ✅ Permissive |
 | `bcj` / `pybcj` | BSD-3-Clause | New (BCJ filters in 7z) | ✅ Permissive |
-| `libarchive-c` (PR #200) | BSD-2-Clause | New optional backend | ✅ Permissive; wraps libarchive (BSD-2-Clause) |
+| `libarchive-c` (PR #200) | **CC0** | New optional backend | ✅ Public domain; wraps libarchive C library (BSD-2-Clause dominant) — see §5a |
 
 ### Native RAR parser
 
@@ -287,6 +299,98 @@ Neither the rewrite plan nor any of the spec documents address the `lzip`
 GPL-3.0 issue.  This should be resolved independently — the subprocess approach
 (Option A in §2) is the lowest-effort fix and is consistent with how archivey
 already handles `unrar`.
+
+---
+
+## §5a — libarchive in depth: two packages, very different licenses
+
+There is significant potential for confusion here because there are **two entirely
+separate Python packages** on PyPI that provide bindings for the libarchive C
+library, and they have very different licenses.
+
+### Package 1: `libarchive-c` (what archivey uses)
+
+- **PyPI name**: `libarchive-c`
+- **License**: **CC0 1.0 Universal** (effectively public domain)
+- **Author**: Changaco / Christophe Combelles
+- **Homepage**: https://github.com/Changaco/python-libarchive-c
+- **What it is**: A thin CFFI/ctypes wrapper around the system `libarchive` shared
+  library (`libarchive.so`).  It ships no compiled C code of its own — the
+  actual decompression logic lives in the separately installed system library.
+- **Compatibility with MIT**: ✅ CC0 imposes zero restrictions; fully compatible.
+
+PR #200 adds `libarchive-c>=5.3` to `pyproject.toml`.  This is the correct package.
+
+### Package 2: `libarchive` (a different, unrelated package)
+
+- **PyPI name**: `libarchive`
+- **License**: **GPL-2**
+- **What it is**: A different, older Python binding; the latest version is 0.4.7.
+- **Compatibility with MIT**: 🚨 Incompatible — GPL-2 would require archivey to be GPL-2.
+- **Archivey uses this**: **No.**  This package is not referenced anywhere in archivey.
+
+The only relationship between these two packages is that they both wrap the same
+underlying C library.  The package names are confusingly similar; always verify
+you are looking at `libarchive-c`, not `libarchive`.
+
+### The libarchive C library itself
+
+The libarchive C library (`libarchive.so`, installed via the OS package manager
+as `libarchive-dev` / `libarchive`) is licensed primarily under **BSD-2-Clause**
+with a handful of files under other permissive licenses:
+
+| Files | License |
+|---|---|
+| Core library, CLI tools | BSD-2-Clause |
+| Some contrib / awk scripts | Expat (MIT-equivalent) |
+| BLAKE2 implementation | Apache-2.0 OR CC0-1.0 OR OpenSSL+SSLeay |
+| PPMd implementation | Public Domain |
+| Historical UCB files | BSD-4-clause-UCB (non-advertising) |
+| RAR5 reader | BSD-2-Clause AND Expat |
+| Some contrib files | Apache-2.0 |
+
+All of these are permissive; there is **no GPL or LGPL anywhere in the C library**.
+The "weird BSD-like" impression comes from the mix of BSD variants and the
+BSD-4-clause-UCB historical files (which include the old "advertising clause"
+that was dropped from modern BSD).  BSD-4-clause-UCB is unusual but permissive
+and compatible with MIT in practice — it requires an acknowledgement in
+advertising materials, but courts and the FSF consider the clause unenforceable
+and many distributions explicitly grant an exception to it.
+
+### How `libarchive-c` uses the C library at runtime
+
+`libarchive-c` loads `libarchive.so` at runtime via ctypes/CFFI.  It does not
+bundle or statically link libarchive's code.  This means:
+
+- archivey's wheel contains only `libarchive-c`'s own (CC0) Python code.
+- The BSD-2-Clause C library is installed separately by the user (system package
+  or via conda).
+- No C code from libarchive is shipped inside archivey's distribution.
+
+This is the same pattern as the `unrar` binary: archivey relies on a separately
+installed system component, does not bundle it, and therefore does not need to
+reproduce its license in archivey's own distribution.
+
+### Format support libarchive adds
+
+Based on PR #200, libarchive would be an **optional streaming-only backend**
+(`config.use_libarchive=True`).  libarchive the C library supports a very wide
+range of formats (tar, zip, 7z, rar, cab, lha, iso, cpio, xar, ar, …) including
+many that archivey does not currently support natively.  Using it as a streaming
+fallback could cover legacy or exotic formats without adding per-format Python
+dependencies.  The trade-off is the requirement for `libarchive.so` to be
+installed on the user's system.
+
+### Verdict for libarchive
+
+| Layer | License | Assessment |
+|---|---|---|
+| `libarchive-c` Python wrapper | CC0 | ✅ No restrictions whatsoever |
+| libarchive C library (system package) | BSD-2-Clause (dominant) | ✅ Permissive; not bundled by archivey |
+| `libarchive` PyPI package (NOT used) | GPL-2 | 🚨 Would be problematic — but archivey does not use this |
+
+Adding `libarchive-c` as an optional dependency introduces **no new licensing
+concerns** and is fully compatible with archivey's MIT license.
 
 ---
 
