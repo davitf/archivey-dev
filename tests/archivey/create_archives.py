@@ -9,6 +9,7 @@ import lzma
 import os
 import shutil
 import stat
+import struct
 import subprocess
 import tarfile
 import tempfile
@@ -47,10 +48,6 @@ try:  # Optional dependency
 except ModuleNotFoundError:
     brotli = None
 
-try:  # Optional dependency
-    import lzip  # type: ignore
-except ModuleNotFoundError:
-    lzip = None
 
 try:  # Optional dependency
     import py7zr  # type: ignore
@@ -355,20 +352,42 @@ def _zlib_open(path: str, mode: str = "wb") -> _ZlibWriter:
     return _ZlibWriter(path)
 
 
+def create_lzip_member(data: bytes, dict_size_bits: int = 23) -> bytes:
+    """Compress *data* into a single lzip member using stdlib lzma.
+
+    lzip omits the 13-byte LZMA_ALONE header from its raw stream; we compress
+    with FORMAT_ALONE (which includes it), then strip the header to get the
+    raw LZMA1 stream that lzip expects.
+    """
+    filters: list[dict] = [
+        {"id": lzma.FILTER_LZMA1, "dict_size": 1 << dict_size_bits, "lc": 3, "lp": 0, "pb": 2}
+    ]
+    compressed_alone = lzma.compress(data, format=lzma.FORMAT_ALONE, filters=filters)
+    lzma_raw = compressed_alone[13:]  # strip the 13-byte LZMA_ALONE header
+    header = b"LZIP" + bytes([1, dict_size_bits])
+    member_total = len(header) + len(lzma_raw) + 20
+    trailer = struct.pack("<IQQ", zlib.crc32(data) & 0xFFFFFFFF, len(data), member_total)
+    return header + lzma_raw + trailer
+
+
 class _LzipWriter(io.BufferedIOBase):
+    """Write a lzip file (single member) using stdlib lzma."""
+
     def __init__(self, path: str) -> None:
-        assert lzip is not None, "lzip is not installed"
-        self._encoder = lzip.FileEncoder(path)
+        self._path = path
+        self._buf = io.BytesIO()
         self._pos = 0
 
     def write(self, data: bytes) -> int:
-        self._encoder.compress(data)
+        self._buf.write(data)
         self._pos += len(data)
         return len(data)
 
     def close(self) -> None:
-        if self._encoder is not None:
-            self._encoder.close()
+        if not self.closed:
+            member = create_lzip_member(self._buf.getvalue())
+            with open(self._path, "wb") as f:
+                f.write(member)
         super().close()
 
     def tell(self) -> int:  # pragma: no cover - used by tarfile
@@ -398,7 +417,7 @@ SINGLE_FILE_LIBRARY_OPENERS: dict[StreamFormat, Callable[..., io.BytesIO] | None
     if pyzstd is not None
     else None,
     StreamFormat.LZ4: lz4_frame.open if lz4_frame is not None else None,
-    StreamFormat.LZIP: _lzip_open if lzip is not None else None,
+    StreamFormat.LZIP: _lzip_open,
     StreamFormat.ZLIB: _zlib_open,
     StreamFormat.BROTLI: _brotli_open if brotli is not None else None,
 }
@@ -516,16 +535,10 @@ def create_tar_archive_with_tarfile(
         output_stream.close()
 
     if compress_after:
-        assert lzip is not None
-        with (
-            open(temp_tar_path, "rb") as src,
-            lzip.FileEncoder(abs_archive_path) as enc,
-        ):
-            while True:
-                chunk = src.read(65536)
-                if not chunk:
-                    break
-                enc.compress(chunk)
+        with open(temp_tar_path, "rb") as src:
+            raw = src.read()
+        with open(abs_archive_path, "wb") as dst:
+            dst.write(create_lzip_member(raw))
         os.remove(temp_tar_path)
 
 

@@ -1,10 +1,15 @@
 """
 Pure-stdlib lzip decompression using Python's lzma module.
 
+lzip binary format spec:
+  https://www.nongnu.org/lzip/manual/lzip_manual.html#File-format
+
 lzip binary format (RFC-like structure, per lzip manual):
   Each file is a sequence of one or more *members*.  Members can be
   concatenated freely; readers must iterate until the compressed stream
-  is exhausted.
+  is exhausted.  The spec calls the trailer a "distributed index":
+  each member records its own compressed and uncompressed sizes, enabling
+  efficient random access without a separate index file.
 
   Per member:
     Header  (6 bytes):
@@ -40,6 +45,8 @@ Implementation notes:
 import lzma
 import struct
 import zlib
+from dataclasses import dataclass
+from typing import BinaryIO
 
 from archivey.exceptions import ArchiveCorruptedError, ArchiveEOFError
 
@@ -58,6 +65,78 @@ _PROPS_BYTE = bytes([0x5D])
 _UNKNOWN_SIZE = b"\xff" * 8
 
 
+@dataclass
+class _MemberBounds:
+    """Compressed/decompressed extents for one lzip member."""
+
+    compressed_start: int    # absolute byte offset in the compressed stream
+    decompressed_start: int  # cumulative decompressed bytes before this member
+    compressed_size: int     # header(6) + lzma_data + trailer(20), from trailer field
+    decompressed_size: int   # uncompressed bytes, from trailer field
+
+    @property
+    def decompressed_end(self) -> int:
+        return self.decompressed_start + self.decompressed_size
+
+
+def _read_index_backwards(stream: BinaryIO, file_size: int) -> list[_MemberBounds]:
+    """Build the complete member index by scanning the stream backwards.
+
+    Reads only the 20-byte trailers (plus a 4-byte magic check) — no
+    decompression is performed.  The magic check catches corrupt member_size
+    values before they cascade into wrong offsets for every prior member.
+    """
+    entries: list[tuple[int, int, int]] = []  # (compressed_start, decomp_size, comp_size)
+    compressed_end = file_size
+
+    while compressed_end > 0:
+        if compressed_end < _TRAILER_SIZE:
+            raise ArchiveCorruptedError("Lzip file is too small to contain a valid trailer")
+
+        stream.seek(compressed_end - _TRAILER_SIZE)
+        trailer = stream.read(_TRAILER_SIZE)
+        if len(trailer) < _TRAILER_SIZE:
+            raise ArchiveCorruptedError("Lzip file truncated during backward index scan")
+
+        _, data_size, member_size = struct.unpack_from("<IQQ", trailer, 0)
+
+        if member_size < _HEADER_SIZE + _TRAILER_SIZE:
+            raise ArchiveCorruptedError(
+                f"Lzip member_size {member_size} in trailer is too small to be valid"
+            )
+
+        compressed_start = compressed_end - member_size
+        if compressed_start < 0:
+            raise ArchiveCorruptedError(
+                f"Lzip member_size {member_size} exceeds remaining file size"
+            )
+
+        # Verify the 4-byte magic at the computed member start.  A corrupt
+        # member_size would otherwise silently produce a garbage index for all
+        # preceding members.
+        stream.seek(compressed_start)
+        magic = stream.read(4)
+        if magic != _MAGIC:
+            raise ArchiveCorruptedError(
+                f"Lzip magic not found at expected member start {compressed_start} "
+                f"(got {magic!r}); member_size in trailer may be corrupt"
+            )
+
+        entries.append((compressed_start, int(data_size), int(member_size)))
+        compressed_end = compressed_start
+
+    # Build the forward index, accumulating decompressed_start for each member.
+    result: list[_MemberBounds] = []
+    decompressed_offset = 0
+    for comp_start, decomp_size, comp_size in reversed(entries):
+        result.append(
+            _MemberBounds(comp_start, decompressed_offset, comp_size, decomp_size)
+        )
+        decompressed_offset += decomp_size
+
+    return result
+
+
 class _LzipState:
     """
     Streaming state machine for multi-member lzip decompression.
@@ -65,6 +144,10 @@ class _LzipState:
     Call feed(chunk) repeatedly with successive compressed chunks; it returns
     the corresponding decompressed bytes.  When the underlying stream is
     exhausted, call flush() to finalise and detect truncation.
+
+    completed_members records (decompressed_size, compressed_size) for every
+    member whose trailer has been fully verified.  LzipDecompressorStream reads
+    this list to build its persistent member index.
 
     The state machine cycles through three phases per member:
 
@@ -95,6 +178,8 @@ class _LzipState:
         self._crc = 0
         self._member_size = 0
         self._finished = False
+        # Populated in _verify_trailer; read by LzipDecompressorStream to build its index.
+        self.completed_members: list[tuple[int, int]] = []  # (decompressed_size, compressed_size)
 
     def feed(self, data: bytes) -> bytes:
         self._buf.extend(data)
@@ -178,7 +263,7 @@ class _LzipState:
         self._member_size = 0
 
     def _verify_trailer(self, trailer: bytes) -> None:
-        crc32_stored, data_size, _member_size = struct.unpack_from("<IQQ", trailer, 0)
+        crc32_stored, data_size, member_size = struct.unpack_from("<IQQ", trailer, 0)
         if (self._crc & 0xFFFFFFFF) != crc32_stored:
             raise ArchiveCorruptedError(
                 f"Lzip CRC32 mismatch: stored {crc32_stored:#010x}, "
@@ -188,3 +273,4 @@ class _LzipState:
             raise ArchiveCorruptedError(
                 f"Lzip size mismatch: stored {data_size}, actual {self._member_size}"
             )
+        self.completed_members.append((int(data_size), int(member_size)))

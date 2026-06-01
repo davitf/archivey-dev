@@ -88,7 +88,11 @@ from archivey.exceptions import (
     ArchiveStreamNotSeekableError,
     PackageNotInstalledError,
 )
-from archivey.formats.lzip_stream import _LzipState
+from archivey.formats.lzip_stream import (
+    _LzipState,
+    _MemberBounds,
+    _read_index_backwards,
+)
 from archivey.internal.io_helpers import ensure_binaryio
 
 logger = logging.getLogger(__name__)
@@ -546,17 +550,162 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
 
 
 class LzipDecompressorStream(DecompressorStream[_LzipState]):
+    """Seekable lzip decompressor backed by Python's stdlib lzma.
+
+    Maintains a member index (list of _MemberBounds) built progressively as
+    members are read forward, and on-demand via a backwards scan of trailers.
+    The index enables:
+      - O(members_skipped) backward seeks (jump to the right member instead of
+        rewinding to byte 0 of the compressed stream)
+      - O(members_skipped) forward seeks across already-indexed members
+      - O(members) SEEK_END without decompressing any data
+    """
+
+    def __init__(self, path: str | BinaryIO) -> None:
+        # Initialise index state BEFORE super().__init__() because that call
+        # invokes _create_decompressor(), which references these attributes.
+        self._member_index: list[_MemberBounds] = []
+        self._index_complete: bool = False
+        # Which slot in _member_index the current _LzipState started at.
+        self._current_member_idx: int = 0
+        # How many entries in _decompressor.completed_members have already been
+        # processed for index updates.
+        self._last_completed_count: int = 0
+        super().__init__(path)
+
+    # ------------------------------------------------------------------
+    # DecompressorStream abstract interface
+    # ------------------------------------------------------------------
+
     def _create_decompressor(self) -> _LzipState:
+        # Called by super().__init__() and by _rewind().
+        self._current_member_idx = 0
+        self._last_completed_count = 0
         return _LzipState()
 
     def _decompress_chunk(self, chunk: bytes) -> bytes:
-        return self._decompressor.feed(chunk)
+        result = self._decompressor.feed(chunk)
+        self._update_index()
+        return result
 
     def _flush_decompressor(self) -> bytes:
-        return self._decompressor.flush()
+        result = self._decompressor.flush()
+        self._update_index()
+        if self._decompressor.is_finished():
+            self._index_complete = True
+        return result
 
     def _is_decompressor_finished(self) -> bool:
         return self._decompressor.is_finished()
+
+    # ------------------------------------------------------------------
+    # Member index management
+    # ------------------------------------------------------------------
+
+    def _update_index(self) -> None:
+        """Append any newly completed members to the persistent index."""
+        completed = self._decompressor.completed_members
+        for i in range(self._last_completed_count, len(completed)):
+            decompressed_size, compressed_size = completed[i]
+            absolute_idx = self._current_member_idx + i
+            if absolute_idx >= len(self._member_index):
+                if self._member_index:
+                    last = self._member_index[-1]
+                    cs = last.compressed_start + last.compressed_size
+                    ds = last.decompressed_start + last.decompressed_size
+                else:
+                    cs = ds = 0
+                self._member_index.append(
+                    _MemberBounds(cs, ds, compressed_size, decompressed_size)
+                )
+        self._last_completed_count = len(completed)
+
+    def _build_index_backwards(self) -> None:
+        """Scan trailers to build the complete index without decompressing."""
+        saved = self._inner.tell()
+        try:
+            file_size = self._inner.seek(0, io.SEEK_END)
+            self._member_index = _read_index_backwards(self._inner, file_size)
+            self._index_complete = True
+            self._size = sum(m.decompressed_size for m in self._member_index)
+        finally:
+            self._inner.seek(saved)
+
+    def _find_member_idx_for(self, pos: int) -> int | None:
+        """Return the index of the last member with decompressed_start <= pos."""
+        best: int | None = None
+        for i, m in enumerate(self._member_index):
+            if m.decompressed_start <= pos:
+                best = i
+        return best
+
+    # ------------------------------------------------------------------
+    # Seek overrides
+    # ------------------------------------------------------------------
+
+    def _rewind(self) -> None:
+        saved_size = self._size  # _index_complete size survives a rewind
+        super()._rewind()       # resets _size to None; calls _create_decompressor()
+        if self._index_complete:
+            self._size = saved_size
+
+    def _reset_to_member(self, member_idx: int) -> None:
+        """Jump the compressed stream to the start of a known indexed member."""
+        member = self._member_index[member_idx]
+        self._inner.seek(member.compressed_start)
+        # Install a fresh state machine for this member onwards.
+        # Use direct assignment (not _create_decompressor) so we can set
+        # _current_member_idx ourselves without it being overwritten.
+        self._current_member_idx = member_idx
+        self._last_completed_count = 0
+        self._decompressor = _LzipState()
+        self._buffer.clear()
+        self._eof = False
+        self._pos = member.decompressed_start
+        # _size and _member_index are intentionally preserved.
+
+    def _seek_to_pos(self, pos: int) -> None:
+        # When the target is at or past the known end of the decompressed stream,
+        # skip decompression entirely: just mark EOF and set the position.
+        if self._size is not None and pos >= self._size:
+            self._buffer.clear()
+            self._eof = True
+            self._pos = pos
+            return
+
+        # Trigger backwards index build if pos is past the indexed frontier and
+        # the stream is seekable.  24 bytes per member (trailer + magic) is
+        # negligible vs. decompressing many members to reach a far position.
+        if not self._index_complete and self._inner.seekable():
+            _probe = self._find_member_idx_for(pos)
+            if _probe is None or self._member_index[_probe].decompressed_end <= pos:
+                self._build_index_backwards()
+
+        best_idx = self._find_member_idx_for(pos)
+        if best_idx is not None:
+            current_member = self._current_member_idx + self._last_completed_count
+            if pos < self._pos:
+                # Backward seek: jump to the best member.
+                if best_idx > 0:
+                    self._reset_to_member(best_idx)
+                else:
+                    self._rewind()
+            elif best_idx > current_member:
+                # Forward seek past one or more already-indexed members: skip them.
+                self._reset_to_member(best_idx)
+            # else: target is within or just ahead of the current member; read forward.
+        elif pos < self._pos:
+            self._rewind()
+
+        # _pos <= pos at this point; delegate remaining forward-read to base class.
+        super()._seek_to_pos(pos)
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        # For SEEK_END we need the total decompressed size.  Use the backwards
+        # index scan instead of the base class's readall() when possible.
+        if whence == io.SEEK_END and self._size is None and self._inner.seekable():
+            self._build_index_backwards()
+        return super().seek(offset, whence)
 
 
 class ZlibDecompressorStream(DecompressorStream):
