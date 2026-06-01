@@ -69,10 +69,10 @@ _UNKNOWN_SIZE = b"\xff" * 8
 class _MemberBounds:
     """Compressed/decompressed extents for one lzip member."""
 
-    compressed_start: int    # absolute byte offset in the compressed stream
+    compressed_start: int  # absolute byte offset in the compressed stream
     decompressed_start: int  # cumulative decompressed bytes before this member
-    compressed_size: int     # header(6) + lzma_data + trailer(20), from trailer field
-    decompressed_size: int   # uncompressed bytes, from trailer field
+    compressed_size: int  # header(6) + lzma_data + trailer(20), from trailer field
+    decompressed_size: int  # uncompressed bytes, from trailer field
 
     @property
     def decompressed_end(self) -> int:
@@ -86,17 +86,23 @@ def _read_index_backwards(stream: BinaryIO, file_size: int) -> list[_MemberBound
     decompression is performed.  The magic check catches corrupt member_size
     values before they cascade into wrong offsets for every prior member.
     """
-    entries: list[tuple[int, int, int]] = []  # (compressed_start, decomp_size, comp_size)
+    entries: list[
+        tuple[int, int, int]
+    ] = []  # (compressed_start, decomp_size, comp_size)
     compressed_end = file_size
 
     while compressed_end > 0:
         if compressed_end < _TRAILER_SIZE:
-            raise ArchiveCorruptedError("Lzip file is too small to contain a valid trailer")
+            raise ArchiveCorruptedError(
+                "Lzip file is too small to contain a valid trailer"
+            )
 
         stream.seek(compressed_end - _TRAILER_SIZE)
         trailer = stream.read(_TRAILER_SIZE)
         if len(trailer) < _TRAILER_SIZE:
-            raise ArchiveCorruptedError("Lzip file truncated during backward index scan")
+            raise ArchiveCorruptedError(
+                "Lzip file truncated during backward index scan"
+            )
 
         _, data_size, member_size = struct.unpack_from("<IQQ", trailer, 0)
 
@@ -179,7 +185,9 @@ class _LzipState:
         self._member_size = 0
         self._finished = False
         # Populated in _verify_trailer; read by LzipDecompressorStream to build its index.
-        self.completed_members: list[tuple[int, int]] = []  # (decompressed_size, compressed_size)
+        self.completed_members: list[
+            tuple[int, int]
+        ] = []  # (decompressed_size, compressed_size)
 
     def feed(self, data: bytes) -> bytes:
         self._buf.extend(data)

@@ -625,7 +625,9 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
         saved = self._inner.tell()
         try:
             file_size = self._inner.seek(0, io.SEEK_END)
-            self._member_index = _read_index_backwards(self._inner, file_size)
+            self._member_index = _read_index_backwards(
+                cast("BinaryIO", self._inner), file_size
+            )
             self._index_complete = True
             self._size = sum(m.decompressed_size for m in self._member_index)
         finally:
@@ -645,7 +647,7 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
 
     def _rewind(self) -> None:
         saved_size = self._size  # _index_complete size survives a rewind
-        super()._rewind()       # resets _size to None; calls _create_decompressor()
+        super()._rewind()  # resets _size to None; calls _create_decompressor()
         if self._index_complete:
             self._size = saved_size
 
