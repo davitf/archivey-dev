@@ -8,11 +8,9 @@ from typing import BinaryIO, cast
 import pytest
 
 from archivey.exceptions import ArchiveCorruptedError, ArchiveEOFError
-from archivey.formats.compressed_streams import (
-    LzipDecompressorStream,
-    _translate_lzip_exception,
-)
-from archivey.formats.lzip_stream import _MemberBounds, _read_index_backwards
+from archivey.formats.compressed_streams import _translate_lzip_exception
+from archivey.formats.decompressor_stream import LzipDecompressorStream, SeekPoint
+from archivey.formats.lzip_stream import _read_index_backwards
 from tests.archivey.create_archives import create_lzip_member
 
 # ---------------------------------------------------------------------------
@@ -169,15 +167,15 @@ def test_forward_seek_skips_intermediate_members():
     with open_lzip(data) as f:
         # Build the full index via SEEK_END
         f.seek(0, io.SEEK_END)
-        assert f._index_complete  # type: ignore[attr-defined]
+        assert f._index_built  # type: ignore[attr-defined]
 
         # Seek back to start, then forward directly to member 2
         f.seek(0)
         target = len(parts[0]) + len(parts[1])
         f.seek(target)
-        # _current_member_idx == 2 confirms we jumped directly to member 2;
+        # _decomp_cursor == target confirms we jumped directly to member 2's start;
         # members 0 and 1 were not decompressed.
-        assert f._current_member_idx == 2  # type: ignore[attr-defined]
+        assert f._decomp_cursor == target  # type: ignore[attr-defined]
         assert f.read() == parts[2]
 
 
@@ -214,13 +212,13 @@ def test_backward_seek_uses_index_not_position_zero():
     with open_lzip(data) as f:
         # Read through all members so the index covers 0..2
         f.read()
-        assert len(f._member_index) == 3  # type: ignore[attr-defined]
+        assert len(f._seek_points) == 3  # type: ignore[attr-defined]
 
         # Now seek backward to the start of member 1
         target = len(parts[0])
         f.seek(target)
-        # After the jump, the current member should be member 1 (not 0)
-        assert f._current_member_idx == 1  # type: ignore[attr-defined]
+        # _decomp_cursor == target confirms we jumped directly to member 1 (not 0)
+        assert f._decomp_cursor == target  # type: ignore[attr-defined]
         assert f.read(len(parts[1])) == parts[1]
 
 
@@ -244,9 +242,9 @@ def test_seek_end_does_not_decompress():
     data = make_multi_member(parts)
     with open_lzip(data) as f:
         f.seek(0, io.SEEK_END)
-        # _current_member_idx == 0 confirms the backward scan decompressed nothing.
-        assert f._current_member_idx == 0  # type: ignore[attr-defined]
-        assert f._index_complete  # type: ignore[attr-defined]
+        # _decomp_cursor == 0 confirms the backward scan decompressed nothing.
+        assert f._decomp_cursor == 0  # type: ignore[attr-defined]
+        assert f._index_built  # type: ignore[attr-defined]
 
 
 def test_seek_end_then_read_last_bytes():
@@ -280,11 +278,11 @@ def test_forward_seek_triggers_index_build():
     ) as f:
         # Read only the first member's content
         f.read(len(parts[0]))
-        assert not f._index_complete  # type: ignore[attr-defined]
+        assert not f._index_built  # type: ignore[attr-defined]
         # Seek past what we've indexed — should trigger backwards scan
         target = len(parts[0]) + len(parts[1])
         f.seek(target)
-        assert f._index_complete  # type: ignore[attr-defined]
+        assert f._index_built  # type: ignore[attr-defined]
         assert f.read() == parts[2]
 
 
@@ -303,16 +301,16 @@ def test_member_index_built_progressively():
         cast("BinaryIO", _LimitedReadStream(data, chunk_size))
     ) as f:
         # No members indexed yet
-        assert len(f._member_index) == 0  # type: ignore[attr-defined]
+        assert len(f._seek_points) == 0  # type: ignore[attr-defined]
 
         f.read(len(parts[0]))
-        assert len(f._member_index) == 1  # type: ignore[attr-defined]
+        assert len(f._seek_points) == 1  # type: ignore[attr-defined]
 
         f.read(len(parts[1]))
-        assert len(f._member_index) == 2  # type: ignore[attr-defined]
+        assert len(f._seek_points) == 2  # type: ignore[attr-defined]
 
         f.read()
-        assert len(f._member_index) == 3  # type: ignore[attr-defined]
+        assert len(f._seek_points) == 3  # type: ignore[attr-defined]
 
 
 def test_member_index_bounds():
@@ -320,14 +318,16 @@ def test_member_index_bounds():
     data = make_multi_member(parts)
     with open_lzip(data) as f:
         f.read()
-        idx: list[_MemberBounds] = f._member_index  # type: ignore[attr-defined]
-        assert idx[0].decompressed_start == 0
-        assert idx[0].decompressed_size == 3
-        assert idx[1].decompressed_start == 3
-        assert idx[1].decompressed_size == 2
-        assert idx[2].decompressed_start == 5
-        assert idx[2].decompressed_size == 1
-        assert idx[2].decompressed_end == 6
+        sp: list[SeekPoint] = f._seek_points  # type: ignore[attr-defined]
+        assert sp[0].decompressed_offset == 0
+        assert sp[0].compressed_offset == 0
+        assert sp[1].decompressed_offset == 3
+        assert sp[2].decompressed_offset == 5
+        # Consecutive seek points encode member sizes.
+        assert sp[1].decompressed_offset - sp[0].decompressed_offset == 3
+        assert sp[2].decompressed_offset - sp[1].decompressed_offset == 2
+        assert f._size - sp[2].decompressed_offset == 1  # type: ignore[operator]
+        assert f._size == 6  # type: ignore[attr-defined]
 
 
 def test_read_index_backwards():
