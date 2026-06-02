@@ -181,6 +181,7 @@ class _LzipState:
         self._crc = 0
         self._member_size = 0
         self._finished = False
+        self._members_seen: int = 0  # incremented after each verified trailer
 
     def feed(self, data: bytes) -> tuple[bytes, list[tuple[int, int]]]:
         self._buf.extend(data)
@@ -195,6 +196,8 @@ class _LzipState:
         header and raise ArchiveEOFError.
         """
         if self._state == self._NEED_HEADER:
+            if self._members_seen == 0 and not self._buf:
+                raise ArchiveCorruptedError("Not a valid lzip file: no members found")
             if len(self._buf) >= 4 and self._buf[:4] == _MAGIC:
                 raise ArchiveEOFError("Lzip file truncated mid-header")
             self._finished = True
@@ -251,24 +254,43 @@ class _LzipState:
         return bytes(output), new_members
 
     def _start_member(self, header: bytes) -> bool:
-        """Initialise state for a new member.  Returns False when trailing data
-        (non-LZIP magic bytes) is detected so the caller can stop gracefully."""
+        """Initialise state for a new member.
+
+        Returns False when trailing data (non-LZIP magic bytes) is detected
+        after at least one valid member — the caller should stop gracefully.
+        Raises ArchiveCorruptedError if called before any member has been seen
+        (the stream is not a valid lzip file) or if header fields are invalid.
+        """
         if header[:4] != _MAGIC:
-            # lzip spec §7: trailing data after the last member is valid.
+            if self._members_seen == 0:
+                raise ArchiveCorruptedError(
+                    f"Not a valid lzip file: expected magic {_MAGIC!r}, "
+                    f"got {header[:4]!r}"
+                )
+            # lzip spec §7: trailing data after valid members is allowed.
             self._finished = True
             return False
+
         if header[4] != 1:
             raise ArchiveCorruptedError(f"Unsupported lzip version: {header[4]}")
 
-        dict_size = 1 << (header[5] & 0x1F)
+        exp = header[5] & 0x1F
+        if not (12 <= exp <= 29):
+            raise ArchiveCorruptedError(
+                f"Invalid lzip dict_size exponent {exp}: valid range is 12–29"
+            )
+        dict_size = 1 << exp
 
         # Build the 13-byte LZMA_ALONE header that Python's lzma module expects.
         # lzip stores only the dict size; lc/lp/pb are implicit (always 0x5D).
         lzma_alone_header = _PROPS_BYTE + struct.pack("<I", dict_size) + _UNKNOWN_SIZE
-        self._dec = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE)
-        # Feeding the synthetic header initialises the decompressor state;
-        # it produces no output because the header contains no compressed data.
-        self._dec.decompress(lzma_alone_header)
+        try:
+            self._dec = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE)
+            # Feeding the synthetic header initialises the decompressor state;
+            # it produces no output because the header contains no compressed data.
+            self._dec.decompress(lzma_alone_header)
+        except lzma.LZMAError as e:
+            raise ArchiveCorruptedError(f"Error reading lzip header: {e}") from e
 
         self._crc = 0
         self._member_size = 0
@@ -285,4 +307,5 @@ class _LzipState:
             raise ArchiveCorruptedError(
                 f"Lzip size mismatch: stored {data_size}, actual {self._member_size}"
             )
+        self._members_seen += 1
         return (int(data_size), int(member_size))

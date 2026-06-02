@@ -375,6 +375,8 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
 
 
 def _translate_lzip_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, lzma.LZMAError):
+        return ArchiveCorruptedError(f"Error reading lzip archive: {e}")
     return None
 
 

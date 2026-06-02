@@ -1,13 +1,17 @@
 """Tests for LzipDecompressorStream: multi-member files and efficient seeking."""
 
 import io
+import lzma
 import struct
 from typing import BinaryIO, cast
 
 import pytest
 
 from archivey.exceptions import ArchiveCorruptedError, ArchiveEOFError
-from archivey.formats.compressed_streams import LzipDecompressorStream
+from archivey.formats.compressed_streams import (
+    LzipDecompressorStream,
+    _translate_lzip_exception,
+)
 from archivey.formats.lzip_stream import _MemberBounds, _read_index_backwards
 from tests.archivey.create_archives import create_lzip_member
 
@@ -428,3 +432,70 @@ def test_wrong_member_size_backwards_scan_falls_back():
         f.seek(0, io.SEEK_END)  # must not raise
         f.seek(0)
         assert f.read() == b"".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Issue 1: lzma.LZMAError must be translated to ArchiveCorruptedError
+# ---------------------------------------------------------------------------
+
+
+def test_translate_lzip_exception_wraps_lzma_error():
+    """_translate_lzip_exception must map lzma.LZMAError → ArchiveCorruptedError
+    so that raw stdlib exceptions never escape through the stream API."""
+    result = _translate_lzip_exception(lzma.LZMAError("bad data"))
+    assert isinstance(result, ArchiveCorruptedError)
+
+
+# ---------------------------------------------------------------------------
+# Issue 2: empty / non-lzip input must raise, not return empty bytes
+# ---------------------------------------------------------------------------
+
+
+def test_empty_file_raises_corrupted_error():
+    """An empty byte stream is not a valid lzip file; at least one member required."""
+    with open_lzip(b"") as f:
+        with pytest.raises(ArchiveCorruptedError):
+            f.read()
+
+
+def test_non_lzip_data_raises_corrupted_error():
+    """Data that doesn't start with the LZIP magic must raise ArchiveCorruptedError,
+    not silently return an empty stream."""
+    gzip_magic = b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03"
+    with open_lzip(gzip_magic) as f:
+        with pytest.raises(ArchiveCorruptedError):
+            f.read()
+
+
+# ---------------------------------------------------------------------------
+# Issue 3: coded_dict exponent must be validated (valid range: 12–29)
+# ---------------------------------------------------------------------------
+
+
+def _member_with_dict_exp(data: bytes, exp: int) -> bytes:
+    """Build a lzip member whose header advertises the given dict exponent."""
+    member = bytearray(create_lzip_member(data))
+    member[5] = exp  # overwrite coded_dict byte; data/CRC unchanged
+    return bytes(member)
+
+
+def test_invalid_dict_exponent_too_small():
+    """A coded_dict exponent below 12 (spec minimum) must raise ArchiveCorruptedError."""
+    with open_lzip(_member_with_dict_exp(b"hello", exp=10)) as f:
+        with pytest.raises(ArchiveCorruptedError):
+            f.read()
+
+
+def test_invalid_dict_exponent_too_large():
+    """A coded_dict exponent above 29 (spec maximum) must raise ArchiveCorruptedError."""
+    with open_lzip(_member_with_dict_exp(b"hello", exp=30)) as f:
+        with pytest.raises(ArchiveCorruptedError):
+            f.read()
+
+
+def test_valid_dict_exponent_boundary_values():
+    """Exponents 12 and 29 are the spec boundaries and must succeed."""
+    with open_lzip(make_multi_member([b"hi"], dict_size_bits=12)) as f:
+        assert f.read() == b"hi"
+    with open_lzip(make_multi_member([b"hi"], dict_size_bits=29)) as f:
+        assert f.read() == b"hi"
