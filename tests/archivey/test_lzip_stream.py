@@ -378,25 +378,53 @@ def test_truncation_mid_member():
             f.read()
 
 
-def test_invalid_member_size_too_small_triggers_backwards_scan_error():
-    """A member_size smaller than header+trailer in a trailer should raise
-    ArchiveCorruptedError during the backwards index scan."""
+def test_invalid_member_size_in_trailer_falls_back_to_forward_decompression():
+    """A member_size smaller than header+trailer causes the backwards scan to
+    fall back gracefully (it's indistinguishable from trailing data at that
+    layer).  The file content is still readable via sequential decompression
+    because member_size is not used during forward decoding."""
     parts = [b"valid", b"also valid"]
     data = bytearray(make_multi_member(parts))
-    # Corrupt member_size in the last member's trailer (last 8 bytes of file)
+    # Corrupt only member_size (last 8 bytes); CRC and data_size are intact.
     struct.pack_into("<Q", data, len(data) - 8, 5)  # absurdly small member_size
     with open_lzip(bytes(data)) as f:
-        with pytest.raises(ArchiveCorruptedError):
-            f.seek(0, io.SEEK_END)
+        f.seek(0, io.SEEK_END)  # must not raise
+        f.seek(0)
+        assert f.read() == b"".join(parts)
 
 
-def test_corrupt_member_size_detected_by_magic_check():
-    """A plausible-looking but wrong member_size in the trailer causes the
-    backwards scan to jump to an offset where b'LZIP' is not present."""
+def test_trailing_data_falls_back_to_forward_decompression():
+    """Trailing bytes after the last lzip member are valid per the lzip spec.
+    The backwards scan should fail gracefully and fall back to sequential
+    decompression rather than raising ArchiveCorruptedError."""
+    parts = [b"hello", b"world"]
+    data = make_multi_member(parts) + b"\x00" * 16  # 16 bytes of trailing data
+    with open_lzip(data) as f:
+        # SEEK_END must not raise, even though the backwards scan will fail.
+        size = f.seek(0, io.SEEK_END)
+        assert size == sum(len(p) for p in parts)
+        f.seek(0)
+        assert f.read() == b"helloworld"
+
+
+def test_trailing_data_seek_falls_back_to_forward_decompression():
+    """Same as above but triggered via a forward seek past the known frontier."""
+    parts = [b"aaa" * 10, b"bbb" * 10]
+    data = make_multi_member(parts) + b"\xff" * 8
+    with open_lzip(data) as f:
+        f.seek(len(parts[0]))  # triggers backwards scan attempt; should not raise
+        assert f.read(len(parts[1])) == parts[1]
+
+
+def test_wrong_member_size_backwards_scan_falls_back():
+    """A plausible-but-wrong member_size causes the backwards scan to jump to
+    an offset where LZIP magic is not present.  The scan falls back gracefully;
+    sequential decompression succeeds because member_size is unused there."""
     parts = [b"first" * 10, b"second" * 10]
     data = bytearray(make_multi_member(parts))
-    # Set member_size to a plausible-but-wrong value (off by 3)
+    # Corrupt only member_size (off by 3); CRC and data_size are intact.
     struct.pack_into("<Q", data, len(data) - 8, len(data) - 3)
     with open_lzip(bytes(data)) as f:
-        with pytest.raises(ArchiveCorruptedError):
-            f.seek(0, io.SEEK_END)
+        f.seek(0, io.SEEK_END)  # must not raise
+        f.seek(0)
+        assert f.read() == b"".join(parts)

@@ -570,6 +570,10 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
         # Absolute index of the member the current _LzipState is processing.
         # Incremented by _update_index as each member completes.
         self._current_member_idx: int = 0
+        # Set when the backwards scan fails (e.g. trailing data after the last
+        # member).  Prevents pointless retries; callers fall back to forward
+        # decompression.
+        self._backwards_scan_failed: bool = False
         super().__init__(path)
 
     # ------------------------------------------------------------------
@@ -616,7 +620,12 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
             self._current_member_idx += 1
 
     def _build_index_backwards(self) -> None:
-        """Scan trailers to build the complete index without decompressing."""
+        """Scan trailers to build the complete index without decompressing.
+
+        If the scan fails (e.g. because the file has trailing data after the
+        last member, which is valid per the lzip spec), logs a warning and sets
+        _backwards_scan_failed so callers fall back to forward decompression.
+        """
         saved = self._inner.tell()
         try:
             file_size = self._inner.seek(0, io.SEEK_END)
@@ -625,6 +634,14 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
             )
             self._index_complete = True
             self._size = sum(m.decompressed_size for m in self._member_index)
+        except ArchiveCorruptedError as e:
+            logger.warning(
+                "Lzip backwards index scan failed (the file may have trailing "
+                "data after the last member, which is valid); falling back to "
+                "sequential decompression. Reason: %s",
+                e,
+            )
+            self._backwards_scan_failed = True
         finally:
             self._inner.seek(saved)
 
@@ -676,7 +693,11 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
         # Trigger backwards index build if pos is past the indexed frontier and
         # the stream is seekable.  24 bytes per member (trailer + magic) is
         # negligible vs. decompressing many members to reach a far position.
-        if not self._index_complete and self._inner.seekable():
+        if (
+            not self._index_complete
+            and not self._backwards_scan_failed
+            and self._inner.seekable()
+        ):
             _probe = self._find_member_idx_for(pos)
             if _probe is None or self._member_index[_probe].decompressed_end <= pos:
                 self._build_index_backwards()
@@ -702,7 +723,12 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
         # For SEEK_END we need the total decompressed size.  Use the backwards
         # index scan instead of the base class's readall() when possible.
-        if whence == io.SEEK_END and self._size is None and self._inner.seekable():
+        if (
+            whence == io.SEEK_END
+            and self._size is None
+            and self._inner.seekable()
+            and not self._backwards_scan_failed
+        ):
             self._build_index_backwards()
         return super().seek(offset, whence)
 

@@ -189,10 +189,14 @@ class _LzipState:
     def flush(self) -> tuple[bytes, list[tuple[int, int]]]:
         """Called when the compressed stream is exhausted.
 
-        Succeeds (sets finished=True) only if we are cleanly between members
-        with no buffered bytes.  Any other state means the stream was truncated.
+        Succeeds when cleanly between members.  Trailing data (bytes that don't
+        start with the LZIP magic) is valid per the lzip spec and silently
+        ignored.  Bytes starting with the LZIP magic indicate a truncated member
+        header and raise ArchiveEOFError.
         """
-        if self._state == self._NEED_HEADER and not self._buf:
+        if self._state == self._NEED_HEADER:
+            if len(self._buf) >= 4 and self._buf[:4] == _MAGIC:
+                raise ArchiveEOFError("Lzip file truncated mid-header")
             self._finished = True
             return b"", []
         raise ArchiveEOFError("Lzip file is truncated")
@@ -209,7 +213,9 @@ class _LzipState:
                     break
                 header = bytes(self._buf[:_HEADER_SIZE])
                 del self._buf[:_HEADER_SIZE]
-                self._start_member(header)
+                if not self._start_member(header):
+                    self._buf.clear()  # discard remaining trailing data
+                    break
                 self._state = self._IN_MEMBER
 
             elif self._state == self._IN_MEMBER:
@@ -244,9 +250,13 @@ class _LzipState:
 
         return bytes(output), new_members
 
-    def _start_member(self, header: bytes) -> None:
+    def _start_member(self, header: bytes) -> bool:
+        """Initialise state for a new member.  Returns False when trailing data
+        (non-LZIP magic bytes) is detected so the caller can stop gracefully."""
         if header[:4] != _MAGIC:
-            raise ArchiveCorruptedError(f"Invalid lzip magic: {header[:4]!r}")
+            # lzip spec §7: trailing data after the last member is valid.
+            self._finished = True
+            return False
         if header[4] != 1:
             raise ArchiveCorruptedError(f"Unsupported lzip version: {header[4]}")
 
@@ -262,6 +272,7 @@ class _LzipState:
 
         self._crc = 0
         self._member_size = 0
+        return True
 
     def _verify_trailer(self, trailer: bytes) -> tuple[int, int]:
         crc32_stored, data_size, member_size = struct.unpack_from("<IQQ", trailer, 0)
