@@ -268,8 +268,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             should_build = new_pos is None or (
                 new_pos > 0
                 and (
-                    not self._seek_points
-                    or new_pos > last.decompressed_offset  # type: ignore[union-attr]
+                    not self._seek_points or new_pos > last.decompressed_offset  # type: ignore[union-attr]
                 )
             )
             if should_build:
