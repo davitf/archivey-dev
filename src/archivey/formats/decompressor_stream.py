@@ -71,7 +71,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             self._should_close = False
         self._seek_points: list[SeekPoint] = [SeekPoint(0, 0)]
         self._index_built: bool = False
-        self._decompressor: DecompressorT = self._create_decompressor(SeekPoint(0, 0))
+        self._decompressor: DecompressorT = self._create_decompressor(_seek_points[0])
         self._buffer = bytearray()
         self._eof = False
         self._pos = 0
