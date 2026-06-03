@@ -71,7 +71,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             self._should_close = False
         self._seek_points: list[SeekPoint] = [SeekPoint(0, 0)]
         self._index_built: bool = False
-        self._decompressor: DecompressorT = self._create_decompressor(_seek_points[0])
+        self._decompressor: DecompressorT = self._create_decompressor(self._seek_points[0])
         self._buffer = bytearray()
         self._eof = False
         self._pos = 0
@@ -209,6 +209,26 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             self._inner.close()
         super().close()
 
+    def _ensure_index_built(self) -> None:
+        if self._index_built:
+            return
+
+        inner_pos = self._inner.tell()
+        new_points, new_size = self._build_index(self._seek_points[-1])
+        self._index_built = True
+
+        if new_points:
+            self.add_seek_points(new_points)
+        if new_size is not None:
+            self._size = new_size
+
+        # _build_index may seek _inner for index reads (e.g. lzip's
+        # backward trailer scan); restore it so the decompressor's
+        # expected read position is still valid.
+        if self._inner.tell() != inner_pos:
+            self._inner.seek(inner_pos)
+
+
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
         if not self._inner.seekable():
             raise io.UnsupportedOperation("seek")
@@ -222,39 +242,30 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
         else:
             raise ValueError(f"Invalid whence: {whence}")
 
-        # Trigger _build_index once when the target is past the known index
-        # frontier or unknown (SEEK_END).  Skip when the target is already
-        # inside the current buffer — no index is needed in that case.
-        if not self._index_built:
-            last = self._seek_points[-1]
-            should_build = whence == io.SEEK_END or (
-                new_pos > last.decompressed_offset
-                and new_pos > self._pos + len(self._buffer)
-            )
-            if should_build:
-                inner_pos = self._inner.tell()
-                new_points, new_size = self._build_index(last)
-                self._index_built = True
-                if new_points:
-                    self.add_seek_points(new_points)
-                if new_size is not None:
-                    self._size = new_size
-                # _build_index may seek _inner for index reads (e.g. lzip's
-                # backward trailer scan); restore it so the decompressor's
-                # expected read position is still valid.
-                if self._inner.tell() != inner_pos:
-                    self._inner.seek(inner_pos)
+        # Build the index if we're seeking from the end (as we need to know the
+        # total decompressed size) or to a target posiiton after the current
+        # buffer end and after the last known seek point.
+        if whence == io.SEEK_END or (
+            new_pos > self._pos + len(self._buffer)
+            new_pos > self._seek_points[-1].decompressed_offset
+        ):
+            self._ensure_index_built()
 
         if whence == io.SEEK_END:
             if self._size is None:
-                # Scan to EOF without buffering (readall() would hold the entire
-                # remainder of the file in RAM just to discard it).
+                # If we don't know the stream size (building the index above
+                # doesn't always provide it), scan to EOF to discover it.
+                # We don't use readall() to avoid buffering all the remaining
+                # data in RAM.
                 self._pos += len(self._buffer)
                 self._buffer.clear()
                 while not self._eof:
                     data = self._read_decompressed_chunk()
                     self._pos += len(data)
+                # _read_decompressed_chunk() sets _size when it reaches the
+                # end of the stream.
                 assert self._size is not None
+
             new_pos = self._size + offset
 
         if new_pos < 0:
