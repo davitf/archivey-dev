@@ -79,19 +79,29 @@ class _MemberBounds:
         return self.decompressed_start + self.decompressed_size
 
 
-def _read_index_backwards(stream: BinaryIO, file_size: int) -> list[_MemberBounds]:
-    """Build the complete member index by scanning the stream backwards.
+def _read_index_backwards(
+    stream: BinaryIO,
+    file_size: int,
+    stop_at: int = 0,
+    start_decompressed_offset: int = 0,
+) -> list[_MemberBounds]:
+    """Build the member index by scanning the stream backwards.
 
     Reads only the 20-byte trailers (plus a 4-byte magic check) — no
     decompression is performed.  The magic check catches corrupt member_size
     values before they cascade into wrong offsets for every prior member.
+
+    stop_at: stop scanning when compressed_end reaches this offset (default 0
+    scans the whole file).  start_decompressed_offset: cumulative decompressed
+    bytes before the first scanned member, used to produce correct absolute
+    decompressed_start values in the result.
     """
     entries: list[
         tuple[int, int, int]
     ] = []  # (compressed_start, decomp_size, comp_size)
     compressed_end = file_size
 
-    while compressed_end > 0:
+    while compressed_end > stop_at:
         if compressed_end < _TRAILER_SIZE:
             raise ArchiveCorruptedError(
                 "Lzip file is too small to contain a valid trailer"
@@ -133,7 +143,7 @@ def _read_index_backwards(stream: BinaryIO, file_size: int) -> list[_MemberBound
 
     # Build the forward index, accumulating decompressed_start for each member.
     result: list[_MemberBounds] = []
-    decompressed_offset = 0
+    decompressed_offset = start_decompressed_offset
     for comp_start, decomp_size, comp_size in reversed(entries):
         result.append(
             _MemberBounds(comp_start, decompressed_offset, comp_size, decomp_size)

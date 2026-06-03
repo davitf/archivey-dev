@@ -59,8 +59,6 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
       register known positions as they are discovered during forward reads.
     - Override _build_index() for a one-shot full index build (e.g. lzip reads
       member trailers backwards).  _build_index is called at most once.
-    - Override _reset_to_seek_point() for any format-specific state updates
-      when jumping to a known seek point.
     """
 
     def __init__(self, path: str | BinaryIO) -> None:
@@ -73,14 +71,14 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             self._should_close = False
         self._seek_points: list[SeekPoint] = [SeekPoint(0, 0)]
         self._index_built: bool = False
-        self._decompressor: DecompressorT = self._create_decompressor()
+        self._decompressor: DecompressorT = self._create_decompressor(SeekPoint(0, 0))
         self._buffer = bytearray()
         self._eof = False
         self._pos = 0
         self._size: int | None = None
 
     @abc.abstractmethod
-    def _create_decompressor(self, state: Any = None) -> DecompressorT: ...
+    def _create_decompressor(self, point: SeekPoint) -> DecompressorT: ...
 
     @abc.abstractmethod
     def _decompress_chunk(self, chunk: bytes) -> bytes: ...
@@ -137,16 +135,16 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
     def _reset_to_seek_point(self, point: SeekPoint) -> None:
         """Jump to a known seek point.  Does not touch _size."""
         self._inner.seek(point.compressed_offset)
-        self._decompressor = self._create_decompressor(point.state)
+        self._decompressor = self._create_decompressor(point)
         self._buffer.clear()
         self._eof = False
         self._pos = point.decompressed_offset
 
-    def _build_index(self, last_known: SeekPoint) -> None:
-        """One-shot full index build.  Default: no-op.
+    def _build_index(self, last_known: SeekPoint) -> tuple[list[SeekPoint], int | None]:
+        """One-shot full index build.  Default: no-op, returns empty list and no size.
 
-        Subclasses that support random access override this to populate
-        _seek_points (and optionally set _size) without decompressing.
+        Subclasses that support random access override this to return a list of
+        new seek points and the total decompressed size (or None if unknown).
         Called at most once per stream (guarded by _index_built in seek()).
 
         last_known: the highest-offset SeekPoint currently in _seek_points.
@@ -156,6 +154,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
         The inner stream's position after this call is unspecified; seek()
         repositions it via _reset_to_seek_point as needed.
         """
+        return [], None
 
     def _read_decompressed_chunk(self) -> bytes:
         chunk = self._inner.read(65536)
@@ -234,8 +233,12 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             )
             if should_build:
                 inner_pos = self._inner.tell()
-                self._build_index(last)
+                new_points, new_size = self._build_index(last)
                 self._index_built = True
+                if new_points:
+                    self.add_seek_points(new_points)
+                if new_size is not None:
+                    self._size = new_size
                 # _build_index may seek _inner for index reads (e.g. lzip's
                 # backward trailer scan); restore it so the decompressor's
                 # expected read position is still valid.
@@ -276,20 +279,21 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             self._pos = new_pos
             return self._pos
         else:
-            # Forward seek: jump to a closer seek point if one exists
+            # Forward seek past the current buffer: jump to a closer seek point
+            # if one exists, otherwise advance past the buffered data.
             best = self._find_best_seek_point(new_pos)
             if best.decompressed_offset > self._pos:
                 self._reset_to_seek_point(best)
+            else:
+                self._pos += len(self._buffer)
+                self._buffer.clear()
 
-        # After any reset, _reset_to_seek_point clears the buffer, so
-        # _pos + len(_buffer) == _pos.  If that exactly equals new_pos the
-        # target is a seek-point boundary and no forward read is needed.
+        # Buffer is empty after any reset or explicit clear above.
+        assert not self._buffer
         if self._pos == new_pos:
             return self._pos
 
         # Forward-read loop (handles tail of backward seeks and forward jumps)
-        self._pos += len(self._buffer)
-        self._buffer.clear()
         while not self._eof:
             decompressed = self._read_decompressed_chunk()
             if self._pos + len(decompressed) >= new_pos:
@@ -319,17 +323,20 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
     """
 
     def __init__(self, path: str | BinaryIO) -> None:
-        # Initialise cursor state BEFORE super().__init__() because that call
-        # invokes _create_decompressor(), which may reference these attributes.
-        self._comp_cursor: int = 0  # compressed offset of the member being decoded
-        self._decomp_cursor: int = 0  # decompressed offset of the member being decoded
+        # Pre-declare cursor attributes so pyright knows they exist; they are
+        # set to their correct values by _create_decompressor(SeekPoint(0, 0))
+        # called from super().__init__().
+        self._comp_cursor: int = 0
+        self._decomp_cursor: int = 0
         super().__init__(path)
 
     # ------------------------------------------------------------------
     # DecompressorStream abstract interface
     # ------------------------------------------------------------------
 
-    def _create_decompressor(self, state: Any = None) -> _LzipState:
+    def _create_decompressor(self, point: SeekPoint) -> _LzipState:
+        self._comp_cursor = point.compressed_offset
+        self._decomp_cursor = point.decompressed_offset
         return _LzipState()
 
     def _decompress_chunk(self, chunk: bytes) -> bytes:
@@ -356,22 +363,35 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
             self._comp_cursor += compressed_size
             self._decomp_cursor += decompressed_size
 
-    def _build_index(self, last_known: SeekPoint) -> None:
+    def _build_index(self, last_known: SeekPoint) -> tuple[list[SeekPoint], int | None]:
         """Scan member trailers backwards to build the complete index.
 
+        Starts the scan at the file end and stops at last_known.compressed_offset,
+        covering only the portion not yet indexed by forward decompression.
+
         On failure (e.g. trailing data after the last member, which is valid
-        per the lzip spec §7), logs a warning and leaves the partial index
-        intact so the base class falls back to sequential decompression.
+        per the lzip spec §7), logs a warning and returns empty results so the
+        base class falls back to sequential decompression.
 
         The inner stream's position after this call is unspecified.
         """
         file_size = self._inner.seek(0, io.SEEK_END)
         try:
-            members = _read_index_backwards(cast("BinaryIO", self._inner), file_size)
-            self.add_seek_points(
-                [SeekPoint(m.decompressed_start, m.compressed_start) for m in members]
+            members = _read_index_backwards(
+                cast("BinaryIO", self._inner),
+                file_size,
+                stop_at=last_known.compressed_offset,
+                start_decompressed_offset=last_known.decompressed_offset,
             )
-            self._size = sum(m.decompressed_size for m in members)
+            points = [
+                SeekPoint(m.decompressed_start, m.compressed_start) for m in members
+            ]
+            total_size = (
+                members[-1].decompressed_start + members[-1].decompressed_size
+                if members
+                else None
+            )
+            return points, total_size
         except ArchiveCorruptedError as e:
             logger.warning(
                 "Lzip backwards index scan failed (the file may have trailing "
@@ -379,15 +399,11 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
                 "falling back to sequential decompression. Reason: %s",
                 e,
             )
-
-    def _reset_to_seek_point(self, point: SeekPoint) -> None:
-        self._comp_cursor = point.compressed_offset
-        self._decomp_cursor = point.decompressed_offset
-        super()._reset_to_seek_point(point)
+            return [], None
 
 
 class ZlibDecompressorStream(DecompressorStream):
-    def _create_decompressor(self, state: Any = None) -> "zlib._Decompress":
+    def _create_decompressor(self, point: SeekPoint) -> "zlib._Decompress":
         return zlib.decompressobj()
 
     def _decompress_chunk(self, chunk: bytes) -> bytes:
@@ -403,7 +419,7 @@ class ZlibDecompressorStream(DecompressorStream):
 class BrotliDecompressorStream(DecompressorStream):
     """Wrap a file-like object and decompress it using ``brotli``."""
 
-    def _create_decompressor(self, state: Any = None) -> "brotli.Decompressor":
+    def _create_decompressor(self, point: SeekPoint) -> "brotli.Decompressor":
         return brotli.Decompressor()
 
     def _decompress_chunk(self, chunk: bytes) -> bytes:
