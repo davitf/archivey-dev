@@ -70,9 +70,11 @@ def write_files_to_dir(dir: str | os.PathLike, files: list[FileInfo]):
     # List the files to help debug failures
     try:
         subprocess.run(["ls", "-alF", "-R", "--time-style=full-iso", dir], check=True)
-    except subprocess.CalledProcessError:
-        # Fallback to a simpler command if the full one fails
-        subprocess.run(["ls", "-alF", "-R", dir])
+    except (subprocess.CalledProcessError, OSError):
+        try:
+            subprocess.run(["ls", "-alF", "-R", dir])
+        except OSError:
+            pass  # ls not available on this platform
 
 
 def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConfig]):

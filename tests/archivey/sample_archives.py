@@ -248,6 +248,7 @@ ZIP_ZIPFILE_STORE = ArchiveCreationInfo(
         duplicate_files=True,
         mtime_with_tz=False,
         link_targets_in_header=False,
+        replace_backslash_with_slash=True,
     ),
     generation_method_options={"compression_method": "store"},
 )
@@ -262,6 +263,7 @@ ZIP_ZIPFILE_DEFLATE = ArchiveCreationInfo(
         duplicate_files=True,
         mtime_with_tz=False,
         link_targets_in_header=False,
+        replace_backslash_with_slash=True,
     ),
     generation_method_options={"compression_method": "deflate"},
 )
@@ -278,6 +280,7 @@ ZIP_INFOZIP = ArchiveCreationInfo(
         # times in UTC.
         mtime_with_tz=True,
         link_targets_in_header=False,
+        replace_backslash_with_slash=True,
     ),
 )
 
