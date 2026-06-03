@@ -264,6 +264,19 @@ def test_seek_end_negative_offset_into_earlier_member():
         assert f.read() == b"AABBBB"
 
 
+def test_seek_past_eof_then_read_returns_empty():
+    """Seeking past EOF and then reading must return b"" without asserting."""
+    parts = [b"hello", b"world"]
+    data = make_multi_member(parts)
+    with open_lzip(data) as f:
+        size = f.seek(0, io.SEEK_END)
+        # Seek one byte past EOF
+        f.seek(1, io.SEEK_END)
+        assert f.read() == b""
+        # Size must not have been overwritten by the past-EOF pos
+        assert f.seek(0, io.SEEK_END) == size
+
+
 def test_forward_seek_triggers_index_build():
     """Seeking forward past the known index frontier should trigger a backwards scan."""
     parts = [b"part0" * 5, b"part1" * 5, b"part2" * 5]

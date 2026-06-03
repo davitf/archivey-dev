@@ -219,11 +219,12 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             self._buffer.extend(self._read_decompressed_chunk())
 
         data = bytes(self._buffer)
-        self._pos += len(data)
-        if self._size is not None:
-            assert self._size == self._pos
-        self._size = self._pos
         self._buffer.clear()
+        # _pos may be past _size when the caller seeked beyond EOF; in that case
+        # the buffer is already empty and we must not overwrite _size with _pos.
+        if self._size is None or self._pos <= self._size:
+            self._pos += len(data)
+            self._size = self._pos
         return data
 
     def read(self, n: int = -1) -> bytes:
