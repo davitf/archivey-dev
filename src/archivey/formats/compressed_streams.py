@@ -1,4 +1,3 @@
-import abc
 import bz2
 import gzip
 import io
@@ -9,9 +8,7 @@ from typing import (
     TYPE_CHECKING,
     BinaryIO,
     Callable,
-    Generic,
     Optional,
-    TypeVar,
     cast,
 )
 
@@ -31,8 +28,6 @@ if TYPE_CHECKING:
     import brotli
     import indexed_bzip2
     import lz4.frame
-    import lzip
-    import lzip_extension
     import pyzstd
     import rapidgzip
     import uncompresspy
@@ -80,13 +75,6 @@ else:
     except ImportError:
         brotli = None
 
-    try:
-        import lzip
-        import lzip_extension
-    except ImportError:
-        lzip = None
-        lzip_extension = None
-
 
 import logging
 
@@ -96,6 +84,11 @@ from archivey.exceptions import (
     ArchiveError,
     ArchiveStreamNotSeekableError,
     PackageNotInstalledError,
+)
+from archivey.formats.decompressor_stream import (
+    BrotliDecompressorStream,
+    LzipDecompressorStream,
+    ZlibDecompressorStream,
 )
 from archivey.internal.io_helpers import ensure_binaryio
 
@@ -378,25 +371,12 @@ def open_lz4_stream(path: str | BinaryIO) -> BinaryIO:
 
 
 def _translate_lzip_exception(e: Exception) -> Optional[ArchiveError]:
-    if isinstance(e, RuntimeError) and "Unexpected EOF" in str(e):
-        return ArchiveEOFError(f"Lzip file is truncated: {repr(e)}")
-    if isinstance(e, RuntimeError) and "Lzip error" in str(e):
-        return ArchiveCorruptedError(f"Error reading Lzip archive: {repr(e)}")
-    if lzip is not None and isinstance(e, lzip.RemainingBytesError):
-        return ArchiveCorruptedError(f"Error reading Lzip archive: {repr(e)}")
+    if isinstance(e, lzma.LZMAError):
+        return ArchiveCorruptedError(f"Error reading lzip archive: {e}")
     return None
 
 
 def open_lzip_stream(path: str | BinaryIO) -> BinaryIO:
-    if lzip is None:
-        raise PackageNotInstalledError(
-            "lzip package is not installed, required for Lzip archives",
-        ) from None
-    if lzip_extension is None:
-        raise PackageNotInstalledError(
-            "lzip_extension module not found, should be provided by the lzip package",
-        ) from None
-
     return LzipDecompressorStream(path)
 
 
@@ -412,217 +392,6 @@ def _translate_zlib_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, EOFError):
         return ArchiveEOFError(f"Zlib file is truncated: {repr(e)}")
     return None
-
-
-DecompressorT = TypeVar("DecompressorT")
-
-
-class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
-    """
-    A base class for decompressor streams that follow the `_compression.DecompressReader` model.
-    It supports seeking by re-reading the stream from the beginning.
-    """
-
-    def __init__(self, path: str | BinaryIO) -> None:
-        super().__init__()
-        if isinstance(path, (str, bytes, os.PathLike)):
-            self._inner = open(path, "rb")
-            self._should_close = True
-        else:
-            self._inner = ensure_bufferedio(path)
-            self._should_close = False
-        self._decompressor: DecompressorT = self._create_decompressor()
-        self._buffer = bytearray()
-        self._eof = False
-        self._pos = 0
-        self._size: int | None = None
-
-    @abc.abstractmethod
-    def _create_decompressor(self) -> DecompressorT: ...
-
-    @abc.abstractmethod
-    def _decompress_chunk(self, chunk: bytes) -> bytes: ...
-
-    @abc.abstractmethod
-    def _flush_decompressor(self) -> bytes: ...
-
-    @abc.abstractmethod
-    def _is_decompressor_finished(self) -> bool: ...
-
-    def readable(self) -> bool:
-        return True
-
-    def writable(self) -> bool:  # pragma: no cover - not used
-        return False
-
-    def seekable(self) -> bool:
-        return self._inner.seekable()
-
-    def _rewind(self) -> None:
-        self._inner.seek(0)
-        self._decompressor = self._create_decompressor()
-        self._buffer.clear()
-        self._eof = False
-        self._pos = 0
-        self._size = None
-
-    def _read_decompressed_chunk(self) -> bytes:
-        chunk = self._inner.read(65536)
-        if not chunk:
-            self._eof = True
-            leftover = self._flush_decompressor()
-            logger.info("EOF reached, leftover: %d", len(leftover))
-            if not self._is_decompressor_finished():
-                raise ArchiveEOFError("File is truncated")
-            self._size = self._pos + len(self._buffer) + len(leftover)
-            logger.info("EOF reached, size: %d", self._size)
-            return leftover
-        return self._decompress_chunk(chunk)
-
-    def _seek_to_pos(self, pos: int) -> None:
-        if pos == self._pos:
-            return
-
-        if pos < self._pos:
-            self._rewind()
-            assert self._pos == 0
-
-        if self._pos + len(self._buffer) >= pos:
-            del self._buffer[: pos - self._pos]
-            self._pos = pos
-            return
-
-        self._pos += len(self._buffer)
-        self._buffer.clear()
-
-        while not self._eof:
-            decompressed = self._read_decompressed_chunk()
-            if self._pos + len(decompressed) >= pos:
-                self._buffer.extend(decompressed[pos - self._pos :])
-                self._pos = pos
-                return
-            self._pos += len(decompressed)
-
-        # The position is past EOF
-        self._pos = pos
-
-    def readall(self) -> bytes:
-        while not self._eof:
-            self._buffer.extend(self._read_decompressed_chunk())
-
-        data = bytes(self._buffer)
-        self._pos += len(data)
-        if self._size is not None:
-            assert self._size == self._pos
-        self._size = self._pos
-        self._buffer.clear()
-        return data
-
-    def read(self, n: int = -1) -> bytes:
-        if n == 0:
-            return b""
-        if n is None or n < 0:
-            return self.readall()
-
-        if len(self._buffer) < n and not self._eof:
-            # Read only one more block
-            self._buffer.extend(self._read_decompressed_chunk())
-
-        data = bytes(self._buffer[:n])
-        del self._buffer[:n]
-        self._pos += len(data)
-        return data
-
-    def readinto(self, b: bytearray | memoryview) -> int:
-        data = self.read(len(b))
-        b[: len(data)] = data
-        return len(data)
-
-    def close(self) -> None:
-        if self._should_close:
-            self._inner.close()
-        super().close()
-
-    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
-        if whence == io.SEEK_SET:
-            new_pos = offset
-        elif whence == io.SEEK_CUR:
-            new_pos = self._pos + offset
-        elif whence == io.SEEK_END:
-            if self._size is None:
-                # Read until EOF to get the size.
-                self.readall()
-                assert self._size is not None
-
-            new_pos = self._size + offset
-        else:
-            raise ValueError(f"Invalid whence: {whence}")
-
-        if new_pos < 0:
-            raise ValueError(f"Invalid offset: {offset}")
-
-        self._seek_to_pos(new_pos)
-        return self._pos
-
-    def tell(self) -> int:
-        return self._pos
-
-
-class LzipDecompressorStream(DecompressorStream["lzip_extension.Decoder"]):
-    def __init__(self, path: str | BinaryIO) -> None:
-        super().__init__(path)
-        self._finished = False
-
-    def _create_decompressor(self) -> "lzip_extension.Decoder":
-        self._finished = False
-        return lzip_extension.Decoder(1)
-
-    def _decompress_chunk(self, chunk: bytes) -> bytes:
-        return self._decompressor.decompress(chunk)
-
-    def _flush_decompressor(self) -> bytes:
-        decoded, remaining = self._decompressor.finish()
-        self._finished = True
-        # This shouldn't happen, as we set a minimum word size of 1.
-        if len(remaining) > 0:
-            raise lzip.RemainingBytesError(lzip.default_word_size, remaining)
-        return decoded
-
-    def _is_decompressor_finished(self) -> bool:
-        return self._finished
-
-
-class ZlibDecompressorStream(DecompressorStream):
-    def _create_decompressor(self) -> "zlib._Decompress":
-        return zlib.decompressobj()
-
-    def _decompress_chunk(self, chunk: bytes) -> bytes:
-        return self._decompressor.decompress(chunk)
-
-    def _flush_decompressor(self) -> bytes:
-        return self._decompressor.flush()
-
-    def _is_decompressor_finished(self) -> bool:
-        return self._decompressor.eof
-
-
-class BrotliDecompressorStream(DecompressorStream):
-    """Wrap a file-like object and decompress it using ``brotli``."""
-
-    def _create_decompressor(self) -> "brotli.Decompressor":
-        return brotli.Decompressor()
-
-    def _decompress_chunk(self, chunk: bytes) -> bytes:
-        return self._decompressor.process(chunk)
-
-    def _flush_decompressor(self) -> bytes:
-        # brotli's decompressor doesn't have a flush method.
-        # The remaining data is processed when `process` is called with an empty chunk,
-        # but our `_read_decompressed_chunk` in the base class handles the EOF case.
-        return b""
-
-    def _is_decompressor_finished(self) -> bool:
-        return self._decompressor.is_finished()
 
 
 def _translate_brotli_exception(e: Exception) -> Optional[ArchiveError]:
