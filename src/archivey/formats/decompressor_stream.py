@@ -71,7 +71,9 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             self._should_close = False
         self._seek_points: list[SeekPoint] = [SeekPoint(0, 0)]
         self._index_built: bool = False
-        self._decompressor: DecompressorT = self._create_decompressor(self._seek_points[0])
+        self._decompressor: DecompressorT = self._create_decompressor(
+            self._seek_points[0]
+        )
         self._buffer = bytearray()
         self._eof = False
         self._pos = 0
@@ -228,7 +230,6 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
         if self._inner.tell() != inner_pos:
             self._inner.seek(inner_pos)
 
-
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
         if not self._inner.seekable():
             raise io.UnsupportedOperation("seek")
@@ -247,7 +248,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
         # buffer end and after the last known seek point.
         if whence == io.SEEK_END or (
             new_pos > self._pos + len(self._buffer)
-            new_pos > self._seek_points[-1].decompressed_offset
+            and new_pos > self._seek_points[-1].decompressed_offset
         ):
             self._ensure_index_built()
 
