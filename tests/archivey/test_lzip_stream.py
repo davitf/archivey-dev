@@ -313,9 +313,11 @@ def test_member_index_built_progressively():
     with LzipDecompressorStream(
         cast("BinaryIO", _LimitedReadStream(data, chunk_size))
     ) as f:
-        # No members indexed yet
-        assert len(f._seek_points) == 0  # type: ignore[attr-defined]
+        # Origin point SeekPoint(0, 0) is always present
+        assert len(f._seek_points) == 1  # type: ignore[attr-defined]
 
+        # After member 0 completes, _update_index adds SeekPoint(0, 0) which is
+        # a duplicate of the initial origin point, so the count stays at 1.
         f.read(len(parts[0]))
         assert len(f._seek_points) == 1  # type: ignore[attr-defined]
 

@@ -71,7 +71,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
         else:
             self._inner = ensure_bufferedio(path)
             self._should_close = False
-        self._seek_points: list[SeekPoint] = []
+        self._seek_points: list[SeekPoint] = [SeekPoint(0, 0)]
         self._index_built: bool = False
         self._decompressor: DecompressorT = self._create_decompressor()
         self._buffer = bytearray()
@@ -146,11 +146,6 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
         forward indexing from there or to stop a backwards scan at that point.
         """
 
-    def _rewind(self) -> None:
-        self._reset_to_seek_point(SeekPoint(0, 0))
-        self._size = None
-        # _seek_points and _index_built are preserved across rewinds
-
     def _read_decompressed_chunk(self) -> bytes:
         chunk = self._inner.read(65536)
         if not chunk:
@@ -178,10 +173,8 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
 
         if pos < self._pos:
             best = self._find_best_seek_point(pos)
-            if best is not None:
-                self._reset_to_seek_point(best)
-            else:
-                self._rewind()
+            assert best is not None  # SeekPoint(0, 0) is always present
+            self._reset_to_seek_point(best)
 
         # pos already in the buffer?
         if self._pos + len(self._buffer) >= pos:
@@ -372,12 +365,6 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
         self._comp_cursor = point.compressed_offset
         self._decomp_cursor = point.decompressed_offset
         super()._reset_to_seek_point(point)
-
-    def _rewind(self) -> None:
-        saved_size = self._size
-        super()._rewind()  # _reset_to_seek_point(SeekPoint(0, 0)) + _size = None
-        if self._index_built:
-            self._size = saved_size
 
 
 class ZlibDecompressorStream(DecompressorStream):
