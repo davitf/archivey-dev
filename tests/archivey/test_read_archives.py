@@ -13,7 +13,7 @@ from archivey.core import open_archive
 from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
 from archivey.filters import create_filter
 from archivey.internal.dependency_checker import get_dependency_versions
-from archivey.internal.utils import get_current_user_and_group
+from archivey.internal.utils import get_current_user_and_group, platform_supports_setting_symlink_mtime
 from archivey.types import (
     ArchiveMember,
     ContainerFormat,
@@ -158,9 +158,16 @@ def check_member_metadata(
             f"Timestamp mismatch for {member.filename}: {member.mtime} != {sample_file.mtime}"
         )
     else:  # Expect exact match
-        assert member.mtime == sample_file.mtime, (
-            f"Timestamp mismatch for {member.filename}: {member.mtime} != {sample_file.mtime}"
-        )
+        if (
+            member.type == MemberType.SYMLINK
+            and sample_archive.creation_info.format.container == ContainerFormat.FOLDER
+            and not platform_supports_setting_symlink_mtime()
+        ):
+            pass  # symlink mtime cannot be set on this platform
+        else:
+            assert member.mtime == sample_file.mtime, (
+                f"Timestamp mismatch for {member.filename}: {member.mtime} != {sample_file.mtime}"
+            )
 
     if features.mtime:
         assert member.mtime_with_tz is not None
