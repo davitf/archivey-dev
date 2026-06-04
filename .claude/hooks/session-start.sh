@@ -8,8 +8,8 @@ fi
 # Install Python dependencies (main + optional extras + dev group)
 uv sync --group dev --extra optional
 
-# Install pyright for type checking (used in linting)
-npm install -g pyright
+# Install pyright for type checking (used in linting) and OpenSpec CLI
+npm install -g pyright @fission-ai/openspec@latest
 
 # Install unrar for RAR archive support
 if ! command -v unrar >/dev/null 2>&1; then
