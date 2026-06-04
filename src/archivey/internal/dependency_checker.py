@@ -24,6 +24,7 @@ class DependencyVersions:
     brotli_version: Optional[str] = None
     unrar_version: Optional[str] = None
     pyzstd_version: Optional[str] = None
+    stdlib_zstd_version: Optional[str] = None
 
 
 def get_dependency_versions() -> DependencyVersions:
@@ -57,6 +58,12 @@ def get_dependency_versions() -> DependencyVersions:
             setattr(versions, attr, version(package))
         except PackageNotFoundError:
             pass
+
+    try:
+        import compression.zstd as _stdlib_zstd  # noqa: F401
+        versions.stdlib_zstd_version = f"stdlib ({versions.python_version})"
+    except ImportError:
+        pass
 
     # Check if the unrar command is available
     unrar_path = shutil.which("unrar")

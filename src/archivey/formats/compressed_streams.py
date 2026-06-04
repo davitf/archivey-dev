@@ -48,7 +48,10 @@ else:
     try:
         import pyzstd
     except ImportError:
-        pyzstd = None
+        try:
+            import compression.zstd as pyzstd  # type: ignore[no-redef]
+        except ImportError:
+            pyzstd = None
 
     try:
         import rapidgzip
