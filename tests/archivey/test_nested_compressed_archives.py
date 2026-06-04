@@ -31,8 +31,18 @@ from tests.archivey.test_open_nonseekable import EXPECTED_NON_SEEKABLE_FAILURES
 from tests.archivey.testing_utils import skip_if_package_missing
 
 
+_NESTED_ARCHIVES_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "test_archives", "nested"
+)
+
+
 def compress_stream(src: str, dst: str, fmt: StreamFormat) -> str:
     if fmt == StreamFormat.UNIX_COMPRESS:
+        # Use a pre-built .Z file if one exists for this inner archive.
+        prebuilt = os.path.join(_NESTED_ARCHIVES_DIR, os.path.basename(src) + ".Z")
+        if os.path.exists(prebuilt):
+            shutil.copy(prebuilt, dst)
+            return dst
         if shutil.which("compress") is None:
             pytest.skip("compress command not available on this platform")
         with open(dst, "wb") as f_out:
