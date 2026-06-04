@@ -105,6 +105,7 @@ def test_filter_with_raise_on_error_false(
     }
     expected_missing_filenames = {
         "/absfile.txt",
+        "C:/windows_absfile.txt",
         "../outside.txt",
         "link_outside",
         "hardlink_outside",

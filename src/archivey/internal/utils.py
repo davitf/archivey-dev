@@ -155,6 +155,8 @@ def get_ownership_from_stat(stat_result: os.stat_result) -> OwnershipInfo:
     Platform-specific modules are imported lazily to avoid errors on unsupported
     systems.
     """
+    if not hasattr(os, "getuid"):
+        return OwnershipInfo(uid=None, gid=None, uname=None, gname=None)
 
     uid = stat_result.st_uid
     gid = stat_result.st_gid
@@ -173,6 +175,8 @@ def get_ownership_from_stat(stat_result: os.stat_result) -> OwnershipInfo:
 
 def get_current_user_and_group() -> OwnershipInfo:
     """Return the current user and group."""
+    if not hasattr(os, "getuid"):
+        return OwnershipInfo(uid=None, gid=None, uname=None, gname=None)
     return OwnershipInfo(
         uid=os.getuid(),
         gid=os.getgid(),

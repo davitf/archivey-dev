@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import ntpath
 import os
 import posixpath
 from typing import Any
@@ -33,9 +34,9 @@ logger = logging.getLogger(__name__)
 def _check_target_inside_archive_root(
     target_path: str, dest_path: str | None, target_type_str: str
 ) -> None:
-    if os.path.isabs(target_path):
+    if os.path.isabs(target_path) or ntpath.isabs(target_path):
         raise ArchiveFilterError(
-            f"Absolute {target_type_str} not allowed: {target_path}"
+            f"Absolute path not allowed: {target_path}"
         )
 
     if target_path.startswith("..") or "/../" in target_path:
@@ -109,13 +110,13 @@ def _get_filtered_member(
 
         new_attrs: dict[str, Any] = {}
         if for_data:
-            if member.uid:
+            if member.uid is not None:
                 new_attrs["uid"] = None
-            if member.gid:
+            if member.gid is not None:
                 new_attrs["gid"] = None
-            if member.uname:
+            if member.uname is not None:
                 new_attrs["uname"] = None
-            if member.gname:
+            if member.gname is not None:
                 new_attrs["gname"] = None
 
         if sanitize_names:
