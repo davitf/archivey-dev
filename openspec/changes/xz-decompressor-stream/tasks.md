@@ -15,17 +15,17 @@
 - [ ] 2.4 Implement `_XzState.is_finished() -> bool`
 - [ ] 2.5 Handle stream padding in `NEED_HEADER`: when accumulated bytes start with `\x00`, consume 4-byte-aligned null runs before looking for the `\xfd7zXZ\x00` magic
 - [ ] 2.6 Handle trailing non-XZ bytes after valid streams: detect in `NEED_HEADER`, set `_finished = True`, clear buffer (same graceful-stop as `_LzipState`)
+- [ ] 2.7 Add `_XzBlockChain` class to `xz_stream.py`: takes a list of `_XzBlockBounds` (from the current block onward) and the inner stream; exposes `feed(chunk)`, `flush()`, and `is_finished()` with the same signature as `_XzState`; internally manages a per-block `LZMADecompressor` and synthetic stream wrapper; limits each `feed` call to at most `round_up(unpadded_size) - bytes_fed_so_far` bytes for the current block, injects synthetic header (pre-fed at block start) and footer (injected when block bytes are exhausted), then advances to the next block; `is_finished()` returns True only when the last block in the list is exhausted
 
 ## 3. XzDecompressorStream — DecompressorStream subclass
 
 - [ ] 3.1 Add `XzDecompressorStream` class in `decompressor_stream.py`; pre-declare `_comp_cursor: int` and `_decomp_cursor: int` in `__init__` (same pattern as `LzipDecompressorStream`)
-- [ ] 3.2 Implement `_create_decompressor(point: SeekPoint) -> _XzState` — if `point.state` is `None`, return a fresh `_XzState` (stream-level); if `point.state` is a `(check, unpadded_size, uncompressed_size)` tuple, set up a block-level decompressor (see task 3.7)
-- [ ] 3.3 Implement `_decompress_chunk(chunk: bytes) -> bytes` — call `self._decompressor.feed(chunk)`, call `_update_index(new_streams)`
-- [ ] 3.4 Implement `_flush_decompressor() -> bytes` — call `self._decompressor.flush()`, call `_update_index(new_streams)`
+- [ ] 3.2 Implement `_create_decompressor(point: SeekPoint) -> _XzState | _XzBlockChain` — if `point.state` is `None`, return a fresh `_XzState` (stream-level fallback, only used for `SeekPoint(0, 0)`); if `point.state` is a `(check, unpadded_size, uncompressed_size)` tuple, collect all subsequent block-level seek points from `_seek_points` and return `_XzBlockChain(blocks_from_here, self._inner)`
+- [ ] 3.3 Implement `_decompress_chunk(chunk: bytes) -> bytes` — call `self._decompressor.feed(chunk)`, call `_update_index(new_streams)` if decompressor is `_XzState`
+- [ ] 3.4 Implement `_flush_decompressor() -> bytes` — call `self._decompressor.flush()`, call `_update_index(new_streams)` if decompressor is `_XzState`
 - [ ] 3.5 Implement `_is_decompressor_finished() -> bool`
-- [ ] 3.6 Implement `_update_index(new_streams: list[tuple[int, int]])` — mirrors `LzipDecompressorStream._update_index`; adds stream-boundary `SeekPoint(decomp_cursor, comp_cursor)` for each completed stream
-- [ ] 3.7 Implement block-level decompressor setup in `_create_decompressor` for block seek points: create a `LZMADecompressor(format=FORMAT_XZ)`, pre-feed the 12-byte synthetic stream header (`create_xz_header(check)`), position `_inner` at `compressed_start`; subsequent `_decompress_chunk` calls feed up to `round_up(unpadded_size)` block bytes then feed the synthetic `index+footer` to trigger decompressor EOF
-- [ ] 3.8 Implement `_build_index(last_known: SeekPoint) -> tuple[list[SeekPoint], int | None]` — call `_read_xz_index_backwards`; on `ArchiveCorruptedError`, log warning and return `([], None)` (fallback to sequential); convert `_XzBlockBounds` to `SeekPoint` objects with block metadata in `.state`; return total decompressed size
+- [ ] 3.6 Implement `_update_index(new_streams: list[tuple[int, int]])`: for each completed stream, (a) add a stream-boundary `SeekPoint(decomp_cursor, comp_cursor, state=None)` (skipped for stream 0 since `SeekPoint(0, 0)` already covers it); (b) if inner is seekable and `_index_built` is False, save `_inner.tell()`, call `_read_xz_index_backwards` for just this stream's compressed range, add resulting block-level `SeekPoint`s, restore `_inner.tell()`; on `ArchiveCorruptedError`, log and skip; advance `_comp_cursor` and `_decomp_cursor`
+- [ ] 3.7 Implement `_build_index(last_known: SeekPoint) -> tuple[list[SeekPoint], int | None]` — call `_read_xz_index_backwards(inner, file_size, stop_at=last_known.compressed_offset, start_decompressed_offset=last_known.decompressed_offset)`; on `ArchiveCorruptedError`, log warning and return `([], None)`; convert `_XzBlockBounds` to `SeekPoint` objects with block metadata in `.state`; return total decompressed size
 
 ## 4. Integration — compressed_streams.py and config
 
@@ -36,11 +36,11 @@
 - [ ] 4.5 Remove `use_python_xz` field from `ArchiveyConfig` in `config.py` and from `ConfigOverrides` TypedDict
 - [ ] 4.6 Remove python-xz from optional dependencies in `pyproject.toml`; update `dependency_checker.py` if it references `xz`
 
-## 5. Fix read_xz_metadata in single_file_reader.py
+## 5. Read file_size from stream in single_file_reader.py (XZ and lzip)
 
-- [ ] 5.1 Rewrite `read_xz_metadata` to call `_read_xz_index_backwards(f, file_size)` and set `member.file_size = sum(b.uncompressed_size for b in blocks)`
-- [ ] 5.2 Remove the old `_read_xz_multibyte_integer` helper from `single_file_reader.py` (now in `xz_stream.py`)
-- [ ] 5.3 Remove `XZ_MAGIC_FOOTER` and `XZ_STREAM_HEADER_MAGIC` constants from `single_file_reader.py` (now in `xz_stream.py`)
+- [ ] 5.1 In `SingleFileReader.__init__`, after opening `self.fileobj`, if the stream is seekable: call `self.fileobj.seek(0, io.SEEK_END)` (triggers backwards index scan) then `self.fileobj.seek(0)`; set `member.file_size = self.fileobj._size`; apply for both `ArchiveFormat.XZ` and `ArchiveFormat.LZIP`
+- [ ] 5.2 Remove `read_xz_metadata` function from `single_file_reader.py` entirely
+- [ ] 5.3 Remove the now-unused `_read_xz_multibyte_integer` helper, `XZ_MAGIC_FOOTER`, and `XZ_STREAM_HEADER_MAGIC` constants from `single_file_reader.py`
 
 ## 6. Tests
 
@@ -54,7 +54,7 @@
 - [ ] 6.8 Test trailing non-XZ data: silently ignored; size and content correct
 - [ ] 6.9 Test `_read_xz_index_backwards` directly: block offsets, multi-stream, corrupt footer, corrupt index CRC
 - [ ] 6.10 Test corruption detection: bad magic, truncated mid-stream, bad index MBI
-- [ ] 6.11 Test `read_xz_metadata` multi-stream fix: two-stream file returns sum of both sizes
+- [ ] 6.11 Test `SingleFileReader` size for multi-stream XZ file: `member.file_size` equals sum of both streams' sizes; also test lzip `file_size` is now populated
 - [ ] 6.12 Update `test_missing_packages.py`: confirm python-xz absence no longer raises `PackageNotInstalledError` for XZ
 - [ ] 6.13 Update any existing tests that set `use_python_xz=True` (search `test_open_compressed_stream.py` and others)
 

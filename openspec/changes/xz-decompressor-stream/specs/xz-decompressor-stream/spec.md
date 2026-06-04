@@ -86,16 +86,20 @@ After the backwards index is built, `XzDecompressorStream` SHALL seek to any dec
 
 ---
 
-### Requirement: read_xz_metadata reports correct size for multi-stream files
-`read_xz_metadata` in `single_file_reader.py` SHALL report the total decompressed size as the sum of all blocks across all XZ streams, not just the last stream.
+### Requirement: SingleFileReader reports correct file_size for XZ and lzip
+`SingleFileReader` SHALL populate `member.file_size` for both XZ and lzip files by triggering the stream's backwards index scan, not via a separate metadata read. For multi-stream XZ files this fixes the previous bug where only the last stream's size was counted.
 
-#### Scenario: Single-stream file size is correct
-- **WHEN** `read_xz_metadata` is called on a single-stream XZ file
+#### Scenario: Single-stream XZ file_size is correct
+- **WHEN** a single-stream XZ file is opened via `SingleFileReader`
 - **THEN** `member.file_size` equals the decompressed size of that stream
 
-#### Scenario: Multi-stream file size is correct
-- **WHEN** `read_xz_metadata` is called on a file with two XZ streams of sizes A and B
+#### Scenario: Multi-stream XZ file_size is correct
+- **WHEN** an XZ file with two streams of decompressed sizes A and B is opened via `SingleFileReader`
 - **THEN** `member.file_size` equals `A + B`
+
+#### Scenario: lzip file_size is now populated
+- **WHEN** a lzip file is opened via `SingleFileReader`
+- **THEN** `member.file_size` is set to the total decompressed size (previously it was `None`)
 
 ---
 
