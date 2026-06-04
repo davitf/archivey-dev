@@ -33,7 +33,8 @@ from tests.archivey.testing_utils import skip_if_package_missing
 
 def compress_stream(src: str, dst: str, fmt: StreamFormat) -> str:
     if fmt == StreamFormat.UNIX_COMPRESS:
-        # Compress via subprocess
+        if shutil.which("compress") is None:
+            pytest.skip("compress command not available on this platform")
         with open(dst, "wb") as f_out:
             process = subprocess.Popen(
                 ["compress", "-c", src],
@@ -70,6 +71,8 @@ def create_archive_with_member(
         create_7z_archive_with_py7zr(dst, contents, ArchiveFormat.SEVENZIP)
     elif outer_format.container == ContainerFormat.TAR:
         if outer_format.stream == StreamFormat.UNIX_COMPRESS:
+            if shutil.which("compress") is None:
+                pytest.skip("compress command not available on this platform")
             create_tar_archive_with_command_line(dst, contents, outer_format)
         else:
             create_tar_archive_with_tarfile(dst, contents, outer_format)

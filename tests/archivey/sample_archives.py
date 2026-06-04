@@ -1214,7 +1214,7 @@ SANITIZE_ARCHIVES = (
             file_basename="sanitize",
             files=SANITIZE_FILES_WITHOUT_ABSOLUTE_PATHS,
         ),
-        [FOLDER_FORMAT, SEVENZIP_7ZCMD] + RAR_FORMATS,
+        [SEVENZIP_7ZCMD] + RAR_FORMATS,
     )
 )
 

@@ -1,6 +1,7 @@
 import collections
 import logging
 import os
+import sys
 from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Optional
@@ -91,8 +92,12 @@ def check_member_metadata(
     else:
         assert member.comment is None
 
-    # Check permissions
-    if sample_file.permissions is not None:
+    # Check permissions — skip for FOLDER archives on Windows since the OS doesn't
+    # faithfully round-trip Unix permission bits via stat.
+    if sample_file.permissions is not None and not (
+        sys.platform == "win32"
+        and sample_archive.creation_info.format.container == ContainerFormat.FOLDER
+    ):
         assert member.mode is not None, (
             f"Permissions not set for {member.filename} in {sample_archive.filename} "
             f"(expected {oct(sample_file.permissions)})"
