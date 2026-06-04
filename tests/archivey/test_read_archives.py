@@ -13,7 +13,10 @@ from archivey.core import open_archive
 from archivey.exceptions import ArchiveError, ArchiveMemberCannotBeOpenedError
 from archivey.filters import create_filter
 from archivey.internal.dependency_checker import get_dependency_versions
-from archivey.internal.utils import get_current_user_and_group, platform_supports_setting_symlink_mtime
+from archivey.internal.utils import (
+    get_current_user_and_group,
+    platform_supports_setting_symlink_mtime,
+)
 from archivey.types import (
     ArchiveMember,
     ContainerFormat,

@@ -60,7 +60,8 @@ def get_dependency_versions() -> DependencyVersions:
             pass
 
     try:
-        import compression.zstd as _stdlib_zstd  # noqa: F401
+        import compression.zstd  # type: ignore[import-not-found]  # noqa: F401
+
         versions.stdlib_zstd_version = f"stdlib ({versions.python_version})"
     except ImportError:
         pass

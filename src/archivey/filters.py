@@ -35,9 +35,7 @@ def _check_target_inside_archive_root(
     target_path: str, dest_path: str | None, target_type_str: str
 ) -> None:
     if os.path.isabs(target_path) or ntpath.isabs(target_path):
-        raise ArchiveFilterError(
-            f"Absolute path not allowed: {target_path}"
-        )
+        raise ArchiveFilterError(f"Absolute path not allowed: {target_path}")
 
     if target_path.startswith("..") or "/../" in target_path:
         raise ArchiveFilterError(
