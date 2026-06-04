@@ -92,6 +92,7 @@ from archivey.exceptions import (
 from archivey.formats.decompressor_stream import (
     BrotliDecompressorStream,
     LzipDecompressorStream,
+    XzDecompressorStream,
     ZlibDecompressorStream,
 )
 from archivey.internal.io_helpers import ensure_binaryio
@@ -259,6 +260,18 @@ def open_python_xz_stream(path: str | BinaryIO) -> BinaryIO:
         ) from None  # pragma: no cover -- lz4 is installed for main tests
 
     return ensure_binaryio(xz.open(path))
+
+
+def _translate_xz_stream_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, lzma.LZMAError):
+        return ArchiveCorruptedError(f"Error reading XZ archive: {repr(e)}")
+    if isinstance(e, EOFError):
+        return ArchiveEOFError(f"XZ file is truncated: {repr(e)}")
+    return None
+
+
+def open_xz_stream(path: str | BinaryIO) -> BinaryIO:
+    return XzDecompressorStream(path)
 
 
 class ZstandardReopenOnBackwardsSeekIO(io.RawIOBase, BinaryIO):
@@ -487,7 +500,7 @@ def get_stream_open_fn(
     if format == StreamFormat.XZ:
         if config.use_python_xz:
             return open_python_xz_stream, _translate_python_xz_exception
-        return open_lzma_stream, _translate_lzma_exception
+        return open_xz_stream, _translate_xz_stream_exception
 
     if format == StreamFormat.LZ4:
         return open_lz4_stream, _translate_lz4_exception

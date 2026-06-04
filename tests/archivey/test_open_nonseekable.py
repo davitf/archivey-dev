@@ -31,9 +31,11 @@ SKIPPABLE_FORMATS: set[ArchiveFormat] = {
 EXPECTED_NON_SEEKABLE_FAILURES: set[tuple[ArchiveFormat, bool]] = {
     (ArchiveFormat.GZIP, True),
     (ArchiveFormat.BZIP2, True),
+    # XZ with use_python_xz=True still fails on non-seekable streams (python-xz requires seeking)
     (ArchiveFormat.XZ, True),
     (ArchiveFormat.TAR_GZ, True),
     (ArchiveFormat.TAR_BZ2, True),
+    # TAR_XZ with use_python_xz=True still fails on non-seekable streams
     (ArchiveFormat.TAR_XZ, True),
     (ArchiveFormat.TAR_Z, False),
     (ArchiveFormat.TAR_Z, True),

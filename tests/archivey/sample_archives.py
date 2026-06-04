@@ -518,7 +518,7 @@ LZIP_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.lz",
     format=ArchiveFormat.LZIP,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
+    features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 ZLIB_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.zz",

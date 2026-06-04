@@ -12,6 +12,7 @@ from archivey.exceptions import (
 )
 from archivey.formats.compressed_streams import get_stream_open_fn
 from archivey.formats.format_detection import EXTENSION_TO_FORMAT
+from archivey.formats.lzip_stream import _read_index_backwards as _lzip_read_index_backwards
 from archivey.internal.base_reader import BaseArchiveReader
 from archivey.internal.io_helpers import (  # Updated import
     is_seekable,
@@ -209,6 +210,22 @@ def read_xz_metadata(path: str | BinaryIO, member: ArchiveMember):
         )
 
 
+def read_lzip_metadata(path: str | BinaryIO, member: ArchiveMember) -> None:
+    """Read lzip member trailers backwards to determine the total uncompressed size."""
+    logger.info("Reading lzip metadata for %s", path)
+    with open_if_file(path) as f:
+        try:
+            file_size = f.seek(0, io.SEEK_END)
+        except io.UnsupportedOperation:
+            return
+        try:
+            members = _lzip_read_index_backwards(f, file_size)
+            if members:
+                member.file_size = members[-1].decompressed_start + members[-1].decompressed_size
+        except (ArchiveCorruptedError, Exception) as e:
+            logger.debug("lzip metadata read failed: %s", e)
+
+
 class SingleFileReader(BaseArchiveReader):
     """Reader for raw compressed files (gz, bz2, xz, zstd, lz4)."""
 
@@ -288,6 +305,8 @@ class SingleFileReader(BaseArchiveReader):
                 read_gzip_metadata(archive_path, self.member, self.use_stored_metadata)
             elif self.format == ArchiveFormat.XZ:
                 read_xz_metadata(archive_path, self.member)
+            elif self.format == ArchiveFormat.LZIP:
+                read_lzip_metadata(archive_path, self.member)
 
         # Open the file to see if it's supported by the library and valid.
         # To avoid opening the file twice, we'll store the reference and return it

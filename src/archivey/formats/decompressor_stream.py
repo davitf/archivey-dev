@@ -20,6 +20,7 @@ from typing_extensions import Buffer
 
 from archivey.exceptions import ArchiveCorruptedError, ArchiveEOFError
 from archivey.formats.lzip_stream import _LzipState, _read_index_backwards
+from archivey.formats.xz_stream import _XzState, _read_xz_index_backwards
 from archivey.internal.io_helpers import ensure_bufferedio
 
 if TYPE_CHECKING:
@@ -443,3 +444,112 @@ class BrotliDecompressorStream(DecompressorStream):
 
     def _is_decompressor_finished(self) -> bool:
         return self._decompressor.is_finished()
+
+
+class XzDecompressorStream(DecompressorStream[_XzState]):
+    """Seekable XZ decompressor backed by Python's stdlib lzma.
+
+    Builds a seek-point table from XZ block headers:
+      - Progressively via _update_index() as blocks are decoded forward.
+      - On-demand via a one-shot backwards stream+index scan (_build_index()).
+
+    Each seek point stores the absolute compressed-file offset of the block
+    header start plus the filter chain, so seeking jumps directly to the block
+    and decompresses with lzma.FORMAT_RAW.
+
+    Supports multi-block XZ files (xz --block-size=...) and multi-stream
+    concatenated XZ files.  Works on non-seekable input streams (seek points
+    won't be available, but sequential reading is unaffected).
+    """
+
+    def __init__(self, path: str | BinaryIO) -> None:
+        self._decomp_cursor: int = 0
+        super().__init__(path)
+
+    # ------------------------------------------------------------------
+    # DecompressorStream abstract interface
+    # ------------------------------------------------------------------
+
+    def _create_decompressor(self, point: SeekPoint) -> _XzState:
+        self._decomp_cursor = point.decompressed_offset
+        if point.state is not None:
+            return _XzState(
+                initial_compressed_offset=point.compressed_offset,
+                seek_state=point.state,
+            )
+        return _XzState(initial_compressed_offset=point.compressed_offset)
+
+    def _decompress_chunk(self, chunk: bytes) -> bytes:
+        data, new_blocks = self._decompressor.feed(chunk)
+        self._update_index(new_blocks)
+        return data
+
+    def _flush_decompressor(self) -> bytes:
+        data, new_blocks = self._decompressor.flush()
+        self._update_index(new_blocks)
+        return data
+
+    def _is_decompressor_finished(self) -> bool:
+        return self._decompressor.is_finished()
+
+    # ------------------------------------------------------------------
+    # Seek-point machinery
+    # ------------------------------------------------------------------
+
+    def _update_index(self, new_blocks: list[dict]) -> None:
+        """Extend the seek-point table with newly completed blocks."""
+        for b in new_blocks:
+            self.add_seek_points(
+                [
+                    SeekPoint(
+                        decompressed_offset=self._decomp_cursor,
+                        compressed_offset=b["header_abs_start"],
+                        state={
+                            "block_header_size": b["block_header_size"],
+                            "compressed_data_size": b["compressed_data_size"],
+                            "check_size": b["check_size"],
+                            "filters": b["filters"],
+                        },
+                    )
+                ]
+            )
+            self._decomp_cursor += b["decomp_size"]
+
+    def _build_index(self, last_known: SeekPoint) -> tuple[list[SeekPoint], int | None]:
+        """Scan XZ stream footers and indexes backwards to build the complete index.
+
+        Covers only the portion of the file not already indexed by forward reading
+        (i.e., compressed offsets > last_known.compressed_offset).
+
+        On failure (e.g. trailing data or corrupt footer), logs a warning and
+        returns empty results so the base class falls back to sequential
+        decompression.
+        """
+        file_size = self._inner.seek(0, io.SEEK_END)
+        try:
+            blocks = _read_xz_index_backwards(
+                cast("BinaryIO", self._inner),
+                file_size,
+                stop_at=last_known.compressed_offset,
+                start_decompressed_offset=last_known.decompressed_offset,
+            )
+            points = [
+                SeekPoint(
+                    b.decompressed_start,
+                    b.compressed_start,
+                    state=b.to_seek_state(),
+                )
+                for b in blocks
+            ]
+            total_size = (
+                blocks[-1].decompressed_end if blocks else None
+            )
+            return points, total_size
+        except (ArchiveCorruptedError, ArchiveEOFError) as e:
+            logger.warning(
+                "XZ backwards index scan failed (the file may have trailing data "
+                "or a corrupt footer); falling back to sequential decompression. "
+                "Reason: %s",
+                e,
+            )
+            return [], None
