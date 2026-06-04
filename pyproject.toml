@@ -31,12 +31,8 @@ optional = [
     "indexed_bzip2>=1.6.0",
     "python-xz>=0.5.0",
     "pyzstd>=0.17.0",
-    # Not currently compatible with Python 3.14. Fix on the way, see
-    # https://github.com/indygreg/python-zstandard/pull/262
-    "zstandard>=0.23.0 ; python_full_version < '3.14'",
-    # Not currently compatible with Python 3.14. Fix on the way, see
-    # https://github.com/python-lz4/python-lz4/pull/303
-    "lz4>=4.4.4 ; python_full_version < '3.14'",
+    "zstandard>=0.25.0",
+    "lz4>=4.4.5",
     "pycdlib>=1.14.0",
     "uncompresspy>=0.4.0; python_full_version >= '3.11'",
     "brotli>=1.1.0",
@@ -51,7 +47,8 @@ optional-freethreaded = [
     "indexed_bzip2==1.6.0",  # 1.7.0 does not compile in Github actions for free-threaded builds
     "python-xz>=0.5.0",
     "pyzstd>=0.17.0",
-    "lz4>=4.4.4 ; python_full_version < '3.14'",
+    "zstandard>=0.25.0",
+    "lz4>=4.4.5",
     "pycdlib>=1.14.0",
     "uncompresspy>=0.4.0",
     "brotli>=1.1.0",

@@ -30,7 +30,6 @@ from tests.archivey.sample_archives import (
 from tests.archivey.test_open_nonseekable import EXPECTED_NON_SEEKABLE_FAILURES
 from tests.archivey.testing_utils import skip_if_package_missing
 
-
 _NESTED_ARCHIVES_DIR = os.path.join(
     os.path.dirname(__file__), "..", "test_archives", "nested"
 )

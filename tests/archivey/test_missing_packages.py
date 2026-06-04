@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -113,6 +114,15 @@ def test_missing_package_raises_exception(
         open_archive(archive_path, config=config)
 
     assert f"{library_name} package is not installed" in str(excinfo.value)
+
+
+def test_stdlib_zstd_version():
+    versions = get_dependency_versions()
+    if sys.version_info >= (3, 14):
+        assert versions.stdlib_zstd_version is not None
+        assert versions.stdlib_zstd_version.startswith("stdlib (")
+    else:
+        assert versions.stdlib_zstd_version is None
 
 
 @pytest.mark.skipif(
