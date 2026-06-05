@@ -230,10 +230,8 @@ class SingleFileReader(BaseArchiveReader):
 
         if seekable and self.fileobj is not None and self.fileobj.seekable():
             if self.format in (ArchiveFormat.XZ, ArchiveFormat.LZIP):
-                self.fileobj.seek(0, io.SEEK_END)
-                self.fileobj.seek(0)
-                if hasattr(self.fileobj, "_size") and self.fileobj._size is not None:
-                    self.member.file_size = self.fileobj._size
+                if hasattr(self.fileobj, "try_get_size"):
+                    self.member.file_size = self.fileobj.try_get_size()
 
     def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
         return self._exception_translator(e)

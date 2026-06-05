@@ -77,6 +77,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
             self._should_close = False
         self._seek_points: list[SeekPoint] = [SeekPoint(0, 0)]
         self._index_built: bool = False
+        self._index_build_attempted: bool = False
         self._decompressor: DecompressorT = self._create_decompressor(
             self._seek_points[0]
         )
@@ -218,12 +219,14 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
         super().close()
 
     def _ensure_index_built(self) -> None:
-        if self._index_built:
+        if self._index_built or self._index_build_attempted:
             return
 
         inner_pos = self._inner.tell()
         new_points, new_size = self._build_index(self._seek_points[-1])
-        self._index_built = True
+        self._index_build_attempted = True
+        if new_points or new_size is not None:
+            self._index_built = True
 
         if new_points:
             self.add_seek_points(new_points)
@@ -235,6 +238,20 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
         # expected read position is still valid.
         if self._inner.tell() != inner_pos:
             self._inner.seek(inner_pos)
+
+    def try_get_size(self) -> int | None:
+        """Return the total decompressed size if cheaply available, else None.
+
+        Attempts to build the index (backward scan) to learn the size without
+        falling back to decompressing the whole stream.  Safe to call on open;
+        returns None rather than blocking if the index scan fails.
+        """
+        if self._size is not None:
+            return self._size
+        if not self._inner.seekable():
+            return None
+        self._ensure_index_built()
+        return self._size
 
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
         if not self._inner.seekable():
