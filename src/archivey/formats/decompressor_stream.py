@@ -11,7 +11,9 @@ from typing import (
     TYPE_CHECKING,
     Any,
     BinaryIO,
+    Callable,
     Generic,
+    Protocol,
     TypeVar,
     cast,
 )
@@ -53,6 +55,17 @@ class SeekPoint:
 
 
 DecompressorT = TypeVar("DecompressorT")
+
+
+class _SegmentDecompressor(Protocol):
+    """Interface shared by _LzipState, _XzState, and _XzBlockChain."""
+
+    def feed(self, data: bytes) -> tuple[bytes, list[tuple[int, int]]]: ...
+    def flush(self) -> tuple[bytes, list[tuple[int, int]]]: ...
+    def is_finished(self) -> bool: ...
+
+
+_SDT = TypeVar("_SDT", bound=_SegmentDecompressor)
 
 
 class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
@@ -345,55 +358,96 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
         return self._pos
 
 
-class LzipDecompressorStream(DecompressorStream[_LzipState]):
+class _SegmentedDecompressorStream(DecompressorStream[_SDT]):
+    """Intermediate base for multi-segment compressed formats (lzip, XZ).
+
+    Factors out cursor tracking, the feed/flush delegation to the state-machine
+    decompressor, and a shared _build_index_backwards skeleton.  Subclasses
+    implement _make_decompressor, _on_completed_segments, and _build_index.
+    """
+
+    def __init__(self, path: "str | BinaryIO") -> None:
+        # Pre-declare cursors before super().__init__() because the base
+        # calls _create_decompressor() which reads them.
+        self._comp_cursor: int = 0
+        self._decomp_cursor: int = 0
+        super().__init__(path)
+
+    @abc.abstractmethod
+    def _make_decompressor(self, point: SeekPoint) -> _SDT: ...
+
+    @abc.abstractmethod
+    def _on_completed_segments(self, units: list[tuple[int, int]]) -> None: ...
+
+    def _create_decompressor(self, point: SeekPoint) -> _SDT:
+        self._comp_cursor = point.compressed_offset
+        self._decomp_cursor = point.decompressed_offset
+        return self._make_decompressor(point)
+
+    def _decompress_chunk(self, chunk: bytes) -> bytes:
+        data, units = self._decompressor.feed(chunk)
+        self._on_completed_segments(units)
+        return data
+
+    def _flush_decompressor(self) -> bytes:
+        data, units = self._decompressor.flush()
+        self._on_completed_segments(units)
+        return data
+
+    def _is_decompressor_finished(self) -> bool:
+        return self._decompressor.is_finished()
+
+    def _build_index_backwards(
+        self,
+        last_known: SeekPoint,
+        scan_fn: "Callable[..., list[Any]]",
+        to_point: "Callable[[Any], SeekPoint]",
+        warning_msg: str,
+    ) -> "tuple[list[SeekPoint], int | None]":
+        """Shared skeleton: backward scan → SeekPoints + total decompressed size.
+
+        Calls scan_fn(inner, file_size, stop_at=..., start_decompressed_offset=...),
+        converts each bounds object to a SeekPoint via to_point (skipping any
+        whose decompressed_start duplicates last_known), and infers total size
+        from the last bound's decompressed_end.
+        """
+        file_size = self._inner.seek(0, io.SEEK_END)
+        try:
+            bounds = scan_fn(
+                cast("BinaryIO", self._inner),
+                file_size,
+                stop_at=last_known.compressed_offset,
+                start_decompressed_offset=last_known.decompressed_offset,
+            )
+        except ArchiveCorruptedError as e:
+            logger.warning(warning_msg, e)
+            return [], None
+        points = [
+            to_point(b)
+            for b in bounds
+            if b.decompressed_start > last_known.decompressed_offset
+        ]
+        total: "int | None" = bounds[-1].decompressed_end if bounds else None
+        return points, total
+
+
+class LzipDecompressorStream(_SegmentedDecompressorStream[_LzipState]):
     """Seekable lzip decompressor backed by Python's stdlib lzma.
 
     Builds a seek-point table from member headers/trailers:
-      - Progressively via _update_index() as members are decoded forward.
-      - On-demand via a one-shot backwards trailer scan (_build_index()).
+      - Progressively as members are decoded during forward reads.
+      - On-demand via a one-shot backwards trailer scan (_build_index).
 
     The table enables efficient SEEK_END (no decompression), backward seeks
     (jump to the nearest indexed member), and forward seeks across already-
     indexed members.
     """
 
-    def __init__(self, path: str | BinaryIO) -> None:
-        # Pre-declare cursor attributes so pyright knows they exist; they are
-        # set to their correct values by _create_decompressor(SeekPoint(0, 0))
-        # called from super().__init__().
-        self._comp_cursor: int = 0
-        self._decomp_cursor: int = 0
-        super().__init__(path)
-
-    # ------------------------------------------------------------------
-    # DecompressorStream abstract interface
-    # ------------------------------------------------------------------
-
-    def _create_decompressor(self, point: SeekPoint) -> _LzipState:
-        self._comp_cursor = point.compressed_offset
-        self._decomp_cursor = point.decompressed_offset
+    def _make_decompressor(self, point: SeekPoint) -> _LzipState:
         return _LzipState()
 
-    def _decompress_chunk(self, chunk: bytes) -> bytes:
-        data, new_members = self._decompressor.feed(chunk)
-        self._update_index(new_members)
-        return data
-
-    def _flush_decompressor(self) -> bytes:
-        data, new_members = self._decompressor.flush()
-        self._update_index(new_members)
-        return data
-
-    def _is_decompressor_finished(self) -> bool:
-        return self._decompressor.is_finished()
-
-    # ------------------------------------------------------------------
-    # Seek-point machinery
-    # ------------------------------------------------------------------
-
-    def _update_index(self, new_members: list[tuple[int, int]]) -> None:
-        """Extend the seek-point table with newly completed members."""
-        for decompressed_size, compressed_size in new_members:
+    def _on_completed_segments(self, units: list[tuple[int, int]]) -> None:
+        for decompressed_size, compressed_size in units:
             self.add_seek_points([SeekPoint(self._decomp_cursor, self._comp_cursor)])
             self._comp_cursor += compressed_size
             self._decomp_cursor += decompressed_size
@@ -401,66 +455,36 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
     def _build_index(self, last_known: SeekPoint) -> tuple[list[SeekPoint], int | None]:
         """Scan member trailers backwards to build the complete index.
 
-        Starts the scan at the file end and stops at last_known.compressed_offset,
-        covering only the portion not yet indexed by forward decompression.
-
         On failure (e.g. trailing data after the last member, which is valid
-        per the lzip spec §7), logs a warning and returns empty results so the
-        base class falls back to sequential decompression.
-
-        The inner stream's position after this call is unspecified.
+        per the lzip spec §7), logs a warning and falls back to sequential
+        decompression.
         """
-        file_size = self._inner.seek(0, io.SEEK_END)
-        try:
-            members = _read_index_backwards(
-                cast("BinaryIO", self._inner),
-                file_size,
-                stop_at=last_known.compressed_offset,
-                start_decompressed_offset=last_known.decompressed_offset,
-            )
-            points = [
-                SeekPoint(m.decompressed_start, m.compressed_start) for m in members
-            ]
-            total_size = (
-                members[-1].decompressed_start + members[-1].decompressed_size
-                if members
-                else None
-            )
-            return points, total_size
-        except ArchiveCorruptedError as e:
-            logger.warning(
-                "Lzip backwards index scan failed (the file may have trailing "
-                "data after the last member, which is valid per the lzip spec); "
-                "falling back to sequential decompression. Reason: %s",
-                e,
-            )
-            return [], None
+        return self._build_index_backwards(
+            last_known,
+            _read_index_backwards,
+            lambda m: SeekPoint(m.decompressed_start, m.compressed_start),
+            "Lzip backwards index scan failed (the file may have trailing "
+            "data after the last member, which is valid per the lzip spec); "
+            "falling back to sequential decompression. Reason: %s",
+        )
 
 
-class XzDecompressorStream(DecompressorStream["_XzState | _XzBlockChain"]):
+class XzDecompressorStream(_SegmentedDecompressorStream["_XzState | _XzBlockChain"]):
     """Seekable XZ decompressor backed by Python's stdlib lzma.
 
     Builds a block-level seek-point table:
-      - Progressively via _update_index() as streams complete during forward reads.
-      - On-demand via _build_index() (triggered by SEEK_END or forward seek past frontier).
+      - Progressively as XZ streams complete during forward reads.
+      - On-demand via _build_index (triggered by SEEK_END or forward seek past frontier).
 
     SeekPoint.state == None  →  stream-level decompressor (_XzState), used only for the
                                 initial SeekPoint(0, 0) before any index is known.
     SeekPoint.state == tuple →  block metadata (check, unpadded_size, uncompressed_size);
-                                uses _XzBlockChain for block-level decompression.
+                                uses _XzBlockChain for block-level random access.
     """
 
-    def __init__(self, path: "str | BinaryIO") -> None:
-        self._comp_cursor: int = 0
-        self._decomp_cursor: int = 0
-        super().__init__(path)
-
-    def _create_decompressor(self, point: SeekPoint) -> "_XzState | _XzBlockChain":
-        self._comp_cursor = point.compressed_offset
-        self._decomp_cursor = point.decompressed_offset
+    def _make_decompressor(self, point: SeekPoint) -> "_XzState | _XzBlockChain":
         if point.state is None:
             return _XzState()
-        # Block-level: collect this point and all subsequent block-level points
         check, unpadded_size, uncompressed_size = point.state
         start_block = _XzBlockBounds(
             compressed_start=point.compressed_offset,
@@ -469,7 +493,6 @@ class XzDecompressorStream(DecompressorStream["_XzState | _XzBlockChain"]):
             uncompressed_size=uncompressed_size,
             check=check,
         )
-        # Gather all subsequent block-level seek points
         subsequent = [
             sp for sp in self._seek_points
             if sp.decompressed_offset > point.decompressed_offset and sp.state is not None
@@ -484,46 +507,27 @@ class XzDecompressorStream(DecompressorStream["_XzState | _XzBlockChain"]):
             )
             for sp in subsequent
         ]
-        blocks = [start_block] + extra_blocks
-        return _XzBlockChain(blocks, cast("BinaryIO", self._inner))
+        return _XzBlockChain([start_block] + extra_blocks, cast("BinaryIO", self._inner))
 
-    def _decompress_chunk(self, chunk: bytes) -> bytes:
-        result = self._decompressor.feed(chunk)
-        data, new_streams = result
+    def _on_completed_segments(self, units: list[tuple[int, int]]) -> None:
         if isinstance(self._decompressor, _XzState):
-            self._update_index(new_streams)
+            self._update_index(units)
         else:
-            # _XzBlockChain: update cursors only
-            for decomp_size, comp_size in new_streams:
+            for decomp_size, comp_size in units:
                 self._comp_cursor += comp_size
                 self._decomp_cursor += decomp_size
-        return data
-
-    def _flush_decompressor(self) -> bytes:
-        data, new_streams = self._decompressor.flush()
-        if isinstance(self._decompressor, _XzState):
-            self._update_index(new_streams)
-        else:
-            for decomp_size, comp_size in new_streams:
-                self._comp_cursor += comp_size
-                self._decomp_cursor += decomp_size
-        return data
-
-    def _is_decompressor_finished(self) -> bool:
-        return self._decompressor.is_finished()
 
     def _update_index(self, new_streams: list[tuple[int, int]]) -> None:
-        """Extend seek points with newly completed streams.
+        """Extend seek points with newly completed streams (only called for _XzState).
 
-        For each completed stream: adds a stream-level SeekPoint (so the stream
-        can be re-entered from its start), then immediately scans that stream's
-        compressed range backwards to populate block-level seek points.
+        For each completed stream: adds a stream-level SeekPoint, then scans that
+        stream's compressed range backwards to populate block-level seek points.
         """
         for decompressed_size, compressed_size in new_streams:
             stream_comp_start = self._comp_cursor
             stream_decomp_start = self._decomp_cursor
 
-            # Add stream-level seek point (skip for stream 0 — SeekPoint(0,0) covers it)
+            # Skip for stream 0 — SeekPoint(0, 0) already covers it
             if stream_decomp_start > 0:
                 self.add_seek_points(
                     [SeekPoint(stream_decomp_start, stream_comp_start, state=None)]
@@ -531,7 +535,6 @@ class XzDecompressorStream(DecompressorStream["_XzState | _XzBlockChain"]):
 
             stream_comp_end = stream_comp_start + compressed_size
 
-            # Per-stream backward scan to populate block-level seek points
             if not self._index_built and self._inner.seekable():
                 saved_pos = self._inner.tell()
                 try:
@@ -548,7 +551,7 @@ class XzDecompressorStream(DecompressorStream["_XzState | _XzBlockChain"]):
                             state=(b.check, b.unpadded_size, b.uncompressed_size),
                         )
                         for b in blocks
-                        if b.decompressed_start > 0  # skip block 0 of stream 0 duplicate
+                        if b.decompressed_start > stream_decomp_start
                     ]
                     if block_points:
                         self.add_seek_points(block_points)
@@ -564,41 +567,19 @@ class XzDecompressorStream(DecompressorStream["_XzState | _XzBlockChain"]):
             self._comp_cursor = stream_comp_end
             self._decomp_cursor += decompressed_size
 
-    def _build_index(
-        self, last_known: SeekPoint
-    ) -> tuple[list[SeekPoint], int | None]:
+    def _build_index(self, last_known: SeekPoint) -> tuple[list[SeekPoint], int | None]:
         """Full backwards scan from EOF to last_known, building block seek points."""
-        file_size = self._inner.seek(0, io.SEEK_END)
-        try:
-            blocks = _read_xz_index_backwards(
-                cast("BinaryIO", self._inner),
-                file_size,
-                stop_at=last_known.compressed_offset,
-                start_decompressed_offset=last_known.decompressed_offset,
-            )
-        except ArchiveCorruptedError as e:
-            logger.warning(
-                "XZ backwards index scan failed; falling back to sequential "
-                "decompression. Reason: %s",
-                e,
-            )
-            return [], None
-
-        points = [
-            SeekPoint(
+        return self._build_index_backwards(
+            last_known,
+            _read_xz_index_backwards,
+            lambda b: SeekPoint(
                 b.decompressed_start,
                 b.compressed_start,
                 state=(b.check, b.unpadded_size, b.uncompressed_size),
-            )
-            for b in blocks
-            if b.decompressed_start > 0  # skip duplicate of SeekPoint(0,0)
-        ]
-        total_size = (
-            blocks[-1].decompressed_start + blocks[-1].uncompressed_size
-            if blocks
-            else None
+            ),
+            "XZ backwards index scan failed; falling back to sequential "
+            "decompression. Reason: %s",
         )
-        return points, total_size
 
 
 class ZlibDecompressorStream(DecompressorStream):
