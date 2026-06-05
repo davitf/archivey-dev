@@ -7,8 +7,7 @@ import pytest
 
 from archivey.exceptions import ArchiveCorruptedError, ArchiveEOFError
 from archivey.formats.compressed_streams import _translate_xz_exception
-from archivey.formats.decompressor_stream import XzDecompressorStream
-from archivey.formats.xz_stream import _read_xz_index_backwards
+from archivey.formats.xz_stream import XzDecompressorStream, _read_xz_index_backwards
 
 # ---------------------------------------------------------------------------
 # Helpers

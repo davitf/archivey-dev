@@ -3,15 +3,17 @@
 import io
 import lzma
 import struct
-from typing import BinaryIO, cast
+from typing import TYPE_CHECKING, BinaryIO, cast
 
 import pytest
 
 from archivey.exceptions import ArchiveCorruptedError, ArchiveEOFError
 from archivey.formats.compressed_streams import _translate_lzip_exception
-from archivey.formats.decompressor_stream import LzipDecompressorStream, SeekPoint
-from archivey.formats.lzip_stream import _read_index_backwards
+from archivey.formats.lzip_stream import LzipDecompressorStream, _read_index_backwards
 from tests.archivey.create_archives import create_lzip_member
+
+if TYPE_CHECKING:
+    from archivey.formats.decompressor_stream import SeekPoint
 
 # ---------------------------------------------------------------------------
 # Helpers

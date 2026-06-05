@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
-from archivey.formats.decompressor_stream import XzDecompressorStream
+from archivey.formats.xz_stream import XzDecompressorStream
 
 try:
     import xz as _python_xz

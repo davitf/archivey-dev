@@ -91,10 +91,10 @@ from archivey.exceptions import (
 )
 from archivey.formats.decompressor_stream import (
     BrotliDecompressorStream,
-    LzipDecompressorStream,
-    XzDecompressorStream,
     ZlibDecompressorStream,
 )
+from archivey.formats.lzip_stream import LzipDecompressorStream
+from archivey.formats.xz_stream import XzDecompressorStream
 from archivey.internal.io_helpers import ensure_binaryio
 
 logger = logging.getLogger(__name__)
