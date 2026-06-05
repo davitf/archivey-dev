@@ -31,8 +31,13 @@ SKIPPABLE_FORMATS: set[ArchiveFormat] = {
 EXPECTED_NON_SEEKABLE_FAILURES: set[tuple[ArchiveFormat, bool]] = {
     (ArchiveFormat.GZIP, True),
     (ArchiveFormat.BZIP2, True),
+    # XZ uses python-xz under ALTERNATIVE_CONFIG (use_python_xz=True), which
+    # requires a seekable stream. The default backend (XzDecompressorStream)
+    # supports non-seekable streams, so only the altlibs (True) variant fails.
+    (ArchiveFormat.XZ, True),
     (ArchiveFormat.TAR_GZ, True),
     (ArchiveFormat.TAR_BZ2, True),
+    (ArchiveFormat.TAR_XZ, True),
     (ArchiveFormat.TAR_Z, False),
     (ArchiveFormat.TAR_Z, True),
     (ArchiveFormat.ZIP, False),

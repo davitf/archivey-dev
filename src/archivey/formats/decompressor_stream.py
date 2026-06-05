@@ -32,6 +32,8 @@ from archivey.internal.io_helpers import ensure_bufferedio
 
 if TYPE_CHECKING:
     import brotli
+
+    from archivey.types import ReadableBinaryStream
 else:
     try:
         import brotli
@@ -80,7 +82,7 @@ class DecompressorStream(io.RawIOBase, BinaryIO, Generic[DecompressorT]):
       member trailers backwards).  _build_index is called at most once.
     """
 
-    def __init__(self, path: str | BinaryIO) -> None:
+    def __init__(self, path: "str | BinaryIO | ReadableBinaryStream") -> None:
         super().__init__()
         if isinstance(path, (str, bytes, os.PathLike)):
             self._inner = open(path, "rb")
@@ -366,7 +368,7 @@ class _SegmentedDecompressorStream(DecompressorStream[_SDT]):
     implement _make_decompressor, _on_completed_segments, and _build_index.
     """
 
-    def __init__(self, path: "str | BinaryIO") -> None:
+    def __init__(self, path: "str | BinaryIO | ReadableBinaryStream") -> None:
         # Pre-declare cursors before super().__init__() because the base
         # calls _create_decompressor() which reads them.
         self._comp_cursor: int = 0

@@ -11,6 +11,7 @@ from archivey.exceptions import (
     ArchiveStreamNotSeekableError,
 )
 from archivey.formats.compressed_streams import get_stream_open_fn
+from archivey.formats.decompressor_stream import DecompressorStream
 from archivey.formats.format_detection import EXTENSION_TO_FORMAT
 from archivey.internal.base_reader import BaseArchiveReader
 from archivey.internal.io_helpers import (  # Updated import
@@ -230,7 +231,7 @@ class SingleFileReader(BaseArchiveReader):
 
         if seekable and self.fileobj is not None and self.fileobj.seekable():
             if self.format in (ArchiveFormat.XZ, ArchiveFormat.LZIP):
-                if hasattr(self.fileobj, "try_get_size"):
+                if isinstance(self.fileobj, DecompressorStream):
                     self.member.file_size = self.fileobj.try_get_size()
 
     def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:

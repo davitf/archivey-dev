@@ -31,7 +31,7 @@ import tempfile
 import time
 from datetime import date
 from pathlib import Path
-from typing import IO, Callable
+from typing import IO, Callable, cast
 
 # Ensure the project source is importable when run from the repo root.
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -145,8 +145,9 @@ def op_open_size(open_fn: Callable[[str], IO[bytes]], path: str, runs: int) -> f
     """Open + determine decompressed size."""
     def _run() -> None:
         f = open_fn(path)
-        if hasattr(f, "try_get_size"):
-            f.try_get_size()
+        try_get_size = getattr(f, "try_get_size", None)
+        if try_get_size is not None:
+            try_get_size()
         else:
             try:
                 f.seek(0, io.SEEK_END)
@@ -198,7 +199,7 @@ def _open_lzma(path: str) -> IO[bytes]:
 
 def _open_python_xz(path: str) -> IO[bytes]:
     assert _python_xz is not None
-    return _python_xz.open(path)
+    return cast("IO[bytes]", _python_xz.open(path))
 
 
 def _open_our_xz(path: str) -> IO[bytes]:
