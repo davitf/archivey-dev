@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import BinaryIO, Iterator, Optional
 
 from archivey.exceptions import (
+    ArchiveCorruptedError,
     ArchiveError,
     ArchiveStreamNotSeekableError,
 )

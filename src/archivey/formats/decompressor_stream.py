@@ -21,10 +21,10 @@ from typing_extensions import Buffer
 from archivey.exceptions import ArchiveCorruptedError, ArchiveEOFError
 from archivey.formats.lzip_stream import _LzipState, _read_index_backwards
 from archivey.formats.xz_stream import (
+    _read_xz_index_backwards,
     _XzBlockBounds,
     _XzBlockChain,
     _XzState,
-    _read_xz_index_backwards,
 )
 from archivey.internal.io_helpers import ensure_bufferedio
 

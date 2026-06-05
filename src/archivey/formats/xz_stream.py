@@ -98,8 +98,7 @@ def _parse_xz_header(data: bytes) -> int:
         raise ArchiveCorruptedError(
             f"XZ stream flags reserved byte is non-zero: {stream_flags[0]:#04x}"
         )
-    check = stream_flags[1] & 0x0F
-    return check
+    return stream_flags[1] & 0x0F
 
 
 def _parse_xz_footer(data: bytes) -> tuple[int, int]:
