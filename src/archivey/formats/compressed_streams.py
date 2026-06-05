@@ -31,7 +31,6 @@ if TYPE_CHECKING:
     import pyzstd
     import rapidgzip
     import uncompresspy
-    import xz
     import zstandard
 
 else:
@@ -65,11 +64,6 @@ else:
         indexed_bzip2 = None
 
     try:
-        import xz
-    except ImportError:
-        xz = None
-
-    try:
         import uncompresspy
     except ImportError:
         uncompresspy = None
@@ -92,6 +86,7 @@ from archivey.exceptions import (
 from archivey.formats.decompressor_stream import (
     BrotliDecompressorStream,
     LzipDecompressorStream,
+    XzDecompressorStream,
     ZlibDecompressorStream,
 )
 from archivey.internal.io_helpers import ensure_binaryio
@@ -235,30 +230,16 @@ def open_lzma_stream(path: str | BinaryIO) -> BinaryIO:
     return ensure_binaryio(lzma.open(path))
 
 
-def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
-    if isinstance(e, xz.XZError):
+def _translate_xz_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, lzma.LZMAError):
         return ArchiveCorruptedError(f"Error reading XZ archive: {repr(e)}")
-    if isinstance(e, ValueError) and "filename is not seekable" in str(e):
-        return ArchiveStreamNotSeekableError(
-            "Python XZ does not support non-seekable streams"
-        )
-    # Raised by RecordableStream (used to wrap non-seekable streams during format
-    # detection) when the library tries to seek to the end.
-    if isinstance(e, io.UnsupportedOperation) and "seek to end" in str(e):
-        return ArchiveStreamNotSeekableError(
-            "Python XZ does not support non-seekable streams"
-        )
-
-    return None  # pragma: no cover -- all possible exceptions should have been handled
+    if isinstance(e, EOFError):
+        return ArchiveEOFError(f"XZ file is truncated: {repr(e)}")
+    return None
 
 
-def open_python_xz_stream(path: str | BinaryIO) -> BinaryIO:
-    if xz is None:
-        raise PackageNotInstalledError(
-            "python-xz package is not installed, required for XZ archives"
-        ) from None  # pragma: no cover -- lz4 is installed for main tests
-
-    return ensure_binaryio(xz.open(path))
+def open_xz_stream(path: str | BinaryIO) -> BinaryIO:
+    return XzDecompressorStream(path)
 
 
 class ZstandardReopenOnBackwardsSeekIO(io.RawIOBase, BinaryIO):
@@ -485,9 +466,7 @@ def get_stream_open_fn(
         return open_bzip2_stream, _translate_bz2_exception
 
     if format == StreamFormat.XZ:
-        if config.use_python_xz:
-            return open_python_xz_stream, _translate_python_xz_exception
-        return open_lzma_stream, _translate_lzma_exception
+        return open_xz_stream, _translate_xz_exception
 
     if format == StreamFormat.LZ4:
         return open_lz4_stream, _translate_lz4_exception

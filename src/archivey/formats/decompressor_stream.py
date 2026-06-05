@@ -20,6 +20,12 @@ from typing_extensions import Buffer
 
 from archivey.exceptions import ArchiveCorruptedError, ArchiveEOFError
 from archivey.formats.lzip_stream import _LzipState, _read_index_backwards
+from archivey.formats.xz_stream import (
+    _XzBlockBounds,
+    _XzBlockChain,
+    _XzState,
+    _read_xz_index_backwards,
+)
 from archivey.internal.io_helpers import ensure_bufferedio
 
 if TYPE_CHECKING:
@@ -412,6 +418,170 @@ class LzipDecompressorStream(DecompressorStream[_LzipState]):
                 e,
             )
             return [], None
+
+
+class XzDecompressorStream(DecompressorStream["_XzState | _XzBlockChain"]):
+    """Seekable XZ decompressor backed by Python's stdlib lzma.
+
+    Builds a block-level seek-point table:
+      - Progressively via _update_index() as streams complete during forward reads.
+      - On-demand via _build_index() (triggered by SEEK_END or forward seek past frontier).
+
+    SeekPoint.state == None  →  stream-level decompressor (_XzState), used only for the
+                                initial SeekPoint(0, 0) before any index is known.
+    SeekPoint.state == tuple →  block metadata (check, unpadded_size, uncompressed_size);
+                                uses _XzBlockChain for block-level decompression.
+    """
+
+    def __init__(self, path: "str | BinaryIO") -> None:
+        self._comp_cursor: int = 0
+        self._decomp_cursor: int = 0
+        super().__init__(path)
+
+    def _create_decompressor(self, point: SeekPoint) -> "_XzState | _XzBlockChain":
+        self._comp_cursor = point.compressed_offset
+        self._decomp_cursor = point.decompressed_offset
+        if point.state is None:
+            return _XzState()
+        # Block-level: collect this point and all subsequent block-level points
+        check, unpadded_size, uncompressed_size = point.state
+        start_block = _XzBlockBounds(
+            compressed_start=point.compressed_offset,
+            decompressed_start=point.decompressed_offset,
+            unpadded_size=unpadded_size,
+            uncompressed_size=uncompressed_size,
+            check=check,
+        )
+        # Gather all subsequent block-level seek points
+        subsequent = [
+            sp for sp in self._seek_points
+            if sp.decompressed_offset > point.decompressed_offset and sp.state is not None
+        ]
+        extra_blocks = [
+            _XzBlockBounds(
+                compressed_start=sp.compressed_offset,
+                decompressed_start=sp.decompressed_offset,
+                unpadded_size=sp.state[1],
+                uncompressed_size=sp.state[2],
+                check=sp.state[0],
+            )
+            for sp in subsequent
+        ]
+        blocks = [start_block] + extra_blocks
+        return _XzBlockChain(blocks, cast("BinaryIO", self._inner))
+
+    def _decompress_chunk(self, chunk: bytes) -> bytes:
+        result = self._decompressor.feed(chunk)
+        data, new_streams = result
+        if isinstance(self._decompressor, _XzState):
+            self._update_index(new_streams)
+        else:
+            # _XzBlockChain: update cursors only
+            for decomp_size, comp_size in new_streams:
+                self._comp_cursor += comp_size
+                self._decomp_cursor += decomp_size
+        return data
+
+    def _flush_decompressor(self) -> bytes:
+        data, new_streams = self._decompressor.flush()
+        if isinstance(self._decompressor, _XzState):
+            self._update_index(new_streams)
+        else:
+            for decomp_size, comp_size in new_streams:
+                self._comp_cursor += comp_size
+                self._decomp_cursor += decomp_size
+        return data
+
+    def _is_decompressor_finished(self) -> bool:
+        return self._decompressor.is_finished()
+
+    def _update_index(self, new_streams: list[tuple[int, int]]) -> None:
+        """Extend seek points with newly completed streams.
+
+        For each completed stream: adds a stream-level SeekPoint (so the stream
+        can be re-entered from its start), then immediately scans that stream's
+        compressed range backwards to populate block-level seek points.
+        """
+        for decompressed_size, compressed_size in new_streams:
+            stream_comp_start = self._comp_cursor
+            stream_decomp_start = self._decomp_cursor
+
+            # Add stream-level seek point (skip for stream 0 — SeekPoint(0,0) covers it)
+            if stream_decomp_start > 0:
+                self.add_seek_points(
+                    [SeekPoint(stream_decomp_start, stream_comp_start, state=None)]
+                )
+
+            stream_comp_end = stream_comp_start + compressed_size
+
+            # Per-stream backward scan to populate block-level seek points
+            if not self._index_built and self._inner.seekable():
+                saved_pos = self._inner.tell()
+                try:
+                    blocks = _read_xz_index_backwards(
+                        cast("BinaryIO", self._inner),
+                        stream_comp_end,
+                        stop_at=stream_comp_start,
+                        start_decompressed_offset=stream_decomp_start,
+                    )
+                    block_points = [
+                        SeekPoint(
+                            b.decompressed_start,
+                            b.compressed_start,
+                            state=(b.check, b.unpadded_size, b.uncompressed_size),
+                        )
+                        for b in blocks
+                        if b.decompressed_start > 0  # skip block 0 of stream 0 duplicate
+                    ]
+                    if block_points:
+                        self.add_seek_points(block_points)
+                except ArchiveCorruptedError as e:
+                    logger.warning(
+                        "XZ per-stream backward scan failed, block-level seek points "
+                        "for this stream will not be available: %s",
+                        e,
+                    )
+                finally:
+                    self._inner.seek(saved_pos)
+
+            self._comp_cursor = stream_comp_end
+            self._decomp_cursor += decompressed_size
+
+    def _build_index(
+        self, last_known: SeekPoint
+    ) -> tuple[list[SeekPoint], int | None]:
+        """Full backwards scan from EOF to last_known, building block seek points."""
+        file_size = self._inner.seek(0, io.SEEK_END)
+        try:
+            blocks = _read_xz_index_backwards(
+                cast("BinaryIO", self._inner),
+                file_size,
+                stop_at=last_known.compressed_offset,
+                start_decompressed_offset=last_known.decompressed_offset,
+            )
+        except ArchiveCorruptedError as e:
+            logger.warning(
+                "XZ backwards index scan failed; falling back to sequential "
+                "decompression. Reason: %s",
+                e,
+            )
+            return [], None
+
+        points = [
+            SeekPoint(
+                b.decompressed_start,
+                b.compressed_start,
+                state=(b.check, b.unpadded_size, b.uncompressed_size),
+            )
+            for b in blocks
+            if b.decompressed_start > 0  # skip duplicate of SeekPoint(0,0)
+        ]
+        total_size = (
+            blocks[-1].decompressed_start + blocks[-1].uncompressed_size
+            if blocks
+            else None
+        )
+        return points, total_size
 
 
 class ZlibDecompressorStream(DecompressorStream):

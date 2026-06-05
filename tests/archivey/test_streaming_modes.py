@@ -107,7 +107,6 @@ def test_streaming_only_mode(
             use_rar_stream=True,
             use_rapidgzip=True,
             use_indexed_bzip2=True,
-            use_python_xz=True,
             use_zstandard=True,
         )
     else:

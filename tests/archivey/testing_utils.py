@@ -96,8 +96,6 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         pytest.importorskip("rapidgzip")
     elif format.stream == StreamFormat.BZIP2 and config.use_indexed_bzip2:
         pytest.importorskip("indexed_bzip2")
-    elif format.stream == StreamFormat.XZ and config.use_python_xz:
-        pytest.importorskip("xz")
     elif format.stream == StreamFormat.ZSTD and config.use_zstandard:
         pytest.importorskip("zstandard")
     elif format.stream == StreamFormat.ZSTD:

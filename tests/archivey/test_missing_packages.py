@@ -77,7 +77,6 @@ BASIC_UNIX_COMPRESS_ARCHIVE = filter_archives(
         ("py7zr", BASIC_7Z_ARCHIVE, False),
         ("rapidgzip", BASIC_GZIP_ARCHIVE, True),
         ("indexed_bzip2", BASIC_BZIP2_ARCHIVE, True),
-        ("python-xz", BASIC_XZ_ARCHIVE, True),
         ("pyzstd", BASIC_ZSTD_ARCHIVE, False),
         ("zstandard", BASIC_ZSTD_ARCHIVE, True),
         ("lz4", BASIC_LZ4_ARCHIVE, False),

@@ -31,10 +31,8 @@ SKIPPABLE_FORMATS: set[ArchiveFormat] = {
 EXPECTED_NON_SEEKABLE_FAILURES: set[tuple[ArchiveFormat, bool]] = {
     (ArchiveFormat.GZIP, True),
     (ArchiveFormat.BZIP2, True),
-    (ArchiveFormat.XZ, True),
     (ArchiveFormat.TAR_GZ, True),
     (ArchiveFormat.TAR_BZ2, True),
-    (ArchiveFormat.TAR_XZ, True),
     (ArchiveFormat.TAR_Z, False),
     (ArchiveFormat.TAR_Z, True),
     (ArchiveFormat.ZIP, False),
