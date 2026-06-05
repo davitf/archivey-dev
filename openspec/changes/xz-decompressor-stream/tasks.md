@@ -62,7 +62,7 @@
 
 - [x] 7.1 Run the full test suite; confirm no regressions in existing XZ tests
 - [x] 7.2 Verify `python-xz>=0.5.0` is present in both `optional` and `optional-freethreaded` dep groups in `pyproject.toml`, and `use_python_xz` config field is restored
-- [ ] 7.3 Update `CLAUDE.md` or changelog if the project maintains one; no breaking change for `use_python_xz` (re-added); note that default XZ backend is now `XzDecompressorStream` (stdlib only)
+- [x] 7.3 Update `CLAUDE.md` or changelog if the project maintains one; no breaking change for `use_python_xz` (re-added); note that default XZ backend is now `XzDecompressorStream` (stdlib only)
 
 ## 8. Re-add python-xz as optional backend
 
