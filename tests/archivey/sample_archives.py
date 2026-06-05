@@ -1222,6 +1222,7 @@ ALTERNATIVE_CONFIG = ArchiveyConfig(
     use_rapidgzip=True,
     use_indexed_bzip2=True,
     use_zstandard=True,
+    use_python_xz=True,
 )
 
 ALTERNATIVE_PACKAGES_FORMATS = (

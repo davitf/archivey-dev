@@ -436,9 +436,15 @@ class _XzBlockChain:
             self._start_block(0)
 
     def _start_block(self, idx: int) -> None:
-        """Set up decompressor for block idx."""
+        """Set up decompressor for block idx, seeking inner stream to the block start.
+
+        The seek is a no-op for contiguous blocks (single-stream multi-block XZ)
+        but necessary for multi-stream XZ where index/footer/stream-header bytes
+        separate consecutive blocks in different streams.
+        """
         self._block_idx = idx
         block = self._blocks[idx]
+        self._inner.seek(block.compressed_start)
         self._dec = lzma.LZMADecompressor(format=lzma.FORMAT_XZ)
         self._block_bytes_fed = 0
 
@@ -517,7 +523,13 @@ class _XzBlockChain:
                 if next_idx >= len(self._blocks):
                     self._finished = True
                 else:
+                    prev_end = block.compressed_start + _round_up_4(block.unpadded_size)
                     self._start_block(next_idx)
+                    # For multi-stream XZ the next block is not contiguous
+                    # (index/footer/stream-header bytes intervene).  Stop consuming
+                    # the current chunk so the next read comes from the seeked position.
+                    if self._blocks[next_idx].compressed_start != prev_end:
+                        break
 
         return bytes(output), new_streams
 

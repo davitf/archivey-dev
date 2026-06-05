@@ -264,6 +264,29 @@ def test_multi_stream_seek_forward_into_later_stream():
         assert f.read(4) == b"CCCC"
 
 
+def test_multi_stream_seek_then_read_across_stream_boundary():
+    """Seeking to a block-level seek point and reading across a stream boundary.
+
+    _XzBlockChain transitions between blocks from different streams (they are
+    NOT contiguous on disk — index/footer/stream-header bytes intervene).
+    _start_block() must seek the inner file to each block's compressed_start
+    rather than assuming the bytes immediately follow the previous block.
+    """
+    stream0 = bytes(i % 256 for i in range(8000))
+    stream1 = bytes((255 - i % 256) for i in range(8000))
+    stream2 = bytes((i * 3) % 256 for i in range(8000))
+    parts = [stream0, stream1, stream2]
+    data = make_multi_stream(parts)
+    with open_xz(data) as f:
+        f.seek(0, io.SEEK_END)  # build index; creates block-level seek points
+        # Seek to the start of stream1 — this has a block-level seek point
+        # so _XzBlockChain is used.  read() reads all remaining streams.
+        f.seek(len(stream0))
+        assert f._decompressor.__class__.__name__ == "_XzBlockChain"  # type: ignore[attr-defined]
+        result = f.read()  # readall — crosses stream1 → stream2 boundary
+        assert result == stream1 + stream2
+
+
 def test_forward_seek_uses_seek_points():
     """After building index, forward seek to a stream boundary uses seek points."""
     parts = [b"stream0" * 50, b"stream1" * 50, b"stream2" * 50]

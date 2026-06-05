@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     import pyzstd
     import rapidgzip
     import uncompresspy
+    import xz
     import zstandard
 
 else:
@@ -72,6 +73,11 @@ else:
         import brotli
     except ImportError:
         brotli = None
+
+    try:
+        import xz
+    except ImportError:
+        xz = None
 
 
 import logging
@@ -240,6 +246,29 @@ def _translate_xz_exception(e: Exception) -> Optional[ArchiveError]:
 
 def open_xz_stream(path: str | BinaryIO) -> BinaryIO:
     return XzDecompressorStream(path)
+
+
+def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, xz.XZError):
+        return ArchiveCorruptedError(f"Error reading XZ archive: {repr(e)}")
+    if isinstance(e, ValueError) and "filename is not seekable" in str(e):
+        return ArchiveStreamNotSeekableError(
+            "python-xz does not support non-seekable streams"
+        )
+    if isinstance(e, io.UnsupportedOperation) and "seek to end" in str(e):
+        return ArchiveStreamNotSeekableError(
+            "python-xz does not support non-seekable streams"
+        )
+    return None  # pragma: no cover -- all possible exceptions should have been handled
+
+
+def open_python_xz_stream(path: str | BinaryIO) -> BinaryIO:
+    if xz is None:
+        raise PackageNotInstalledError(
+            "python-xz package is not installed, required for XZ archives"
+        ) from None
+
+    return ensure_binaryio(xz.open(path))
 
 
 class ZstandardReopenOnBackwardsSeekIO(io.RawIOBase, BinaryIO):
@@ -466,6 +495,8 @@ def get_stream_open_fn(
         return open_bzip2_stream, _translate_bz2_exception
 
     if format == StreamFormat.XZ:
+        if config.use_python_xz:
+            return open_python_xz_stream, _translate_python_xz_exception
         return open_xz_stream, _translate_xz_exception
 
     if format == StreamFormat.LZ4:

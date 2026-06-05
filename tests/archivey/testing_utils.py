@@ -104,6 +104,8 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         if sys.version_info < (3, 14):
             pytest.importorskip("pyzstd")
         # On Python 3.14+, compression.zstd is always available as stdlib fallback
+    elif format.stream == StreamFormat.XZ and config.use_python_xz:
+        pytest.importorskip("xz")
     elif format.stream == StreamFormat.BROTLI:
         pytest.importorskip("brotli")
     elif format.stream == StreamFormat.UNIX_COMPRESS:

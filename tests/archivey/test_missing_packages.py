@@ -82,6 +82,7 @@ BASIC_UNIX_COMPRESS_ARCHIVE = filter_archives(
         ("lz4", BASIC_LZ4_ARCHIVE, False),
         ("brotli", BASIC_BROTLI_ARCHIVE, False),
         ("uncompresspy", BASIC_UNIX_COMPRESS_ARCHIVE, False),
+        ("python-xz", BASIC_XZ_ARCHIVE, True),
     ],
     ids=lambda x: os.path.basename(x) if isinstance(x, str) else x,
 )

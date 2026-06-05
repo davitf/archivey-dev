@@ -24,6 +24,7 @@ class DependencyVersions:
     unrar_version: Optional[str] = None
     pyzstd_version: Optional[str] = None
     stdlib_zstd_version: Optional[str] = None
+    python_xz_version: Optional[str] = None
 
 
 def get_dependency_versions() -> DependencyVersions:
@@ -51,6 +52,7 @@ def get_dependency_versions() -> DependencyVersions:
         ("uncompresspy", "uncompresspy_version"),
         ("brotli", "brotli_version"),
         ("pyzstd", "pyzstd_version"),
+        ("python-xz", "python_xz_version"),
     ]:
         try:
             setattr(versions, attr, version(package))
