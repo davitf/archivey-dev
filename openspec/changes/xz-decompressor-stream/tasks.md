@@ -61,5 +61,33 @@
 ## 7. Cleanup and verification
 
 - [ ] 7.1 Run the full test suite; confirm no regressions in existing XZ tests
-- [ ] 7.2 Verify `pyproject.toml` has no remaining reference to `python-xz` or `xz` optional dep group
-- [ ] 7.3 Update `CLAUDE.md` or changelog if the project maintains one; note `use_python_xz` removal as a breaking change
+- [ ] 7.2 Verify `python-xz>=0.5.0` is present in both `optional` and `optional-freethreaded` dep groups in `pyproject.toml`, and `use_python_xz` config field is restored
+- [ ] 7.3 Update `CLAUDE.md` or changelog if the project maintains one; no breaking change for `use_python_xz` (re-added); note that default XZ backend is now `XzDecompressorStream` (stdlib only)
+
+## 8. Re-add python-xz as optional backend
+
+- [ ] 8.1 Re-add `python-xz>=0.5.0` to `optional` and `optional-freethreaded` dep groups in `pyproject.toml`
+- [ ] 8.2 Re-add `use_python_xz: bool = False` field to `ArchiveyConfig` in `config.py` (with docstring: "Use python-xz library for XZ streams if installed; raises PackageNotInstalledError if enabled but not installed. Default backend is XzDecompressorStream (stdlib only).")
+- [ ] 8.3 Re-add `open_python_xz_stream(path)` and `_translate_python_xz_exception(e)` to `compressed_streams.py`; guard the `import xz` with a try/except as before
+- [ ] 8.4 Update `get_stream_open_fn` for `StreamFormat.XZ`: if `config.use_python_xz` is True, use `open_python_xz_stream` / `_translate_python_xz_exception` (raises `PackageNotInstalledError` if not installed); otherwise use `open_xz_stream` / `_translate_xz_exception`
+- [ ] 8.5 Add/update test: `use_python_xz=True` with python-xz not installed raises `PackageNotInstalledError`; `use_python_xz=False` (default) always uses `XzDecompressorStream` regardless of whether python-xz is installed
+
+## 9. Benchmark script
+
+- [ ] 9.1 Create `benchmarks/` directory with `benchmarks/bench_xz.py`; add a `benchmarks/README.md` documenting how to run and what each variant tests
+- [ ] 9.2 Add seeded synthetic test-data generator: 80% limited-charset text (word-like repetitions from a small vocabulary), 20% random bytes; target 100 MB uncompressed; reproducible via fixed seed
+- [ ] 9.3 Add XZ file-variant generators (all on-the-fly, no stored files):
+  - `single_block`: standard `lzma.compress(FORMAT_XZ)` — one stream, one block
+  - `multi_block_1mb`: subprocess `xz --block-size=1MiB` — one stream, blocks every 1 MB; skip gracefully if `xz` binary absent
+  - `multi_stream`: concatenate 100 × `lzma.compress(1 MB chunk)` — 100 streams of 1 MB each
+  - `trailing_data`: `multi_block_1mb` output + 4 KB of `os.urandom` appended — index scan fails, fallback path exercised
+- [ ] 9.4 Implement three benchmark operations for each file variant × library:
+  - **open_size**: time from open to `try_get_size()` returning (index scan cost); report ms
+  - **sequential**: read to EOF in 64 KB chunks; report MB/s
+  - **seek_4x**: seek to 10 / 30 / 60 / 90 % offsets, read 1 MB at each; report total ms
+- [ ] 9.5 Wire up three XZ libraries per variant:
+  - `lzma.open()` — stdlib baseline (no seeking; mark seek_4x as N/A)
+  - `python-xz` (`xz.open()`) — old library; skip gracefully if not installed, print a note
+  - `XzDecompressorStream` — our implementation
+- [ ] 9.6 Add tar.xz benchmark: create a tar.xz with 50 members × 2 MB each (100 MB total, multi-block); benchmark (a) extract member 0 (first), (b) extract member 49 (last); compare `python-xz` vs `XzDecompressorStream`; report seconds and MB decompressed
+- [ ] 9.7 Add output: print a formatted markdown table per operation group; save full results to `benchmarks/results/YYYY-MM-DD.json`; include Python version, platform, and library versions in JSON header
