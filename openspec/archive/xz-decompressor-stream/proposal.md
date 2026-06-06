@@ -29,3 +29,25 @@ XZ files have the same multi-stream structure as lzip: each stream ends with a f
 - **Dependency removed**: `python-xz` (optional dep in `pyproject.toml`)
 - **Config API**: `use_python_xz` field removed from `ArchiveyConfig`
 - **Test additions**: `tests/archivey/test_xz_stream.py` (mirroring `test_lzip_stream.py`)
+
+---
+
+## Archive Information
+
+**Archived:** 2026-06-06
+**Outcome:** Successfully implemented
+
+### Specs Updated
+- `openspec/specs/xz-decompressor-stream/spec.md` — complete live spec created
+
+### Implementation Summary
+All 9 task groups (94 tasks) completed:
+1. `xz_stream.py` — `_XzBlockBounds`, MBI helpers, XZ index/footer/header parsers, `_read_xz_index_backwards`
+2. `_XzState` — streaming state machine (NEED_HEADER ↔ IN_STREAM)
+3. `_XzBlockChain` — block-level decompressor using synthetic XZ stream wrapper
+4. `XzDecompressorStream` — subclass of `_SegmentedDecompressorStream`
+5. `compressed_streams.py` + config — wired XzDecompressorStream as default; python-xz as optional backend
+6. `single_file_reader.py` — `file_size` via stream seek, removed `read_xz_metadata`
+7. Tests — `test_xz_stream.py` + all integration test updates
+8. Refactor — `_SegmentedDecompressorStream` base class; Lzip/XZ stream classes co-located with format modules
+9. Benchmarks — `benchmarks/bench_xz.py`
