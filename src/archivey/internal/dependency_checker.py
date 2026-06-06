@@ -19,12 +19,12 @@ class DependencyVersions:
     pycdlib_version: Optional[str] = None
     rapidgzip_version: Optional[str] = None
     indexed_bzip2_version: Optional[str] = None
-    python_xz_version: Optional[str] = None
     uncompresspy_version: Optional[str] = None
     brotli_version: Optional[str] = None
     unrar_version: Optional[str] = None
     pyzstd_version: Optional[str] = None
     stdlib_zstd_version: Optional[str] = None
+    python_xz_version: Optional[str] = None
 
 
 def get_dependency_versions() -> DependencyVersions:
@@ -49,10 +49,10 @@ def get_dependency_versions() -> DependencyVersions:
         ("pycdlib", "pycdlib_version"),
         ("rapidgzip", "rapidgzip_version"),
         ("indexed_bzip2", "indexed_bzip2_version"),
-        ("python-xz", "python_xz_version"),
         ("uncompresspy", "uncompresspy_version"),
         ("brotli", "brotli_version"),
         ("pyzstd", "pyzstd_version"),
+        ("python-xz", "python_xz_version"),
     ]:
         try:
             setattr(versions, attr, version(package))

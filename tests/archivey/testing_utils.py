@@ -96,8 +96,6 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         pytest.importorskip("rapidgzip")
     elif format.stream == StreamFormat.BZIP2 and config.use_indexed_bzip2:
         pytest.importorskip("indexed_bzip2")
-    elif format.stream == StreamFormat.XZ and config.use_python_xz:
-        pytest.importorskip("xz")
     elif format.stream == StreamFormat.ZSTD and config.use_zstandard:
         pytest.importorskip("zstandard")
     elif format.stream == StreamFormat.ZSTD:
@@ -106,6 +104,8 @@ def skip_if_package_missing(format: ArchiveFormat, config: Optional[ArchiveyConf
         if sys.version_info < (3, 14):
             pytest.importorskip("pyzstd")
         # On Python 3.14+, compression.zstd is always available as stdlib fallback
+    elif format.stream == StreamFormat.XZ and config.use_python_xz:
+        pytest.importorskip("xz")
     elif format.stream == StreamFormat.BROTLI:
         pytest.importorskip("brotli")
     elif format.stream == StreamFormat.UNIX_COMPRESS:

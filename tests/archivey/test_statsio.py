@@ -39,7 +39,6 @@ def test_open_archive_statsio(
         config = ArchiveyConfig(
             use_rapidgzip=True,
             use_indexed_bzip2=True,
-            use_python_xz=True,
             use_zstandard=True,
         )
     else:
@@ -353,7 +352,6 @@ def test_open_archive_statsio_io_methods(
         config = ArchiveyConfig(
             use_rapidgzip=True,
             use_indexed_bzip2=True,
-            use_python_xz=True,
             use_zstandard=True,
         )
     else:

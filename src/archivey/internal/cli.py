@@ -178,11 +178,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use indexed_bzip2 for reading bzip2-compressed files",
     )
-    parser.add_argument(
-        "--use-python-xz",
-        action="store_true",
-        help="Use python-xz for reading xz-compressed files",
-    )
     parser.add_argument("--stream", action="store_true", help="Stream the archive")
     parser.add_argument(
         "--info", action="store_true", help="Print info about the archive"
@@ -271,7 +266,6 @@ def main(argv: list[str] | None = None) -> None:
                 use_single_file_stored_metadata=args.use_stored_metadata,
                 use_rapidgzip=args.use_rapidgzip,
                 use_indexed_bzip2=args.use_indexed_bzip2,
-                use_python_xz=args.use_python_xz,
                 overwrite_mode=OverwriteMode[args.overwrite_mode.upper()],
             )
             with open_archive(

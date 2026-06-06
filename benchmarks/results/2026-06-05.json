@@ -1,0 +1,90 @@
+{
+  "meta": {
+    "date": "2026-06-05",
+    "python_version": "3.11.15",
+    "platform": "Linux-6.18.5-x86_64-with-glibc2.39",
+    "size_mb": 20,
+    "runs": 1,
+    "libraries": {
+      "lzma": "stdlib",
+      "python_xz": null,
+      "XzDecompressorStream": "this build"
+    }
+  },
+  "variants": {
+    "single_block": {
+      "lzma.open (stdlib)": {
+        "open_size_ms": 220.07,
+        "sequential_mbs": 89.85,
+        "sequential_ms": 222.58,
+        "seek_4x_ms": 227.76
+      },
+      "python-xz": {
+        "skipped": true
+      },
+      "XzDecompressorStream": {
+        "open_size_ms": 0.22,
+        "sequential_mbs": 82.28,
+        "sequential_ms": 243.06,
+        "seek_4x_ms": 240.69
+      }
+    },
+    "multi_block_1mb": {
+      "lzma.open (stdlib)": {
+        "open_size_ms": 217.22,
+        "sequential_mbs": 93.96,
+        "sequential_ms": 212.87,
+        "seek_4x_ms": 202.15
+      },
+      "python-xz": {
+        "skipped": true
+      },
+      "XzDecompressorStream": {
+        "open_size_ms": 0.23,
+        "sequential_mbs": 90.43,
+        "sequential_ms": 221.17,
+        "seek_4x_ms": 14.18
+      }
+    },
+    "multi_stream_100": {
+      "lzma.open (stdlib)": {
+        "open_size_ms": 233.36,
+        "sequential_mbs": 84.79,
+        "sequential_ms": 235.87,
+        "seek_4x_ms": 233.02
+      },
+      "python-xz": {
+        "skipped": true
+      },
+      "XzDecompressorStream": {
+        "open_size_ms": 1.27,
+        "sequential_mbs": 77.72,
+        "sequential_ms": 257.33,
+        "seek_4x_ms": 21.24
+      }
+    },
+    "multi_block_trailing": {
+      "lzma.open (stdlib)": {
+        "open_size_ms": 212.43,
+        "sequential_mbs": 94.05,
+        "sequential_ms": 212.66,
+        "seek_4x_ms": 203.23
+      },
+      "python-xz": {
+        "skipped": true
+      },
+      "XzDecompressorStream": {
+        "open_size_ms": 0.37,
+        "sequential_mbs": 90.23,
+        "sequential_ms": 221.64,
+        "seek_4x_ms": 204.65
+      }
+    }
+  },
+  "tar_xz": {
+    "XzDecompressorStream": {
+      "first_member_ms": 38.47,
+      "last_member_ms": 34.23
+    }
+  }
+}

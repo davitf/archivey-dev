@@ -518,7 +518,7 @@ LZIP_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.lz",
     format=ArchiveFormat.LZIP,
     generation_method=GenerationMethod.SINGLE_FILE_LIBRARY,
-    features=ArchiveFormatFeatures(file_size=False, mtime_with_tz=True),
+    features=ArchiveFormatFeatures(file_size=True, mtime_with_tz=True),
 )
 ZLIB_LIBRARY = ArchiveCreationInfo(
     file_suffix="lib.zz",
@@ -1221,8 +1221,8 @@ SANITIZE_ARCHIVES = (
 ALTERNATIVE_CONFIG = ArchiveyConfig(
     use_rapidgzip=True,
     use_indexed_bzip2=True,
-    use_python_xz=True,
     use_zstandard=True,
+    use_python_xz=True,
 )
 
 ALTERNATIVE_PACKAGES_FORMATS = (

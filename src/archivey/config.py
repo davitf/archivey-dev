@@ -32,14 +32,14 @@ class ArchiveyConfig:
     use_indexed_bzip2: bool = False
     "Alternative library that can be used instead of the builtin bzip2 module to read bzip2 streams. Provides multithreaded decompression and random access support."
 
-    use_python_xz: bool = False
-    "Alternative library that can be used instead of the builtin xz module to read xz streams. Provides random access support."
-
     use_zstandard: bool = False
     "An alternative to pyzstd. Not as good at error reporting."
 
     use_rar_stream: bool = False
     "If set, use an alternative approach instead of calling rarfile when iterating over RAR archive members. This supports decompressing multiple members in a solid archive by going through the archive only once, instead of once per member."
+
+    use_python_xz: bool = False
+    "Use python-xz library for XZ streams instead of the default XzDecompressorStream (stdlib only). Raises PackageNotInstalledError if enabled but python-xz is not installed."
 
     use_single_file_stored_metadata: bool = False
     "If set, data stored in compressed stream headers is set in the ArchiveMember object for single-file compressed archives, instead of basing it only on the file itself. (filename and modification time for gzip archives only)"
@@ -63,8 +63,8 @@ ExtractionFilterLiteral: TypeAlias = Literal["data", "tar", "fully_trusted"]
 class ConfigOverrides(TypedDict, total=False):
     use_rapidgzip: bool | None
     use_indexed_bzip2: bool | None
-    use_python_xz: bool | None
     use_zstandard: bool | None
+    use_python_xz: bool | None
     use_rar_stream: bool | None
     use_single_file_stored_metadata: bool | None
     tar_check_integrity: bool | None

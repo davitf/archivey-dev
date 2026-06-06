@@ -561,7 +561,6 @@ def test_read_single_file_compressed_archives(
         config = ArchiveyConfig(
             use_rapidgzip=True,
             use_indexed_bzip2=True,
-            use_python_xz=True,
             use_zstandard=True,
             use_single_file_stored_metadata=True,
         )

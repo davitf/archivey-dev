@@ -32,7 +32,6 @@ def test_open_compressed_stream_from_file(
         config = ArchiveyConfig(
             use_rapidgzip=True,
             use_indexed_bzip2=True,
-            use_python_xz=True,
             use_zstandard=True,
         )
     else:
@@ -68,7 +67,6 @@ def test_open_compressed_stream_from_stream(
         config = ArchiveyConfig(
             use_rapidgzip=True,
             use_indexed_bzip2=True,
-            use_python_xz=True,
             use_zstandard=True,
         )
     else:
@@ -99,7 +97,6 @@ def test_open_compressed_stream_from_stream_with_prefix(
         config = ArchiveyConfig(
             use_rapidgzip=True,
             use_indexed_bzip2=True,
-            use_python_xz=True,
             use_zstandard=True,
         )
     else:
@@ -132,7 +129,6 @@ def test_open_compressed_stream_from_archive(
         config = ArchiveyConfig(
             use_rapidgzip=True,
             use_indexed_bzip2=True,
-            use_python_xz=True,
             use_zstandard=True,
         )
     else:

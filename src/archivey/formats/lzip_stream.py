@@ -49,6 +49,10 @@ from dataclasses import dataclass
 from typing import BinaryIO
 
 from archivey.exceptions import ArchiveCorruptedError, ArchiveEOFError
+from archivey.formats.decompressor_stream import (
+    SeekPoint,
+    _SegmentedDecompressorStream,
+)
 
 # lzip member header is always 6 bytes: magic(4) + version(1) + coded_dict(1)
 _MAGIC = b"LZIP"
@@ -319,3 +323,41 @@ class _LzipState:
             )
         self._members_seen += 1
         return (int(data_size), int(member_size))
+
+
+class LzipDecompressorStream(_SegmentedDecompressorStream[_LzipState]):
+    """Seekable lzip decompressor backed by Python's stdlib lzma.
+
+    Builds a seek-point table from member headers/trailers:
+      - Progressively as members are decoded during forward reads.
+      - On-demand via a one-shot backwards trailer scan (_build_index).
+
+    The table enables efficient SEEK_END (no decompression), backward seeks
+    (jump to the nearest indexed member), and forward seeks across already-
+    indexed members.
+    """
+
+    def _make_decompressor(self, point: SeekPoint) -> _LzipState:
+        return _LzipState()
+
+    def _on_completed_segments(self, units: list[tuple[int, int]]) -> None:
+        for decompressed_size, compressed_size in units:
+            self.add_seek_points([SeekPoint(self._decomp_cursor, self._comp_cursor)])
+            self._comp_cursor += compressed_size
+            self._decomp_cursor += decompressed_size
+
+    def _build_index(self, last_known: SeekPoint) -> tuple[list[SeekPoint], int | None]:
+        """Scan member trailers backwards to build the complete index.
+
+        On failure (e.g. trailing data after the last member, which is valid
+        per the lzip spec §7), logs a warning and falls back to sequential
+        decompression.
+        """
+        return self._build_index_backwards(
+            last_known,
+            _read_index_backwards,
+            lambda m: SeekPoint(m.decompressed_start, m.compressed_start),
+            "Lzip backwards index scan failed (the file may have trailing "
+            "data after the last member, which is valid per the lzip spec); "
+            "falling back to sequential decompression. Reason: %s",
+        )

@@ -65,11 +65,6 @@ else:
         indexed_bzip2 = None
 
     try:
-        import xz
-    except ImportError:
-        xz = None
-
-    try:
         import uncompresspy
     except ImportError:
         uncompresspy = None
@@ -78,6 +73,11 @@ else:
         import brotli
     except ImportError:
         brotli = None
+
+    try:
+        import xz
+    except ImportError:
+        xz = None
 
 
 import logging
@@ -91,9 +91,10 @@ from archivey.exceptions import (
 )
 from archivey.formats.decompressor_stream import (
     BrotliDecompressorStream,
-    LzipDecompressorStream,
     ZlibDecompressorStream,
 )
+from archivey.formats.lzip_stream import LzipDecompressorStream
+from archivey.formats.xz_stream import XzDecompressorStream
 from archivey.internal.io_helpers import ensure_binaryio
 
 logger = logging.getLogger(__name__)
@@ -235,20 +236,29 @@ def open_lzma_stream(path: str | BinaryIO) -> BinaryIO:
     return ensure_binaryio(lzma.open(path))
 
 
+def _translate_xz_exception(e: Exception) -> Optional[ArchiveError]:
+    if isinstance(e, lzma.LZMAError):
+        return ArchiveCorruptedError(f"Error reading XZ archive: {repr(e)}")
+    if isinstance(e, EOFError):
+        return ArchiveEOFError(f"XZ file is truncated: {repr(e)}")
+    return None
+
+
+def open_xz_stream(path: str | BinaryIO) -> BinaryIO:
+    return XzDecompressorStream(path)
+
+
 def _translate_python_xz_exception(e: Exception) -> Optional[ArchiveError]:
     if isinstance(e, xz.XZError):
         return ArchiveCorruptedError(f"Error reading XZ archive: {repr(e)}")
     if isinstance(e, ValueError) and "filename is not seekable" in str(e):
         return ArchiveStreamNotSeekableError(
-            "Python XZ does not support non-seekable streams"
+            "python-xz does not support non-seekable streams"
         )
-    # Raised by RecordableStream (used to wrap non-seekable streams during format
-    # detection) when the library tries to seek to the end.
     if isinstance(e, io.UnsupportedOperation) and "seek to end" in str(e):
         return ArchiveStreamNotSeekableError(
-            "Python XZ does not support non-seekable streams"
+            "python-xz does not support non-seekable streams"
         )
-
     return None  # pragma: no cover -- all possible exceptions should have been handled
 
 
@@ -256,7 +266,7 @@ def open_python_xz_stream(path: str | BinaryIO) -> BinaryIO:
     if xz is None:
         raise PackageNotInstalledError(
             "python-xz package is not installed, required for XZ archives"
-        ) from None  # pragma: no cover -- lz4 is installed for main tests
+        ) from None
 
     return ensure_binaryio(xz.open(path))
 
@@ -487,7 +497,7 @@ def get_stream_open_fn(
     if format == StreamFormat.XZ:
         if config.use_python_xz:
             return open_python_xz_stream, _translate_python_xz_exception
-        return open_lzma_stream, _translate_lzma_exception
+        return open_xz_stream, _translate_xz_exception
 
     if format == StreamFormat.LZ4:
         return open_lz4_stream, _translate_lz4_exception

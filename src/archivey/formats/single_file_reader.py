@@ -11,6 +11,7 @@ from archivey.exceptions import (
     ArchiveStreamNotSeekableError,
 )
 from archivey.formats.compressed_streams import get_stream_open_fn
+from archivey.formats.decompressor_stream import DecompressorStream
 from archivey.formats.format_detection import EXTENSION_TO_FORMAT
 from archivey.internal.base_reader import BaseArchiveReader
 from archivey.internal.io_helpers import (  # Updated import
@@ -134,79 +135,6 @@ def read_gzip_metadata(
             pass
 
 
-def _read_xz_multibyte_integer(data: bytes, offset: int) -> tuple[int, int]:
-    """
-    Read a multi-byte integer from the data at the given offset.
-    """
-    value = 0
-    shift = 0
-    while True:
-        b = data[offset]
-        offset += 1
-        value |= (b & 0x7F) << shift
-        if b & 0x80 == 0:
-            break
-        shift += 7
-
-    return value, offset
-
-
-XZ_MAGIC_FOOTER = b"YZ"
-XZ_STREAM_HEADER_MAGIC = b"\xfd7zXZ\x00"
-
-
-def read_xz_metadata(path: str | BinaryIO, member: ArchiveMember):
-    logger.info("Reading XZ metadata for %s", path)
-    with open_if_file(path) as f:
-        try:
-            f.seek(-12, 2)  # Footer is always 12 bytes
-        except io.UnsupportedOperation:
-            # Stream not seekable or not seekable to end
-            return
-
-        footer = read_exact(f, 12)
-
-        if footer[-2:] != XZ_MAGIC_FOOTER:
-            logger.warning("Invalid XZ footer, file possibly truncated: %s", path)
-            return
-
-        # Backward Size (first 4 bytes) tells how far back the Index is, in 4-byte units minus 1
-        backward_size_field = struct.unpack("<I", footer[4:8])[0]
-        index_size = (backward_size_field + 1) * 4
-        logger.info(
-            "XZ metadata: index_size=%s, backward_size_field=%s",
-            index_size,
-            backward_size_field,
-        )
-
-        f.seek(-12 - index_size, 2)
-        index_data = read_exact(f, index_size)
-
-        # Skip index indicator byte and reserved bits (first byte)
-        if index_data[0] != 0x00:
-            logger.warning("Invalid XZ footer, file possibly corrupted: %s", path)
-            return
-
-        # Next 2–10 bytes are variable-length field counts and sizes
-        # We just want the uncompressed size (encoded as a multi-byte integer)
-
-        # Decode the first count (number of records)
-        blocks = []
-        total_uncompressed_size = 0
-
-        offset = 1
-        number_of_blocks, offset = _read_xz_multibyte_integer(index_data, offset)
-
-        for _ in range(number_of_blocks):
-            count, offset = _read_xz_multibyte_integer(index_data, offset)
-            uncompressed_size, offset = _read_xz_multibyte_integer(index_data, offset)
-            blocks.append((uncompressed_size, offset))
-            total_uncompressed_size += uncompressed_size
-
-        member.file_size = total_uncompressed_size
-        logger.debug(
-            f"XZ metadata: total_size={total_uncompressed_size}, num_blocks={number_of_blocks}, blocks={blocks}"
-        )
 
 
 class SingleFileReader(BaseArchiveReader):
@@ -286,8 +214,6 @@ class SingleFileReader(BaseArchiveReader):
         if seekable:
             if self.format == ArchiveFormat.GZIP:
                 read_gzip_metadata(archive_path, self.member, self.use_stored_metadata)
-            elif self.format == ArchiveFormat.XZ:
-                read_xz_metadata(archive_path, self.member)
 
         # Open the file to see if it's supported by the library and valid.
         # To avoid opening the file twice, we'll store the reference and return it
@@ -302,6 +228,11 @@ class SingleFileReader(BaseArchiveReader):
             archive_path=self.path_str,
             member_name=self.member.filename,
         )
+
+        if seekable and self.fileobj is not None and self.fileobj.seekable():
+            if self.format in (ArchiveFormat.XZ, ArchiveFormat.LZIP):
+                if isinstance(self.fileobj, DecompressorStream):
+                    self.member.file_size = self.fileobj.try_get_size()
 
     def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
         return self._exception_translator(e)

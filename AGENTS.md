@@ -81,6 +81,38 @@ It will print the contents of the archive, as read by the corresponding ArchiveR
 along with the file hashes (computed by reading the archive members).
 
 
+## XZ decompression backend
+
+The default XZ backend is `XzDecompressorStream`, a native implementation built
+on stdlib `lzma`. It requires no external packages and supports random access via
+a backward index scan that builds block-level seek points without reading the full
+file.
+
+`python-xz` is available as an optional alternative backend. To use it, install
+the package and set `use_python_xz=True` in `ArchiveyConfig`. If the flag is
+`True` but the package is not installed, `PackageNotInstalledError` is raised.
+This follows the same pattern as `use_rapidgzip` and `use_indexed_bzip2`.
+
+```python
+from archivey import open_archive
+from archivey.config import ArchiveyConfig
+
+# Default: uses XzDecompressorStream (no extra packages needed)
+arc = open_archive("file.tar.xz")
+
+# Optional: use python-xz if installed
+arc = open_archive("file.tar.xz", config=ArchiveyConfig(use_python_xz=True))
+```
+
+To benchmark XZ decompression performance across backends:
+
+```bash
+uv run python benchmarks/bench_xz.py
+uv run python benchmarks/bench_xz.py --quick   # shorter run
+```
+
+See `benchmarks/README.md` for details on what each variant tests.
+
 ## Best practices
 
 - All exceptions raised by libraries should be wrapped in an exception defined in
