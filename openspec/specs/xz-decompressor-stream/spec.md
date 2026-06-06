@@ -1,6 +1,6 @@
 # XZ Decompressor Stream Specification
 
-## Overview
+## Purpose
 
 `XzDecompressorStream` is the default decompressor for XZ-format files. It extends
 `_SegmentedDecompressorStream` (the intermediate base class for segmented formats)
@@ -17,9 +17,7 @@ and provides:
 An optional `python-xz` library backend is available via `use_python_xz=True` in
 `ArchiveyConfig`, but the default is always `XzDecompressorStream`.
 
----
-
-## Architecture
+### Architecture
 
 ```
 DecompressorStream[T]
@@ -30,8 +28,6 @@ _XzState         ← forward streaming state machine (NEED_HEADER → IN_STREAM 
 _XzBlockChain    ← block-level decompressor for random access seeks
 _XzBlockBounds   ← dataclass: compressed/decompressed offsets + block metadata
 ```
-
-### Key data structures
 
 **`_XzBlockBounds`** — one entry per block (from the XZ stream index):
 - `compressed_start`: absolute byte offset of the block in the file
@@ -44,9 +40,9 @@ _XzBlockBounds   ← dataclass: compressed/decompressed offsets + block metadata
 **`SeekPoint.state`** — stores an `_XzBlockBounds` directly for block-level seek
 points. Stream-level fallback seek points have `state=None`.
 
----
+## Requirements
 
-## Sequential Decompression
+**Sequential decompression**
 
 ### Requirement: Single-stream XZ file reads correctly
 `XzDecompressorStream` SHALL decompress a single-stream XZ file, producing the
@@ -64,8 +60,8 @@ Concatenated XZ streams SHALL be decompressed in order.
 - THEN `read()` returns the decompressed content of all streams concatenated in order
 
 ### Requirement: Stream padding is handled transparently
-4-byte-aligned null padding bytes between XZ streams (as allowed by the XZ spec)
-SHALL be silently skipped.
+Null padding bytes (4-byte-aligned) between XZ streams SHALL be silently skipped,
+as allowed by the XZ spec.
 
 #### Scenario: Stream padding
 - WHEN a file contains 4-byte-aligned null padding between two XZ streams
@@ -79,9 +75,7 @@ be silently ignored (not treated as an error), consistent with `_LzipState` beha
 - WHEN a file has valid XZ streams followed by bytes not starting with the XZ magic
 - THEN `read()` returns only the decompressed content of the valid streams
 
----
-
-## Non-Seekable Stream Support
+**Non-seekable stream support**
 
 ### Requirement: Non-seekable stream degrades to sequential-only
 When `XzDecompressorStream` wraps a non-seekable file-like object, it SHALL
@@ -93,9 +87,7 @@ still decompress correctly while disabling all seeking and index-building featur
 - THEN `seek()` raises `io.UnsupportedOperation`
 - THEN `read()` still returns the full decompressed content
 
----
-
-## SEEK_END Without Decompression
+**SEEK_END without decompression**
 
 ### Requirement: SEEK_END resolves via backwards index scan
 `seek(0, SEEK_END)` SHALL return the total decompressed size by reading only XZ
@@ -113,9 +105,7 @@ stream footers and block indices — no decompression is performed.
 - WHEN a file has two XZ streams with decompressed sizes A and B
 - THEN `seek(0, SEEK_END)` returns `A + B`
 
----
-
-## Block-Level Random Access
+**Block-level random access**
 
 ### Requirement: Backwards index scan is correct for multi-stream files
 `_read_xz_index_backwards` SHALL walk all XZ streams from EOF to file start,
@@ -158,16 +148,16 @@ After the index is built, seeking forward SHALL skip all blocks before the targe
 - WHEN the index is built and a forward seek targets the start of block N
 - THEN blocks before N are not decompressed
 
-### Requirement: seek(-N, SEEK_END) lands in the correct block
+### Requirement: Relative seek from end lands in the correct block
+`seek(-N, SEEK_END)` SHALL position the stream `N` bytes before the end after the
+index is built.
 
 #### Scenario: Relative seek from end
 - WHEN `seek(-N, SEEK_END)` is called after the index is built
 - THEN the stream position is `total_size - N`
 - THEN subsequent `read()` returns the last N bytes
 
----
-
-## Progressive Index Building
+**Progressive index building**
 
 ### Requirement: Per-stream backward scan runs during forward reads
 When a complete XZ stream is read sequentially, `XzDecompressorStream` SHALL
@@ -181,15 +171,23 @@ waiting for a full `_build_index()` call (triggered by SEEK_END or a backward se
 - Once `_index_built = True` (after a full `_build_index()` run), per-stream scans
   are suppressed
 
+#### Scenario: Block seek points available after reading a stream
+- WHEN a complete XZ stream has been read sequentially
+- THEN block-level seek points for that stream are available without a full
+  `_build_index()` call
+
 ### Requirement: Block seek points and stream seek points coexist correctly
-Block-level seek points (from both per-stream scans and full `_build_index()`)
-and stream-level fallback seek points coexist in `_seek_points`. The initial
+Block-level and stream-level fallback seek points SHALL coexist in `_seek_points`
+(block points come from both per-stream scans and full `_build_index()`). The initial
 `SeekPoint(0, 0, state=None)` (stream-level fallback) is always present and covers
 seeks to the very start of the file. `add_seek_points` handles deduplication.
 
----
+#### Scenario: Initial stream-level seek point always present
+- WHEN a fresh `XzDecompressorStream` is created
+- THEN `_seek_points` contains the initial `SeekPoint(0, 0, state=None)` that
+  covers seeks to the start of the file
 
-## Block Decompressor — Synthetic XZ Stream Wrapper
+**Block decompressor — synthetic XZ stream wrapper**
 
 ### Requirement: Block-level decompression uses synthetic XZ stream wrapping
 `_XzBlockChain` SHALL decompress individual blocks by wrapping each block's raw
@@ -204,9 +202,12 @@ by the python-xz library.
   so the `_SegmentedDecompressorStream` base class sees a single uninterrupted feed/flush
   interface
 
----
+#### Scenario: Block decompressed via synthetic stream
+- WHEN a single block is decompressed for a random-access seek
+- THEN its raw bytes are wrapped in a synthetic XZ stream and decompressed with
+  `LZMADecompressor(format=FORMAT_XZ)`, yielding the block's content
 
-## SingleFileReader Integration
+**SingleFileReader integration**
 
 ### Requirement: SingleFileReader reports correct file_size for XZ and lzip
 `SingleFileReader` SHALL populate `member.file_size` for XZ and lzip files by
@@ -226,13 +227,11 @@ is needed.
 - WHEN a lzip file is opened via `SingleFileReader`
 - THEN `member.file_size` is set to the total decompressed size (not `None`)
 
----
-
-## Optional python-xz Backend
+**Optional python-xz backend**
 
 ### Requirement: use_python_xz config field selects the python-xz library backend
 When `use_python_xz=True` is set in `ArchiveyConfig`, XZ streams SHALL use
-`indexed_bzip2`-style random access via the `python-xz` library.
+random access via the `python-xz` library.
 
 #### Scenario: use_python_xz=True uses python-xz
 - WHEN `get_stream_open_fn(StreamFormat.XZ, config)` is called with `config.use_python_xz=True`
@@ -246,18 +245,28 @@ When `use_python_xz=True` is set in `ArchiveyConfig`, XZ streams SHALL use
 - WHEN `use_python_xz` is `False` (default)
 - THEN XZ archives open via `XzDecompressorStream` regardless of whether python-xz is installed
 
----
-
-## Error Handling
+**Error handling**
 
 ### Requirement: Truncated mid-stream raises ArchiveEOFError
-If the input ends while a stream is being decompressed (not cleanly between streams),
-`_XzState.flush()` SHALL raise `ArchiveEOFError`.
+`_XzState.flush()` SHALL raise `ArchiveEOFError` if the input ends while a stream
+is being decompressed (not cleanly between streams).
+
+#### Scenario: Truncated XZ stream
+- WHEN the input ends partway through an XZ stream
+- THEN `ArchiveEOFError` is raised
 
 ### Requirement: No valid streams raises ArchiveCorruptedError
-If `flush()` is called without any complete XZ streams having been seen,
-`_XzState.flush()` SHALL raise `ArchiveCorruptedError`.
+`_XzState.flush()` SHALL raise `ArchiveCorruptedError` if it is called without
+any complete XZ streams having been seen.
+
+#### Scenario: No complete streams
+- WHEN flushing without any complete XZ stream having been seen
+- THEN `ArchiveCorruptedError` is raised
 
 ### Requirement: LZMA errors are translated to ArchiveCorruptedError
 `lzma.LZMAError` SHALL be caught and translated to `ArchiveCorruptedError` by
 `_translate_xz_exception`.
+
+#### Scenario: LZMA error translated
+- WHEN `lzma.LZMAError` is raised while decompressing an XZ stream
+- THEN it is translated to `ArchiveCorruptedError`

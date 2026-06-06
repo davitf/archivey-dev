@@ -5,8 +5,9 @@ Archivey is a library for reading many common archive formats through a simple, 
 ## Features
 
 - Automatic file format detection
-- Support for ZIP, TAR (including `.tar.gz`, `.tar.bz2`, etc.), RAR and 7z archives
-- Support for single-file compressed formats like gzip, bzip2, xz, zstd and lz4
+- Support for ZIP, TAR (including `.tar.gz`, `.tar.bz2`, etc.), RAR, 7z and ISO archives
+- Reading plain directories through the same interface
+- Support for single-file compressed formats: gzip, bzip2, xz, zstd, lz4, lzip, zlib, brotli and Unix compress
 - Consistent handling of symlinks, file times, permissions, and passwords
 - Consistent exception hierarchy
 - Optimized for sequential iteration over archive members
@@ -28,11 +29,13 @@ If you'd rather manage dependencies yourself, install only the extras you need. 
 | TAR archives | `.tar`, `.tar.*` | [`tarfile`](https://docs.python.org/3/library/tarfile.html) | | |
 | RAR archives | `.rar` | | [`rarfile`](https://pypi.org/project/rarfile)<br>[`cryptography`](https://pypi.org/project/cryptography) (for encrypted headers) | `unrar` binary |
 | 7z archives | `.7z` | | [`py7zr`](https://pypi.org/project/py7zr) | |
+| ISO images | `.iso` | | [`pycdlib`](https://pypi.org/project/pycdlib) | |
 | Gzip | `.gz` | [`gzip`](https://docs.python.org/3/library/gzip.html) | [`rapidgzip`](https://pypi.org/project/rapidgzip) (multithreaded decompression and random access) | |
 | Bzip2 | `.bz2` | [`bz2`](https://docs.python.org/3/library/bz2.html) | [`indexed_bzip2`](https://pypi.org/project/indexed-bzip2) (multithreaded decompression and random access) | |
-| XZ | `.xz` | [`lzma`](https://docs.python.org/3/library/lzma.html) | [`python-xz`](https://pypi.org/project/python-xz) (random access) | |
-| Zstandard | `.zst` | | [`pyzstd`](https://pypi.org/project/pyzstd) (preferred) or [`zstandard`](https://pypi.org/project/zstandard) | |
+| XZ | `.xz` | [`lzma`](https://docs.python.org/3/library/lzma.html) (native reader with random access) | [`python-xz`](https://pypi.org/project/python-xz) (alternative random-access backend) | |
+| Zstandard | `.zst` | [`compression.zstd`](https://docs.python.org/3.14/library/compression.zstd.html) (Python 3.14+) | [`pyzstd`](https://pypi.org/project/pyzstd) (preferred) or [`zstandard`](https://pypi.org/project/zstandard) | |
 | LZ4 | `.lz4` | | [`lz4`](https://pypi.org/project/lz4) | |
+| Lzip | `.lz` | [`lzma`](https://docs.python.org/3/library/lzma.html) (native reader with random access) | | |
 | Zlib | `.zz` | [`zlib`](https://docs.python.org/3/library/zlib.html) | | |
 | Brotli | `.br` | | [`brotli`](https://pypi.org/project/brotli) | |
 | Unix compress | `.Z` | | [`uncompresspy`](https://pypi.org/project/uncompresspy) | |
@@ -76,13 +79,13 @@ Some libraries may decompress parts of the archive multiple times if you list th
 ```python
 from archivey import open_archive
 
-with open_archive("example.tar.gz", streaming_only=True) as archive:
-    for member, stream in [archive.iter_members_with_streams()]:
+with open_archive("example.tar.gz", streaming=True) as archive:
+    for member, stream in archive.iter_members_with_streams():
         data = stream and stream.read(20)
         print(member.filename, member.file_size, data)
 ```
 
-`streaming_only` is an optional argument; if set, it disallows some methods to ensure your code doesn't accidentally perform expensive operations. ([more details](user_guide.md#streaming-safe-methods))
+`streaming` is an optional argument; if set, it disallows some methods to ensure your code doesn't accidentally perform expensive operations, and allows reading from non-seekable sources (e.g. pipes or network streams). ([more details](user_guide.md#streaming-safe-methods))
 
 ### Single-file compressed streams
 
@@ -146,18 +149,15 @@ For more detailed information on using and extending `archivey`, please refer to
 
 Some things on my radar for future versions. Feel free to pick some to contribute!
 
-*   Archive format support: [ar archives](https://en.wikipedia.org/wiki/Ar_(Unix)) (`.ar`, `.deb`), [ISO images](https://en.wikipedia.org/wiki/Optical_disc_image) (`.iso`)
-*   Compression format support: [Brotli](https://en.wikipedia.org/wiki/Brotli)
+*   Archive format support: [ar archives](https://en.wikipedia.org/wiki/Ar_(Unix)) (`.ar`, `.deb`)
 *   Add [libarchive](https://pypi.org/project/libarchive/) as a backend, see what it allows us to do
 *   Opening self-extracting (SFX) RAR and 7z archives
 *   Non-seeking access to ZIP archives (similar approach to [`stream-unzip`](http://pypi.org/project/stream-unzip))
-*   Use [builtin Zstandard](https://docs.python.org/3.14/whatsnew/3.14.html#whatsnew314-pep784) in Python 3.14
 *   Auto-select libraries or implementations to use based on what is installed and/or required features
 *   Archive writing support
 *   Bug: ZIP filename decoding can be wrong in some cases (see sample archive `tests/test_archives_external/encoding_infozip_jules.zip`)
-*   Test under Windows / Mac (there are CI tests, but with failures)
+*   Test under Windows / Mac (there are CI tests, but we haven't done detailed manual testing)
     *   There should be archives generated in Mac / Windows in test_archives
     *   Possibly: use [oschmod](https://pypi.org/project/oschmod/) for setting permissions properly under Windows
-*   Add additional metadata fields (Windows permissions (read-only) in 7z files)
 *   Add Pathlib-compatible wrapper that allows accessing files inside archives
 *   Try to read / extract all the test archives in unittests for underlying libraries, and old/weird files, to find bugs

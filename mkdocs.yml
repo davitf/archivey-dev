@@ -3,6 +3,7 @@ site_url: https://davitf.github.io/archivey/
 nav:
   - Home: index.md
   - User guide: user_guide.md
+  - Design principles: design_principles.md
   - Developer guide: developer_guide.md
   - API reference: api.md
 plugins:
