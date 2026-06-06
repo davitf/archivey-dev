@@ -6,10 +6,11 @@ from typing import BinaryIO, Callable
 
 from archivey.archive_reader import ArchiveReader
 from archivey.config import ArchiveyConfig, archivey_config, get_archivey_config
-from archivey.exceptions import ArchiveNotSupportedError
+from archivey.exceptions import ArchiveNotSupportedError, ArchiveStreamNotSeekableError
 from archivey.formats.compressed_streams import open_stream
 from archivey.formats.folder_reader import FolderReader
 from archivey.formats.format_detection import detect_archive_format
+from archivey.formats.iso_reader import IsoReader
 from archivey.formats.rar_reader import RarReader
 from archivey.formats.sevenzip_reader import SevenZipReader
 from archivey.formats.single_file_reader import SingleFileReader
@@ -50,6 +51,7 @@ _FORMAT_TO_READER: dict[ContainerFormat, Callable[..., ArchiveReader]] = {
     ContainerFormat.ZIP: ZipReader,
     ContainerFormat.SEVENZIP: SevenZipReader,
     ContainerFormat.TAR: TarReader,
+    ContainerFormat.ISO: IsoReader,
     ContainerFormat.FOLDER: FolderReader,
     ContainerFormat.RAW_STREAM: SingleFileReader,
 }
@@ -59,7 +61,8 @@ def open_archive(
     path_or_stream: str | bytes | os.PathLike | ReadableBinaryStream,
     *,
     config: ArchiveyConfig | None = None,
-    streaming_only: bool = False,
+    streaming: bool = False,
+    streaming_only: bool | None = None,
     pwd: bytes | str | None = None,
     format: ArchiveFormat | ContainerFormat | StreamFormat | None = None,
 ) -> ArchiveReader:
@@ -73,13 +76,13 @@ def open_archive(
             behavior. If `None`, the default configuration (which may have been
             customized with [set_archivey_config][archivey.set_archivey_config]) is
             used.
-        streaming_only: If `True`, forces the archive to be opened in a streaming-only
-            mode, even if it supports random access. This can be more efficient if you
-            only need to extract the archive or iterate over its members once.
-
-            If set to `True`, disables random access methods like `open()` and
-            `extract()` to avoid expensive seeks or rewinds. Calls to those methods will
-            raise a `ValueError`.
+        streaming: If ``True``, open in streaming mode: only sequential iteration
+            via `iter_members_with_streams()` and `extractall()` are available.
+            Non-seekable streams are accepted. If ``False`` (default), random access
+            is required; passing a non-seekable stream raises
+            `ArchiveStreamNotSeekableError`.
+        streaming_only: Deprecated alias for ``streaming``. If provided, overrides
+            ``streaming`` and emits a deprecation warning.
         pwd: Optional password used to decrypt the archive if it is encrypted.
         format: Optional archive format to use. If `None`, the format is auto-detected.
 
@@ -91,6 +94,9 @@ def open_archive(
         ArchiveNotSupportedError: If the archive format is not supported or cannot
             be determined.
         ArchiveCorruptedError: If the archive is detected as corrupted during opening.
+        ArchiveStreamNotSeekableError: If ``streaming=False`` and the source is not
+            seekable, or if ``streaming=True`` but the format cannot operate on a
+            non-seekable source.
         ArchiveEncryptedError: If the archive is encrypted and no password is provided,
             or if the provided password is incorrect. This will only be raised here
             if the archive header is encrypted; otherwise, the incorrect password
@@ -111,8 +117,17 @@ def open_archive(
             print(f"An archive error occurred: {e}")
         ```
     """
+    if streaming_only is not None:
+        import warnings
+        warnings.warn(
+            "streaming_only is deprecated; use streaming=True instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        streaming = streaming_only
+
     logger.debug(
-        f"open_archive({path_or_stream}, config={config}, streaming_only={streaming_only}, pwd={pwd}, format={format})"
+        f"open_archive({path_or_stream}, config={config}, streaming={streaming}, pwd={pwd}, format={format})"
     )
 
     if pwd is not None and not isinstance(pwd, (str, bytes)):
@@ -125,7 +140,17 @@ def open_archive(
     rewindable_wrapper: RewindableStreamWrapper | None = None
     if stream is not None:
         assert not stream.closed
-        if is_seekable(stream):
+        source_is_seekable = is_seekable(stream)
+
+        if not streaming and not source_is_seekable:
+            raise ArchiveStreamNotSeekableError(
+                "The source stream is not seekable. Pass streaming=True to "
+                "open_archive() if you want to support non-seekable streams. "
+                "Note: streaming mode disables random-access methods (open(), "
+                "extract(), get_members())."
+            )
+
+        if source_is_seekable:
             stream.seek(0)
 
         # Many reader libraries expect the stream's read() method to return the
@@ -184,7 +209,7 @@ def open_archive(
             format=format,
             archive_path=ensure_not_none(stream or path),
             pwd=pwd,
-            streaming_only=streaming_only,
+            streaming_only=streaming,
         )
 
 

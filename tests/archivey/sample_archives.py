@@ -549,16 +549,32 @@ FOLDER_FORMAT = ArchiveCreationInfo(
         hardlink_mtime=False,  # Hardlinks get the timestamp of the original file
     ),
 )
-# ISO format
+# ISO 9660 format
+# Note: mtime=False because pycdlib's add_file/add_directory does not copy the
+# source file's mtime into the directory record date; it uses the current time.
+# Rock Ridge and Joliet are enabled (interchange_level=3, rock_ridge="1.09", joliet=3).
+_ISO_FORMAT_FEATURES = ArchiveFormatFeatures(
+    dir_entries=True,
+    file_comments=False,
+    archive_comment=False,
+    mtime=False,
+    mtime_with_tz=False,
+    rounded_mtime=False,
+    file_size=True,
+    link_targets_in_header=False,
+    ownership=False,
+)
 ISO_PYCDLIB = ArchiveCreationInfo(
     file_suffix="pycdlib.iso",
     format=ArchiveFormat.ISO,
     generation_method=GenerationMethod.ISO_PYCDLIB,
+    features=_ISO_FORMAT_FEATURES,
 )
 ISO_GENISOIMAGE = ArchiveCreationInfo(
     file_suffix="genisoimage.iso",
     format=ArchiveFormat.ISO,
     generation_method=GenerationMethod.ISO_GENISOIMAGE,
+    features=_ISO_FORMAT_FEATURES,
 )
 
 ALL_SINGLE_FILE_FORMATS = [
@@ -625,8 +641,6 @@ ZIP_RAR_7Z_FORMATS = ZIP_FORMATS + RAR_FORMATS + SEVENZIP_FORMATS
 
 # Skip test filenames
 SKIP_TEST_FILENAMES = {
-    # "basic_nonsolid__genisoimage.iso",
-    # "basic_nonsolid__pycdlib.iso",
     "single_file__lib.br",
     "large_single_file__lib.br",
 }
