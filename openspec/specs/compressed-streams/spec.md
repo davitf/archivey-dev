@@ -16,7 +16,9 @@ uniform exception translation.
 defaults: gzip via stdlib `gzip`, bzip2 via stdlib `bz2`, xz via the native
 `XzDecompressorStream` (stdlib `lzma`), lzip via the native
 `LzipDecompressorStream`, zlib and brotli via native decompressor streams, lz4
-via `lz4.frame`, zstd via `pyzstd`, and Unix compress via `uncompresspy`.
+via `lz4.frame`, zstd via `pyzstd` (falling back to the stdlib
+`compression.zstd` module on Python 3.14+ when `pyzstd` is not installed), and
+Unix compress via `uncompresspy`.
 
 #### Scenario: Default gzip backend
 - **WHEN** a gzip stream is opened with default configuration
@@ -25,6 +27,11 @@ via `lz4.frame`, zstd via `pyzstd`, and Unix compress via `uncompresspy`.
 #### Scenario: Default xz backend
 - **WHEN** an xz stream is opened with default configuration
 - **THEN** it is decompressed using the native `XzDecompressorStream`
+
+#### Scenario: zstd falls back to the stdlib module
+- **WHEN** a zstd stream is opened with default configuration and `pyzstd` is not
+  installed on Python 3.14+
+- **THEN** it is decompressed using the stdlib `compression.zstd` module
 
 ### Requirement: Configuration selects alternative backends
 

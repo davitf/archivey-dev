@@ -211,6 +211,10 @@ everything:
 hatch run docs
 ```
 This builds the MkDocs site (into `site/`) from the Markdown sources under
-`docs/`. Ensure the optional development dependencies are installed
-(e.g. `pip install -e .[dev]`).
+`docs/`. The `docs` script runs in Hatch's default environment, which already
+declares the documentation dependencies (`mkdocs`, `mkdocstrings`,
+`mkdocs-material`, `mkdocs-autorefs`, `griffe-fieldz`), so Hatch installs them
+automatically into that environment on first run — no separate install step is
+needed. If you prefer to build outside Hatch, install the same dependencies via
+the `dev` extra (e.g. `uv pip install -e .[dev]`) and run `mkdocs build`.
 

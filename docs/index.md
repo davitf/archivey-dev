@@ -7,7 +7,7 @@ Archivey is a library for reading many common archive formats through a simple, 
 - Automatic file format detection
 - Support for ZIP, TAR (including `.tar.gz`, `.tar.bz2`, etc.), RAR, 7z and ISO archives
 - Reading plain directories through the same interface
-- Support for single-file compressed formats like gzip, bzip2, xz, zstd, lz4, lzip, zlib, brotli and Unix compress
+- Support for single-file compressed formats: gzip, bzip2, xz, zstd, lz4, lzip, zlib, brotli and Unix compress
 - Consistent handling of symlinks, file times, permissions, and passwords
 - Consistent exception hierarchy
 - Optimized for sequential iteration over archive members
@@ -33,7 +33,7 @@ If you'd rather manage dependencies yourself, install only the extras you need. 
 | Gzip | `.gz` | [`gzip`](https://docs.python.org/3/library/gzip.html) | [`rapidgzip`](https://pypi.org/project/rapidgzip) (multithreaded decompression and random access) | |
 | Bzip2 | `.bz2` | [`bz2`](https://docs.python.org/3/library/bz2.html) | [`indexed_bzip2`](https://pypi.org/project/indexed-bzip2) (multithreaded decompression and random access) | |
 | XZ | `.xz` | [`lzma`](https://docs.python.org/3/library/lzma.html) (native reader with random access) | [`python-xz`](https://pypi.org/project/python-xz) (alternative random-access backend) | |
-| Zstandard | `.zst` | | [`pyzstd`](https://pypi.org/project/pyzstd) (preferred) or [`zstandard`](https://pypi.org/project/zstandard) | |
+| Zstandard | `.zst` | [`compression.zstd`](https://docs.python.org/3.14/library/compression.zstd.html) (Python 3.14+) | [`pyzstd`](https://pypi.org/project/pyzstd) (preferred) or [`zstandard`](https://pypi.org/project/zstandard) | |
 | LZ4 | `.lz4` | | [`lz4`](https://pypi.org/project/lz4) | |
 | Lzip | `.lz` | [`lzma`](https://docs.python.org/3/library/lzma.html) (native reader with random access) | | |
 | Zlib | `.zz` | [`zlib`](https://docs.python.org/3/library/zlib.html) | | |
@@ -156,9 +156,8 @@ Some things on my radar for future versions. Feel free to pick some to contribut
 *   Auto-select libraries or implementations to use based on what is installed and/or required features
 *   Archive writing support
 *   Bug: ZIP filename decoding can be wrong in some cases (see sample archive `tests/test_archives_external/encoding_infozip_jules.zip`)
-*   Test under Windows / Mac (there are CI tests, but with failures)
+*   Test under Windows / Mac (there are CI tests, but we haven't done detailed manual testing)
     *   There should be archives generated in Mac / Windows in test_archives
     *   Possibly: use [oschmod](https://pypi.org/project/oschmod/) for setting permissions properly under Windows
-*   Add additional metadata fields (Windows permissions (read-only) in 7z files)
 *   Add Pathlib-compatible wrapper that allows accessing files inside archives
 *   Try to read / extract all the test archives in unittests for underlying libraries, and old/weird files, to find bugs

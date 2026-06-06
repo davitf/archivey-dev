@@ -220,6 +220,23 @@ format, solidity, optional version, comment, and format-specific extras.
 - **WHEN** `get_archive_info()` is called
 - **THEN** an `ArchiveInfo` with at least the archive `format` is returned
 
+### Requirement: Member stream seekability matches the access mode
+
+Streams returned for members SHALL report `seekable()` consistently with the
+archive's access mode: `True` when the archive has random access (opened with
+`streaming=False`), and `False` when the archive was opened in streaming mode
+(`streaming=True`). This lets callers detect up front whether they may seek
+within a member's content.
+
+#### Scenario: Seekable member stream in random-access mode
+- **WHEN** a member stream is obtained from an archive opened with `streaming=False`
+- **THEN** the stream's `seekable()` returns `True`
+
+#### Scenario: Non-seekable member stream in streaming mode
+- **WHEN** a member stream is obtained while iterating an archive opened with
+  `streaming=True`
+- **THEN** the stream's `seekable()` returns `False`
+
 ### Requirement: Member streams are opened through a translating wrapper
 
 Streams returned to callers SHALL be wrapped so that exceptions raised while
