@@ -2,19 +2,33 @@ schema: spec-driven
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Archivey is a Python library (src layout, package `src/archivey`) that provides a
+  single, consistent interface for reading and extracting many archive and
+  compression formats: ZIP, TAR (and compressed tars), RAR, 7z, ISO 9660, plain
+  folders, and single-file compressed streams (gzip, bzip2, xz, zstd, lz4, lzip,
+  zlib, brotli, Unix compress).
+
+  Tech stack: pure Python (>=3.9), stdlib modules (zipfile, tarfile, lzma, bz2,
+  gzip, zlib) plus optional third-party backends (rarfile, py7zr, pycdlib, lz4,
+  pyzstd/zstandard, brotli, rapidgzip, indexed_bzip2, python-xz, uncompresspy).
+  Tooling: hatch + uv + tox, ruff + pyright for linting, pytest for tests.
+
+  Architecture conventions:
+  - Public API lives in `archivey.core` (open_archive, open_compressed_stream) and
+    re-exported from `archivey/__init__.py`.
+  - `ArchiveReader` (archive_reader.py) is the abstract public interface; concrete
+    readers extend `BaseArchiveReader` (internal/base_reader.py).
+  - Format readers live in `archivey.formats`; shared helpers in `archivey.internal`.
+  - All errors raised due to archive problems MUST be subclasses of
+    `archivey.exceptions.ArchiveError`; readers translate library exceptions via a
+    `_translate_exception` hook.
+  - Member metadata is normalized into `ArchiveMember`; archive metadata into
+    `ArchiveInfo` (types.py).
+
+  See AGENTS.md, docs/developer_guide.md and docs/user_guide.md for more detail.
 
 # Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+# rules:
+#   proposal:
+#     - Keep proposals focused on a single capability when possible

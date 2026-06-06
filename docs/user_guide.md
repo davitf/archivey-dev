@@ -1,6 +1,6 @@
 # Archivey User Guide
 
-Archivey is a Python library that provides a consistent interface for reading and extracting files from many archive formats, including ZIP, TAR, RAR, 7z, and compressed formats like `.gz`, `.bz2`, `.xz`, `.zst`, and `.lz4`.
+Archivey is a Python library that provides a consistent interface for reading and extracting files from many archive formats, including ZIP, TAR, RAR, 7z, ISO and plain folders, as well as single-file compressed formats like `.gz`, `.bz2`, `.xz`, `.zst`, `.lz4`, `.lz`, `.zz`, `.br` and `.Z`.
 
 This guide covers the most common use cases. For full details, see the [API reference](api.md).
 
@@ -21,7 +21,7 @@ You can pass:
 
 - A file path or binary stream
 - `config`: an [`ArchiveyConfig`][archivey.ArchiveyConfig] object
-- `streaming_only=True`: enables one-pass streaming mode
+- `streaming=True`: enables one-pass streaming mode (and allows non-seekable sources)
 - `pwd`: password for encrypted archives
 
 ---
@@ -32,7 +32,7 @@ Some archive formats (like `.tar.gz`, `.tar.xz`) don’t include a central index
 
 **Streaming-safe methods** let you read or extract relevant members in a single pass, avoiding redundant decompression. They also support non-seekable sources (e.g. pipes or network streams), if the underlying format or library allows.
 
-When opening with `streaming_only=True`, non-streaming methods are disabled to prevent accidental re-decompression. Even outside of streaming mode, these methods may still be more efficient.
+When opening with `streaming=True`, non-streaming methods are disabled to prevent accidental re-decompression. Even outside of streaming mode, these methods may still be more efficient.
 
 ---
 
@@ -88,7 +88,7 @@ Useful for progress reporting or early inspection without triggering a full scan
 
 ## 🗂️ Random-Access Methods
 
-These methods are available only if the archive was **not** opened in `streaming_only` mode. You can check with:
+These methods are available only if the archive was **not** opened in `streaming` mode. You can check with:
 
 ```python
 if archive.has_random_access():

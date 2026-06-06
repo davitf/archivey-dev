@@ -210,7 +210,7 @@ everything:
 ```bash
 hatch run docs
 ```
-This copies the project `README.md` to `docs/index.md` and then
-builds the MkDocs site (into `site/`). Ensure the optional development
-dependencies are installed (e.g. `pip install -e .[dev]`).
+This builds the MkDocs site (into `site/`) from the Markdown sources under
+`docs/`. Ensure the optional development dependencies are installed
+(e.g. `pip install -e .[dev]`).
 
