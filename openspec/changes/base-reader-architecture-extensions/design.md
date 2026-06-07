@@ -28,7 +28,7 @@ already rewrite those readers; see the note under Decisions.
 | §8.B `_format_supports_random_access` (per-instance flag) | No (same errors/modes) | none |
 | §8.C `members_list_supported` as ClassVar | No | none |
 | §8.D `CompressionMethod` enum | **Yes** (`compression_method` value type) | `archive-metadata` |
-| §8.E capability introspection (`MemberListing` + `AccessCost` enums, `member_listing` / `member_access`, stream `seek_cost`, drop `has_random_access`) | **Yes** (public API surface change) | `archive-reading` |
+| §8.E capability introspection (`MemberListing` + `AccessCost` enums, `member_listing` / `member_access`, add stream `seek_cost` alongside `seekable()`, drop `has_random_access`) | **Yes** (public API surface change) | `archive-reading` |
 
 So only §8.D and §8.E get delta specs; §8.B/§8.C are captured as tasks because they
 must not change behavior (the existing `archive-reading` requirements are the
@@ -70,12 +70,25 @@ regression contract).
     `!= UNAVAILABLE`, and `DIRECT` (ZIP) vs `LIMITED` (rapidgzip `tar.gz`) vs
     `EXPENSIVE` (solid 7z, rewind `tar.gz`) tells a caller whether random access in a
     loop is fine or an O(N²) trap.
-  - **`AccessCost` is one shared scale** reused for member-stream *seek cost*: the
-    existing `seekable(): bool` becomes a `seek_cost: AccessCost`, so callers can tell
-    a true random-access stream (`DIRECT`) from one seekable only by re-decompressing
-    (`EXPENSIVE`). `seekable()` is kept and defined as `seek_cost != UNAVAILABLE`.
-    Listing keeps its own vocabulary because enumerating a catalog is a different
-    operation from reaching bytes; the two reach-bytes operations share `AccessCost`.
+  - **`AccessCost` is one shared scale** reused for member-stream *seek cost*. The
+    stream protocol requires `seekable(): bool`, so it stays exactly as-is (the IO
+    contract callers and `tarfile`/`zipfile` depend on); `seek_cost: AccessCost` is an
+    *additional, separate* property layered alongside it, not a replacement. `seek_cost`
+    refines the bool — letting callers tell a true random-access stream (`DIRECT`) from
+    one seekable only by re-decompressing (`EXPENSIVE`) — and the two MUST stay
+    consistent (`seekable()` is `False` iff `seek_cost` is `UNAVAILABLE`). Listing keeps
+    its own vocabulary because enumerating a catalog is a different operation from
+    reaching bytes; the two reach-bytes operations share `AccessCost`.
+  - **A TAR reader derives its own `member_access` from the seek cost of the
+    decompressed stream it opens.** Reaching a member out of order means seeking that
+    inner stream to the member's offset, so the archive's access cost *is* the stream's
+    `seek_cost`: an uncompressed seekable tar inherits `DIRECT`, a rapidgzip-backed
+    `tar.gz` inherits `LIMITED`, a rewind-from-start `tar.gz` inherits `EXPENSIVE`, and a
+    non-seekable piped stream inherits `UNAVAILABLE` (forcing streaming). This is the
+    concrete payoff of sharing one scale across both axes — the archive-level tier is
+    computed from the stream-level tier rather than re-derived. (Today `TarReader` only
+    checks the inner stream's `seekable()` bool at `tar_reader.py:112`; the tiers refine
+    that same decision.)
   - Both enums are classified **per archive/stream by mechanism** (worst-case tier),
     derived at open time, never measured per call and never performing I/O to answer.
     `get_members_if_available()` is tightened to honor `member_listing`: it returns

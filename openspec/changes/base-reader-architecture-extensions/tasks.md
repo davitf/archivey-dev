@@ -26,11 +26,15 @@
       `EXPENSIVE` / `UNAVAILABLE`) to `types.py`
 - [ ] 2.4 Add `member_listing: MemberListing` and `member_access: AccessCost`
       properties to `ArchiveReader`/`BaseArchiveReader`; have each reader report both
-      by mechanism (no I/O, no raise)
+      by mechanism (no I/O, no raise). For `TarReader`, derive `member_access` from the
+      `seek_cost` of the decompressed stream it opens (refining the inner-stream
+      `seekable()` check at `tar_reader.py:112`)
 - [ ] 2.5 Remove `has_random_access()`; migrate callers/docs to
       `member_access != AccessCost.UNAVAILABLE`
-- [ ] 2.6 Upgrade member-stream seekability to a `seek_cost: AccessCost` property on
-      the stream wrapper; keep `seekable()` defined as `seek_cost != UNAVAILABLE`
+- [ ] 2.6 Add a `seek_cost: AccessCost` property to the member-stream wrapper
+      *alongside* the protocol-required `seekable()` (keep `seekable()` as-is — the IO
+      contract); keep the two consistent (`seekable()` is `False` iff `seek_cost ==
+      UNAVAILABLE`)
 - [ ] 2.7 Tighten `get_members_if_available()` so it returns the list only for
       `INDEXED` (or already-registered) members and never triggers a `SCAN_REQUIRED`
       pass

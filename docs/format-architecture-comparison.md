@@ -625,11 +625,16 @@ def member_access(self) -> AccessCost:
     ...
 ```
 
-`AccessCost` is shared: a member stream's `seekable(): bool` is upgraded to a
-`seek_cost: AccessCost` (with `seekable() == (seek_cost != UNAVAILABLE)`), so a
+`AccessCost` is shared: a member stream keeps the protocol-required
+`seekable(): bool` as-is and gains a *separate* `seek_cost: AccessCost` property
+alongside it (kept consistent, `seekable() == (seek_cost != UNAVAILABLE)`), so a
 true random-access stream (`DIRECT`) is distinguishable from one seekable only
-by re-decompressing (`EXPENSIVE`). Both enums are classified per archive/stream
-by mechanism (worst-case tier), never measured per call.
+by re-decompressing (`EXPENSIVE`). A `TarReader` derives its own `member_access`
+from the `seek_cost` of the decompressed stream it opens — reaching a member out
+of order is a seek on that stream, so the archive tier *is* the stream tier
+(uncompressed → `DIRECT`, rapidgzip `tar.gz` → `LIMITED`, rewind `tar.gz` →
+`EXPENSIVE`, non-seekable → `UNAVAILABLE`). Both enums are classified per
+archive/stream by mechanism (worst-case tier), never measured per call.
 `get_members_if_available()` returns the list only when `member_listing` is
 `INDEXED` (or members are already registered) and never triggers a
 `SCAN_REQUIRED` pass.

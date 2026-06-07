@@ -52,9 +52,12 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
     `has_random_access()` and a plain `supports_random_access` boolean: "can I?" is
     `member_access != UNAVAILABLE`, and the enum additionally says how expensive it
     is (cheap ZIP vs bounded rapidgzip `tar.gz` vs O(N) solid 7z).
-  - `AccessCost` is shared: the same scale also reports member-stream **seek cost**,
-    upgrading the existing `seekable(): bool` contract so callers can tell a true
-    random-access stream from one that is seekable only by re-decompressing.
+  - `AccessCost` is shared: the same scale also reports member-stream **seek cost** via
+    a new `seek_cost` property. The protocol-required `seekable(): bool` is kept as-is;
+    `seek_cost` is an additional property alongside it (the two stay consistent), so
+    callers can tell a true random-access stream from one that is seekable only by
+    re-decompressing. A TAR reader's `member_access` is derived from the `seek_cost` of
+    the decompressed stream it opens (reaching a member is a seek on that stream).
 
 ## Capabilities
 
@@ -65,9 +68,10 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
 ### Modified Capabilities
 
 - `archive-reading`: adds the `MemberListing` and shared `AccessCost` enums and the
-  `member_listing` / `member_access` introspection properties, upgrades member-stream
-  seekability to an `AccessCost` `seek_cost`, tightens `get_members_if_available` to
-  never scan, and removes `has_random_access()` (superseded) (§8.E).
+  `member_listing` / `member_access` introspection properties, adds an `AccessCost`
+  `seek_cost` property alongside the protocol-required `seekable()` on member streams,
+  tightens `get_members_if_available` to never scan, and removes `has_random_access()`
+  (superseded) (§8.E).
 - `archive-metadata`: adds the typed `CompressionMethod` enum and the lossless
   `compression_method_detail` field (§8.D).
 
@@ -102,8 +106,10 @@ Recommended order across all pending changes:
 - **Files**: `internal/base_reader.py` (`member_listing` / `member_access`
   introspection properties, tightened `get_members_if_available`, removed
   `has_random_access`), `formats/*_reader.py` (`members_list_supported` ClassVar,
-  `member_listing` / `member_access` reporting), the member-stream wrapper
-  (`seek_cost`), `types.py` (`CompressionMethod`, `compression_method_detail`,
+  `member_listing` / `member_access` reporting — TAR derives `member_access` from its
+  decompressed stream's `seek_cost`), the member-stream wrapper (adds `seek_cost`
+  alongside the existing `seekable()`), `types.py` (`CompressionMethod`,
+  `compression_method_detail`,
   `MemberListing`, `AccessCost`), `archive_reader.py` (property declarations).
 - **Live specs touched**: `archive-reading`, `archive-metadata`.
 - **Design reference**: `docs/format-architecture-comparison.md` §8–§9.

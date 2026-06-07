@@ -94,6 +94,14 @@ NOT perform archive I/O or raise.
 - **WHEN** `member_access` or `member_listing` is read
 - **THEN** the value is returned without performing archive I/O or raising
 
+#### Scenario: TAR member_access derives from the decompressed stream's seek cost
+- **WHEN** a TAR reader reports `member_access`
+- **THEN** the value equals the `seek_cost` of the decompressed stream it opens
+  (reaching a member out of order is a seek on that stream): `DIRECT` for an
+  uncompressed seekable tar, `LIMITED` for an indexed-decompressor `tar.gz`,
+  `EXPENSIVE` for a rewind-from-start `tar.gz`, and `UNAVAILABLE` for a non-seekable
+  source
+
 ## MODIFIED Requirements
 
 ### Requirement: get_members_if_available avoids full traversal
@@ -119,13 +127,17 @@ has completed, it returns `None` (the scan is the job of `get_members()`).
   been iterated
 - **THEN** `None` is returned
 
-### Requirement: Member stream seek cost is reported as an AccessCost
+### Requirement: Member streams add a seek_cost AccessCost alongside seekable()
 
-Streams returned for members SHALL expose a `seek_cost` property (an `AccessCost`
-value) describing what it costs to seek *within* the member's content, and SHALL
-report `seekable()` consistently with it (`False` exactly when `seek_cost` is
-`UNAVAILABLE`, `True` otherwise). This lets callers distinguish a true random-access
-stream from one that is seekable only by re-decompressing.
+Streams returned for members SHALL continue to implement the stream protocol's
+`seekable(): bool` method unchanged — it is part of the IO contract callers and the
+underlying libraries depend on, and SHALL NOT be removed or redefined as a derived
+view of another property. In *addition*, member streams SHALL expose a separate
+`seek_cost` property (an `AccessCost` value) describing what it costs to seek *within*
+the member's content. `seek_cost` refines `seekable()` — letting callers distinguish a
+true random-access stream from one that is seekable only by re-decompressing — and the
+two SHALL be consistent: `seekable()` returns `False` exactly when `seek_cost` is
+`UNAVAILABLE`, and `True` otherwise.
 
 - `DIRECT` — true random seek in both directions (a stored member, or a stream backed
   by a seekable file).
