@@ -1,14 +1,17 @@
 # Implementation Tasks: Base reader architecture extensions
 
-## 1. Co-iteration hook (§8.A)
+## 1. Adopt the existing co-iteration hook (§8.A)
 
-- [ ] 1.1 Add `_iter_members_and_streams()` to `BaseArchiveReader` with a default
-      that opens each file member (`for_iteration=True`) and yields `None` for others
-- [ ] 1.2 Route `iter_members_with_streams()` through the hook, keeping
-      selection/filtering/auto-close in the base method
-- [ ] 1.3 Reimplement the 7z and RAR (`use_rar_stream`) solid paths as overrides of
-      the hook; delete their bespoke `iter_members_with_streams` overrides
-- [ ] 1.4 Verify observable behavior is unchanged (existing `archive-reading` tests)
+The base hook `_iter_members_and_streams_internal()` and the central filtering in
+`iter_members_with_streams()` already exist (added in #209). Only the reader
+migration remains.
+
+- [ ] 1.1 Migrate `SevenZipReader` to override `_iter_members_and_streams_internal`
+      instead of the public `iter_members_with_streams`, deleting its bespoke
+      member-selection/filter logic
+- [ ] 1.2 Migrate the RAR `use_rar_stream` path (`RarReader`) likewise
+- [ ] 1.3 Verify observable behavior is unchanged (existing `archive-reading` tests),
+      including that filtered-out members incur no open/decompression
 
 ## 2. Capability/preference split (§8.B, §8.C)
 
