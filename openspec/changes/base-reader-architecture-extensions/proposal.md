@@ -1,3 +1,6 @@
+**Status:** Implementation Complete
+**Completed:** 2026-06-07
+
 ## Why
 
 `docs/format-architecture-comparison.md` §8 identifies five places where the

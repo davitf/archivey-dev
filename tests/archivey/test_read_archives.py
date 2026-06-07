@@ -18,10 +18,12 @@ from archivey.internal.utils import (
     platform_supports_setting_symlink_mtime,
 )
 from archivey.types import (
+    AccessCost,
     ArchiveMember,
     ContainerFormat,
     CreateSystem,
     MemberType,
+    _parse_compression_method,
 )
 from tests.archivey.sample_archives import (
     MARKER_MTIME_BASED_ON_ARCHIVE_NAME,
@@ -75,7 +77,8 @@ def check_member_metadata(
         )
 
     if sample_file.compression_method is not None:
-        assert member.compression_method == sample_file.compression_method
+        expected_cm, _ = _parse_compression_method(sample_file.compression_method)
+        assert member.compression_method == expected_cm
 
     if features.file_comments:
         file_comment = sample_file.comment
@@ -343,7 +346,7 @@ def check_iter_members(
                 if sample_file.type == MemberType.FILE and not skip_member_contents:
                     assert contents == sample_file.contents
 
-                if sample_file.contents is not None and archive.has_random_access():
+                if sample_file.contents is not None and archive.member_access_cost != AccessCost.UNAVAILABLE:
                     with archive.open(member) as stream:
                         assert stream.read() == sample_file.contents
                 else:
@@ -354,7 +357,7 @@ def check_iter_members(
                         )
 
             sample_file = expected_files[-1]
-            if sample_file.contents is not None and archive.has_random_access():
+            if sample_file.contents is not None and archive.member_access_cost != AccessCost.UNAVAILABLE:
                 with archive.open(filename) as stream:
                     assert stream.read() == sample_file.contents
             else:

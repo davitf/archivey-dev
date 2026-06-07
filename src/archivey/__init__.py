@@ -8,11 +8,14 @@ from archivey.config import (
 from archivey.core import open_archive, open_compressed_stream
 from archivey.exceptions import ArchiveError
 from archivey.types import (
+    AccessCost,
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
+    CompressionMethod,
     ContainerFormat,
     ExtractionFilter,
+    MemberListingCost,
     MemberType,
     StreamFormat,
 )
@@ -26,7 +29,10 @@ __all__ = [
     "ArchiveMember",
     # Enums
     "ArchiveFormat",
+    "AccessCost",
+    "CompressionMethod",
     "ContainerFormat",
+    "MemberListingCost",
     "StreamFormat",
     "MemberType",
     "ExtractionFilter",

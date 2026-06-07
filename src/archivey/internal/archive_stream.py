@@ -14,6 +14,7 @@ from typing import (
 from archivey.exceptions import ArchiveError
 from archivey.internal.io_helpers import is_seekable
 from archivey.internal.utils import ensure_not_none
+from archivey.types import AccessCost
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class ArchiveStream(io.RawIOBase, BinaryIO):
         archive_path: str | None,
         member_name: str,
         seekable: bool,
+        seek_cost: Optional[AccessCost] = None,
     ):
         """
         Initialize the ArchiveStream wrapper.
@@ -56,6 +58,10 @@ class ArchiveStream(io.RawIOBase, BinaryIO):
             seekable: A boolean hint indicating whether the underlying stream is
                 expected to be seekable. `seekable()` will return this value
                 without actually opening the stream.
+            seek_cost: The `AccessCost` of seeking within this stream. If ``None``,
+                derived from *seekable*: ``UNAVAILABLE`` when not seekable, ``EXPENSIVE``
+                otherwise. ``seekable()`` is ``False`` exactly when ``seek_cost`` is
+                ``UNAVAILABLE``.
         """
 
         super().__init__()
@@ -72,6 +78,9 @@ class ArchiveStream(io.RawIOBase, BinaryIO):
         self.archive_path = archive_path
         self.member_name = member_name
         self._seekable = seekable
+        if seek_cost is None:
+            seek_cost = AccessCost.UNAVAILABLE if not seekable else AccessCost.EXPENSIVE
+        self._seek_cost: AccessCost = seek_cost
 
         if not lazy:
             self._ensure_open()
@@ -170,6 +179,15 @@ class ArchiveStream(io.RawIOBase, BinaryIO):
 
     def seekable(self) -> bool:
         return is_seekable(self._inner) if self._inner is not None else self._seekable
+
+    @property
+    def seek_cost(self) -> AccessCost:
+        """Cost of seeking within this stream alongside the IO-protocol `seekable()`.
+
+        Consistent with `seekable()`: returns ``UNAVAILABLE`` exactly when
+        ``seekable()`` is ``False``.
+        """
+        return self._seek_cost
 
     def write(self, b: Any) -> int:
         raise NotImplementedError("ArchiveStream is not writable.")

@@ -5,7 +5,7 @@ import stat
 import struct
 import zipfile
 from datetime import datetime, timezone
-from typing import BinaryIO, Iterator, Optional, cast
+from typing import BinaryIO, ClassVar, Iterator, Optional, cast
 
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -24,11 +24,13 @@ from archivey.internal.io_helpers import (
 )
 from archivey.internal.utils import decode_bytes_with_fallback, str_to_bytes
 from archivey.types import (
+    AccessCost,
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
     CreateSystem,
     MemberType,
+    _parse_compression_method,
 )
 
 # Encoding fallbacks used when decoding strings stored in the ZIP metadata.
@@ -117,6 +119,8 @@ ZIP_COMPRESSION_METHODS = {
 class ZipReader(BaseArchiveReader):
     """Reader for ZIP archives."""
 
+    members_list_supported: ClassVar[bool] = True
+
     def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, zipfile.BadZipFile):
             return ArchiveCorruptedError("Error reading ZIP archive")
@@ -151,7 +155,6 @@ class ZipReader(BaseArchiveReader):
             archive_path=archive_path,
             pwd=pwd,
             streaming_only=streaming_only,
-            members_list_supported=True,
         )
 
         if is_stream(self.path_or_stream) and not is_seekable(self.path_or_stream):
@@ -182,7 +185,10 @@ class ZipReader(BaseArchiveReader):
         is_dir = info.is_dir()
         is_link = stat.S_ISLNK(mode)
 
-        compression_method = ZIP_COMPRESSION_METHODS.get(info.compress_type, "unknown")
+        raw_method_str = ZIP_COMPRESSION_METHODS.get(info.compress_type)
+        compression_method, compression_method_detail = _parse_compression_method(
+            raw_method_str
+        )
 
         logger.info(
             f"Filename: {info.filename}: compression_method={compression_method} {info.compress_type}"
@@ -202,6 +208,7 @@ class ZipReader(BaseArchiveReader):
             mode=stat.S_IMODE(mode) if info.external_attr != 0 else None,
             crc32=info.CRC if hasattr(info, "CRC") else None,
             compression_method=compression_method,
+            compression_method_detail=compression_method_detail,
             comment=decode_bytes_with_fallback(info.comment, _ZIP_ENCODINGS)
             if info.comment
             else None,
@@ -221,6 +228,12 @@ class ZipReader(BaseArchiveReader):
             raw_info=info,
             link_target=self._read_link_target(info),
         )
+
+    def _get_member_seek_cost(self, member: ArchiveMember) -> AccessCost:
+        raw_info = cast("zipfile.ZipInfo", member.raw_info)
+        if raw_info.compress_type == zipfile.ZIP_STORED:
+            return AccessCost.DIRECT
+        return AccessCost.EXPENSIVE
 
     def _read_link_target(self, info: zipfile.ZipInfo) -> str | None:
         """Return the symlink target for ``info`` if it is a symlink."""
