@@ -108,6 +108,12 @@ The base class handles the TAR (and streaming ZIP) case via the
 
 ### 2.2 `streaming_only`
 
+> **Terminology note.** The public `open_archive()` parameter is now `streaming`;
+> `streaming_only` survives only as a deprecated alias (see the `archive-opening`
+> spec). Internally the flag is still `_streaming_only` on `BaseArchiveReader`.
+> Below, `streaming_only` refers to the **internal** flag / historical parameter;
+> read it as `streaming` wherever the public API is meant.
+
 This flag has two sources of truth that are currently conflated:
 
 - **Format capability**: Can the format support random access at all?  ZIP,
@@ -386,7 +392,7 @@ TAR is the only format with native hardlink support.
 | ZIP | `zipfile` (stdlib) | Full in-process decompressor + parser | Excellent | Low benefit: stdlib works well |
 | TAR | `tarfile` (stdlib) | Full in-process decompressor + parser | Good | Low benefit: stdlib works well |
 | RAR | `rarfile` (third-party) | Metadata parsing; shells out to `unrar` for data | Medium | **High** — native reader target; eliminates dependency |
-| 7z | `py7zr` (third-party) | Metadata + in-process decompressor | Medium | **High** — native reader target for metadata; keep py7zr for decompression |
+| 7z | `py7zr` (third-party) | Metadata + in-process decompressor | Medium | **High** — full native reader target (metadata + decompression); drops py7zr entirely (stdlib `lzma`/`bz2`/`zlib` cover LZMA2/BCJ/Delta/Deflate/BZip2, existing `zstandard`/`brotli`/crypto optionals + new `pyppmd`/`inflate64` cover the rest; BCJ2 detect-and-raise as py7zr does) |
 | ISO | `pycdlib` (third-party) | Test-only (creation); no reader exists | N/A | Wrap pycdlib or write native (native is ~400 lines) |
 
 The RAR and 7z native reader designs are documented in
@@ -540,17 +546,22 @@ instead of its current piecemeal approach.
 
 #### B. Separate format capability from user preference
 
-**Problem**: `streaming_only` is both a format fact and a user preference.
+**Problem**: the streaming flag is both a format fact and a user preference.
 
-**Proposed addition**: a class attribute:
+**Proposed addition**: a per-instance flag set in `__init__`:
 ```python
 class BaseArchiveReader:
-    _format_supports_random_access: ClassVar[bool] = True
+    def __init__(self, ..., format_supports_random_access: bool = True):
+        self._format_supports_random_access = format_supports_random_access
 ```
 
-Set to `False` for non-seekable compressed TAR streams (not for all TAR — only
-when the underlying decompressor is non-seekable). The runtime `streaming_only`
-flag then means "user requested streaming OR format cannot random-access".
+This is **not** a `ClassVar`: whether a compressed TAR can random-access depends
+on the specific stream/backend at construction time, not on the reader class —
+stdlib gzip/bz2/lzma on a pipe is non-seekable, the same on a file rewinds, and
+rapidgzip/indexed_bzip2 are always seekable (see §7.2). So TAR sets it `False`
+only when its decompressor is genuinely non-seekable for this instance. The
+runtime streaming flag then means "user requested streaming OR format cannot
+random-access".
 
 #### C. `members_list_supported` should be a class attribute
 
@@ -578,21 +589,62 @@ parsing strings.
 #### E. Capability introspection
 
 **Problem**: callers must try operations and catch `ValueError` to discover
-whether random access is available.
+whether random access is available, and there is no honest way to ask how
+*expensive* listing or access is — a single boolean would conflate ZIP's
+one-seek catalog with TAR's O(N) full pass, and direct ZIP member access with
+an O(N²)-in-a-loop solid archive.
 
-**Proposed addition**:
+**Proposed surface** — two orthogonal axes, each a cost-classifying enum, plus
+the removal of the redundant `has_random_access()` method. Note a plain
+`supports_random_access` boolean would equal `not streaming` for every openable
+archive (non-seekable sources are already forced to streaming), so it would
+carry no information; the enum is what earns its place.
+
 ```python
-@property
-def supports_random_access(self) -> bool:
-    return not self._streaming_only
+class MemberListingCost(StrEnum):
+    """How cheaply can the full member list be obtained?"""
+    INDEXED = "indexed"                  # catalog / central directory, <= one seek
+    SCAN_REQUIRED = "scan_required"      # full O(N) pass over the body (seekable TAR)
+    SEQUENTIAL_ONLY = "sequential_only"  # only as iteration proceeds
+
+class AccessCost(StrEnum):
+    """Amortized per-access cost of reaching data out of order — a member, or
+    bytes within one. Decided at open by mechanism; a one-time index build is
+    folded into LIMITED (it doesn't change the loop-vs-iterate decision)."""
+    DIRECT = "direct"            # seek + decode only the target, no extra decompression
+    LIMITED = "limited"          # bounded per access, back to nearest seek/index point
+                                 #   (rapidgzip tar.gz; multi-block tar.xz/tar.lz)
+    EXPENSIVE = "expensive"      # unbounded prefix, no usable seek point
+                                 #   (solid 7z, rewind tar.gz, single-block tar.xz)
+    UNAVAILABLE = "unavailable"  # forward path only (streaming / non-seekable)
 
 @property
-def supports_member_list(self) -> bool:
-    return self._early_members_list_supported or not self._streaming_only
+def member_listing_cost(self) -> MemberListingCost: ...
+
+@property
+def member_access_cost(self) -> AccessCost:
+    """Cost of opening an arbitrary member out of order.
+    `UNAVAILABLE` iff out-of-order open is impossible; replaces
+    has_random_access() (== member_access_cost != UNAVAILABLE)."""
+    ...
 ```
 
-Both are derivable from existing state; making them properties prevents
-callers from relying on internal flags.
+`AccessCost` is shared: a member stream keeps the protocol-required
+`seekable(): bool` as-is and gains a *separate* `seek_cost: AccessCost` property
+alongside it (kept consistent, `seekable() == (seek_cost != UNAVAILABLE)`), so a
+true random-access stream (`DIRECT`) is distinguishable from one seekable only
+by re-decompressing (`EXPENSIVE`). A `TarReader` derives its own `member_access_cost`
+from the `seek_cost` of the decompressed stream it opens — reaching a member out
+of order is a seek on that stream, so the archive tier *is* the stream tier
+(uncompressed → `DIRECT`, rapidgzip `tar.gz` → `LIMITED`, rewind `tar.gz` →
+`EXPENSIVE`, non-seekable → `UNAVAILABLE`). The `LIMITED`/`EXPENSIVE` split is
+"are there usable intermediate seek points?": a multi-block `tar.xz`/`tar.lz` is
+`LIMITED` (bounded by block size), a single-block one is `EXPENSIVE`. Both enums
+are classified per archive/stream by mechanism (worst-case tier) at open, reported
+conservatively when the structure isn't known, never measured per call.
+`get_members_if_available()` returns the list only when `member_listing_cost` is
+`INDEXED` (or members are already registered) and never triggers a
+`SCAN_REQUIRED` pass.
 
 ---
 

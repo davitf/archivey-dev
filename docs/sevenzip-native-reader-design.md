@@ -1,9 +1,14 @@
 # 7-Zip Native Reader — Architecture Design Notes
 
 This document captures the research needed to replace `py7zr`-based 7-zip handling
-with a built-in implementation that parses archive metadata itself but still
-delegates decompression to py7zr (or a future alternative like the `lzma` stdlib
-module for LZMA2-only archives, or an external `7z` tool for other codecs).
+with a built-in implementation that parses archive metadata **and** drives
+decompression itself, removing the py7zr dependency entirely. Decompression reuses
+codecs archivey already has (stdlib `lzma`/`bz2`/`zlib`, plus the existing
+`zstandard`/`brotli`/crypto optionals) and adds two small optional packages
+(`pyppmd`, `inflate64`) for the codecs stdlib lacks. The key enabler: liblzma (via
+the stdlib `lzma` module) already implements the whole BCJ branch-filter family and
+the Delta filter, so the 7z "preprocessors" need no bespoke code for the common
+case. See §4.3 for the codec landscape.
 
 The structure mirrors [`rar-native-reader-design.md`](rar-native-reader-design.md).
 
@@ -129,6 +134,12 @@ if self._archive.header.main_streams is None:
 
 ### 2.4 The thread + queue streaming design
 
+> **This entire mechanism is removed by native decompression (§4.3).** The thread,
+> the two queues, the backpressure logic, and the `StreamingFile`/`WriterFactory`
+> machinery exist *only* because py7zr is push-based. Driving decompression
+> ourselves makes the iterator naturally pull-based (the tar/zip model), so none of
+> this survives. It is documented here as the thing being deleted.
+
 py7zr's extraction model is push-based: you pass a `WriterFactory` and py7zr
 calls `factory.create(filename)` → writes chunks → calls `writer.close()`.
 There is no way to pull one file at a time from the outside.
@@ -176,6 +187,13 @@ file starts (when py7zr first calls `writer.write()`).
   (after joining the thread).
 
 ### 2.5 Password handling — the `_temporary_password` hack
+
+> **Also removed by native decompression (§4.3, §4.5).** The `_temporary_password`
+> context manager and the class-level `_password_lock` are workarounds for py7zr
+> having no per-call password parameter. A native `AESDecompressor` takes the
+> password (or derived key) as a constructor argument, so the per-folder mutation
+> and the global lock both disappear — and per-member passwords (today a skipped
+> test) become expressible because each folder's decryptor is built independently.
 
 py7zr stores the AES password on each `Folder` object (`folder.password`).
 The password is set when the archive is opened:
@@ -396,20 +414,33 @@ produces garbage that fails CRC validation.
 
 ### 4.1 Scope
 
-The goal is to replace py7zr for **metadata parsing** while still using py7zr
-(or another backend) for decompression.  A native parser would:
+The goal is to replace py7zr **entirely** — for both metadata parsing and
+decompression — so 7z support depends only on the stdlib plus codec packages
+archivey already manages. The native reader:
+
+**Header parsing** (same as the metadata-only plan):
 
 1. Detect the 7z signature and read the 32-byte signature header.
 2. Seek to the end header, read and verify its CRC32.
 3. If `ENCODED_HEADER`: read the inner `StreamsInfo` to locate the compressed
-   header payload, then decompress it (using `lzma.decompress` for LZMA2, or
-   delegating to py7zr/external tool), verify CRC.
+   header payload, then decompress it (via the same native folder pipeline used for
+   member data — typically `lzma` FORMAT_RAW LZMA2), verify CRC.
 4. If header-encrypted: derive the AES key and decrypt before step 3.
 5. Parse `HEADER` → `FILES_INFO` to build the member list.
-6. Parse `MAIN_STREAMS_INFO` → `UNPACK_INFO` → folders + coders, and
-   `SUBSTREAMS_INFO` → per-file sizes and CRCs.
+6. Parse `MAIN_STREAMS_INFO` → `PACK_INFO` (pack-stream offsets/sizes),
+   `UNPACK_INFO` (folders + coders + bind pairs), and `SUBSTREAMS_INFO` (per-file
+   sizes and CRCs).
 7. Associate each file with its folder and compute per-file metadata.
 8. Detect `is_solid`, `is_encrypted`, folder-level encryption.
+
+**Decompression** (new — replaces py7zr's `extract()` + thread/queue):
+
+9. For a target member, locate its folder's packed byte range from `PACK_INFO`,
+   wrap it as a bounded reader over the archive file.
+10. Build a decompressor pipeline from the folder's coder chain (§4.3) and expose it
+    as a pull-based `BinaryIO` via the existing `DecompressorStream` wrapper.
+11. For solid folders, decompress the folder once and slice out each substream by
+    its unpack size, yielding members in order — naturally O(N), no threads.
 
 ### 4.2 Native `SevenZipMemberInfo` dataclass
 
@@ -439,46 +470,125 @@ class SevenZipMemberInfo:
 
 ### 4.3 Decompression strategy
 
-Nothing changes in the decompression path — we still use py7zr's `extract()`
-with the `StreamingFactory`/`WriterFactory` pattern.  The only change is that
-we no longer need py7zr for metadata (the `iter_members_for_registration` phase),
-so we build our own `SevenZipMemberInfo` objects and construct a minimal
-py7zr-compatible structure for the extraction call.
+Decompression is **native and pull-based**, replacing py7zr's push model. A 7z
+folder is one packed bitstream produced by a short *coder chain* (a filter pipeline
+ending in an entropy coder). We read the folder's packed bytes from the archive,
+run them back through the inverse chain, and slice the result into members.
 
-**Alternative (future)**: if py7zr is removed entirely, decompression would need
-to fall back to an external `7z` tool (like `unrar` for RAR).  The streaming
-design would then mirror `RarStreamReader`: spawn `7z e -so`, share stdout.
+**Codec landscape — what we already have vs. what we add.** The central finding is
+that almost every coder 7z emits is already available to archivey, and the BCJ/Delta
+"preprocessors" are not missing at all — liblzma implements them:
 
-### 4.4 Solid-archive extraction: current strategy is already O(N)
+| 7z coder | Method ID | Our route | New dep? |
+|---|---|---|---|
+| Copy (store) | `0x00` | identity passthrough | — |
+| LZMA2 | `0x21` | `lzma` FORMAT_RAW | stdlib |
+| LZMA1 | `0x030101` | `lzma` FORMAT_RAW | stdlib |
+| Delta | `0x03` | `lzma.FILTER_DELTA` in the raw chain | stdlib |
+| BCJ x86 | `0x04` / `0x03030103` | `lzma.FILTER_X86` | stdlib |
+| BCJ ARM / ARMT / PPC / SPARC / IA64 | `0x05`–`0x09` … | `lzma.FILTER_ARM`/`ARMTHUMB`/`POWERPC`/`SPARC`/`IA64` | stdlib |
+| Deflate | `0x040108` | `zlib.decompressobj(-15)` (raw) | stdlib |
+| BZip2 | `0x040202` | `bz2.BZ2Decompressor` | stdlib |
+| Zstd | `0x04f71101` | `zstandard` | existing optional |
+| Brotli | `0x04f71102` | `brotli` | existing optional |
+| AES-256 / SHA-256 | `0x06f10701` | `cryptography` / `pycryptodome` | existing optional |
+| PPMd (var.H) | `0x030401` | `pyppmd.Ppmd7Decoder` | **new optional** |
+| Deflate64 | `0x040109` | `inflate64.Inflater` | **new optional** |
+| BCJ2 | `0x0303011B` | — (detect and raise) | — |
 
-Unlike RAR (where each `rarfile.open()` re-decompresses from the start of the
-solid stream), py7zr's `extract(targets=[f1, f2, ..., fN], factory=factory)`
-decompresses each folder **once** regardless of how many of its files are
-targeted.  The archivey reader collects all pending members before calling
-`extract()`, which means:
+Verified facts behind this table:
 
-- Best case (all members extracted at once): O(N) total decompression work.
-- Worst case (single file from a large solid folder): O(folder_files)
-  decompression work per call (same as any decompressor).
+- Python's stdlib `lzma` exposes `FILTER_X86`, `FILTER_ARM`, `FILTER_ARMTHUMB`,
+  `FILTER_POWERPC`, `FILTER_SPARC`, `FILTER_IA64`, and `FILTER_DELTA`, and a raw
+  `[FILTER_X86, FILTER_LZMA2]` chain round-trips. So the common executable-archive
+  case (LZMA2 + a BCJ filter, optionally + Delta) is **pure stdlib** — no pybcj, no
+  rolled-own branch filters, no external tool.
+- `pyppmd`, `inflate64`, and `pybcj` are already present in the environment
+  *transitively via py7zr*. Dropping py7zr and adding `pyppmd` + `inflate64` as
+  direct optionals is therefore a re-labeling, not new dependency weight. We do
+  **not** need `pybcj` (liblzma covers BCJ for the LZMA2 chains that matter).
+- **PPMd and Deflate64 become first-class stream decompressors** (alongside the
+  existing gzip/bz2/lzma/zstd/brotli openers in `compressed_streams.py`), so they are
+  shared with the planned native ZIP reader rather than 7z-local. This is deliberate:
+  stdlib `zipfile` does **not** support Deflate64 — `_get_decompressor` raises
+  `NotImplementedError: compression type 9 (deflate64)` — so a native ZIP reader will
+  need the same `inflate64` backend (ZIP method 9).
 
-The `use_rar_stream` optimization has no 7z equivalent — the same result is
-achieved by the existing batch collection in `iter_members_with_streams()`.
+**Coder chains and bind pairs.** A folder's coders form a small DAG joined by *bind
+pairs* (`out_index → in_index`) with a list of packed-stream indices feeding the
+unbound inputs. Two cases matter:
 
-For `_open_member()` (random access), the current implementation calls
-`iter_members_with_streams()` with a single-member list (lines 528–539),
-which still goes through the full thread+queue machinery.  This means a single
-`open()` call is relatively expensive for members in large solid folders.
+```
+Linear chain (≈ all real archives)        BCJ2 (the one exception)
+┌─────┐    ┌───────┐                      ┌──────┐  4 inputs, 3 packed streams
+│ BCJ │───▶│ LZMA2 │                      │ BCJ2 │◀── main  (LZMA2)
+└─────┘    └───────┘                      │      │◀── call  (LZMA2)
+   ▲                                       │      │◀── jump  (LZMA2)
+   └─ 1 packed stream                      └──────┘◀── rc    (raw range coder)
+```
 
-### 4.5 Password handling: what would improve
+For a **linear chain** the pipeline is the coder list applied in reverse (decode
+order), which is exactly how stdlib builds a raw filter list — a single
+`lzma.LZMADecompressor(format=FORMAT_RAW, filters=[...])` can hold the whole
+`[BCJ, LZMA2]` sequence, and non-lzma stages (zstd, bz2, …) chain as separate
+`decompress()` steps. **BCJ2** is the only multi-input structure; it is *not*
+supported by py7zr either (py7zr raises `UnsupportedCompressionMethodError`), so the
+native reader reaches parity by detecting it and raising the same kind of clean
+error. Folders with more than 4 coders are already rejected upstream.
 
-The `_temporary_password` pattern is a **workaround** for py7zr's lack of a
-per-call password parameter.  If the decompression backend changes:
+**Stream wrapping.** archivey already has `DecompressorStream`
+(`formats/decompressor_stream.py`), which turns a `decompress(data)`-style object
+into a seekable, pull-based `BinaryIO` (with optional seek points). The folder
+pipeline plugs into it the same way the gzip/brotli/zlib streams do today, so member
+streams are ordinary readable files — no background thread, no queue.
 
-- A native Python decompressor would accept a password at decompression time
-  (pass to `AESDecompressor(aes_properties, password)`).
-- An external `7z` tool would accept `-p<password>` on the command line.
+**Solid folders.** Because we own the decompression loop, a solid folder is
+decompressed **once** and its substreams are sliced out by their unpack sizes as we
+read forward. This matches py7zr's single-pass `extract(targets=[...])` cost (design
+§4.4) without the batch-collection dance: opening the whole archive is O(N); opening
+a single member from a large solid folder still pays for the prefix up to that member
+(the inherent solid cost, reported via `AccessCost.EXPENSIVE` from
+`base-reader-architecture-extensions` §8.E).
 
-Either approach eliminates the need for the global class-level lock.
+### 4.4 Solid-archive extraction: native single-pass is O(N)
+
+The native reader keeps the O(N) property py7zr's batch `extract()` had, but more
+directly. Iterating the archive decompresses each folder once and slices its
+substreams forward (§4.3), so a full pass is O(N) with no batch-collection logic.
+
+- Full iteration: O(N) total decompression work, one pass per folder.
+- Single-member `open()` from a solid folder: pays for the prefix up to that member
+  within its folder (the inherent solid cost) — but only that folder, not the whole
+  archive. The previous design routed `_open_member()` through the entire
+  thread+queue path for a single-member list; the native path just opens the folder
+  stream and seeks to the substream offset.
+
+This is where the §8.E `AccessCost` enum earns its place: a solid 7z folder reports
+`EXPENSIVE` (random access in a loop is O(N²)), a non-solid folder `DIRECT`, so
+callers can choose in-order iteration when it matters without measuring.
+
+### 4.5 Password handling: native per-folder decryptors
+
+The native decompressor accepts the password (or the key derived from it per §3.5)
+when it builds a folder's AES stage: `AESDecompressor(aes_properties, password)`.
+This eliminates the `_temporary_password` context manager and the class-level
+`_password_lock` entirely (§2.5), because nothing mutates shared state — each
+folder's pipeline is constructed independently with whatever password applies to it.
+
+This also **fixes the skipped multi-password test**
+(`encryption_several_passwords__7zcmd.7z`) for free, using the password mechanism
+archivey already has — no new public API. The base reader already accepts an
+archive-wide password at open time (stored as `_archive_password`) and a per-call
+`pwd` on `open(member, pwd=...)` / `_open_member(..., pwd=...)`, exactly as RAR and
+the other readers use it. The native reader simply builds each folder's decryptor
+from the `pwd` passed to that open call, falling back to the archive-wide default.
+Because the decryptor is per-call rather than a global mutation of the shared
+archive object, opening two members that need different passwords just works — which
+is precisely what py7zr's global `folder.password` assignment made impossible.
+
+Wrong passwords behave as in §3.5: there is no pre-flight check value, so a bad
+password decrypts to garbage that fails the substream CRC — which we surface as a
+decryption/corruption error.
 
 ### 4.6 Header decryption in a native parser
 
@@ -525,15 +635,25 @@ The most significant improvement a native parser offers is exposing
 
 ## 5. Things that can be dropped / simplified
 
+Because py7zr is removed for decompression too, the entire push-model scaffolding
+goes away — not "kept until phase 2":
+
 | Current complexity | Why it exists | Native reader stance |
 |---|---|---|
-| `_temporary_password` context manager + class lock | py7zr has no per-call password | Keep until decompression backend also changes |
-| `reset()` before every `extract()` | py7zr's Worker is stateful | Keep if still using py7zr extraction |
-| `_build_extract_filename_to_member_map` with `get_sanitized_output_path` | py7zr renames duplicates | Keep if still using py7zr extraction |
-| `_is_member_encrypted` via `SupportedMethods.needs_password` | py7zr private API | Replace with direct coder-list check in native parser |
-| `archiveinfo()` crash guard (empty archive) | py7zr bug | Can implement `is_solid` directly from `num_unpackstreams_folders` |
-| `py7zr.helpers.filetime_to_dt` | py7zr utility | Trivial to inline: `datetime(1601,1,1) + timedelta(microseconds=ft//10)` |
-| Exception catch-all in extractor thread | py7zr exceptions not wrapped | Keep regardless of backend |
+| Background extractor thread + two queues + 64-chunk backpressure | py7zr is push-based (`WriterFactory`) | **Removed** — native decompression is pull-based (§4.3) |
+| `_temporary_password` context manager + class `_password_lock` | py7zr has no per-call password | **Removed** — per-folder `AESDecompressor` takes the password (§4.5) |
+| `reset()` before every `extract()` | py7zr's `Worker` is stateful | **Removed** — no py7zr `Worker` |
+| `_build_extract_filename_to_member_map` + `get_sanitized_output_path` | py7zr renames duplicates during extraction | **Removed** — we map members to folders/substreams directly; no name round-trip |
+| `StreamingFile` / `WriterFactory` / `NullIO` | adapt push API to a pull iterator | **Removed** — members are plain `DecompressorStream` files |
+| `_is_member_encrypted` via `SupportedMethods.needs_password` | py7zr private API | Replaced with a direct coder-list check in the native parser |
+| `archiveinfo()` crash guard (empty archive) | py7zr bug | `is_solid` computed directly from `num_unpackstreams_folders` |
+| `py7zr.helpers.filetime_to_dt` | py7zr utility | Inlined: `datetime(1601,1,1) + timedelta(microseconds=ft//10)` |
+| Exception catch-all in extractor thread | py7zr exceptions not wrapped on a thread | **Removed** — no thread; errors propagate directly and go through `_translate_exception` |
+
+What remains genuinely new (the cost of dropping py7zr): the coder-chain →
+decompressor-pipeline builder (§4.3), the pack-stream locator, the AES key
+derivation + CBC stage (§3.5), and the PPMd/Deflate64 backends. All are bounded and
+mostly thin wrappers over existing libraries.
 
 ---
 
@@ -541,60 +661,68 @@ The most significant improvement a native parser offers is exposing
 
 | File | Change |
 |---|---|
-| `src/archivey/formats/sevenzip_reader.py` | Replace `py7zr.files` / `ArchiveFile` usage in `iter_members_for_registration` with native parser; keep streaming machinery |
-| New: `src/archivey/formats/sevenzip_parser.py` | `SevenZipParser`, `SevenZipMemberInfo`, raw header reading |
-| `src/archivey/internal/dependency_checker.py` | Mark `py7zr` as optional for metadata, still required for decompression |
-| Tests | Verify all existing 7z test archives still pass; add parser unit tests |
-
-If the decompression backend is also replaced (phase 2):
-
-| File | Change |
-|---|---|
-| `src/archivey/formats/sevenzip_reader.py` | Replace `_extract_members_iterator` thread+queue with direct decompressor calls or external-tool subprocess |
-| `pyproject.toml` | Remove `py7zr>=1.0.0` from `optional` dependencies |
+| New: `src/archivey/formats/sevenzip_parser.py` | `SevenZipParser`, `SevenZipMemberInfo`, raw header reading, pack-stream offsets, coder chains/bind pairs |
+| New: `src/archivey/formats/sevenzip_codecs.py` (or fold into the parser) | Coder-chain → `DecompressorStream` pipeline builder; AES-256 stage (KDF §3.5 + CBC); BCJ2 detect-and-raise |
+| `src/archivey/formats/compressed_streams.py` | Add `pyppmd` (PPMd var.H) and `inflate64` (Deflate64) stream openers — **shared with the future native ZIP reader** (ZIP method 9) |
+| `src/archivey/formats/sevenzip_reader.py` | Drop py7zr entirely; build members from the native parser; replace the thread+queue extractor with native pull-based folder decompression; override `_iter_members_and_streams_internal` (§8.A) |
+| `src/archivey/internal/dependency_checker.py` | Remove `py7zr`; gate PPMd/Deflate64/AES/zstd/brotli on their own packages with clear `PackageNotInstalledError`s |
+| `pyproject.toml` | Remove `py7zr>=1.0.0`; add `pyppmd` and `inflate64` to the `optional` (and `optional-freethreaded`) extras |
+| Tests | All existing 7z archives still pass (metadata + extraction + CRC); per-codec decompression tests; BCJ2 raises cleanly |
 
 ---
 
 ## 7. Open questions / risks
 
-1. **LZMA1 vs LZMA2 detection** — most modern 7z archives use LZMA2, but older
-   ones use LZMA1.  Both are supported by Python's `lzma` module.  The native
-   parser needs to dispatch correctly based on the coder ID.
+1. **LZMA1 + BCJ in one chain** — liblzma's raw decoder chains BCJ with **LZMA2**
+   fine (verified), but the rare **LZMA1 + BCJ** combination is what py7zr handles
+   with a special case: it routes the BCJ stage through its own `pybcj` decoder
+   while LZMA1 stays on liblzma (compressor.py:634, the "native + alternative" hack).
+   The native reader must either (a) special-case LZMA1+BCJ the same way (pull in
+   `pybcj` only for this path) or (b) decode the BCJ stage as a separate liblzma
+   single-filter step. Decide during implementation; LZMA2 is the 7z default so this
+   is a tail case, but it must not silently corrupt output. **Action:** add a test
+   archive that uses LZMA1+BCJ.
 
-2. **BCJ/Delta filter chain** — many 7z archives prepend a BCJ (Branch
-   Conversion Jump) filter or Delta filter before LZMA2.  These must be
-   inverted during decompression.  py7zr implements all of these in Python; a
-   native reader must either port them or continue to use py7zr for
-   decompression.
+2. **BCJ2 (`0x0303011B`)** — the 4-stream branch coder. **Not supported by py7zr
+   either** (raises `UnsupportedCompressionMethodError`), so detect-and-raise reaches
+   parity. The risk is purely that we must detect it *before* attempting to build a
+   linear pipeline (it has `numinstreams == 4`), and raise the same kind of clean
+   error archivey already raises for unsupported methods. Acceptable per the agreed
+   "strictly equal-or-better than py7zr" bar.
 
-3. **Multi-volume archives** — py7zr uses `multivolumefile.MultiVolume` for
-   split archives.  This is not currently supported in archivey (same as RAR);
-   a native parser should raise `ArchiveError` cleanly at the volume-detection
-   step rather than producing garbage output.
+3. **Newer BCJ filters (ARM64, RISC-V)** — added to xz/7z more recently and **not**
+   exposed by Python's `lzma` on older liblzma (this env's `lzma` lists x86/ARM/ARMT/
+   PPC/SPARC/IA64 + Delta, no ARM64). Archives using ARM64/RISC-V BCJ would need a
+   newer liblzma or a fallback. Treat as detect-and-raise for now (still a clean
+   error, not corruption); revisit if it shows up in real archives.
 
-4. **Anti-files** — 7z supports "anti-items" (files that should be deleted
-   during extraction from a delta-update archive).  py7zr handles them silently.
-   A native reader should either support them or warn.
+4. **PPMd / Deflate64 backends** — `pyppmd.Ppmd7Decoder` (7z uses PPMd var.H = Ppmd7)
+   and `inflate64.Inflater` cover these; both are already in the tree via py7zr today.
+   Risk is API-surface fit into `DecompressorStream` (chunked `decompress`/`inflate`
+   semantics, end-of-stream handling) — bounded wrapper work, validated by the
+   existing PPMd/Deflate64 test archives.
 
-5. **Empty archive CRC edge case** — `_real_get_contents` skips `FILES_INFO` if
-   absent (line 478: `if getattr(self.header, "files_info", None) is None`).
-   The native parser must handle the same case.
+5. **Multi-volume archives** — not supported (same as RAR). The native parser raises
+   `ArchiveError` cleanly at volume detection rather than producing garbage.
 
-6. **Thread safety of the extractor thread** — py7zr (1.0+) itself is not
-   thread-safe, which is why the `_temporary_password` lock exists at the
-   reader level.  Any new decompression backend must document its own
-   thread-safety model.
+6. **Anti-files** — 7z "anti-items" (deletion markers in delta-update archives).
+   Warn and skip, matching the metadata-reader plan.
 
-7. **`compressed` size inaccuracy for solid archives** — the current reader
-   stores the **folder's** total packed size as `compress_size` for every file
-   in a solid folder.  A native parser has the same structural limitation (per-
-   file compressed sizes are undefined in solid streams) but could at least
-   expose the folder-level size clearly via `extra`.
+7. **Empty / `FILES_INFO`-absent archives** — handle the absent-`FILES_INFO` case
+   directly (no py7zr crash guard needed); `is_solid` from `num_unpackstreams_folders`.
 
-8. **Compression method name mapping** — the coder ID `0x030101` = LZMA,
-   `0x21` = LZMA2, etc.  A native reader can produce human-readable method
-   names (e.g. `"LZMA2 + BCJ"`) by walking the folder's coder list.  Currently
-   archivey returns `None` for 7z.
+8. **Thread-safety** — with the thread+queue gone, the reader's concurrency model is
+   just "one decompression pipeline per open stream." Document that two concurrent
+   `open()`s on overlapping folders each build independent pipelines and seek the
+   archive file independently (the shared file handle's seeks must be serialized or
+   each pipeline given its own handle/`pread`).
+
+9. **`compressed` size for solid folders** — unchanged structural limit: per-file
+   packed size is undefined inside a solid stream; expose the folder total clearly.
+
+10. **Compression method mapping** — coder IDs → typed `CompressionMethod` (§8.D
+    enum) for the primary codec, with the full chain (e.g. `"LZMA2 + BCJ"`) in
+    `compression_method_detail`. Currently `None` for 7z.
 
 ---
 
@@ -607,6 +735,14 @@ If the decompression backend is also replaced (phase 2):
   - `archiveinfo.py` — header parsing: `Header`, `SignatureHeader`, `Folder`,
     `UnpackInfo`, `PackInfo`, `SubStreamsInfo`, `FilesInfo`.
   - `compressor.py` — `AESDecompressor`, `SevenZipDecompressor`, `Folder.get_decompressor`.
+    Note its `methods_map` / `_get_lzma_decompressor` logic: BCJ+LZMA2 goes through
+    liblzma (`FORMAT_RAW`), and only the LZMA1+BCJ "native + alternative" case
+    (compressor.py:634) falls back to the `pybcj` package — the model for §4.3.
+- Codec packages (decompression backends):
+  - `lzma` (stdlib) — LZMA1/LZMA2 + BCJ (x86/ARM/ARMT/PPC/SPARC/IA64) + Delta, all via
+    `FORMAT_RAW` filter chains; `zlib`/`bz2` (stdlib) — Deflate/BZip2.
+  - `pyppmd` — PPMd var.H (`Ppmd7Decoder`); `inflate64` — Deflate64 (`Inflater`).
+  - `zstandard`, `brotli`, `cryptography`/`pycryptodome` — existing archivey optionals.
   - `py7zr.py` — `SevenZipFile._real_get_contents`, `_extract`, `_is_solid`,
     `archiveinfo()`, `ArchiveFile`.
   - `properties.py` — `MAGIC_7Z`, `PROPERTY.*` constants, `CompressionMethod.*`.

@@ -77,6 +77,19 @@ Whether RAR/7z store junction targets as **absolute** host paths (expected) or a
 them. The design includes the exact Windows procedure to confirm this before the
 filter requirement is finalised.
 
+## Dependencies / Sequencing
+
+**Land last** (after both native-reader changes).
+
+- `rar-native-metadata-reader` and `sevenzip-native-reader` must land
+  first: RAR and 7z junction detection needs to be wired into the native parsers
+  built by those changes rather than the old rarfile/py7zr facades.
+- Run the Windows spike (see design.md) **during the native-reader phase** so the
+  junction target format (absolute host path vs relative) is confirmed before this
+  change is implemented.
+- `test-suite-parametrization` should be in place so junction sample archives can
+  be registered declaratively.
+
 ## Impact
 
 - **Files changed**: `types.py` (new field + junction representation),
