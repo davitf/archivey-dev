@@ -24,13 +24,13 @@
 - [ ] 2.3 Add a `MemberListing` enum (`INDEXED` / `SCAN_REQUIRED` /
       `SEQUENTIAL_ONLY`) and a shared `AccessCost` enum (`DIRECT` / `LIMITED` /
       `EXPENSIVE` / `UNAVAILABLE`) to `types.py`
-- [ ] 2.4 Add `member_listing: MemberListing` and `member_access: AccessCost`
+- [ ] 2.4 Add `member_listing_cost: MemberListing` and `member_access_cost: AccessCost`
       properties to `ArchiveReader`/`BaseArchiveReader`; have each reader report both
-      by mechanism (no I/O, no raise). For `TarReader`, derive `member_access` from the
+      by mechanism (no I/O, no raise). For `TarReader`, derive `member_access_cost` from the
       `seek_cost` of the decompressed stream it opens (refining the inner-stream
       `seekable()` check at `tar_reader.py:112`)
 - [ ] 2.5 Remove `has_random_access()`; migrate callers/docs to
-      `member_access != AccessCost.UNAVAILABLE`
+      `member_access_cost != AccessCost.UNAVAILABLE`
 - [ ] 2.6 Add a `seek_cost: AccessCost` property to the member-stream wrapper
       *alongside* the protocol-required `seekable()` (keep `seekable()` as-is — the IO
       contract); keep the two consistent (`seekable()` is `False` iff `seek_cost ==

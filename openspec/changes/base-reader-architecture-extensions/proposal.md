@@ -42,21 +42,21 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
   confusing tangle of `streaming` / `has_random_access()` / "member list supported"
   with introspection on two orthogonal axes, each a cost-classifying enum so the
   surface never lies about expense the way a boolean does:
-  - `member_listing: MemberListing` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
+  - `member_listing_cost: MemberListing` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
     — *how cheaply the full member list is obtainable*, so "one bounded seek (ZIP
     catalog)" is no longer conflated with "O(N) full pass (seekable TAR)".
     `get_members_if_available()` is tightened to return the list only for `INDEXED`
     (or already-known) and never to trigger a scan.
-  - `member_access: AccessCost` (`DIRECT` / `LIMITED` / `EXPENSIVE` / `UNAVAILABLE`)
+  - `member_access_cost: AccessCost` (`DIRECT` / `LIMITED` / `EXPENSIVE` / `UNAVAILABLE`)
     — *what it costs to open an arbitrary member out of order*. **Replaces** both
     `has_random_access()` and a plain `supports_random_access` boolean: "can I?" is
-    `member_access != UNAVAILABLE`, and the enum additionally says how expensive it
+    `member_access_cost != UNAVAILABLE`, and the enum additionally says how expensive it
     is (cheap ZIP vs bounded rapidgzip `tar.gz` vs O(N) solid 7z).
   - `AccessCost` is shared: the same scale also reports member-stream **seek cost** via
     a new `seek_cost` property. The protocol-required `seekable(): bool` is kept as-is;
     `seek_cost` is an additional property alongside it (the two stay consistent), so
     callers can tell a true random-access stream from one that is seekable only by
-    re-decompressing. A TAR reader's `member_access` is derived from the `seek_cost` of
+    re-decompressing. A TAR reader's `member_access_cost` is derived from the `seek_cost` of
     the decompressed stream it opens (reaching a member is a seek on that stream).
 
 ## Capabilities
@@ -68,7 +68,7 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
 ### Modified Capabilities
 
 - `archive-reading`: adds the `MemberListing` and shared `AccessCost` enums and the
-  `member_listing` / `member_access` introspection properties, adds an `AccessCost`
+  `member_listing_cost` / `member_access_cost` introspection properties, adds an `AccessCost`
   `seek_cost` property alongside the protocol-required `seekable()` on member streams,
   tightens `get_members_if_available` to never scan, and removes `has_random_access()`
   (superseded) (§8.E).
@@ -103,10 +103,10 @@ Recommended order across all pending changes:
 
 ## Impact
 
-- **Files**: `internal/base_reader.py` (`member_listing` / `member_access`
+- **Files**: `internal/base_reader.py` (`member_listing_cost` / `member_access_cost`
   introspection properties, tightened `get_members_if_available`, removed
   `has_random_access`), `formats/*_reader.py` (`members_list_supported` ClassVar,
-  `member_listing` / `member_access` reporting — TAR derives `member_access` from its
+  `member_listing_cost` / `member_access_cost` reporting — TAR derives `member_access_cost` from its
   decompressed stream's `seek_cost`), the member-stream wrapper (adds `seek_cost`
   alongside the existing `seekable()`), `types.py` (`CompressionMethod`,
   `compression_method_detail`,

@@ -6,20 +6,33 @@ An `AccessCost` enum SHALL classify, on a single shared scale, what it costs to
 reach data out of order — used both for reaching a member within the archive and
 for seeking within a member's stream:
 
-- `DIRECT` — reach the target by seeking and decoding only it, with no penalty.
-- `LIMITED` — reach the target after a *bounded* amount of extra decompression
-  (e.g. back to the nearest index point); random access in a loop is acceptable, but
-  in-order iteration is still preferable.
-- `EXPENSIVE` — reaching the target decodes an *unbounded* prefix (e.g. a whole
-  stream or solid block up to that point); random access in a loop is O(N²) and
-  callers should strongly prefer in-order iteration.
+- `DIRECT` — reach the target by seeking and decoding only it, with no extra
+  decompression (a stored member, or a stream backed by a seekable file).
+- `LIMITED` — each out-of-order access costs a *bounded* amount of extra
+  decompression: back to the nearest seek/index point, never more than the spacing
+  between points. A *one-time* index build (e.g. rapidgzip constructing its seek
+  index, eagerly or on first seek) MAY precede this; it does not by itself disqualify
+  `LIMITED`, because it is paid once and amortized over all accesses rather than per
+  access. Random access in a loop is acceptable; in-order iteration is still
+  marginally preferable.
+- `EXPENSIVE` — each out-of-order access may decode an *unbounded* prefix — a whole
+  stream or solid block up to the target, with no usable intermediate seek point.
+  Random access in a loop is O(N²) and callers should strongly prefer in-order
+  iteration.
 - `UNAVAILABLE` — the target cannot be reached out of order at all; data is available
   only along the primary forward path (streaming iteration, or a non-seekable
   stream).
 
-`AccessCost` SHALL be classified per archive (or per stream) by *mechanism* — the
-worst case the format/backend can require — not measured per call. It is a documented
-cost hint, not a guarantee of a specific running time.
+`AccessCost` SHALL be classified per archive/stream **when it is opened**, from what
+the backend or format header reveals (an indexed decompressor; an xz/lzip block index
+in the footer; a rewind-only stdlib backend) — by *mechanism* and worst case, not
+measured per call. It describes *amortized* per-access cost in steady state, so a
+one-time O(N) index build does not by itself make a stream `EXPENSIVE`. When the
+structure that would distinguish `LIMITED` from `EXPENSIVE` (e.g. how many seek points
+a stream has) is not known without extra work, the **worse** tier SHALL be reported.
+The value is a documented cost hint, not a guarantee of a specific running time: a
+`LIMITED` stream whose seek points happen to be spaced far apart (e.g. an xz file
+written as one large block) carries a correspondingly loose bound.
 
 #### Scenario: Direct access
 - **WHEN** a member is reached in a ZIP, uncompressed seekable TAR, folder, ISO, or
@@ -28,12 +41,15 @@ cost hint, not a guarantee of a specific running time.
 
 #### Scenario: Bounded extra decompression
 - **WHEN** a member is reached in a `tar.gz` backed by an indexed decompressor
-  (e.g. rapidgzip)
-- **THEN** its access cost is `AccessCost.LIMITED`
+  (e.g. rapidgzip), or a `tar.xz`/`tar.lz` whose block index exposes multiple seek
+  points spaced through the stream
+- **THEN** its access cost is `AccessCost.LIMITED` (even if a one-time index build is
+  required on first use)
 
 #### Scenario: Unbounded prefix decompression
-- **WHEN** a member is reached in a solid 7z/RAR archive, or a `tar.gz` backed by a
-  rewind-from-start decompressor
+- **WHEN** a member is reached in a solid 7z/RAR archive, a `tar.gz` backed by a
+  rewind-from-start decompressor, or a `tar.xz`/`tar.lz` written as a single block
+  (no usable intermediate seek point)
 - **THEN** its access cost is `AccessCost.EXPENSIVE`
 
 #### Scenario: Out-of-order access impossible
@@ -54,48 +70,48 @@ so callers can reason about cost up front instead of discovering it at runtime:
 
 #### Scenario: Catalog format is INDEXED
 - **WHEN** a ZIP, 7z, RAR, folder, or ISO archive is opened
-- **THEN** `member_listing` is `MemberListing.INDEXED`
+- **THEN** `member_listing_cost` is `MemberListing.INDEXED`
 
 #### Scenario: Seekable tar requires a scan
 - **WHEN** a seekable tar is opened with `streaming=False`
-- **THEN** `member_listing` is `MemberListing.SCAN_REQUIRED`
+- **THEN** `member_listing_cost` is `MemberListing.SCAN_REQUIRED`
 
 #### Scenario: Streaming or non-seekable source is sequential-only
 - **WHEN** a tar is opened with `streaming=True`, or any archive is opened from a
   non-seekable source
-- **THEN** `member_listing` is `MemberListing.SEQUENTIAL_ONLY`
+- **THEN** `member_listing_cost` is `MemberListing.SEQUENTIAL_ONLY`
 
 ### Requirement: Reader exposes capability-introspection properties
 
-The reader SHALL expose a `member_access` property (an `AccessCost` value) and a
-`member_listing` property (a `MemberListing` value) so callers can discover what the
+The reader SHALL expose a `member_access_cost` property (an `AccessCost` value) and a
+`member_listing_cost` property (a `MemberListing` value) so callers can discover what the
 archive allows, and at what cost, without invoking an operation and catching an
-error. `member_access` SHALL describe the cost of opening an arbitrary member out of
+error. `member_access_cost` SHALL describe the cost of opening an arbitrary member out of
 order; it SHALL be `AccessCost.UNAVAILABLE` exactly when out-of-order open is
 impossible (streaming mode or a non-seekable source). Reading either property SHALL
 NOT perform archive I/O or raise.
 
 #### Scenario: Random-access archive reports a reachable cost
 - **WHEN** an archive is opened with `streaming=False` from a seekable source
-- **THEN** `member_access` is one of `DIRECT`, `LIMITED`, or `EXPENSIVE` (never
+- **THEN** `member_access_cost` is one of `DIRECT`, `LIMITED`, or `EXPENSIVE` (never
   `UNAVAILABLE`)
 
 #### Scenario: Streaming archive reports UNAVAILABLE access
 - **WHEN** an archive is opened with `streaming=True`
-- **THEN** `member_access` is `AccessCost.UNAVAILABLE`
+- **THEN** `member_access_cost` is `AccessCost.UNAVAILABLE`
 
 #### Scenario: Listing and access are independent
 - **WHEN** a ZIP on a seekable stream is opened with `streaming=True`
-- **THEN** `member_listing` is `MemberListing.INDEXED` (the central directory is one
-  bounded seek away) while `member_access` is `AccessCost.UNAVAILABLE` (the forward
+- **THEN** `member_listing_cost` is `MemberListing.INDEXED` (the central directory is one
+  bounded seek away) while `member_access_cost` is `AccessCost.UNAVAILABLE` (the forward
   stream cannot be re-entered out of order)
 
 #### Scenario: Introspection does not raise
-- **WHEN** `member_access` or `member_listing` is read
+- **WHEN** `member_access_cost` or `member_listing_cost` is read
 - **THEN** the value is returned without performing archive I/O or raising
 
-#### Scenario: TAR member_access derives from the decompressed stream's seek cost
-- **WHEN** a TAR reader reports `member_access`
+#### Scenario: TAR member_access_cost derives from the decompressed stream's seek cost
+- **WHEN** a TAR reader reports `member_access_cost`
 - **THEN** the value equals the `seek_cost` of the decompressed stream it opens
   (reaching a member out of order is a seek on that stream): `DIRECT` for an
   uncompressed seekable tar, `LIMITED` for an indexed-decompressor `tar.gz`,
@@ -107,10 +123,10 @@ NOT perform archive I/O or raise.
 ### Requirement: get_members_if_available avoids full traversal
 
 `get_members_if_available()` SHALL return the complete member list only when it is
-already known or obtainable cheaply — that is, when `member_listing` is `INDEXED`
+already known or obtainable cheaply — that is, when `member_listing_cost` is `INDEXED`
 (reading the catalog with at most one bounded seek) or the members have already been
 fully registered by a prior iteration. It SHALL return `None` otherwise and SHALL NOT
-trigger a full scan: when `member_listing` is `SCAN_REQUIRED` and no prior iteration
+trigger a full scan: when `member_listing_cost` is `SCAN_REQUIRED` and no prior iteration
 has completed, it returns `None` (the scan is the job of `get_members()`).
 
 #### Scenario: Catalog format returns the list cheaply
@@ -139,10 +155,17 @@ true random-access stream from one that is seekable only by re-decompressing —
 two SHALL be consistent: `seekable()` returns `False` exactly when `seek_cost` is
 `UNAVAILABLE`, and `True` otherwise.
 
+The four tiers carry the same meaning as the archive-level `AccessCost` (above),
+applied to within-member seeks:
+
 - `DIRECT` — true random seek in both directions (a stored member, or a stream backed
   by a seekable file).
-- `LIMITED` — backward seeks cost a bounded amount (an indexed-decompressor backend).
-- `EXPENSIVE` — backward seeks re-decompress the member from its start.
+- `LIMITED` — backward seeks cost a bounded amount, back to the nearest seek/index
+  point (an indexed-decompressor backend, or a block-indexed xz/lzip stream with
+  usable seek points), possibly after a one-time index build.
+- `EXPENSIVE` — backward seeks re-decompress the member from its start (a stream with
+  no usable intermediate seek point: a single xz/lzip block, or a rewind-from-start
+  backend).
 - `UNAVAILABLE` — the stream is forward-only (`seekable()` is `False`); a member
   obtained while iterating a `streaming=True` archive.
 
@@ -165,11 +188,11 @@ two SHALL be consistent: `seekable()` returns `False` exactly when `seek_cost` i
 
 ### Requirement: has_random_access reports the access mode
 
-**Reason**: superseded by the `member_access` property. The boolean answered only
-"can I open out of order?" — which is now `member_access != UNAVAILABLE` — while
-`member_access` additionally reports *how expensive* out-of-order access is. Keeping
+**Reason**: superseded by the `member_access_cost` property. The boolean answered only
+"can I open out of order?" — which is now `member_access_cost != UNAVAILABLE` — while
+`member_access_cost` additionally reports *how expensive* out-of-order access is. Keeping
 both a `has_random_access()` method and the property would be two names for an
 overlapping concept, the redundancy this change is meant to remove.
 
 **Migration**: replace `reader.has_random_access()` with
-`reader.member_access != AccessCost.UNAVAILABLE`.
+`reader.member_access_cost != AccessCost.UNAVAILABLE`.

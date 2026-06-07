@@ -28,7 +28,7 @@ already rewrite those readers; see the note under Decisions.
 | §8.B `_format_supports_random_access` (per-instance flag) | No (same errors/modes) | none |
 | §8.C `members_list_supported` as ClassVar | No | none |
 | §8.D `CompressionMethod` enum | **Yes** (`compression_method` value type) | `archive-metadata` |
-| §8.E capability introspection (`MemberListing` + `AccessCost` enums, `member_listing` / `member_access`, add stream `seek_cost` alongside `seekable()`, drop `has_random_access`) | **Yes** (public API surface change) | `archive-reading` |
+| §8.E capability introspection (`MemberListing` + `AccessCost` enums, `member_listing_cost` / `member_access_cost`, add stream `seek_cost` alongside `seekable()`, drop `has_random_access`) | **Yes** (public API surface change) | `archive-reading` |
 
 So only §8.D and §8.E get delta specs; §8.B/§8.C are captured as tasks because they
 must not change behavior (the existing `archive-reading` requirements are the
@@ -57,19 +57,26 @@ regression contract).
   / "member list supported" set conflated listing cost, access cost, and the user's
   streaming preference — and used booleans, which forced genuinely different costs to
   share a value:
-  - `member_listing: MemberListing` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
+  - `member_listing_cost: MemberListing` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
     — *listing cost*. A boolean here is what made TAR lie: "one bounded seek to a
     catalog" (ZIP) and "O(N) full pass" (seekable TAR) are different costs, so they
     get different values. `INDEXED` means the list is readable with ≤ one seek without
     exhausting the stream.
-  - `member_access: AccessCost` (`DIRECT` / `LIMITED` / `EXPENSIVE` / `UNAVAILABLE`)
+  - `member_access_cost: AccessCost` (`DIRECT` / `LIMITED` / `EXPENSIVE` / `UNAVAILABLE`)
     — *cost of opening a member out of order*. **Replaces** both `has_random_access()`
     and a `supports_random_access` boolean: the boolean equalled `not streaming` for
     every openable archive (non-seekable sources are forced to streaming), so it
     carried no information beyond the preference flag. The enum does: "can I?" is
     `!= UNAVAILABLE`, and `DIRECT` (ZIP) vs `LIMITED` (rapidgzip `tar.gz`) vs
     `EXPENSIVE` (solid 7z, rewind `tar.gz`) tells a caller whether random access in a
-    loop is fine or an O(N²) trap.
+    loop is fine or an O(N²) trap. **`LIMITED` is defined in amortized terms**: it is
+    bounded *per access* (back to the nearest seek/index point), and a one-time O(N)
+    index build (rapidgzip building its seek index, eagerly or on first seek) is folded
+    in rather than broken out — it does not change the loop-vs-iterate decision (a
+    *single* random open is O(N) on any non-`DIRECT` backend; the tier is about repeated
+    access). The `LIMITED`/`EXPENSIVE` line is therefore "are there usable intermediate
+    seek points?": a multi-block `tar.xz`/`tar.lz` is `LIMITED` (bounded by block size),
+    a single-block one is `EXPENSIVE` (the only seek point is the start).
   - **`AccessCost` is one shared scale** reused for member-stream *seek cost*. The
     stream protocol requires `seekable(): bool`, so it stays exactly as-is (the IO
     contract callers and `tarfile`/`zipfile` depend on); `seek_cost: AccessCost` is an
@@ -79,7 +86,7 @@ regression contract).
     consistent (`seekable()` is `False` iff `seek_cost` is `UNAVAILABLE`). Listing keeps
     its own vocabulary because enumerating a catalog is a different operation from
     reaching bytes; the two reach-bytes operations share `AccessCost`.
-  - **A TAR reader derives its own `member_access` from the seek cost of the
+  - **A TAR reader derives its own `member_access_cost` from the seek cost of the
     decompressed stream it opens.** Reaching a member out of order means seeking that
     inner stream to the member's offset, so the archive's access cost *is* the stream's
     `seek_cost`: an uncompressed seekable tar inherits `DIRECT`, a rapidgzip-backed
@@ -90,8 +97,11 @@ regression contract).
     checks the inner stream's `seekable()` bool at `tar_reader.py:112`; the tiers refine
     that same decision.)
   - Both enums are classified **per archive/stream by mechanism** (worst-case tier),
-    derived at open time, never measured per call and never performing I/O to answer.
-    `get_members_if_available()` is tightened to honor `member_listing`: it returns
+    decided **at open** from what the backend/format header reveals (a footer block
+    index read during construction is fine) and conservatively (report the worse tier)
+    when the distinguishing structure isn't known without extra work. *Reading* the
+    property never performs I/O or raises and is never measured per call.
+    `get_members_if_available()` is tightened to honor `member_listing_cost`: it returns
     the list only when `INDEXED` or members are already registered, and **never
     triggers a `SCAN_REQUIRED` pass** (that is `get_members()`'s job) — aligning the
     method with its already-documented "avoids full traversal" contract, which the

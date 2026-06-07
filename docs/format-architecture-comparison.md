@@ -608,20 +608,24 @@ class MemberListing(StrEnum):
     SEQUENTIAL_ONLY = "sequential_only"  # only as iteration proceeds
 
 class AccessCost(StrEnum):
-    """Cost of reaching data out of order — a member, or bytes within one."""
-    DIRECT = "direct"            # seek + decode only the target, no penalty
-    LIMITED = "limited"          # bounded extra decompression (rapidgzip tar.gz)
-    EXPENSIVE = "expensive"      # decodes an unbounded prefix (solid 7z, rewind tar.gz)
+    """Amortized per-access cost of reaching data out of order — a member, or
+    bytes within one. Decided at open by mechanism; a one-time index build is
+    folded into LIMITED (it doesn't change the loop-vs-iterate decision)."""
+    DIRECT = "direct"            # seek + decode only the target, no extra decompression
+    LIMITED = "limited"          # bounded per access, back to nearest seek/index point
+                                 #   (rapidgzip tar.gz; multi-block tar.xz/tar.lz)
+    EXPENSIVE = "expensive"      # unbounded prefix, no usable seek point
+                                 #   (solid 7z, rewind tar.gz, single-block tar.xz)
     UNAVAILABLE = "unavailable"  # forward path only (streaming / non-seekable)
 
 @property
-def member_listing(self) -> MemberListing: ...
+def member_listing_cost(self) -> MemberListing: ...
 
 @property
-def member_access(self) -> AccessCost:
+def member_access_cost(self) -> AccessCost:
     """Cost of opening an arbitrary member out of order.
     `UNAVAILABLE` iff out-of-order open is impossible; replaces
-    has_random_access() (== member_access != UNAVAILABLE)."""
+    has_random_access() (== member_access_cost != UNAVAILABLE)."""
     ...
 ```
 
@@ -629,13 +633,16 @@ def member_access(self) -> AccessCost:
 `seekable(): bool` as-is and gains a *separate* `seek_cost: AccessCost` property
 alongside it (kept consistent, `seekable() == (seek_cost != UNAVAILABLE)`), so a
 true random-access stream (`DIRECT`) is distinguishable from one seekable only
-by re-decompressing (`EXPENSIVE`). A `TarReader` derives its own `member_access`
+by re-decompressing (`EXPENSIVE`). A `TarReader` derives its own `member_access_cost`
 from the `seek_cost` of the decompressed stream it opens — reaching a member out
 of order is a seek on that stream, so the archive tier *is* the stream tier
 (uncompressed → `DIRECT`, rapidgzip `tar.gz` → `LIMITED`, rewind `tar.gz` →
-`EXPENSIVE`, non-seekable → `UNAVAILABLE`). Both enums are classified per
-archive/stream by mechanism (worst-case tier), never measured per call.
-`get_members_if_available()` returns the list only when `member_listing` is
+`EXPENSIVE`, non-seekable → `UNAVAILABLE`). The `LIMITED`/`EXPENSIVE` split is
+"are there usable intermediate seek points?": a multi-block `tar.xz`/`tar.lz` is
+`LIMITED` (bounded by block size), a single-block one is `EXPENSIVE`. Both enums
+are classified per archive/stream by mechanism (worst-case tier) at open, reported
+conservatively when the structure isn't known, never measured per call.
+`get_members_if_available()` returns the list only when `member_listing_cost` is
 `INDEXED` (or members are already registered) and never triggers a
 `SCAN_REQUIRED` pass.
 
