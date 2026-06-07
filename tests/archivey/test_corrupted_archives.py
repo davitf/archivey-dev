@@ -163,6 +163,7 @@ def test_read_corrupted_archives(
 @pytest.mark.parametrize("read_streams", [True, False], ids=["read", "noread"])
 def test_read_truncated_archives(
     sample_archive: SampleArchive,
+    sample_archive_path: str,
     corrupted_length: int | float,
     tmp_path_factory: pytest.TempPathFactory,
     read_streams: bool,
@@ -184,7 +185,7 @@ def test_read_truncated_archives(
         f"Testing truncated archive {output_path} with length {corrupted_length}"
     )
 
-    data = open(sample_archive.get_archive_path(), "rb").read()
+    data = open(sample_archive_path, "rb").read()
     if isinstance(corrupted_length, float):
         corrupted_length = int(corrupted_length * len(data))
 
