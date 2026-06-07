@@ -28,7 +28,7 @@ already rewrite those readers; see the note under Decisions.
 | §8.B `_format_supports_random_access` (per-instance flag) | No (same errors/modes) | none |
 | §8.C `members_list_supported` as ClassVar | No | none |
 | §8.D `CompressionMethod` enum | **Yes** (`compression_method` value type) | `archive-metadata` |
-| §8.E capability introspection (`MemberListing`, `supports_random_access`, drop `has_random_access`) | **Yes** (public API surface change) | `archive-reading` |
+| §8.E capability introspection (`MemberListing` + `AccessCost` enums, `member_listing` / `member_access`, stream `seek_cost`, drop `has_random_access`) | **Yes** (public API surface change) | `archive-reading` |
 
 So only §8.D and §8.E get delta specs; §8.B/§8.C are captured as tasks because they
 must not change behavior (the existing `archive-reading` requirements are the
@@ -52,27 +52,37 @@ regression contract).
   (§8.B). Whether a compressed TAR can random-access is decided at construction by
   the decompressor backend (stdlib-on-pipe vs stdlib-on-file vs
   rapidgzip/indexed_bzip2), so it is set in `__init__`, not declared on the class.
-- **Capability introspection is redesigned around two independent axes** (§8.E),
-  because the old `streaming` / `has_random_access()` / "member list supported" set
-  conflated content access, listing cost, and the user's streaming preference:
-  - `supports_random_access: bool` — content access: can a member be opened
-    individually / out of order (seekable + format support + not streaming). Derived,
-    not stored. **Replaces** `has_random_access()` — one name for one concept, since
-    backwards compatibility is not a constraint at this stage.
-  - `member_listing: MemberListing` — listing cost as a 3-state enum (`INDEXED`,
-    `SCAN_REQUIRED`, `SEQUENTIAL_ONLY`). A boolean here is what made TAR lie:
-    "one bounded seek to a catalog" (ZIP) and "O(N) full pass" (seekable TAR) are
-    genuinely different costs, so they get genuinely different values. `INDEXED`
-    means the list is readable with ≤ one seek without exhausting the stream.
-  - `get_members_if_available()` is tightened to honor this: it returns the list only
-    when `member_listing` is `INDEXED` or the members are already registered, and
-    **never triggers a `SCAN_REQUIRED` pass** (that is `get_members()`'s job). This
-    aligns the method with its already-documented "avoids full traversal" contract,
-    which the current code violates for seekable TAR.
-  - Cost wrinkles that are *not* encoded in the type system (kept coarse and
-    explainable, documented in prose): solid 7z/RAR random access decompresses
-    earlier members in the block; `SCAN_REQUIRED` seeks may, on a network/HDD source,
-    cost more than decompression.
+- **Capability introspection is redesigned around two orthogonal axes, each a
+  cost-classifying enum** (§8.E), because the old `streaming` / `has_random_access()`
+  / "member list supported" set conflated listing cost, access cost, and the user's
+  streaming preference — and used booleans, which forced genuinely different costs to
+  share a value:
+  - `member_listing: MemberListing` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
+    — *listing cost*. A boolean here is what made TAR lie: "one bounded seek to a
+    catalog" (ZIP) and "O(N) full pass" (seekable TAR) are different costs, so they
+    get different values. `INDEXED` means the list is readable with ≤ one seek without
+    exhausting the stream.
+  - `member_access: AccessCost` (`DIRECT` / `LIMITED` / `EXPENSIVE` / `UNAVAILABLE`)
+    — *cost of opening a member out of order*. **Replaces** both `has_random_access()`
+    and a `supports_random_access` boolean: the boolean equalled `not streaming` for
+    every openable archive (non-seekable sources are forced to streaming), so it
+    carried no information beyond the preference flag. The enum does: "can I?" is
+    `!= UNAVAILABLE`, and `DIRECT` (ZIP) vs `LIMITED` (rapidgzip `tar.gz`) vs
+    `EXPENSIVE` (solid 7z, rewind `tar.gz`) tells a caller whether random access in a
+    loop is fine or an O(N²) trap.
+  - **`AccessCost` is one shared scale** reused for member-stream *seek cost*: the
+    existing `seekable(): bool` becomes a `seek_cost: AccessCost`, so callers can tell
+    a true random-access stream (`DIRECT`) from one seekable only by re-decompressing
+    (`EXPENSIVE`). `seekable()` is kept and defined as `seek_cost != UNAVAILABLE`.
+    Listing keeps its own vocabulary because enumerating a catalog is a different
+    operation from reaching bytes; the two reach-bytes operations share `AccessCost`.
+  - Both enums are classified **per archive/stream by mechanism** (worst-case tier),
+    derived at open time, never measured per call and never performing I/O to answer.
+    `get_members_if_available()` is tightened to honor `member_listing`: it returns
+    the list only when `INDEXED` or members are already registered, and **never
+    triggers a `SCAN_REQUIRED` pass** (that is `get_members()`'s job) — aligning the
+    method with its already-documented "avoids full traversal" contract, which the
+    current code violates for seekable TAR.
 - **§8.A is folded into the native readers**: because `rar-native-metadata-reader`
   and `sevenzip-native-metadata-reader` already rewrite those readers, each adopts the
   existing `_iter_members_and_streams_internal` hook (dropping its public

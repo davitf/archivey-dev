@@ -40,15 +40,21 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
   own codec names that a closed enum can't represent.
 - **§8.E — capability introspection (redesigned surface)** *(public)*: replace the
   confusing tangle of `streaming` / `has_random_access()` / "member list supported"
-  with two clearly-scoped introspection properties on two independent axes:
-  - `supports_random_access: bool` — can members be opened individually / out of
-    order (seekable source + format support + not streaming). **Replaces**
-    `has_random_access()` (one name for one concept).
-  - `member_listing: MemberListing` — a 3-state enum (`INDEXED` / `SCAN_REQUIRED` /
-    `SEQUENTIAL_ONLY`) for *how cheaply* the full member list can be obtained, so the
-    "one bounded seek (ZIP catalog)" case is no longer conflated with the "O(N) full
-    pass (seekable TAR)" case. `get_members_if_available()` is tightened to return the
-    list only for `INDEXED` (or already-known) and never to trigger a scan.
+  with introspection on two orthogonal axes, each a cost-classifying enum so the
+  surface never lies about expense the way a boolean does:
+  - `member_listing: MemberListing` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
+    — *how cheaply the full member list is obtainable*, so "one bounded seek (ZIP
+    catalog)" is no longer conflated with "O(N) full pass (seekable TAR)".
+    `get_members_if_available()` is tightened to return the list only for `INDEXED`
+    (or already-known) and never to trigger a scan.
+  - `member_access: AccessCost` (`DIRECT` / `LIMITED` / `EXPENSIVE` / `UNAVAILABLE`)
+    — *what it costs to open an arbitrary member out of order*. **Replaces** both
+    `has_random_access()` and a plain `supports_random_access` boolean: "can I?" is
+    `member_access != UNAVAILABLE`, and the enum additionally says how expensive it
+    is (cheap ZIP vs bounded rapidgzip `tar.gz` vs O(N) solid 7z).
+  - `AccessCost` is shared: the same scale also reports member-stream **seek cost**,
+    upgrading the existing `seekable(): bool` contract so callers can tell a true
+    random-access stream from one that is seekable only by re-decompressing.
 
 ## Capabilities
 
@@ -58,9 +64,10 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
 
 ### Modified Capabilities
 
-- `archive-reading`: adds the `MemberListing` enum and the `supports_random_access`
-  / `member_listing` introspection properties, tightens `get_members_if_available`
-  to never scan, and removes `has_random_access()` (superseded) (§8.E).
+- `archive-reading`: adds the `MemberListing` and shared `AccessCost` enums and the
+  `member_listing` / `member_access` introspection properties, upgrades member-stream
+  seekability to an `AccessCost` `seek_cost`, tightens `get_members_if_available` to
+  never scan, and removes `has_random_access()` (superseded) (§8.E).
 - `archive-metadata`: adds the typed `CompressionMethod` enum and the lossless
   `compression_method_detail` field (§8.D).
 
@@ -70,10 +77,10 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
   internal refactors that keep observable behavior identical).
 - The §8.A co-iteration migration — folded into the native-reader changes, since
   those rewrite the same `sevenzip_reader.py` / `rar_reader.py` iteration code.
-- A "how expensive is *content* access" type (solid-archive decompression cost, the
-  TAR scan cost beyond the `SCAN_REQUIRED` flag): these are documented as cost
-  caveats rather than encoded into the introspection surface, to keep it coarse and
-  explainable.
+- *Measured*, per-call cost. `AccessCost` is a coarse mechanism-based hint
+  (worst-case tier), not a predicted running time; wall-clock cost (e.g. whether a
+  `SCAN_REQUIRED` seek beats decompression on a given disk/network) is left
+  unmodeled.
 
 ## Dependencies / Sequencing
 
@@ -92,11 +99,11 @@ Recommended order across all pending changes:
 
 ## Impact
 
-- **Files**: `internal/base_reader.py` (per-instance random-access flag,
-  `member_listing`, introspection properties, tightened `get_members_if_available`,
-  removed `has_random_access`), `formats/*_reader.py` (`members_list_supported`
-  ClassVar, `member_listing` reporting), `types.py` (`CompressionMethod`,
-  `compression_method_detail`, `MemberListing`), `archive_reader.py` (property
-  declarations).
+- **Files**: `internal/base_reader.py` (`member_listing` / `member_access`
+  introspection properties, tightened `get_members_if_available`, removed
+  `has_random_access`), `formats/*_reader.py` (`members_list_supported` ClassVar,
+  `member_listing` / `member_access` reporting), the member-stream wrapper
+  (`seek_cost`), `types.py` (`CompressionMethod`, `compression_method_detail`,
+  `MemberListing`, `AccessCost`), `archive_reader.py` (property declarations).
 - **Live specs touched**: `archive-reading`, `archive-metadata`.
 - **Design reference**: `docs/format-architecture-comparison.md` §8–§9.

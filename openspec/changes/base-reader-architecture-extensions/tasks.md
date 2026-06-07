@@ -22,13 +22,18 @@
       reported-but-unmapped, `None` when unreported); preserve the verbatim/full
       codec description (e.g. 7z filter chains) in `compression_method_detail`
 - [ ] 2.3 Add a `MemberListing` enum (`INDEXED` / `SCAN_REQUIRED` /
-      `SEQUENTIAL_ONLY`) and a `member_listing` property; add a
-      `supports_random_access` property to `ArchiveReader`/`BaseArchiveReader`
-- [ ] 2.4 Remove `has_random_access()` (superseded by `supports_random_access`);
-      update callers and docs
-- [ ] 2.5 Tighten `get_members_if_available()` so it returns the list only for
+      `SEQUENTIAL_ONLY`) and a shared `AccessCost` enum (`DIRECT` / `LIMITED` /
+      `EXPENSIVE` / `UNAVAILABLE`) to `types.py`
+- [ ] 2.4 Add `member_listing: MemberListing` and `member_access: AccessCost`
+      properties to `ArchiveReader`/`BaseArchiveReader`; have each reader report both
+      by mechanism (no I/O, no raise)
+- [ ] 2.5 Remove `has_random_access()`; migrate callers/docs to
+      `member_access != AccessCost.UNAVAILABLE`
+- [ ] 2.6 Upgrade member-stream seekability to a `seek_cost: AccessCost` property on
+      the stream wrapper; keep `seekable()` defined as `seek_cost != UNAVAILABLE`
+- [ ] 2.7 Tighten `get_members_if_available()` so it returns the list only for
       `INDEXED` (or already-registered) members and never triggers a `SCAN_REQUIRED`
-      pass; have each reader report its `member_listing`
+      pass
 
 ## 3. Validation
 

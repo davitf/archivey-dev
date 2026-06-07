@@ -1,5 +1,45 @@
 ## ADDED Requirements
 
+### Requirement: AccessCost classifies the cost of reaching data
+
+An `AccessCost` enum SHALL classify, on a single shared scale, what it costs to
+reach data out of order — used both for reaching a member within the archive and
+for seeking within a member's stream:
+
+- `DIRECT` — reach the target by seeking and decoding only it, with no penalty.
+- `LIMITED` — reach the target after a *bounded* amount of extra decompression
+  (e.g. back to the nearest index point); random access in a loop is acceptable, but
+  in-order iteration is still preferable.
+- `EXPENSIVE` — reaching the target decodes an *unbounded* prefix (e.g. a whole
+  stream or solid block up to that point); random access in a loop is O(N²) and
+  callers should strongly prefer in-order iteration.
+- `UNAVAILABLE` — the target cannot be reached out of order at all; data is available
+  only along the primary forward path (streaming iteration, or a non-seekable
+  stream).
+
+`AccessCost` SHALL be classified per archive (or per stream) by *mechanism* — the
+worst case the format/backend can require — not measured per call. It is a documented
+cost hint, not a guarantee of a specific running time.
+
+#### Scenario: Direct access
+- **WHEN** a member is reached in a ZIP, uncompressed seekable TAR, folder, ISO, or
+  non-solid 7z archive
+- **THEN** its access cost is `AccessCost.DIRECT`
+
+#### Scenario: Bounded extra decompression
+- **WHEN** a member is reached in a `tar.gz` backed by an indexed decompressor
+  (e.g. rapidgzip)
+- **THEN** its access cost is `AccessCost.LIMITED`
+
+#### Scenario: Unbounded prefix decompression
+- **WHEN** a member is reached in a solid 7z/RAR archive, or a `tar.gz` backed by a
+  rewind-from-start decompressor
+- **THEN** its access cost is `AccessCost.EXPENSIVE`
+
+#### Scenario: Out-of-order access impossible
+- **WHEN** an archive is opened with `streaming=True`, or from a non-seekable source
+- **THEN** the member access cost is `AccessCost.UNAVAILABLE`
+
 ### Requirement: MemberListing classifies how cheaply members can be listed
 
 A `MemberListing` enum SHALL classify how the complete member list can be obtained,
@@ -27,34 +67,31 @@ so callers can reason about cost up front instead of discovering it at runtime:
 
 ### Requirement: Reader exposes capability-introspection properties
 
-The reader SHALL expose a `supports_random_access` boolean property and a
+The reader SHALL expose a `member_access` property (an `AccessCost` value) and a
 `member_listing` property (a `MemberListing` value) so callers can discover what the
-archive allows without invoking an operation and catching an error.
-`supports_random_access` SHALL be `True` exactly when members can be opened
-individually and out of order — the source is seekable, the format supports it, and
-the archive was not opened in streaming mode. Reading either property SHALL NOT
-perform archive I/O or raise.
+archive allows, and at what cost, without invoking an operation and catching an
+error. `member_access` SHALL describe the cost of opening an arbitrary member out of
+order; it SHALL be `AccessCost.UNAVAILABLE` exactly when out-of-order open is
+impossible (streaming mode or a non-seekable source). Reading either property SHALL
+NOT perform archive I/O or raise.
 
-The cost of opening a member when `supports_random_access` is `True` is not uniform:
-in solid archives (some 7z/RAR) opening a member may require decompressing earlier
-members in its block. This is documented rather than encoded in the property.
-
-#### Scenario: Random-access archive reports the capability
+#### Scenario: Random-access archive reports a reachable cost
 - **WHEN** an archive is opened with `streaming=False` from a seekable source
-- **THEN** `supports_random_access` is `True`
+- **THEN** `member_access` is one of `DIRECT`, `LIMITED`, or `EXPENSIVE` (never
+  `UNAVAILABLE`)
 
-#### Scenario: Streaming archive cannot random-access
+#### Scenario: Streaming archive reports UNAVAILABLE access
 - **WHEN** an archive is opened with `streaming=True`
-- **THEN** `supports_random_access` is `False`
+- **THEN** `member_access` is `AccessCost.UNAVAILABLE`
 
-#### Scenario: Streaming archive with a catalog still lists members cheaply
+#### Scenario: Listing and access are independent
 - **WHEN** a ZIP on a seekable stream is opened with `streaming=True`
-- **THEN** `supports_random_access` is `False` but `member_listing` is
-  `MemberListing.INDEXED`, because the central directory can be read with a single
-  bounded seek without exhausting the stream
+- **THEN** `member_listing` is `MemberListing.INDEXED` (the central directory is one
+  bounded seek away) while `member_access` is `AccessCost.UNAVAILABLE` (the forward
+  stream cannot be re-entered out of order)
 
 #### Scenario: Introspection does not raise
-- **WHEN** `supports_random_access` or `member_listing` is read
+- **WHEN** `member_access` or `member_listing` is read
 - **THEN** the value is returned without performing archive I/O or raising
 
 ## MODIFIED Requirements
@@ -82,15 +119,45 @@ has completed, it returns `None` (the scan is the job of `get_members()`).
   been iterated
 - **THEN** `None` is returned
 
+### Requirement: Member stream seek cost is reported as an AccessCost
+
+Streams returned for members SHALL expose a `seek_cost` property (an `AccessCost`
+value) describing what it costs to seek *within* the member's content, and SHALL
+report `seekable()` consistently with it (`False` exactly when `seek_cost` is
+`UNAVAILABLE`, `True` otherwise). This lets callers distinguish a true random-access
+stream from one that is seekable only by re-decompressing.
+
+- `DIRECT` — true random seek in both directions (a stored member, or a stream backed
+  by a seekable file).
+- `LIMITED` — backward seeks cost a bounded amount (an indexed-decompressor backend).
+- `EXPENSIVE` — backward seeks re-decompress the member from its start.
+- `UNAVAILABLE` — the stream is forward-only (`seekable()` is `False`); a member
+  obtained while iterating a `streaming=True` archive.
+
+#### Scenario: Direct seek in a stored member
+- **WHEN** a member stream is obtained from a stored entry in an archive opened with
+  `streaming=False`
+- **THEN** `seekable()` returns `True` and `seek_cost` is `AccessCost.DIRECT`
+
+#### Scenario: Re-decompressing backward seeks
+- **WHEN** a member stream is obtained for a compressed entry in a random-access
+  archive whose backend re-decompresses on backward seeks
+- **THEN** `seekable()` returns `True` and `seek_cost` is `AccessCost.EXPENSIVE`
+
+#### Scenario: Forward-only stream in streaming mode
+- **WHEN** a member stream is obtained while iterating an archive opened with
+  `streaming=True`
+- **THEN** `seekable()` returns `False` and `seek_cost` is `AccessCost.UNAVAILABLE`
+
 ## REMOVED Requirements
 
 ### Requirement: has_random_access reports the access mode
 
-**Reason**: superseded by the `supports_random_access` property, which reports the
-same fact with a clearer name as part of the unified capability-introspection
-surface. Keeping both a `has_random_access()` method and a `supports_random_access`
-property would be two names for one concept — the redundancy this change is meant to
-remove.
+**Reason**: superseded by the `member_access` property. The boolean answered only
+"can I open out of order?" — which is now `member_access != UNAVAILABLE` — while
+`member_access` additionally reports *how expensive* out-of-order access is. Keeping
+both a `has_random_access()` method and the property would be two names for an
+overlapping concept, the redundancy this change is meant to remove.
 
-**Migration**: replace `reader.has_random_access()` with the
-`reader.supports_random_access` property.
+**Migration**: replace `reader.has_random_access()` with
+`reader.member_access != AccessCost.UNAVAILABLE`.

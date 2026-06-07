@@ -589,35 +589,50 @@ parsing strings.
 #### E. Capability introspection
 
 **Problem**: callers must try operations and catch `ValueError` to discover
-whether random access is available, and there is no honest way to ask "is
-listing members cheap?" — a single boolean would conflate ZIP's one-seek
-catalog with TAR's O(N) full pass.
+whether random access is available, and there is no honest way to ask how
+*expensive* listing or access is — a single boolean would conflate ZIP's
+one-seek catalog with TAR's O(N) full pass, and direct ZIP member access with
+an O(N²)-in-a-loop solid archive.
 
-**Proposed surface** — two independent axes, plus the removal of the redundant
-`has_random_access()` method:
+**Proposed surface** — two orthogonal axes, each a cost-classifying enum, plus
+the removal of the redundant `has_random_access()` method. Note a plain
+`supports_random_access` boolean would equal `not streaming` for every openable
+archive (non-seekable sources are already forced to streaming), so it would
+carry no information; the enum is what earns its place.
 
 ```python
 class MemberListing(StrEnum):
-    INDEXED = "indexed"            # catalog / central directory, <= one seek
-    SCAN_REQUIRED = "scan_required"  # full O(N) pass over the body (seekable TAR)
+    """How cheaply can the full member list be obtained?"""
+    INDEXED = "indexed"                  # catalog / central directory, <= one seek
+    SCAN_REQUIRED = "scan_required"      # full O(N) pass over the body (seekable TAR)
     SEQUENTIAL_ONLY = "sequential_only"  # only as iteration proceeds
 
-@property
-def supports_random_access(self) -> bool:
-    """Can a member be opened individually / out of order?"""
-    return not self._streaming_only  # and seekable + format support
+class AccessCost(StrEnum):
+    """Cost of reaching data out of order — a member, or bytes within one."""
+    DIRECT = "direct"            # seek + decode only the target, no penalty
+    LIMITED = "limited"          # bounded extra decompression (rapidgzip tar.gz)
+    EXPENSIVE = "expensive"      # decodes an unbounded prefix (solid 7z, rewind tar.gz)
+    UNAVAILABLE = "unavailable"  # forward path only (streaming / non-seekable)
 
 @property
-def member_listing(self) -> MemberListing:
-    """How cheaply can the full member list be obtained?"""
+def member_listing(self) -> MemberListing: ...
+
+@property
+def member_access(self) -> AccessCost:
+    """Cost of opening an arbitrary member out of order.
+    `UNAVAILABLE` iff out-of-order open is impossible; replaces
+    has_random_access() (== member_access != UNAVAILABLE)."""
     ...
 ```
 
+`AccessCost` is shared: a member stream's `seekable(): bool` is upgraded to a
+`seek_cost: AccessCost` (with `seekable() == (seek_cost != UNAVAILABLE)`), so a
+true random-access stream (`DIRECT`) is distinguishable from one seekable only
+by re-decompressing (`EXPENSIVE`). Both enums are classified per archive/stream
+by mechanism (worst-case tier), never measured per call.
 `get_members_if_available()` returns the list only when `member_listing` is
 `INDEXED` (or members are already registered) and never triggers a
-`SCAN_REQUIRED` pass. Content-access cost wrinkles (solid 7z/RAR decompression,
-the TAR scan cost) are documented rather than encoded, to keep the surface
-coarse and explainable.
+`SCAN_REQUIRED` pass.
 
 ---
 
