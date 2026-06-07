@@ -3,18 +3,17 @@ import logging
 
 import pytest
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
 from archivey.internal.utils import ensure_not_none
 from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     LARGE_ARCHIVES,
     SINGLE_FILE_ARCHIVES,
     SampleArchive,
     filter_archives,
 )
-from tests.archivey.testing_utils import skip_if_package_missing
 
 logger = logging.getLogger(__name__)
 
@@ -46,37 +45,29 @@ class SizeLimitedReader(io.RawIOBase):
         return ensure_not_none(self._stream.read(min(n, self._max_bytes)))
 
     def close(self) -> None:
-        # logger.error("Closing OneByteReader", stack_info=True)
         self._stream.close()
         super().close()
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
+@pytest.mark.sample_archives(
+    archives=filter_archives(
         BASIC_ARCHIVES + SINGLE_FILE_ARCHIVES + LARGE_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
     ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "alternative"]
+    configs=["default", "altlibs"],
 )
 @pytest.mark.parametrize("streaming_only", [False, True], ids=["random", "stream"])
 def test_open_archive_small_reads(
     sample_archive: SampleArchive,
     sample_archive_path: str,
-    alternative_packages: bool,
+    archivey_config: ArchiveyConfig | None,
     streaming_only: bool,
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    config = archivey_config or ArchiveyConfig()
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
 
-    # It's too slow to test single-byte reads for large archives. This chunk size
-    # should be enough to test incomplete reads while reading the member contents.
     max_bytes = 250 if "large" in sample_archive_path else 1
     stream = SizeLimitedReader(data, max_bytes=max_bytes)
 

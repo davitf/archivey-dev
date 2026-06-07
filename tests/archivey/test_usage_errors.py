@@ -10,18 +10,15 @@ from tests.archivey.sample_archives import (
     SYMLINK_ARCHIVES,
     SampleArchive,
 )
-from tests.archivey.testing_utils import skip_if_package_missing
 
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize("sample_archive", BASIC_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=BASIC_ARCHIVES)
 def test_get_operations_after_close(
     sample_archive: SampleArchive, sample_archive_path: str
 ) -> None:
     """Calling get_archive_info after closing should raise an error."""
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     archive = open_archive(sample_archive_path)
     assert archive.get_archive_info() is not None
     archive.close()
@@ -39,13 +36,10 @@ def test_get_operations_after_close(
         list(archive.extractall(path="/tmp"))
 
 
-@pytest.mark.parametrize("sample_archive", BASIC_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=BASIC_ARCHIVES)
 def test_open_member_from_another_archive(
     sample_archive: SampleArchive, sample_archive_path: str
 ) -> None:
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
-    # Open the archive twice
     with (
         open_archive(sample_archive_path) as archive1,
         open_archive(sample_archive_path) as archive2,
@@ -57,12 +51,10 @@ def test_open_member_from_another_archive(
             archive2.open(first_file)
 
 
-@pytest.mark.parametrize("sample_archive", BASIC_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=BASIC_ARCHIVES)
 def test_open_dir_member(
     sample_archive: SampleArchive, sample_archive_path: str
 ) -> None:
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     with open_archive(sample_archive_path) as archive:
         first_dir = archive.get_member("subdir/")
         assert first_dir.type == MemberType.DIR
@@ -71,12 +63,10 @@ def test_open_dir_member(
             archive.open(first_dir)
 
 
-@pytest.mark.parametrize("sample_archive", SYMLINK_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=SYMLINK_ARCHIVES)
 def test_resolve_link_non_registered_member(
     sample_archive: SampleArchive, sample_archive_path: str
 ) -> None:
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     with open_archive(sample_archive_path) as archive:
         member = ArchiveMember(
             filename="dangling",

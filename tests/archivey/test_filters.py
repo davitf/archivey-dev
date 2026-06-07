@@ -10,19 +10,11 @@ from archivey.filters import (
 )
 from archivey.types import ArchiveMember, ContainerFormat, MemberType
 from tests.archivey.sample_archives import SANITIZE_ARCHIVES, SampleArchive
-from tests.archivey.testing_utils import skip_if_package_missing
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_fully_trusted_filter(sample_archive: SampleArchive, sample_archive_path: str):
     """Test the fully_trusted filter allows everything."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     with open_archive(sample_archive_path) as archive:
         members = list(archive.iter_members_with_streams(filter=fully_trusted))
 
@@ -44,16 +36,9 @@ def test_fully_trusted_filter(sample_archive: SampleArchive, sample_archive_path
         assert filenames == expected_filenames
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_tar_filter(sample_archive: SampleArchive, sample_archive_path: str):
     """Test the tar_filter raises errors on unsafe content."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(
             ArchiveFilterError,
@@ -62,16 +47,9 @@ def test_tar_filter(sample_archive: SampleArchive, sample_archive_path: str):
             list(archive.iter_members_with_streams(filter=tar_filter))
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_data_filter(sample_archive: SampleArchive, sample_archive_path: str):
     """Test the data_filter raises errors on unsafe content."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(
             ArchiveFilterError,
@@ -80,18 +58,11 @@ def test_data_filter(sample_archive: SampleArchive, sample_archive_path: str):
             list(archive.iter_members_with_streams(filter=ExtractionFilter.DATA))
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_filter_with_raise_on_error_false(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
     """Test filter that logs warnings instead of raising errors."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     custom_filter = create_filter(
         for_data=False,
         sanitize_names=True,
@@ -167,18 +138,11 @@ def test_filter_with_raise_on_error_false(
             assert archive.open(hardlink_absfile).read() == b"abs"
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_filter_without_name_sanitization(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
     """Test filter that doesn't sanitize names."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     custom_filter = create_filter(
         for_data=False,
         sanitize_names=False,
@@ -195,18 +159,11 @@ def test_filter_without_name_sanitization(
             list(archive.iter_members_with_streams(filter=custom_filter))
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_filter_without_link_target_sanitization(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
     """Test filter that doesn't sanitize link targets."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     custom_filter = create_filter(
         for_data=False,
         sanitize_names=True,
@@ -227,18 +184,11 @@ def test_filter_without_link_target_sanitization(
             list(archive.iter_members_with_streams(filter=custom_filter))
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_filter_without_permission_sanitization(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
     """Test filter that doesn't sanitize permissions."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     custom_filter = create_filter(
         for_data=False,
         sanitize_names=True,
@@ -253,18 +203,11 @@ def test_filter_without_permission_sanitization(
             list(archive.iter_members_with_streams(filter=custom_filter))
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_data_filter_with_permission_changes(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
     """Test data filter that changes permissions for files."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     data_filter_custom = create_filter(
         for_data=True,
         sanitize_names=True,
@@ -293,15 +236,9 @@ def test_data_filter_with_permission_changes(
                 )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_filter_combinations(sample_archive: SampleArchive, sample_archive_path: str):
     # Test minimal filtering
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     minimal_filter = create_filter(
         for_data=False,
         sanitize_names=False,
@@ -328,16 +265,9 @@ def test_filter_combinations(sample_archive: SampleArchive, sample_archive_path:
             assert any("../outside.txt" in f for f in filenames)
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_filter_error_messages(sample_archive: SampleArchive, sample_archive_path: str):
     """Test that filter errors have meaningful messages."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     with open_archive(sample_archive_path) as archive:
         with pytest.raises(ArchiveFilterError) as exc_info:
             list(archive.iter_members_with_streams(filter=tar_filter))
@@ -357,11 +287,7 @@ ERROR_CASES = [
 ]
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 @pytest.mark.parametrize(
     ("member_name", "pattern"),
     ERROR_CASES,
@@ -374,9 +300,6 @@ def test_tar_filter_individual_errors(
     pattern: str,
 ):
     """Ensure tar_filter raises the correct error for each problematic member."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     if member_name not in {f.name for f in sample_archive.contents.files}:
         pytest.skip(f"{member_name} not present in {sample_archive.filename}")
 
@@ -389,16 +312,9 @@ def test_tar_filter_individual_errors(
             )
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES,
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES)
 def test_filter_with_dest_path(sample_archive: SampleArchive, sample_archive_path: str):
     """Test filter behavior with destination path specified."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     custom_filter = create_filter(
         for_data=False,
         sanitize_names=True,
@@ -412,16 +328,9 @@ def test_filter_with_dest_path(sample_archive: SampleArchive, sample_archive_pat
             list(archive.iter_members_with_streams(filter=custom_filter))
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    SANITIZE_ARCHIVES[:1],
-    ids=lambda x: x.filename,
-)
+@pytest.mark.sample_archives(archives=SANITIZE_ARCHIVES[:1])
 def test_broken_filter(sample_archive: SampleArchive, sample_archive_path: str):
     """Test that a broken filter raises an error."""
-
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     first_member: ArchiveMember | None = None
 
     def broken_filter(member: ArchiveMember) -> ArchiveMember | None:
@@ -430,7 +339,6 @@ def test_broken_filter(sample_archive: SampleArchive, sample_archive_path: str):
         nonlocal first_member
         if first_member is None:
             first_member = member
-
         return first_member.replace()  # Create a copy
 
     with open_archive(sample_archive_path) as archive:

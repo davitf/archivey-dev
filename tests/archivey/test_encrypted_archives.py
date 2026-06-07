@@ -11,7 +11,6 @@ from tests.archivey.sample_archives import (
     SampleArchive,
     filter_archives,
 )
-from tests.archivey.testing_utils import skip_if_package_missing
 
 # Select encrypted sample archives that use a single password and no header password
 ENCRYPTED_ARCHIVES = filter_archives(
@@ -43,12 +42,10 @@ def _first_encrypted_file(sample: SampleArchive):
     raise ValueError("sample archive has no encrypted files")
 
 
-@pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=ENCRYPTED_ARCHIVES)
 def test_password_in_open_archive(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     pwd = _archive_password(sample_archive)
     with open_archive(sample_archive_path, pwd=pwd) as archive:
         encrypted = _first_encrypted_file(sample_archive)
@@ -56,12 +53,10 @@ def test_password_in_open_archive(
             assert fh.read() == encrypted.contents
 
 
-@pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=ENCRYPTED_ARCHIVES)
 def test_password_in_iter_members(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     pwd = _archive_password(sample_archive)
     with open_archive(sample_archive_path) as archive:
         if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
@@ -78,10 +73,8 @@ def test_password_in_iter_members(
                 assert contents[f.name] == f.contents
 
 
-@pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=ENCRYPTED_ARCHIVES)
 def test_password_in_open(sample_archive: SampleArchive, sample_archive_path: str):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     pwd = _archive_password(sample_archive)
     with open_archive(sample_archive_path) as archive:
         for f in sample_archive.contents.files:
@@ -90,10 +83,8 @@ def test_password_in_open(sample_archive: SampleArchive, sample_archive_path: st
                     assert fh.read() == f.contents
 
 
-@pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=ENCRYPTED_ARCHIVES)
 def test_wrong_password_open(sample_archive: SampleArchive, sample_archive_path: str):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     wrong = "wrong_password"
     encrypted = _first_encrypted_file(sample_archive)
     with open_archive(sample_archive_path) as archive:
@@ -102,12 +93,10 @@ def test_wrong_password_open(sample_archive: SampleArchive, sample_archive_path:
                 f.read()
 
 
-@pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=ENCRYPTED_ARCHIVES)
 def test_wrong_password_iter_members_read(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
         pytest.skip(
             "py7zr does not support password parameter for iter_members_with_streams"
@@ -125,12 +114,10 @@ def test_wrong_password_iter_members_read(
                     stream.read()
 
 
-@pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=ENCRYPTED_ARCHIVES)
 def test_wrong_password_iter_members_no_read(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     wrong = "wrong_password"
     with open_archive(sample_archive_path) as archive:
         if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
@@ -141,12 +128,10 @@ def test_wrong_password_iter_members_no_read(
             pass
 
 
-@pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=ENCRYPTED_ARCHIVES)
 def test_extract_with_password(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     pwd = _archive_password(sample_archive)
     dest = tmp_path / "out"
     dest.mkdir()
@@ -162,12 +147,10 @@ def test_extract_with_password(
         assert f.read() == encrypted.contents
 
 
-@pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=ENCRYPTED_ARCHIVES)
 def test_extractall_with_password(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     # if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
     #     pytest.skip("py7zr extractall password support incomplete")
 
@@ -185,12 +168,10 @@ def test_extractall_with_password(
                 assert fh.read() == f.contents
 
 
-@pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=ENCRYPTED_ARCHIVES)
 def test_extract_wrong_password(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     wrong = "wrong_password"
     dest = tmp_path / "out"
     dest.mkdir()
@@ -203,12 +184,10 @@ def test_extract_wrong_password(
             archive.extract(encrypted.name, dest, pwd=wrong)
 
 
-@pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
+@pytest.mark.sample_archives(archives=ENCRYPTED_ARCHIVES)
 def test_extractall_wrong_password(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     # if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
     #     pytest.skip("py7zr extractall password support incomplete")
 
@@ -221,19 +200,10 @@ def test_extractall_wrong_password(
 
 
 # @pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
-        SAMPLE_ARCHIVES,
-        prefixes=["encryption_with_symlinks"],
-    ),
-    ids=lambda a: a.filename,
-)
+@pytest.mark.sample_archives(prefixes=["encryption_with_symlinks"])
 def test_iterator_encryption_with_symlinks_no_password(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     members_by_name = {}
     with open_archive(sample_archive_path) as archive:
         for member, stream in archive.iter_members_with_streams():
@@ -244,19 +214,10 @@ def test_iterator_encryption_with_symlinks_no_password(
     }
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
-        SAMPLE_ARCHIVES,
-        prefixes=["encryption_with_symlinks"],
-    ),
-    ids=lambda a: a.filename,
-)
+@pytest.mark.sample_archives(prefixes=["encryption_with_symlinks"])
 def test_iterator_encryption_with_symlinks_password_in_open_archive(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     members_by_name = {}
     with open_archive(sample_archive_path, pwd="pwd") as archive:
         for member, stream in archive.iter_members_with_streams():
@@ -267,19 +228,10 @@ def test_iterator_encryption_with_symlinks_password_in_open_archive(
     }
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
-        SAMPLE_ARCHIVES,
-        prefixes=["encryption_with_symlinks"],
-    ),
-    ids=lambda a: a.filename,
-)
+@pytest.mark.sample_archives(prefixes=["encryption_with_symlinks"])
 def test_iterator_encryption_with_symlinks_password_in_iterator(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     members_by_name = {}
     with open_archive(sample_archive_path) as archive:
         for member, stream in archive.iter_members_with_streams(pwd="pwd"):
@@ -290,20 +242,13 @@ def test_iterator_encryption_with_symlinks_password_in_iterator(
     }
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
-        SAMPLE_ARCHIVES,
-        prefixes=["encryption_with_symlinks"],
-        extensions=["rar", "7z"],
-    ),
-    ids=lambda a: a.filename,
+@pytest.mark.sample_archives(
+    prefixes=["encryption_with_symlinks"],
+    extensions=["rar", "7z"],
 )
 def test_open_encrypted_symlink(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     sample_files = {f.name: f for f in sample_archive.contents.files}
 
     files_to_test = [
@@ -334,20 +279,13 @@ def test_open_encrypted_symlink(
                     raise
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
-        SAMPLE_ARCHIVES,
-        prefixes=["encryption_with_symlinks"],
-        extensions=["rar", "7z"],
-    ),
-    ids=lambda a: a.filename,
+@pytest.mark.sample_archives(
+    prefixes=["encryption_with_symlinks"],
+    extensions=["rar", "7z"],
 )
 def test_open_encrypted_symlink_wrong_password(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     symlink_name = "encrypted_link_to_secret.txt"
 
     with open_archive(sample_archive_path) as archive:
@@ -356,20 +294,13 @@ def test_open_encrypted_symlink_wrong_password(
                 fh.read()
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
-        SAMPLE_ARCHIVES,
-        prefixes=["encryption_with_symlinks"],
-        extensions=["rar", "7z"],
-    ),
-    ids=lambda a: a.filename,
+@pytest.mark.sample_archives(
+    prefixes=["encryption_with_symlinks"],
+    extensions=["rar", "7z"],
 )
 def test_open_encrypted_symlink_target_wrong_password(
     sample_archive: SampleArchive, sample_archive_path: str
 ):
-    skip_if_package_missing(sample_archive.creation_info.format, None)
-
     symlink_name = "encrypted_link_to_very_secret.txt"
 
     with open_archive(sample_archive_path) as archive:

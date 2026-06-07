@@ -87,6 +87,9 @@ timeout = 15
 timeout_method = "thread"
 log_format = "%(asctime)s %(levelname)s %(threadName)s %(name)s:%(filename)s:%(lineno)d %(message)s"
 log_date_format = "%Y-%m-%d %H:%M:%S"
+markers = [
+    "sample_archives: declarative parametrization over sample archives and config variants",
+]
 
 [tool.hatch.envs.default]
 python = "3.13"
