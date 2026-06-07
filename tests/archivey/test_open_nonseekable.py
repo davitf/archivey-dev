@@ -3,19 +3,18 @@ import logging
 
 import pytest
 
+from archivey.config import ArchiveyConfig
 from archivey.core import open_archive, open_compressed_stream
 from archivey.exceptions import ArchiveStreamNotSeekableError
 from archivey.internal.io_helpers import ensure_binaryio
 from archivey.types import ArchiveFormat
 from tests.archivey.sample_archives import (
-    ALTERNATIVE_CONFIG,
     BASIC_ARCHIVES,
     LARGE_ARCHIVES,
+    SINGLE_FILE_ARCHIVES,
     SampleArchive,
     filter_archives,
 )
-from tests.archivey.test_open_compressed_stream import SINGLE_FILE_ARCHIVES
-from tests.archivey.testing_utils import skip_if_package_missing
 
 logger = logging.getLogger(__name__)
 
@@ -62,24 +61,21 @@ class NonSeekableBytesIO(io.BytesIO):
         raise io.UnsupportedOperation("tell")
 
 
-@pytest.mark.parametrize(
-    "sample_archive",
-    filter_archives(
+@pytest.mark.sample_archives(
+    archives=filter_archives(
         BASIC_ARCHIVES + LARGE_ARCHIVES,
         custom_filter=lambda a: a.creation_info.format not in (ArchiveFormat.FOLDER,),
     ),
-    ids=lambda a: a.filename,
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
+    configs=["default", "altlibs"],
 )
 def test_open_archive_nonseekable(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archivey_config: ArchiveyConfig | None,
 ):
     """Ensure open_archive can read from non-seekable streams in streaming mode."""
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    alternative_packages = archivey_config is not None
+    config = archivey_config
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()
@@ -113,18 +109,14 @@ def test_open_archive_nonseekable(
             )
 
 
-@pytest.mark.parametrize(
-    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["defaultlibs", "altlibs"]
-)
+@pytest.mark.sample_archives(archives=SINGLE_FILE_ARCHIVES, configs=["default", "altlibs"])
 def test_open_compressed_stream_nonseekable(
-    sample_archive: SampleArchive, sample_archive_path: str, alternative_packages: bool
+    sample_archive: SampleArchive,
+    sample_archive_path: str,
+    archivey_config: ArchiveyConfig | None,
 ):
-    config = ALTERNATIVE_CONFIG if alternative_packages else None
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    alternative_packages = archivey_config is not None
+    config = archivey_config
 
     with open(sample_archive_path, "rb") as f:
         data = f.read()

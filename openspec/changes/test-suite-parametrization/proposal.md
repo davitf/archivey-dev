@@ -1,3 +1,6 @@
+**Status:** Implementation Complete
+**Completed:** 2026-06-07
+
 ## Why
 
 The test suite parametrizes over a central registry of sample archives

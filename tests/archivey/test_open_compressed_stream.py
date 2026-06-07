@@ -12,33 +12,17 @@ from tests.archivey.sample_archives import (
     SINGLE_FILE_ARCHIVES,
     filter_archives,
 )
-from tests.archivey.testing_utils import skip_if_package_missing
 
 BASIC_ZIP_ARCHIVE = filter_archives(BASIC_ARCHIVES, extensions=["zip"])[0]
 
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize(
-    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "altlibs"]
-)
+@pytest.mark.sample_archives(archives=SINGLE_FILE_ARCHIVES, configs=["default", "altlibs"])
 def test_open_compressed_stream_from_file(
-    sample_archive, sample_archive_path, alternative_packages
+    sample_archive, sample_archive_path, archivey_config: ArchiveyConfig | None
 ):
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_zstandard=True,
-        )
-    else:
-        config = ArchiveyConfig()
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
-
+    config = archivey_config or ArchiveyConfig()
     with open_compressed_stream(sample_archive_path, config=config) as f:
         data = f.read()
 
@@ -48,32 +32,16 @@ def test_open_compressed_stream_from_file(
 
 def test_open_compressed_stream_unsupported_format(tmp_path):
     sample_archive = BASIC_ZIP_ARCHIVE
-    skip_if_package_missing(sample_archive.creation_info.format, None)
     path = sample_archive.get_archive_path()
     with pytest.raises(ArchiveNotSupportedError):
         open_compressed_stream(path)
 
 
-@pytest.mark.parametrize(
-    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "altlibs"]
-)
+@pytest.mark.sample_archives(archives=SINGLE_FILE_ARCHIVES, configs=["default", "altlibs"])
 def test_open_compressed_stream_from_stream(
-    sample_archive, sample_archive_path, alternative_packages
+    sample_archive, sample_archive_path, archivey_config: ArchiveyConfig | None
 ):
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_zstandard=True,
-        )
-    else:
-        config = ArchiveyConfig()
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
-
+    config = archivey_config or ArchiveyConfig()
     compressed_data = open(sample_archive_path, "rb").read()
     compressed_stream = io.BytesIO(compressed_data)
 
@@ -84,28 +52,11 @@ def test_open_compressed_stream_from_stream(
     assert data == expected
 
 
-@pytest.mark.parametrize(
-    "sample_archive", SINGLE_FILE_ARCHIVES, ids=lambda a: a.filename
-)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "altlibs"]
-)
+@pytest.mark.sample_archives(archives=SINGLE_FILE_ARCHIVES, configs=["default", "altlibs"])
 def test_open_compressed_stream_from_stream_with_prefix(
-    sample_archive, sample_archive_path, alternative_packages
+    sample_archive, sample_archive_path, archivey_config: ArchiveyConfig | None
 ):
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_zstandard=True,
-        )
-    else:
-        config = ArchiveyConfig()
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
-
-    # Add some bad data to the beginning of the stream, to test that the reading is
-    # done from the initial position.
+    config = archivey_config or ArchiveyConfig()
     bad_data = b"bad data " * 1000
     compressed_data = bad_data + open(sample_archive_path, "rb").read()
     compressed_stream = io.BytesIO(compressed_data)
@@ -118,23 +69,11 @@ def test_open_compressed_stream_from_stream_with_prefix(
     assert data == expected
 
 
-@pytest.mark.parametrize("sample_archive", BASIC_ARCHIVES, ids=lambda a: a.filename)
-@pytest.mark.parametrize(
-    "alternative_packages", [False, True], ids=["default", "altlibs"]
-)
+@pytest.mark.sample_archives(archives=BASIC_ARCHIVES, configs=["default", "altlibs"])
 def test_open_compressed_stream_from_archive(
-    sample_archive, sample_archive_path, alternative_packages
+    sample_archive, sample_archive_path, archivey_config: ArchiveyConfig | None
 ):
-    if alternative_packages:
-        config = ArchiveyConfig(
-            use_rapidgzip=True,
-            use_indexed_bzip2=True,
-            use_zstandard=True,
-        )
-    else:
-        config = ArchiveyConfig()
-
-    skip_if_package_missing(sample_archive.creation_info.format, config)
+    config = archivey_config or ArchiveyConfig()
 
     if (
         sample_archive.creation_info.format.container == ContainerFormat.TAR
