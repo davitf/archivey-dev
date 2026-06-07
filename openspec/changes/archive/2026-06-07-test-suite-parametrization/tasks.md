@@ -51,4 +51,4 @@
 
 - [x] 5.1 `hatch run lint` (ruff check passes)
 - [x] 5.2 `hatch run test` green locally (1417 passed, 401 skipped, 74 xfailed)
-- [ ] 5.3 `openspec validate test-suite-parametrization --type change --strict`
+- [x] 5.3 `openspec validate test-suite-parametrization --type change --strict`
