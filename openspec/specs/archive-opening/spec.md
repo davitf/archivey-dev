@@ -38,16 +38,24 @@ resolution performed before a concrete reader is constructed.
 
 `open_archive()` SHALL raise `ArchiveStreamNotSeekableError` when opening from a
 stream that is not seekable while `streaming` is `False` (the default), rather
-than attempting random access.
+than attempting random access. It SHALL also raise `ArchiveStreamNotSeekableError`
+when `streaming` is `True` but the resolved format cannot operate on a
+non-seekable source (e.g. ZIP, which requires the end-of-central-directory record
+at the tail of the stream).
 
 #### Scenario: Non-seekable source without streaming
 - **WHEN** `open_archive(non_seekable_stream)` is called with `streaming=False`
 - **THEN** `ArchiveStreamNotSeekableError` is raised
 
-#### Scenario: Non-seekable source with streaming
+#### Scenario: Non-seekable source with streaming, format supports sequential reading
 - **WHEN** `open_archive(non_seekable_stream, streaming=True)` is called and the
   format supports sequential reading
 - **THEN** an `ArchiveReader` is returned in streaming mode
+
+#### Scenario: Non-seekable source with streaming, format cannot stream
+- **WHEN** `open_archive(non_seekable_stream, streaming=True)` is called and the
+  resolved format cannot operate on a non-seekable source (such as ZIP)
+- **THEN** `ArchiveStreamNotSeekableError` is raised
 
 #### Scenario: Seekable source is rewound
 - **WHEN** a seekable stream is passed to `open_archive()`
@@ -139,8 +147,9 @@ formats whose container is `RAW_STREAM`.
 
 #### Scenario: Reading starts at the stream's current position
 - **WHEN** a stream positioned past byte 0 is passed to `open_compressed_stream()`
-- **THEN** decompression begins at the stream's position at call time, even
-  though detection may seek to the start of the compressed data
+- **THEN** detection may read ahead from the call-time position, but the stream is
+  rewound to that same position before decompression begins (the call-time
+  position is treated as the start of the compressed data)
 
 #### Scenario: Non-RAW_STREAM format rejected
 - **WHEN** the detected (or provided) format is a multi-file container such as ZIP

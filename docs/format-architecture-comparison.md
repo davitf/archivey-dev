@@ -108,6 +108,12 @@ The base class handles the TAR (and streaming ZIP) case via the
 
 ### 2.2 `streaming_only`
 
+> **Terminology note.** The public `open_archive()` parameter is now `streaming`;
+> `streaming_only` survives only as a deprecated alias (see the `archive-opening`
+> spec). Internally the flag is still `_streaming_only` on `BaseArchiveReader`.
+> Below, `streaming_only` refers to the **internal** flag / historical parameter;
+> read it as `streaming` wherever the public API is meant.
+
 This flag has two sources of truth that are currently conflated:
 
 - **Format capability**: Can the format support random access at all?  ZIP,
@@ -540,17 +546,22 @@ instead of its current piecemeal approach.
 
 #### B. Separate format capability from user preference
 
-**Problem**: `streaming_only` is both a format fact and a user preference.
+**Problem**: the streaming flag is both a format fact and a user preference.
 
-**Proposed addition**: a class attribute:
+**Proposed addition**: a per-instance flag set in `__init__`:
 ```python
 class BaseArchiveReader:
-    _format_supports_random_access: ClassVar[bool] = True
+    def __init__(self, ..., format_supports_random_access: bool = True):
+        self._format_supports_random_access = format_supports_random_access
 ```
 
-Set to `False` for non-seekable compressed TAR streams (not for all TAR — only
-when the underlying decompressor is non-seekable). The runtime `streaming_only`
-flag then means "user requested streaming OR format cannot random-access".
+This is **not** a `ClassVar`: whether a compressed TAR can random-access depends
+on the specific stream/backend at construction time, not on the reader class —
+stdlib gzip/bz2/lzma on a pipe is non-seekable, the same on a file rewinds, and
+rapidgzip/indexed_bzip2 are always seekable (see §7.2). So TAR sets it `False`
+only when its decompressor is genuinely non-seekable for this instance. The
+runtime streaming flag then means "user requested streaming OR format cannot
+random-access".
 
 #### C. `members_list_supported` should be a class attribute
 

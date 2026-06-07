@@ -22,7 +22,9 @@ archives — design §4.4), so the riskier filter/AES decompression code is unto
   the native parser; keep the thread+queue streaming extractor, `_temporary_password`,
   and duplicate-name mapping (still py7zr-driven for decompression).
 - **New metadata** the native parser exposes (design §4.7):
-  - per-member `compression_method` (e.g. `"LZMA2"`, `"LZMA2 + BCJ"`) — currently `None`;
+  - per-member `compression_method` — the typed primary codec (e.g.
+    `CompressionMethod.LZMA2`), with the full filter chain (e.g. `"LZMA2 + BCJ"`)
+    preserved in `compression_method_detail`; both currently `None`;
   - archive `comment` — currently discarded by py7zr;
   - `atime`/`ctime` from `FILES_INFO` when present.
 - **Replaced internals**: `_is_member_encrypted` (private py7zr API) becomes a direct

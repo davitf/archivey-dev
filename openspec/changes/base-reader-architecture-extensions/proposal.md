@@ -20,16 +20,24 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
 
 ## What Changes
 
-- **§8.B — format capability vs user preference** *(internal)*: add
-  `_format_supports_random_access` (ClassVar) so "format cannot random-access" (a
-  non-seekable compressed TAR) is distinct from "user asked for streaming". The
-  runtime `streaming_only` becomes "user requested OR format can't".
+- **§8.B — format capability vs user preference** *(internal)*: add a
+  `_format_supports_random_access` flag so "format cannot random-access" (a
+  non-seekable compressed TAR) is distinct from "user asked for streaming". This is
+  **per-instance, not a ClassVar** — whether a compressed TAR can random-access
+  depends on the runtime stream/backend (stdlib gzip on a pipe is non-seekable;
+  stdlib on a file rewinds; rapidgzip/indexed_bzip2 are always seekable), so it is
+  set in `__init__`. The runtime streaming flag becomes "user requested OR format
+  can't".
 - **§8.C — `members_list_supported` as a ClassVar** *(internal)*: it's a format-level
   fact, so declare it per reader class instead of passing it through `__init__`.
-- **§8.D — typed `CompressionMethod` enum** *(public)*: a `StrEnum` of known methods
-  (`STORED`, `DEFLATE`, `LZMA`, `LZMA2`, `ZSTD`, `BZIP2`, `PPMD`, `BCJ2`, …, plus
-  `UNKNOWN`) so callers can branch on compression without parsing free-form strings.
-  Stays string-compatible.
+- **§8.D — typed `CompressionMethod` enum + lossless detail** *(public)*: a `StrEnum`
+  of known methods (`STORED`, `DEFLATE`, `LZMA`, `LZMA2`, `ZSTD`, `BZIP2`, `PPMD`,
+  `BCJ2`, …, plus `UNKNOWN`) so callers can branch on compression without parsing
+  free-form strings. Stays string-compatible. `compression_method` holds the typed
+  **primary** codec (`UNKNOWN` if reported-but-unmapped, `None` if unreported); a new
+  free-form `compression_method_detail: Optional[str]` preserves the full,
+  lossless description — 7z filter chains (`"LZMA2 + BCJ2"`) and third-party readers'
+  own codec names that a closed enum can't represent.
 - **§8.E — capability introspection** *(public)*: `supports_random_access` and
   `supports_member_list` properties so callers stop probing-and-catching `ValueError`.
 

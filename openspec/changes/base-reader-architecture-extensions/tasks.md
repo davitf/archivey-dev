@@ -6,17 +6,21 @@
 
 ## 1. Capability/preference split (§8.B, §8.C)
 
-- [ ] 1.1 Add `_format_supports_random_access: ClassVar[bool]`; set `False` only for
-      non-seekable compressed TAR
+- [ ] 1.1 Add a per-instance `_format_supports_random_access` flag (set in
+      `__init__`, **not** a ClassVar); set `False` only when the format genuinely
+      cannot random-access — i.e. a compressed TAR whose decompressor is
+      non-seekable at construction time
 - [ ] 1.2 Make `members_list_supported` a ClassVar on each reader instead of an
       `__init__` argument
 
 ## 2. Public introspection & types (§8.D, §8.E)
 
 - [ ] 2.1 Add `CompressionMethod` `StrEnum` (STORED, DEFLATE, LZMA, LZMA2, ZSTD,
-      BZIP2, PPMD, BCJ2, …, UNKNOWN) in `types.py`
-- [ ] 2.2 Map readers' `compression_method` strings onto the enum (keep `None` when
-      unknown/unreported)
+      BZIP2, PPMD, BCJ2, …, UNKNOWN) in `types.py`; add a free-form
+      `compression_method_detail: Optional[str]` field to `ArchiveMember`
+- [ ] 2.2 Map readers' primary `compression_method` onto the enum (`UNKNOWN` for
+      reported-but-unmapped, `None` when unreported); preserve the verbatim/full
+      codec description (e.g. 7z filter chains) in `compression_method_detail`
 - [ ] 2.3 Add `supports_random_access` and `supports_member_list` properties to
       `ArchiveReader`/`BaseArchiveReader`
 

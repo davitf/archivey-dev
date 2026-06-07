@@ -13,10 +13,16 @@ is available).
 - **WHEN** an archive is opened with `streaming=False`
 - **THEN** `supports_random_access` is `True` and `supports_member_list` is `True`
 
-#### Scenario: Streaming archive reports reduced capabilities
+#### Scenario: Streaming archive without an early member list reports reduced capabilities
 - **WHEN** an archive is opened with `streaming=True` and the format has no early
-  member list
+  member list (such as a compressed TAR)
 - **THEN** `supports_random_access` is `False` and `supports_member_list` is `False`
+
+#### Scenario: Streaming archive with a central directory still lists members
+- **WHEN** a ZIP on a seekable stream is opened with `streaming=True`
+- **THEN** `supports_random_access` is `False` but `supports_member_list` is `True`,
+  because the central directory can be read with a single bounded seek without
+  exhausting the stream
 
 #### Scenario: Introspection does not raise
 - **WHEN** `supports_random_access` or `supports_member_list` is read
