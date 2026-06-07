@@ -38,8 +38,17 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
   free-form `compression_method_detail: Optional[str]` preserves the full,
   lossless description — 7z filter chains (`"LZMA2 + BCJ2"`) and third-party readers'
   own codec names that a closed enum can't represent.
-- **§8.E — capability introspection** *(public)*: `supports_random_access` and
-  `supports_member_list` properties so callers stop probing-and-catching `ValueError`.
+- **§8.E — capability introspection (redesigned surface)** *(public)*: replace the
+  confusing tangle of `streaming` / `has_random_access()` / "member list supported"
+  with two clearly-scoped introspection properties on two independent axes:
+  - `supports_random_access: bool` — can members be opened individually / out of
+    order (seekable source + format support + not streaming). **Replaces**
+    `has_random_access()` (one name for one concept).
+  - `member_listing: MemberListing` — a 3-state enum (`INDEXED` / `SCAN_REQUIRED` /
+    `SEQUENTIAL_ONLY`) for *how cheaply* the full member list can be obtained, so the
+    "one bounded seek (ZIP catalog)" case is no longer conflated with the "O(N) full
+    pass (seekable TAR)" case. `get_members_if_available()` is tightened to return the
+    list only for `INDEXED` (or already-known) and never to trigger a scan.
 
 ## Capabilities
 
@@ -49,8 +58,11 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
 
 ### Modified Capabilities
 
-- `archive-reading`: adds capability-introspection properties (§8.E).
-- `archive-metadata`: adds the typed `CompressionMethod` enum (§8.D).
+- `archive-reading`: adds the `MemberListing` enum and the `supports_random_access`
+  / `member_listing` introspection properties, tightens `get_members_if_available`
+  to never scan, and removes `has_random_access()` (superseded) (§8.E).
+- `archive-metadata`: adds the typed `CompressionMethod` enum and the lossless
+  `compression_method_detail` field (§8.D).
 
 ## Non-Goals
 
@@ -58,7 +70,10 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
   internal refactors that keep observable behavior identical).
 - The §8.A co-iteration migration — folded into the native-reader changes, since
   those rewrite the same `sevenzip_reader.py` / `rar_reader.py` iteration code.
-- Renaming or removing `has_random_access()` (the new properties complement it).
+- A "how expensive is *content* access" type (solid-archive decompression cost, the
+  TAR scan cost beyond the `SCAN_REQUIRED` flag): these are documented as cost
+  caveats rather than encoded into the introspection surface, to keep it coarse and
+  explainable.
 
 ## Dependencies / Sequencing
 
@@ -77,8 +92,11 @@ Recommended order across all pending changes:
 
 ## Impact
 
-- **Files**: `internal/base_reader.py` (ClassVars, properties),
-  `formats/*_reader.py` (`members_list_supported` ClassVar), `types.py`
-  (`CompressionMethod`), `archive_reader.py` (property declarations).
+- **Files**: `internal/base_reader.py` (per-instance random-access flag,
+  `member_listing`, introspection properties, tightened `get_members_if_available`,
+  removed `has_random_access`), `formats/*_reader.py` (`members_list_supported`
+  ClassVar, `member_listing` reporting), `types.py` (`CompressionMethod`,
+  `compression_method_detail`, `MemberListing`), `archive_reader.py` (property
+  declarations).
 - **Live specs touched**: `archive-reading`, `archive-metadata`.
 - **Design reference**: `docs/format-architecture-comparison.md` §8–§9.

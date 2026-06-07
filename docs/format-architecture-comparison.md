@@ -589,21 +589,35 @@ parsing strings.
 #### E. Capability introspection
 
 **Problem**: callers must try operations and catch `ValueError` to discover
-whether random access is available.
+whether random access is available, and there is no honest way to ask "is
+listing members cheap?" — a single boolean would conflate ZIP's one-seek
+catalog with TAR's O(N) full pass.
 
-**Proposed addition**:
+**Proposed surface** — two independent axes, plus the removal of the redundant
+`has_random_access()` method:
+
 ```python
+class MemberListing(StrEnum):
+    INDEXED = "indexed"            # catalog / central directory, <= one seek
+    SCAN_REQUIRED = "scan_required"  # full O(N) pass over the body (seekable TAR)
+    SEQUENTIAL_ONLY = "sequential_only"  # only as iteration proceeds
+
 @property
 def supports_random_access(self) -> bool:
-    return not self._streaming_only
+    """Can a member be opened individually / out of order?"""
+    return not self._streaming_only  # and seekable + format support
 
 @property
-def supports_member_list(self) -> bool:
-    return self._early_members_list_supported or not self._streaming_only
+def member_listing(self) -> MemberListing:
+    """How cheaply can the full member list be obtained?"""
+    ...
 ```
 
-Both are derivable from existing state; making them properties prevents
-callers from relying on internal flags.
+`get_members_if_available()` returns the list only when `member_listing` is
+`INDEXED` (or members are already registered) and never triggers a
+`SCAN_REQUIRED` pass. Content-access cost wrinkles (solid 7z/RAR decompression,
+the TAR scan cost) are documented rather than encoded, to keep the surface
+coarse and explainable.
 
 ---
 

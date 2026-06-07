@@ -21,8 +21,14 @@
 - [ ] 2.2 Map readers' primary `compression_method` onto the enum (`UNKNOWN` for
       reported-but-unmapped, `None` when unreported); preserve the verbatim/full
       codec description (e.g. 7z filter chains) in `compression_method_detail`
-- [ ] 2.3 Add `supports_random_access` and `supports_member_list` properties to
-      `ArchiveReader`/`BaseArchiveReader`
+- [ ] 2.3 Add a `MemberListing` enum (`INDEXED` / `SCAN_REQUIRED` /
+      `SEQUENTIAL_ONLY`) and a `member_listing` property; add a
+      `supports_random_access` property to `ArchiveReader`/`BaseArchiveReader`
+- [ ] 2.4 Remove `has_random_access()` (superseded by `supports_random_access`);
+      update callers and docs
+- [ ] 2.5 Tighten `get_members_if_available()` so it returns the list only for
+      `INDEXED` (or already-registered) members and never triggers a `SCAN_REQUIRED`
+      pass; have each reader report its `member_listing`
 
 ## 3. Validation
 
