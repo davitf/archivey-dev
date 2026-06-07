@@ -54,10 +54,18 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
 
 ## Dependencies / Sequencing
 
-§8.D (the `CompressionMethod` enum) should land **before** the 7z native reader so
+**Land second** (after `test-suite-parametrization`, before the native readers).
+
+§8.D (the `CompressionMethod` enum) must land **before** the 7z native reader so
 that reader can emit typed compression methods directly. §8.B/§8.C/§8.E are
 independent and can ship anytime. (The §8.A migration lives in the native-reader
 changes.)
+
+Recommended order across all pending changes:
+1. `test-suite-parametrization` — verification harness
+2. **this change** — §8.B–§8.E (§8.D enum prerequisite for 7z native)
+3. `rar-native-metadata-reader` + `sevenzip-native-metadata-reader` (in parallel; also run junction Windows spike)
+4. `unify-junction-handling` — after native readers (junction detection in native parsers)
 
 ## Impact
 

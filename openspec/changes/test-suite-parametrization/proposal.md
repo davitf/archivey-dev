@@ -66,6 +66,21 @@ preserving for what gets tested).
 - Reviving or rebasing the stale bot branch (PR #206); we re-implement on current main.
 - Replacing pytest, the tox matrix, or `create_archives.py` generation.
 
+## Dependencies / Sequencing
+
+**Land first — before all other pending changes.**
+
+The declarative `@pytest.mark.sample_archives` harness is the verification layer
+for every subsequent change. Migrating tests first means the native-reader and
+junction changes can be validated with the cleaner parametrized suite rather than
+adding more boilerplate while removing old boilerplate in the same PR.
+
+Recommended order across all pending changes:
+1. **this change** — declarative test harness
+2. `base-reader-architecture-extensions` — §8.B–§8.E (§8.D enum prerequisite for 7z native)
+3. `rar-native-metadata-reader` + `sevenzip-native-metadata-reader` (in parallel; also run junction Windows spike during this phase)
+4. `unify-junction-handling` — after native readers (junction detection in native parsers)
+
 ## Impact
 
 - **Files**: `tests/archivey/conftest.py` (the hook + marker), `testing_utils.py`

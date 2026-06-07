@@ -60,6 +60,20 @@ scope.
 - Multi-volume RAR support (still raises a clean error; just no longer via `rarfile`).
 - Any change to the public `ArchiveReader` API or `ArchiveMember` fields.
 
+## Dependencies / Sequencing
+
+**Land third** (in parallel with `sevenzip-native-metadata-reader`, after
+`base-reader-architecture-extensions`).
+
+- `test-suite-parametrization` should land first so new parser tests benefit from
+  the declarative harness.
+- `base-reader-architecture-extensions` §8.D (the `CompressionMethod` enum) is
+  independent of RAR but good to have available before writing new parsers.
+- The §8.A co-iteration migration (task 2.5) is included here and does not need a
+  separate change.
+- `unify-junction-handling` comes after: RAR junction detection will be wired into
+  the native parser built here rather than the old rarfile facade.
+
 ## Impact
 
 - **Files**: new `formats/rar_parser.py`; `formats/rar_reader.py`;

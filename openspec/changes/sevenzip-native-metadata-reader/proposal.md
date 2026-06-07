@@ -55,6 +55,20 @@ archives — design §4.4), so the riskier filter/AES decompression code is unto
 - Multi-volume 7z and anti-file support (raise a clean error / warn).
 - Changing the public `ArchiveReader` API.
 
+## Dependencies / Sequencing
+
+**Land third** (in parallel with `rar-native-metadata-reader`, after
+`base-reader-architecture-extensions`).
+
+- `test-suite-parametrization` should land first so new parser tests benefit from
+  the declarative harness.
+- `base-reader-architecture-extensions` §8.D (the `CompressionMethod` enum) must
+  land first: the native parser emits `compression_method` as the typed enum.
+- The §8.A co-iteration migration (task 2.5) is included here and does not need a
+  separate change.
+- `unify-junction-handling` comes after: 7z junction detection will be wired into
+  the native parser built here rather than the old py7zr facade.
+
 ## Impact
 
 - **Files**: new `formats/sevenzip_parser.py`; `formats/sevenzip_reader.py`;
