@@ -21,6 +21,12 @@
 - [ ] 2.3 Re-implement the extract-hack (RAR3/RAR5 minimal temp archive) natively
 - [ ] 2.4 Raise clean `ArchiveError`/`ArchiveUnsupportedFeatureError` for
       multi-volume and RAR2 archives
+- [ ] 2.5 While in this reader, adopt the base co-iteration hook for the
+      `use_rar_stream` solid path: override `_iter_members_and_streams_internal`
+      instead of the public `iter_members_with_streams`, dropping the bespoke
+      filter/iteration duplication (this is §8.A from
+      `base-reader-architecture-extensions`, folded here since this change already
+      rewrites the reader). Verify filtered-out members still incur no decompression.
 
 ## 3. Dependencies
 

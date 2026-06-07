@@ -31,6 +31,10 @@ archives — design §4.4), so the riskier filter/AES decompression code is unto
 - **Dependency shift**: py7zr is no longer needed for metadata; it remains required
   for decompression (phase 1). Removing py7zr entirely (external `7z`/native
   decompression) is a documented phase 2, out of scope here.
+- **Co-iteration cleanup (folded in)**: since this change rewrites the reader's
+  iteration anyway, it also adopts the base `_iter_members_and_streams_internal`
+  hook (overriding it instead of the public `iter_members_with_streams`), which is
+  §8.A from `base-reader-architecture-extensions`. Behavior-preserving.
 
 ## Capabilities
 

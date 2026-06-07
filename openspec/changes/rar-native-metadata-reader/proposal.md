@@ -34,6 +34,10 @@ spec already requires. Decompression stays exactly as it is today (`unrar`).
 - **New behaviors** the native parser makes explicit: clean `ArchiveError` for
   multi-volume and RAR2 archives instead of relying on `rarfile`; Blake2sp-only RAR5
   members report `crc32 = None`.
+- **Co-iteration cleanup (folded in)**: while in this reader, the `use_rar_stream`
+  solid path adopts the base `_iter_members_and_streams_internal` hook (instead of
+  overriding the public `iter_members_with_streams`), which is §8.A from
+  `base-reader-architecture-extensions`. Behavior-preserving.
 
 This is a **metadata-only** rewrite (design §4.1). Decompression backends are out of
 scope.

@@ -23,6 +23,12 @@
 - [ ] 2.3 Replace `_is_member_encrypted` and the `archiveinfo()` empty-archive guard
       with native equivalents; inline `filetime_to_dt`
 - [ ] 2.4 Raise a clean `ArchiveError` for multi-volume; warn on anti-files
+- [ ] 2.5 While in this reader, adopt the base co-iteration hook: override
+      `_iter_members_and_streams_internal` instead of the public
+      `iter_members_with_streams`, dropping the bespoke member-selection/filter
+      duplication (this is §8.A from `base-reader-architecture-extensions`, folded
+      here since this change already rewrites the reader's iteration). Verify
+      filtered-out members still incur no extraction.
 
 ## 3. Dependencies
 
