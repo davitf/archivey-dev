@@ -103,6 +103,10 @@ def test_read_corrupted_archives(
                 logger.info(f"Reading member {member.filename}")
                 filename = member.filename
 
+                # Single file formats don't store the filename, and the reader derives
+                # it from the archive name. But here, the archive name has a
+                # .corrupted_xxx suffix that doesn't match the name in sample_archive,
+                # so we need to remove it.
                 if (
                     sample_archive.creation_info.format.container
                     == ContainerFormat.RAW_STREAM
@@ -112,6 +116,7 @@ def test_read_corrupted_archives(
                 if stream is not None and read_streams:
                     data = stream.read()
                     logger.info(f"Read {len(data)} bytes from member {filename}")
+
                     found_member_data[filename] = data
 
                 found_member_names.append(filename)
@@ -126,10 +131,16 @@ def test_read_corrupted_archives(
             and archive.format == ArchiveFormat.BZIP2
             and sample_archive.creation_info.format == ArchiveFormat.TAR_BZ2
         ):
+            # In some corrupted archives, bz2 can uncompress the data stream, but it's
+            # not a valid tar format. If we don't actually attempt to read the streams,
+            # we won't detect the corruption.
             pytest.xfail(
                 "Bzip2 can uncompress the data stream, but it's not a valid tar format."
             )
 
+        # If no error was raised, it likely means that the corruption didn't affect the
+        # archive directory or member metadata, so at least all the members should have
+        # been read.
         assert set(found_member_names) == set(expected_member_data.keys()), (
             f"Archive {corrupted_archive_path} did not raise an error but did not read all members"
         )
@@ -138,6 +149,8 @@ def test_read_corrupted_archives(
             assert (
                 sample_archive.creation_info.format in formats_without_redundancy_check
             ), f"Archive {corrupted_archive_path} should have detected a corruption"
+            # If we read the streams and an error wasn't raised, it means the compressed
+            # stream was valid, but at least one member should have different data.
             broken_files = [
                 name
                 for name, contents in expected_member_data.items()
@@ -146,6 +159,9 @@ def test_read_corrupted_archives(
             assert len(broken_files) >= 1, (
                 f"Archive {corrupted_archive_path} should have at least one broken file"
             )
+            # If this is a multi-file archive, which we corrupted in the middle,
+            # at least the first file should be good. The last may or may not be broken,
+            # depending on how the error was propagated.
             if len(expected_member_data) >= 1:
                 assert len(broken_files) <= len(expected_member_data), (
                     f"Archive {corrupted_archive_path} should have at least one good file"
@@ -158,6 +174,8 @@ def test_read_corrupted_archives(
 @pytest.mark.sample_archives(
     prefixes=["large_files_nonsolid", "large_files_solid", "large_single_file"],
     configs=["default", "altlibs"],
+    # Tar files don't have any kind of error detection, so we skip them.
+    # custom=lambda a: a.creation_info.format != ArchiveFormat.TAR,
 )
 @pytest.mark.parametrize("corrupted_length", [16, 47, 0.1, 0.9])
 @pytest.mark.parametrize("read_streams", [True, False], ids=["read", "noread"])
@@ -199,4 +217,5 @@ def test_read_truncated_archives(
                     stream.read()
         logger.warning(f"Archive {output_path} did not raise an error")
     except (ArchiveCorruptedError, ArchiveEOFError):
+        # Test passes if one of the expected exceptions is raised
         pass

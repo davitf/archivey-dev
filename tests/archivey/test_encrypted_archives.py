@@ -136,9 +136,11 @@ def test_extract_with_password(
     dest = tmp_path / "out"
     dest.mkdir()
     encrypted = _first_encrypted_file(sample_archive)
+    # config = get_default_config()
     with open_archive(sample_archive_path) as archive:
         if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
             pytest.skip("py7zr extract password support incomplete")
+        # archive.config.overwrite_mode = OverwriteMode.OVERWRITE
         path = archive.extract(encrypted.name, dest, pwd=pwd)
     extracted_path = Path(path or dest / encrypted.name)
     with open(extracted_path, "rb") as f:
@@ -149,6 +151,9 @@ def test_extract_with_password(
 def test_extractall_with_password(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
+    # if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
+    #     pytest.skip("py7zr extractall password support incomplete")
+
     pwd = _archive_password(sample_archive)
     dest = tmp_path / "all"
     dest.mkdir()
@@ -174,6 +179,7 @@ def test_extract_wrong_password(
     with open_archive(sample_archive_path) as archive:
         if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
             pytest.skip("py7zr extract password support incomplete")
+        # archive.config.overwrite_mode = OverwriteMode.OVERWRITE
         with pytest.raises((ArchiveEncryptedError, ArchiveError)):
             archive.extract(encrypted.name, dest, pwd=wrong)
 
@@ -182,6 +188,9 @@ def test_extract_wrong_password(
 def test_extractall_wrong_password(
     tmp_path: Path, sample_archive: SampleArchive, sample_archive_path: str
 ):
+    # if sample_archive.creation_info.format == ArchiveFormat.SEVENZIP:
+    #     pytest.skip("py7zr extractall password support incomplete")
+
     wrong = "wrong_password"
     dest = tmp_path / "all"
     dest.mkdir()
@@ -190,6 +199,7 @@ def test_extractall_wrong_password(
             archive.extractall(dest, pwd=wrong)
 
 
+# @pytest.mark.parametrize("sample_archive", ENCRYPTED_ARCHIVES, ids=lambda a: a.filename)
 @pytest.mark.sample_archives(prefixes=["encryption_with_symlinks"])
 def test_iterator_encryption_with_symlinks_no_password(
     sample_archive: SampleArchive, sample_archive_path: str
@@ -252,9 +262,13 @@ def test_open_encrypted_symlink(
                 data = archive.open(filename, pwd=pwd).read()
                 assert data == sample_files[filename].contents
 
+                # After reading the file, the link target should have been set
                 member = archive.get_member(filename)
                 assert member.link_target == sample_files[filename].link_target
             except ArchiveEncryptedError:
+                # The workaround we have to read encrypted symlink targets for RAR4
+                # archives involves extracting the symlink and reading the target,
+                # which doesn't fully work on Windows.
                 if (
                     platform_is_windows()
                     and filename.startswith("encrypted_link_to_")

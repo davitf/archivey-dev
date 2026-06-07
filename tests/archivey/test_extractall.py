@@ -37,6 +37,8 @@ def _check_file_metadata(path: Path, info: FileInfo, sample: SampleArchive):
     elif info.permissions is not None:
         assert (stat.st_mode & 0o777) == info.permissions, path
 
+    # Extracted hardlinks will have the same mtime as the original file, which can be
+    # different from the mtime in the archive.
     if not features.mtime or info.type == MemberType.HARDLINK:
         return
 
@@ -77,16 +79,19 @@ def test_extractall(
     for info in remove_duplicate_files(sample_archive.contents.files):
         path = dest / info.name.rstrip("/")
 
+        # Broken hardlink targets should not be extracted.
         if info.type != MemberType.HARDLINK or info.contents is not None:
             assert os.path.lexists(path), f"Missing {path}"
             expected_files.add(str(path.relative_to(dest)).replace(os.sep, "/"))
 
+            # Add any implicit parent directories.
             dirname = os.path.dirname(info.name)
             while dirname:
                 implicit_dirs.add(dirname)
                 dirname = os.path.dirname(dirname)
 
         else:
+            # Broken hardlinks should not exist at all in the extracted folder.
             assert not os.path.lexists(path), f"Broken hardlink {path} should not exist"
             continue
 
@@ -96,6 +101,7 @@ def test_extractall(
         elif info.type == MemberType.SYMLINK:
             assert path.is_symlink()
             assert info.link_target is not None
+            # When extracting links to dirs, the link target may not include the trailing slash.
             assert os.readlink(path).removesuffix("/") == info.link_target.removesuffix(
                 "/"
             )
@@ -105,15 +111,20 @@ def test_extractall(
                 assert f.read() == (info.contents or b"")
 
         _check_file_metadata(path, info, sample_archive)
+        # if info.type != MemberType.HARDLINK or info.name != info.link_target:
         expected_extractall_result[str(path)] = members_by_filename[info.name]
 
     implicit_dirs -= expected_files
+    # Check that no extra files were extracted.
     extracted = {str(p.relative_to(dest)).replace(os.sep, "/") for p in dest.rglob("*")}
     assert (expected_files | implicit_dirs) == extracted
 
+    # Some sample archives may include the implicit parent directories, which are
+    # not in sample_archive.contents.files.
     for dirname in implicit_dirs:
         extractall_result.pop(str(dest / dirname), None)
 
+    # Check that the dict returned by extractall is correct.
     assert expected_extractall_result == extractall_result
 
 
