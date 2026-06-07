@@ -28,7 +28,7 @@ already rewrite those readers; see the note under Decisions.
 | §8.B `_format_supports_random_access` (per-instance flag) | No (same errors/modes) | none |
 | §8.C `members_list_supported` as ClassVar | No | none |
 | §8.D `CompressionMethod` enum | **Yes** (`compression_method` value type) | `archive-metadata` |
-| §8.E capability introspection (`MemberListing` + `AccessCost` enums, `member_listing_cost` / `member_access_cost`, add stream `seek_cost` alongside `seekable()`, drop `has_random_access`) | **Yes** (public API surface change) | `archive-reading` |
+| §8.E capability introspection (`MemberListingCost` + `AccessCost` enums, `member_listing_cost` / `member_access_cost`, add stream `seek_cost` alongside `seekable()`, drop `has_random_access`) | **Yes** (public API surface change) | `archive-reading` |
 
 So only §8.D and §8.E get delta specs; §8.B/§8.C are captured as tasks because they
 must not change behavior (the existing `archive-reading` requirements are the
@@ -57,7 +57,7 @@ regression contract).
   / "member list supported" set conflated listing cost, access cost, and the user's
   streaming preference — and used booleans, which forced genuinely different costs to
   share a value:
-  - `member_listing_cost: MemberListing` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
+  - `member_listing_cost: MemberListingCost` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
     — *listing cost*. A boolean here is what made TAR lie: "one bounded seek to a
     catalog" (ZIP) and "O(N) full pass" (seekable TAR) are different costs, so they
     get different values. `INDEXED` means the list is readable with ≤ one seek without

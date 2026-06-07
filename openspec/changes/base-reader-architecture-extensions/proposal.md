@@ -42,7 +42,7 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
   confusing tangle of `streaming` / `has_random_access()` / "member list supported"
   with introspection on two orthogonal axes, each a cost-classifying enum so the
   surface never lies about expense the way a boolean does:
-  - `member_listing_cost: MemberListing` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
+  - `member_listing_cost: MemberListingCost` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
     — *how cheaply the full member list is obtainable*, so "one bounded seek (ZIP
     catalog)" is no longer conflated with "O(N) full pass (seekable TAR)".
     `get_members_if_available()` is tightened to return the list only for `INDEXED`
@@ -67,7 +67,7 @@ constructor argument, and there is no `_format_supports_random_access` ClassVar 
 
 ### Modified Capabilities
 
-- `archive-reading`: adds the `MemberListing` and shared `AccessCost` enums and the
+- `archive-reading`: adds the `MemberListingCost` and shared `AccessCost` enums and the
   `member_listing_cost` / `member_access_cost` introspection properties, adds an `AccessCost`
   `seek_cost` property alongside the protocol-required `seekable()` on member streams,
   tightens `get_members_if_available` to never scan, and removes `has_random_access()`
@@ -110,6 +110,6 @@ Recommended order across all pending changes:
   decompressed stream's `seek_cost`), the member-stream wrapper (adds `seek_cost`
   alongside the existing `seekable()`), `types.py` (`CompressionMethod`,
   `compression_method_detail`,
-  `MemberListing`, `AccessCost`), `archive_reader.py` (property declarations).
+  `MemberListingCost`, `AccessCost`), `archive_reader.py` (property declarations).
 - **Live specs touched**: `archive-reading`, `archive-metadata`.
 - **Design reference**: `docs/format-architecture-comparison.md` §8–§9.

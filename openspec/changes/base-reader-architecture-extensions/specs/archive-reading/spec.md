@@ -56,9 +56,9 @@ written as one large block) carries a correspondingly loose bound.
 - **WHEN** an archive is opened with `streaming=True`, or from a non-seekable source
 - **THEN** the member access cost is `AccessCost.UNAVAILABLE`
 
-### Requirement: MemberListing classifies how cheaply members can be listed
+### Requirement: MemberListingCost classifies how cheaply members can be listed
 
-A `MemberListing` enum SHALL classify how the complete member list can be obtained,
+A `MemberListingCost` enum SHALL classify how the complete member list can be obtained,
 so callers can reason about cost up front instead of discovering it at runtime:
 
 - `INDEXED` — obtainable from a catalog / central directory with at most one bounded
@@ -70,21 +70,21 @@ so callers can reason about cost up front instead of discovering it at runtime:
 
 #### Scenario: Catalog format is INDEXED
 - **WHEN** a ZIP, 7z, RAR, folder, or ISO archive is opened
-- **THEN** `member_listing_cost` is `MemberListing.INDEXED`
+- **THEN** `member_listing_cost` is `MemberListingCost.INDEXED`
 
 #### Scenario: Seekable tar requires a scan
 - **WHEN** a seekable tar is opened with `streaming=False`
-- **THEN** `member_listing_cost` is `MemberListing.SCAN_REQUIRED`
+- **THEN** `member_listing_cost` is `MemberListingCost.SCAN_REQUIRED`
 
 #### Scenario: Streaming or non-seekable source is sequential-only
 - **WHEN** a tar is opened with `streaming=True`, or any archive is opened from a
   non-seekable source
-- **THEN** `member_listing_cost` is `MemberListing.SEQUENTIAL_ONLY`
+- **THEN** `member_listing_cost` is `MemberListingCost.SEQUENTIAL_ONLY`
 
 ### Requirement: Reader exposes capability-introspection properties
 
 The reader SHALL expose a `member_access_cost` property (an `AccessCost` value) and a
-`member_listing_cost` property (a `MemberListing` value) so callers can discover what the
+`member_listing_cost` property (a `MemberListingCost` value) so callers can discover what the
 archive allows, and at what cost, without invoking an operation and catching an
 error. `member_access_cost` SHALL describe the cost of opening an arbitrary member out of
 order; it SHALL be `AccessCost.UNAVAILABLE` exactly when out-of-order open is
@@ -102,7 +102,7 @@ NOT perform archive I/O or raise.
 
 #### Scenario: Listing and access are independent
 - **WHEN** a ZIP on a seekable stream is opened with `streaming=True`
-- **THEN** `member_listing_cost` is `MemberListing.INDEXED` (the central directory is one
+- **THEN** `member_listing_cost` is `MemberListingCost.INDEXED` (the central directory is one
   bounded seek away) while `member_access_cost` is `AccessCost.UNAVAILABLE` (the forward
   stream cannot be re-entered out of order)
 

@@ -21,10 +21,10 @@
 - [ ] 2.2 Map readers' primary `compression_method` onto the enum (`UNKNOWN` for
       reported-but-unmapped, `None` when unreported); preserve the verbatim/full
       codec description (e.g. 7z filter chains) in `compression_method_detail`
-- [ ] 2.3 Add a `MemberListing` enum (`INDEXED` / `SCAN_REQUIRED` /
+- [ ] 2.3 Add a `MemberListingCost` enum (`INDEXED` / `SCAN_REQUIRED` /
       `SEQUENTIAL_ONLY`) and a shared `AccessCost` enum (`DIRECT` / `LIMITED` /
       `EXPENSIVE` / `UNAVAILABLE`) to `types.py`
-- [ ] 2.4 Add `member_listing_cost: MemberListing` and `member_access_cost: AccessCost`
+- [ ] 2.4 Add `member_listing_cost: MemberListingCost` and `member_access_cost: AccessCost`
       properties to `ArchiveReader`/`BaseArchiveReader`; have each reader report both
       by mechanism (no I/O, no raise). For `TarReader`, derive `member_access_cost` from the
       `seek_cost` of the decompressed stream it opens (refining the inner-stream

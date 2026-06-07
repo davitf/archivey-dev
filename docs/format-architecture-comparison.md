@@ -601,7 +601,7 @@ archive (non-seekable sources are already forced to streaming), so it would
 carry no information; the enum is what earns its place.
 
 ```python
-class MemberListing(StrEnum):
+class MemberListingCost(StrEnum):
     """How cheaply can the full member list be obtained?"""
     INDEXED = "indexed"                  # catalog / central directory, <= one seek
     SCAN_REQUIRED = "scan_required"      # full O(N) pass over the body (seekable TAR)
@@ -619,7 +619,7 @@ class AccessCost(StrEnum):
     UNAVAILABLE = "unavailable"  # forward path only (streaming / non-seekable)
 
 @property
-def member_listing_cost(self) -> MemberListing: ...
+def member_listing_cost(self) -> MemberListingCost: ...
 
 @property
 def member_access_cost(self) -> AccessCost:
