@@ -10,7 +10,7 @@ This change covers the four contract/spec items **§8.B–§8.E**. The fifth, **
 (migrating the 7z/RAR solid readers onto the existing
 `_iter_members_and_streams_internal()` hook), is a pure internal refactor with no
 spec delta, so it is **folded into the native-reader changes**
-(`rar-native-metadata-reader` / `sevenzip-native-metadata-reader`), which already
+(`rar-native-metadata-reader` / `sevenzip-native-reader`), which already
 rewrite those files — see their tasks.
 
 **Current state (verified):** §8.B–E are not yet implemented —
@@ -98,7 +98,7 @@ changes.)
 Recommended order across all pending changes:
 1. `test-suite-parametrization` — verification harness
 2. **this change** — §8.B–§8.E (§8.D enum prerequisite for 7z native)
-3. `rar-native-metadata-reader` + `sevenzip-native-metadata-reader` (in parallel; also run junction Windows spike)
+3. `rar-native-metadata-reader` + `sevenzip-native-reader` (in parallel; also run junction Windows spike)
 4. `unify-junction-handling` — after native readers (junction detection in native parsers)
 
 ## Impact

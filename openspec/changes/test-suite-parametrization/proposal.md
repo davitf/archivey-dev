@@ -78,7 +78,7 @@ adding more boilerplate while removing old boilerplate in the same PR.
 Recommended order across all pending changes:
 1. **this change** — declarative test harness
 2. `base-reader-architecture-extensions` — §8.B–§8.E (§8.D enum prerequisite for 7z native)
-3. `rar-native-metadata-reader` + `sevenzip-native-metadata-reader` (in parallel; also run junction Windows spike during this phase)
+3. `rar-native-metadata-reader` + `sevenzip-native-reader` (in parallel; also run junction Windows spike during this phase)
 4. `unify-junction-handling` — after native readers (junction detection in native parsers)
 
 ## Impact

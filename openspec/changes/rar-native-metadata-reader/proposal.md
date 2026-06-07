@@ -62,7 +62,7 @@ scope.
 
 ## Dependencies / Sequencing
 
-**Land third** (in parallel with `sevenzip-native-metadata-reader`, after
+**Land third** (in parallel with `sevenzip-native-reader`, after
 `base-reader-architecture-extensions`).
 
 - `test-suite-parametrization` should land first so new parser tests benefit from

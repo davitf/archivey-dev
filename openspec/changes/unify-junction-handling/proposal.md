@@ -81,7 +81,7 @@ filter requirement is finalised.
 
 **Land last** (after both native-reader changes).
 
-- `rar-native-metadata-reader` and `sevenzip-native-metadata-reader` must land
+- `rar-native-metadata-reader` and `sevenzip-native-reader` must land
   first: RAR and 7z junction detection needs to be wired into the native parsers
   built by those changes rather than the old rarfile/py7zr facades.
 - Run the Windows spike (see design.md) **during the native-reader phase** so the

@@ -2,7 +2,7 @@
 
 > Scope: §8.B–§8.E. §8.A (migrate the 7z/RAR solid readers onto the existing
 > `_iter_members_and_streams_internal` hook) is folded into the native-reader
-> changes (`rar-native-metadata-reader` / `sevenzip-native-metadata-reader`).
+> changes (`rar-native-metadata-reader` / `sevenzip-native-reader`).
 
 ## 1. Capability/preference split (§8.B, §8.C)
 

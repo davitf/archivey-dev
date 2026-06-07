@@ -392,7 +392,7 @@ TAR is the only format with native hardlink support.
 | ZIP | `zipfile` (stdlib) | Full in-process decompressor + parser | Excellent | Low benefit: stdlib works well |
 | TAR | `tarfile` (stdlib) | Full in-process decompressor + parser | Good | Low benefit: stdlib works well |
 | RAR | `rarfile` (third-party) | Metadata parsing; shells out to `unrar` for data | Medium | **High** — native reader target; eliminates dependency |
-| 7z | `py7zr` (third-party) | Metadata + in-process decompressor | Medium | **High** — native reader target for metadata; keep py7zr for decompression |
+| 7z | `py7zr` (third-party) | Metadata + in-process decompressor | Medium | **High** — full native reader target (metadata + decompression); drops py7zr entirely (stdlib `lzma`/`bz2`/`zlib` cover LZMA2/BCJ/Delta/Deflate/BZip2, existing `zstandard`/`brotli`/crypto optionals + new `pyppmd`/`inflate64` cover the rest; BCJ2 detect-and-raise as py7zr does) |
 | ISO | `pycdlib` (third-party) | Test-only (creation); no reader exists | N/A | Wrap pycdlib or write native (native is ~400 lines) |
 
 The RAR and 7z native reader designs are documented in

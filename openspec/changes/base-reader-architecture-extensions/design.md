@@ -97,7 +97,7 @@ regression contract).
     method with its already-documented "avoids full traversal" contract, which the
     current code violates for seekable TAR.
 - **§8.A is folded into the native readers**: because `rar-native-metadata-reader`
-  and `sevenzip-native-metadata-reader` already rewrite those readers, each adopts the
+  and `sevenzip-native-reader` already rewrite those readers, each adopts the
   existing `_iter_members_and_streams_internal` hook (dropping its public
   `iter_members_with_streams` override) as part of that work, rather than as a
   separate pass here.
