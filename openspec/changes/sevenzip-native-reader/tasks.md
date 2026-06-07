@@ -66,6 +66,9 @@
       Deflate, BZip2, Zstd, Brotli, PPMd, Deflate64, AES-256, Copy); solid folders
 - [ ] 5.3 BCJ2 (and an ARM64/RISC-V BCJ if a sample exists) raise a clean
       unsupported-method error; missing-package paths raise `PackageNotInstalledError`
+- [ ] 5.3a Per-member passwords: un-skip `encryption_several_passwords__7zcmd.7z` —
+      opening members with their matching per-call `pwd` each decrypt correctly; a
+      wrong password surfaces as an encrypted/corrupted error
 - [ ] 5.4 `compression_method` + `compression_method_detail` populated; archive
       `comment` surfaced; `atime`/`ctime` when present
 - [ ] 5.5 `openspec validate sevenzip-native-reader --type change --strict`

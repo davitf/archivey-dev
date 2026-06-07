@@ -575,12 +575,16 @@ This eliminates the `_temporary_password` context manager and the class-level
 `_password_lock` entirely (§2.5), because nothing mutates shared state — each
 folder's pipeline is constructed independently with whatever password applies to it.
 
-A consequence: the **per-member-password** case that is a skipped test today
-(`encryption_several_passwords__7zcmd.7z`, where different folders need different
-passwords) becomes naturally expressible, since the decryptor is chosen per folder
-at open time rather than set globally on the shared archive object. (Wiring the
-public API to *supply* distinct passwords per member is out of scope here; the point
-is the native design no longer structurally precludes it.)
+This also **fixes the skipped multi-password test**
+(`encryption_several_passwords__7zcmd.7z`) for free, using the password mechanism
+archivey already has — no new public API. The base reader already accepts an
+archive-wide password at open time (stored as `_archive_password`) and a per-call
+`pwd` on `open(member, pwd=...)` / `_open_member(..., pwd=...)`, exactly as RAR and
+the other readers use it. The native reader simply builds each folder's decryptor
+from the `pwd` passed to that open call, falling back to the archive-wide default.
+Because the decryptor is per-call rather than a global mutation of the shared
+archive object, opening two members that need different passwords just works — which
+is precisely what py7zr's global `folder.password` assignment made impossible.
 
 Wrong passwords behave as in §3.5: there is no pre-flight check value, so a bad
 password decrypts to garbage that fails the substream CRC — which we surface as a

@@ -55,9 +55,11 @@ This is feasible because the codec inventory mostly already exists in archivey
 - **BCJ2: detect and raise.** Acceptable because it matches py7zr (which cannot decode
   BCJ2). Revisit later (a dedicated BCJ2 decoder, or external `7z` for that case) if
   real archives need it.
-- **Per-folder AES decryptors** remove the password lock and make per-member passwords
-  structurally expressible (today a skipped test); wiring the public API to supply
-  distinct per-member passwords stays out of scope (design §4.5).
+- **Per-folder AES decryptors** remove the password lock and **fix the skipped
+  multi-password test** using the existing per-call `pwd` parameter — no new API. The
+  decryptor is built from the `pwd` passed to `open(member, pwd=...)` (or the
+  archive-wide default), so members needing different passwords just work, unlike
+  py7zr's global `folder.password` mutation (design §4.5).
 - **`compression_method`**: typed primary codec onto the §8.D `CompressionMethod`
   enum (e.g. `LZMA2`), full chain (e.g. `"LZMA2 + BCJ"`) into
   `compression_method_detail`. Depends on `base-reader-architecture-extensions` §8.D.

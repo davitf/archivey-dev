@@ -47,6 +47,11 @@ pull-based and deletes the entire thread/queue/lock apparatus.
 - **New metadata** the native parser exposes (design §4.7): per-member
   `compression_method` (typed primary codec, full filter chain in
   `compression_method_detail`); archive `comment`; `atime`/`ctime`.
+- **Per-member passwords now work** (fixes a skipped test): the native per-folder AES
+  decryptor is built from the `pwd` passed to `open(member, pwd=...)` (or the
+  archive-wide default), the same per-call mechanism RAR and the other readers already
+  use. py7zr's global `folder.password` mutation made differing per-member passwords
+  impossible; the native design removes that limitation with no new public API.
 - **Replaced internals**: `_is_member_encrypted` → direct coder-list check; `is_solid`
   from `num_unpackstreams_folders` directly; `filetime_to_dt` inlined.
 - **Co-iteration cleanup (folded in)**: adopt the base
@@ -75,9 +80,8 @@ pull-based and deletes the entire thread/queue/lock apparatus.
 - Newer **ARM64 / RISC-V** BCJ filters not exposed by the installed liblzma:
   detect-and-raise until a newer liblzma or fallback is available.
 - Multi-volume 7z and anti-file support (raise a clean error / warn).
-- Public API to supply **distinct per-member passwords** (the native design no longer
-  precludes it, but exposing it is separate work).
-- Changing the public `ArchiveReader` API.
+- Changing the public `ArchiveReader` API (per-member passwords use the existing
+  per-call `pwd` parameter — no new surface).
 
 ## Dependencies / Sequencing
 

@@ -67,6 +67,24 @@ py7zr-based reader, which also cannot decode BCJ2.
 - **THEN** a clear unsupported-compression-method `ArchiveError` is raised (no garbage
   output)
 
+### Requirement: 7z honors per-member passwords
+
+The reader SHALL decrypt each encrypted member using the password supplied for that
+open operation — the per-call `pwd` on `open(member, pwd=...)` when given, otherwise
+the archive-wide password supplied when the archive was opened. Decryption SHALL be
+built per member/folder, so two members that require different passwords can each be
+opened correctly within the same archive (no global password state).
+
+#### Scenario: Members with different passwords
+- **WHEN** an encrypted 7z archive holds members in folders that were encrypted with
+  different passwords, and each member is opened with its matching `pwd`
+- **THEN** each member's content decrypts correctly and verifies its CRC
+
+#### Scenario: Wrong password
+- **WHEN** an encrypted member is opened with an incorrect password
+- **THEN** decryption fails as corrupt data (no pre-flight check value exists in 7z),
+  surfaced as an encrypted/corrupted `ArchiveError`
+
 ### Requirement: 7z exposes per-member compression method
 
 The reader SHALL populate each member's `compression_method` with the typed primary
