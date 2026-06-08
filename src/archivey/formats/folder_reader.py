@@ -3,7 +3,7 @@ import os
 import stat
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import BinaryIO, Iterator, Optional
+from typing import BinaryIO, ClassVar, Iterator, Optional
 
 from archivey.exceptions import (
     ArchiveError,
@@ -12,6 +12,7 @@ from archivey.exceptions import (
 from archivey.internal.base_reader import BaseArchiveReader
 from archivey.internal.utils import get_ownership_from_stat
 from archivey.types import (
+    AccessCost,
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
@@ -26,6 +27,8 @@ class FolderReader(BaseArchiveReader):
     Reads a folder on the filesystem as an archive.
     """
 
+    members_list_supported: ClassVar[bool] = True
+
     def __init__(
         self,
         format: ArchiveFormat,
@@ -37,9 +40,9 @@ class FolderReader(BaseArchiveReader):
             ArchiveFormat.FOLDER,
             archive_path,
             streaming_only=streaming_only,
-            members_list_supported=True,
             pwd=None,
         )
+        self._member_seek_cost = AccessCost.DIRECT
 
         if format != ArchiveFormat.FOLDER:
             raise ValueError(f"Unsupported archive format: {format}")

@@ -5,7 +5,7 @@ import pytest
 
 from archivey.config import ArchiveyConfig
 from archivey.core import open_archive
-from archivey.types import ContainerFormat, MemberType
+from archivey.types import AccessCost, ContainerFormat, MemberType
 from tests.archivey.sample_archives import (
     SYMLINK_ARCHIVES,
     SampleArchive,
@@ -25,11 +25,17 @@ logger = logging.getLogger(__name__)
 @pytest.mark.sample_archives(prefixes=["large_files_nonsolid", "large_files_solid"])
 def test_random_access_mode(sample_archive: SampleArchive, sample_archive_path: str):
     with open_archive(sample_archive_path) as archive:
-        assert archive.has_random_access()
-        members_if_available = archive.get_members_if_available()
-        members = archive.get_members()
+        assert archive.member_access_cost != AccessCost.UNAVAILABLE
 
-        assert members_if_available == members
+        # For INDEXED formats (ZIP, RAR, 7z), members are available before scanning.
+        # For SCAN_REQUIRED formats (TAR), get_members_if_available() returns None until scanned.
+        members_if_available_before = archive.get_members_if_available()
+        members = archive.get_members()
+        members_if_available_after = archive.get_members_if_available()
+
+        assert members_if_available_after == members
+        if members_if_available_before is not None:
+            assert members_if_available_before == members
 
         for sample_file in reversed(sample_archive.contents.files):
             f = archive.open(sample_file.name)
@@ -83,7 +89,7 @@ def test_streaming_only_mode(
     with open_archive(
         sample_archive_path, streaming_only=True, config=config
     ) as archive:
-        assert not archive.has_random_access()
+        assert archive.member_access_cost == AccessCost.UNAVAILABLE
 
         with pytest.raises(ValueError):
             archive.get_members()

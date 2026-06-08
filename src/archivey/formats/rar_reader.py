@@ -20,6 +20,7 @@ from typing import (
     Any,
     BinaryIO,
     Callable,
+    ClassVar,
     Collection,
     Iterable,
     Iterator,
@@ -69,6 +70,7 @@ from archivey.types import (
     CreateSystem,
     IteratorFilterFunc,
     MemberType,
+    _parse_compression_method,
 )
 
 logger = logging.getLogger(__name__)
@@ -480,6 +482,8 @@ class RarStreamReader:
 class RarReader(BaseArchiveReader):
     """Base class for RAR archive readers."""
 
+    members_list_supported: ClassVar[bool] = True
+
     def __init__(
         self,
         format: ArchiveFormat,
@@ -495,7 +499,6 @@ class RarReader(BaseArchiveReader):
             format=format,
             archive_path=archive_path,
             streaming_only=streaming_only,
-            members_list_supported=True,
             pwd=pwd,
         )
 
@@ -612,10 +615,13 @@ class RarReader(BaseArchiveReader):
 
         rarinfos: list[RarInfo] = self._archive.infolist()
         for info in rarinfos:
-            compression_method = (
-                _RAR_COMPRESSION_METHODS.get(info.compress_type, "unknown")
+            raw_method_str = (
+                _RAR_COMPRESSION_METHODS.get(info.compress_type)
                 if info.compress_type is not None
                 else None
+            )
+            compression_method, compression_method_detail = _parse_compression_method(
+                raw_method_str
             )
 
             # According to https://documentation.help/WinRAR/HELPArcEncryption.htm :
@@ -657,6 +663,7 @@ class RarReader(BaseArchiveReader):
                 else None,
                 crc32=info.CRC if not has_encrypted_crc else None,
                 compression_method=compression_method,
+                compression_method_detail=compression_method_detail,
                 comment=info.comment,
                 encrypted=info.needs_password(),
                 create_system=_RAR_HOST_OS_TO_CREATE_SYSTEM.get(

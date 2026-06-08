@@ -3,7 +3,7 @@ import logging
 import os
 import struct
 from datetime import datetime, timezone
-from typing import BinaryIO, Iterator, Optional
+from typing import BinaryIO, ClassVar, Iterator, Optional
 
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -30,6 +30,7 @@ from archivey.types import (
     ContainerFormat,
     CreateSystem,
     MemberType,
+    _parse_compression_method,
 )
 
 logger = logging.getLogger(__name__)
@@ -140,6 +141,8 @@ def read_gzip_metadata(
 class SingleFileReader(BaseArchiveReader):
     """Reader for raw compressed files (gz, bz2, xz, zstd, lz4)."""
 
+    members_list_supported: ClassVar[bool] = True
+
     def __init__(
         self,
         format: ArchiveFormat,
@@ -166,7 +169,6 @@ class SingleFileReader(BaseArchiveReader):
             format=format,
             archive_path=archive_path,
             streaming_only=streaming_only,
-            members_list_supported=True,
             pwd=pwd,
         )
 
@@ -200,6 +202,9 @@ class SingleFileReader(BaseArchiveReader):
 
         self.use_stored_metadata = self.config.use_single_file_stored_metadata
 
+        raw_method_str = self.format.file_extension()
+        _cm, _cm_detail = _parse_compression_method(raw_method_str)
+
         # Create a single member representing the decompressed file
         self.member = ArchiveMember(
             filename=member_name,
@@ -208,7 +213,8 @@ class SingleFileReader(BaseArchiveReader):
             compress_size=compress_size,
             mtime_with_tz=mtime,
             type=MemberType.FILE,
-            compression_method=self.format.file_extension(),
+            compression_method=_cm,
+            compression_method_detail=_cm_detail if _cm_detail else raw_method_str,
             crc32=None,
         )
 

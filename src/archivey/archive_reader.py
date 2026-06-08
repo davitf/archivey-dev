@@ -4,12 +4,14 @@ from typing import BinaryIO, Callable, Collection, Iterator, List
 
 from archivey.internal.io_helpers import is_stream
 from archivey.types import (
+    AccessCost,
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
     ExtractFilterFunc,
     ExtractionFilter,
     IteratorFilterFunc,
+    MemberListingCost,
 )
 
 
@@ -155,24 +157,42 @@ class ArchiveReader(abc.ABC):
         """
         pass
 
+    @property
     @abc.abstractmethod
-    def has_random_access(self) -> bool:
+    def member_listing_cost(self) -> MemberListingCost:
         """
-        Return `True` if this archive supports random access to its members.
+        Return how cheaply the complete member list can be obtained.
 
-        Random access allows methods like `open()`, `get_members()`, and `extract()` to
-        be used freely. This returns `False` if the archive was opened in streaming
-        mode, in which case only a single pass through `iter_members_with_streams()` or
-        `extractall()` is supported.
-        supported.
-
-        Random access allows methods like `open()`, `get_members()`, and `extract()` to
-        work reliably. Returns `False` if the archive was opened from a non-seekable
-        source (e.g. a streamed `.tar` file), in which case only a single pass through
-        `iter_members_with_streams()` is allowed.
+        This property never performs I/O or raises. Use it to decide whether
+        calling `get_members_if_available()` is cheap before doing so.
 
         Returns:
-            `True` if random access is available; `False` if in streaming mode.
+            A `MemberListingCost` value:
+            - `INDEXED`: catalog / central directory (ZIP, 7z, RAR, folder, ISO)
+            - `SCAN_REQUIRED`: full sequential pass required (seekable TAR)
+            - `SEQUENTIAL_ONLY`: list discovered only during iteration (streaming TAR)
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def member_access_cost(self) -> AccessCost:
+        """
+        Return the cost of opening an arbitrary member out of order.
+
+        This is `AccessCost.UNAVAILABLE` exactly when the archive was opened in
+        streaming mode or from a non-seekable source, i.e. when `open()` is not
+        supported. For random-access archives it indicates how expensive it is
+        to reach a member that is not next in line.
+
+        This property never performs I/O or raises.
+
+        Returns:
+            An `AccessCost` value:
+            - `DIRECT`: seek + decode only the target (ZIP, folder, ISO, uncompressed TAR)
+            - `LIMITED`: bounded extra decompression to a seek point (indexed-decompressor TAR)
+            - `EXPENSIVE`: unbounded prefix decompression (solid 7z/RAR, plain gzip TAR)
+            - `UNAVAILABLE`: out-of-order access is impossible (streaming mode)
         """
         pass
 
@@ -207,7 +227,7 @@ class ArchiveReader(abc.ABC):
         Accepts either a filename (str) or an ArchiveMember. Filenames are resolved
         to members automatically. For symlinks, this returns the target file’s content.
 
-        Requires random access support (see `has_random_access()`).
+        Requires random access support (see `member_access_cost`).
 
         Args:
             member_or_filename: The member or its filename.

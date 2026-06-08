@@ -3,7 +3,7 @@ import os
 import stat
 import tarfile
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, BinaryIO, Iterator, List, Optional, cast
+from typing import TYPE_CHECKING, BinaryIO, ClassVar, Iterator, Optional, cast
 
 from archivey.exceptions import (
     ArchiveCorruptedError,
@@ -25,7 +25,16 @@ from archivey.internal.io_helpers import (
     read_exact,
     run_with_exception_translation,
 )
-from archivey.types import ArchiveFormat, ContainerFormat, MemberType, StreamFormat
+from archivey.types import (
+    AccessCost,
+    ArchiveFormat,
+    CompressionMethod,
+    ContainerFormat,
+    MemberListingCost,
+    MemberType,
+    StreamFormat,
+    _parse_compression_method,
+)
 
 if TYPE_CHECKING:
     from io import BufferedIOBase
@@ -35,6 +44,8 @@ logger = logging.getLogger(__name__)
 
 class TarReader(BaseArchiveReader):
     """Reader for TAR archives and compressed TAR archives."""
+
+    members_list_supported: ClassVar[bool] = False
 
     def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
         if isinstance(e, tarfile.ReadError):
@@ -69,7 +80,6 @@ class TarReader(BaseArchiveReader):
             format=format,
             archive_path=archive_path,
             streaming_only=streaming_only,
-            members_list_supported=False,
             pwd=pwd,
         )
         self._streaming_only = streaming_only
@@ -85,7 +95,10 @@ class TarReader(BaseArchiveReader):
         )
 
         if format.stream != StreamFormat.UNCOMPRESSED:
-            self.compression_method = str(format.stream.value)
+            raw_method_str = str(format.stream.value)
+            self._compression_method, self._compression_method_detail = (
+                _parse_compression_method(raw_method_str)
+            )
             # Ensure the stream is buffered. tarfile may fail when reading a file
             # if read() returns fewer bytes than requested (specifically
             # inside tarfile._FileInFile.read(), line 696 in Python 3.13.5).
@@ -101,7 +114,8 @@ class TarReader(BaseArchiveReader):
             )
 
         else:
-            self.compression_method = "store"
+            self._compression_method = CompressionMethod.STORED
+            self._compression_method_detail = None
             if isinstance(archive_path, str):
                 self._fileobj = open(archive_path, "rb")
                 self._close_fileobj = True
@@ -113,6 +127,21 @@ class TarReader(BaseArchiveReader):
             raise ArchiveStreamNotSeekableError(
                 f"Tried to open a random-access {format.file_extension()} file, but inner stream is not seekable ({self._fileobj})"
             )
+
+        # Determine whether the decompressed stream supports random access and at what cost.
+        self._format_supports_random_access = is_seekable(self._fileobj)
+        if not self._format_supports_random_access:
+            self._decompressed_seek_cost = AccessCost.UNAVAILABLE
+        elif format.stream == StreamFormat.UNCOMPRESSED:
+            self._decompressed_seek_cost = AccessCost.DIRECT
+        elif format.stream == StreamFormat.GZIP and self.config.use_rapidgzip:
+            self._decompressed_seek_cost = AccessCost.LIMITED
+        elif format.stream == StreamFormat.BZIP2 and self.config.use_indexed_bzip2:
+            self._decompressed_seek_cost = AccessCost.LIMITED
+        else:
+            self._decompressed_seek_cost = AccessCost.EXPENSIVE
+        # Seeking within a TAR member is equivalent to seeking in the decompressed stream.
+        self._member_seek_cost = self._decompressed_seek_cost
 
         open_mode = "r|" if streaming_only else "r:"
 
@@ -145,10 +174,17 @@ class TarReader(BaseArchiveReader):
             self._fileobj.close()
             self._fileobj = None
 
-    def get_members_if_available(self) -> List[ArchiveMember] | None:
+    @property
+    def member_listing_cost(self) -> MemberListingCost:
         if self._streaming_only:
-            return None
-        return self.get_members()
+            return MemberListingCost.SEQUENTIAL_ONLY
+        return MemberListingCost.SCAN_REQUIRED
+
+    @property
+    def member_access_cost(self) -> AccessCost:
+        if self._streaming_only:
+            return AccessCost.UNAVAILABLE
+        return self._decompressed_seek_cost
 
     def _tarinfo_to_archive_member(self, info: tarfile.TarInfo) -> ArchiveMember:
         filename = info.name
@@ -185,7 +221,8 @@ class TarReader(BaseArchiveReader):
             gname=info.gname or None,
             link_target=info.linkname if info.issym() or info.islnk() else None,
             crc32=None,  # TAR doesn't have CRC
-            compression_method=self.compression_method,
+            compression_method=self._compression_method,
+            compression_method_detail=self._compression_method_detail,
             extra={
                 "type": info.type,
                 "mode": info.mode,

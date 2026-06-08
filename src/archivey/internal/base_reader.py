@@ -10,6 +10,7 @@ from typing import (
     TYPE_CHECKING,
     BinaryIO,
     Callable,
+    ClassVar,
     Collection,
     Iterator,
     List,
@@ -31,11 +32,13 @@ from archivey.filters import DEFAULT_FILTERS
 from archivey.internal.archive_stream import ArchiveStream
 from archivey.internal.extraction_helper import ExtractionHelper
 from archivey.types import (
+    AccessCost,
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
     ExtractFilterFunc,
     IteratorFilterFunc,
+    MemberListingCost,
     MemberType,
 )
 
@@ -114,7 +117,13 @@ class BaseArchiveReader(ArchiveReader):
     implementations for some methods based on others. Developers creating
     new readers will typically inherit from this class and implement the
     abstract methods like `iter_members_for_registration`, `open`, and `close`.
+
+    Subclasses **must** define a ``members_list_supported`` class variable:
+    ``True`` for formats with a central directory (ZIP, RAR, 7z, ISO, folder),
+    ``False`` for formats that require a sequential scan to enumerate members (TAR).
     """
+
+    members_list_supported: ClassVar[bool]
 
     def __init__(
         self,
@@ -122,7 +131,6 @@ class BaseArchiveReader(ArchiveReader):
         archive_path: BinaryIO | str | bytes | os.PathLike,
         pwd: bytes | str | None,
         streaming_only: bool,
-        members_list_supported: bool,
     ):
         """
         Initialize the BaseArchiveReader.
@@ -138,14 +146,6 @@ class BaseArchiveReader(ArchiveReader):
                 only be usable once. Set this if the underlying archive format
                 or library inherently doesn't support random access to members
                 (e.g., a raw compressed stream without a central directory).
-            members_list_supported: If True, indicates that the archive format
-                can typically provide a complete list of members upfront (e.g.,
-                by reading a central directory like in ZIP files) without needing
-                to parse the entire archive content. `get_members_if_available()`
-                will attempt to leverage this by exhausting
-                `iter_members_for_registration()` early. If False, obtaining a
-                full member list via `get_members()` might require iterating
-                through a significant portion of the archive if not already done.
         """
         super().__init__(archive_path, format)
         self.config: ArchiveyConfig = get_archivey_config()
@@ -164,7 +164,15 @@ class BaseArchiveReader(ArchiveReader):
         self._archive_id: str = uuid4().hex
 
         self._streaming_only = streaming_only
-        self._early_members_list_supported = members_list_supported
+
+        # True unless the format genuinely cannot random-access at runtime
+        # (e.g. a compressed TAR whose decompressor stream is non-seekable).
+        # Subclasses may set this to False in __init__ after checking the stream.
+        self._format_supports_random_access: bool = True
+
+        # Default seek cost for member streams opened by this reader.
+        # Subclasses that serve truly random-access streams (folder, ISO) set DIRECT.
+        self._member_seek_cost: AccessCost = AccessCost.EXPENSIVE
 
         self._iterator_for_registration: Iterator[ArchiveMember] | None = None
 
@@ -401,21 +409,20 @@ class BaseArchiveReader(ArchiveReader):
 
     def get_members_if_available(self) -> List[ArchiveMember] | None:
         """
-        Get a list of all members if readily available, otherwise None.
+        Return the member list only when it is available cheaply.
 
-        If `members_list_supported` was True during initialization and members
-        haven't been fully registered yet, this method will attempt to register
-        all members by exhausting `iter_members_for_registration()`.
-        For streaming-only archives where `members_list_supported` is False,
-        this will likely return None unless members have already been listed
-        through an iteration that populated `self._members`.
+        Returns the list when ``member_listing_cost`` is ``INDEXED`` (central
+        directory) or all members have already been registered by a prior
+        call to `get_members()` or completed iteration. Returns ``None``
+        otherwise — in particular, never triggers a full scan for
+        ``SCAN_REQUIRED`` archives.
         """
         self.check_archive_open()
 
         if self._all_members_registered:
             return list(self._members)
 
-        if self._streaming_only and not self._early_members_list_supported:
+        if self.member_listing_cost != MemberListingCost.INDEXED:
             return None
 
         while not self._all_members_registered:
@@ -566,6 +573,11 @@ class BaseArchiveReader(ArchiveReader):
         )
         final_member, _ = self._resolve_member_to_open(member)
 
+        seek_cost = (
+            AccessCost.UNAVAILABLE
+            if self._streaming_only
+            else self._get_member_seek_cost(final_member)
+        )
         stream = ArchiveStream(
             open_fn=lambda: self._open_member(
                 final_member, pwd=pwd, for_iteration=for_iteration
@@ -575,6 +587,7 @@ class BaseArchiveReader(ArchiveReader):
             member_name=member.filename,
             lazy=for_iteration,
             seekable=not self._streaming_only,
+            seek_cost=seek_cost,
         )
         self._track_stream(stream)
         return stream
@@ -669,7 +682,7 @@ class BaseArchiveReader(ArchiveReader):
                 closed.
 
         Notes:
-            If :meth:`has_random_access` returns ``False`` (streaming-only
+            If :attr:`member_access_cost` is ``UNAVAILABLE`` (streaming-only
             access), this method can be called **only once**. Further attempts
             to iterate over the archive or to call :meth:`extractall` will raise
             ``ValueError``.
@@ -692,9 +705,39 @@ class BaseArchiveReader(ArchiveReader):
 
             yield filtered_member, stream
 
-    def has_random_access(self) -> bool:
-        """Check if opening members is possible (i.e. not streaming-only access)."""
-        return not self._streaming_only
+    @property
+    def member_listing_cost(self) -> MemberListingCost:
+        """Return the cost of obtaining the complete member list.
+
+        Derived from the class-level ``members_list_supported`` flag and the
+        runtime ``_streaming_only`` state. Never performs I/O or raises.
+        """
+        if type(self).members_list_supported:
+            return MemberListingCost.INDEXED
+        if self._streaming_only:
+            return MemberListingCost.SEQUENTIAL_ONLY
+        return MemberListingCost.SCAN_REQUIRED
+
+    @property
+    def member_access_cost(self) -> AccessCost:
+        """Return the cost of opening an arbitrary member out of order.
+
+        ``UNAVAILABLE`` when in streaming mode; ``DIRECT`` for most random-access
+        formats. Subclasses (e.g. TarReader) override this to report more precise
+        costs based on the underlying stream backend. Never performs I/O or raises.
+        """
+        if self._streaming_only:
+            return AccessCost.UNAVAILABLE
+        return AccessCost.DIRECT
+
+    def _get_member_seek_cost(self, member: ArchiveMember) -> AccessCost:
+        """Return the seek cost for a specific member's stream.
+
+        Called by ``_open_internal`` to populate the ``seek_cost`` property on the
+        returned ``ArchiveStream``. Override in readers where seek cost varies by
+        member (e.g. stored vs compressed ZIP entries).
+        """
+        return self._member_seek_cost
 
     def _extract_pending_files(
         self, path: str, extraction_helper: ExtractionHelper, pwd: bytes | str | None
@@ -702,7 +745,7 @@ class BaseArchiveReader(ArchiveReader):
         """
         Extract files that have been identified by the ExtractionHelper.
 
-        This method is called by `extractall()` when `has_random_access()` is True.
+        This method is called by `extractall()` when `member_access_cost` is not `UNAVAILABLE`.
         The default implementation iterates through `extraction_helper.get_pending_extractions()`
         and calls `self.open()` for each file member, then streams its content.
 
@@ -774,7 +817,7 @@ class BaseArchiveReader(ArchiveReader):
         """Extract multiple members from the archive.
 
         Notes:
-            For streaming-only archives (:meth:`has_random_access` returns ``False``)
+            For streaming-only archives (:attr:`member_access_cost` is ``UNAVAILABLE``)
             this method may only be called once, as it exhausts the underlying stream.
         """
         self.check_archive_open()
@@ -792,7 +835,7 @@ class BaseArchiveReader(ArchiveReader):
             self,
             path,
             self.config.overwrite_mode,
-            can_process_pending_extractions=self.has_random_access(),
+            can_process_pending_extractions=self.member_access_cost != AccessCost.UNAVAILABLE,
         )
 
         if self._streaming_only:

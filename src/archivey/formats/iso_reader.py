@@ -5,7 +5,7 @@ import logging
 import os
 import stat as _stat
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Optional
+from typing import TYPE_CHECKING, Any, BinaryIO, ClassVar, Iterator, Optional
 
 if TYPE_CHECKING:
     import pycdlib
@@ -26,9 +26,11 @@ from archivey.exceptions import (
 from archivey.internal.base_reader import BaseArchiveReader
 from archivey.internal.io_helpers import is_seekable, is_stream
 from archivey.types import (
+    AccessCost,
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
+    CompressionMethod,
     ContainerFormat,
     MemberType,
 )
@@ -116,6 +118,8 @@ class IsoReader(BaseArchiveReader):
     file data access.
     """
 
+    members_list_supported: ClassVar[bool] = True
+
     def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
         if pycdlib is not None and isinstance(
             e, pycdlib.pycdlibexception.PyCdlibException
@@ -155,9 +159,9 @@ class IsoReader(BaseArchiveReader):
             format=format,
             archive_path=archive_path,
             streaming_only=streaming_only,
-            members_list_supported=True,
             pwd=None,
         )
+        self._member_seek_cost = AccessCost.DIRECT
 
         self._format_info: Optional[ArchiveInfo] = None
 
@@ -298,7 +302,7 @@ class IsoReader(BaseArchiveReader):
             gid=gid,
             link_target=link_target,
             crc32=None,
-            compression_method="stored",
+            compression_method=CompressionMethod.STORED,
             encrypted=False,
             raw_info=full_ns_path,  # stored for use by _open_member
         )

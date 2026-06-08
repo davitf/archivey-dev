@@ -40,6 +40,97 @@ FA_ENCRYPTED = 0x4000
 EXTRA_IS_JUNCTION = "is_junction"
 
 
+class CompressionMethod(StrEnum):
+    """Typed enum of known member-level compression methods.
+
+    A `StrEnum` so existing ``== "deflate"`` style comparisons keep working.
+    ``UNKNOWN`` is used when the format reports a codec Archivey does not map;
+    ``None`` on the member field means the format did not report a method at all.
+    """
+
+    STORED = "stored"
+    DEFLATE = "deflate"
+    DEFLATE64 = "deflate64"
+    BZIP2 = "bzip2"
+    LZMA = "lzma"
+    LZMA2 = "lzma2"
+    ZSTD = "zstd"
+    LZ4 = "lz4"
+    PPMD = "ppmd"
+    BCJ2 = "bcj2"
+    UNKNOWN = "unknown"
+
+
+class MemberListingCost(StrEnum):
+    """Cost of obtaining the complete member list from the archive."""
+
+    INDEXED = "indexed"
+    """Obtainable from a catalog / central directory with at most one bounded seek (ZIP, 7z, RAR, folder, ISO)."""
+
+    SCAN_REQUIRED = "scan_required"
+    """Requires a full sequential pass over the archive body (seekable TAR opened without streaming)."""
+
+    SEQUENTIAL_ONLY = "sequential_only"
+    """No upfront list; members discovered only as iteration proceeds (streaming TAR or non-seekable source)."""
+
+
+class AccessCost(StrEnum):
+    """Cost of reaching data out of order — used for both member access and within-stream seeks."""
+
+    DIRECT = "direct"
+    """Reach the target by seeking and decoding only it, with no extra decompression."""
+
+    LIMITED = "limited"
+    """Each out-of-order access costs a *bounded* amount of extra decompression back to the nearest seek point."""
+
+    EXPENSIVE = "expensive"
+    """Each out-of-order access may decode an unbounded prefix — O(N²) random access in a loop."""
+
+    UNAVAILABLE = "unavailable"
+    """Cannot be reached out of order; data is available only along the primary forward path."""
+
+
+# Internal mapping used by _parse_compression_method()
+_COMPRESSION_METHOD_STRINGS: "dict[str, CompressionMethod]" = {}
+
+
+def _init_compression_aliases() -> None:
+    global _COMPRESSION_METHOD_STRINGS
+    _COMPRESSION_METHOD_STRINGS = {
+        "store": CompressionMethod.STORED,
+        "stored": CompressionMethod.STORED,
+        "deflate": CompressionMethod.DEFLATE,
+        "deflate64": CompressionMethod.DEFLATE64,
+        "bzip2": CompressionMethod.BZIP2,
+        "lzma": CompressionMethod.LZMA,
+        "lzma2": CompressionMethod.LZMA2,
+        "zstd": CompressionMethod.ZSTD,
+        "lz4": CompressionMethod.LZ4,
+        "ppmd": CompressionMethod.PPMD,
+        "bcj2": CompressionMethod.BCJ2,
+    }
+
+
+_init_compression_aliases()
+
+
+def _parse_compression_method(
+    raw: "Optional[str]",
+) -> "tuple[Optional[CompressionMethod], Optional[str]]":
+    """Map a raw codec string to ``(CompressionMethod, detail)``.
+
+    Returns ``(None, None)`` when *raw* is ``None`` (format did not report a method).
+    Returns ``(CompressionMethod, None)`` when *raw* maps to a known codec.
+    Returns ``(CompressionMethod.UNKNOWN, raw)`` when *raw* is not ``None`` but unrecognized.
+    """
+    if raw is None:
+        return None, None
+    mapped = _COMPRESSION_METHOD_STRINGS.get(raw.lower())
+    if mapped is not None:
+        return mapped, None
+    return CompressionMethod.UNKNOWN, raw
+
+
 class ContainerFormat(StrEnum):
     """Supported container formats."""
 
@@ -283,10 +374,16 @@ class ArchiveMember:
         default=None,
         metadata={"description": "The CRC32 checksum of the member's data, if known."},
     )
-    compression_method: Optional[str] = field(
+    compression_method: Optional[CompressionMethod] = field(
         default=None,
         metadata={
-            "description": "The compression method used for the member, if known. Format-dependent."
+            "description": "The primary compression method as a typed CompressionMethod enum value. UNKNOWN when the format reports an unrecognized codec; None when the format does not report a method at all."
+        },
+    )
+    compression_method_detail: Optional[str] = field(
+        default=None,
+        metadata={
+            "description": "The full, verbatim compression description as reported by the format, preserving information that cannot be represented by the CompressionMethod enum (e.g. multi-filter chains like 'LZMA2 + BCJ2'). None when the primary codec already describes everything."
         },
     )
     comment: Optional[str] = field(

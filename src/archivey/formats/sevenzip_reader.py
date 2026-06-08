@@ -12,6 +12,7 @@ from typing import (
     TYPE_CHECKING,
     BinaryIO,
     Callable,
+    ClassVar,
     Collection,
     Iterator,
     Optional,
@@ -70,6 +71,7 @@ from archivey.exceptions import (
 from archivey.internal.extraction_helper import ExtractionHelper
 from archivey.internal.utils import bytes_to_str
 from archivey.types import (
+    AccessCost,
     ArchiveFormat,
     ArchiveInfo,
     ArchiveMember,
@@ -283,6 +285,7 @@ class ExtractWriterFactory(WriterFactory):
 class SevenZipReader(BaseArchiveReader):
     """Reader for 7-Zip archives."""
 
+    members_list_supported: ClassVar[bool] = True
     _password_lock: Lock = Lock()
 
     def _translate_exception(self, e: Exception) -> Optional[ArchiveError]:
@@ -372,7 +375,6 @@ class SevenZipReader(BaseArchiveReader):
             format=format,
             archive_path=archive_path,
             streaming_only=streaming_only,
-            members_list_supported=True,
             pwd=pwd,
         )
         if is_stream(self.path_or_stream) and not is_seekable(self.path_or_stream):
@@ -397,6 +399,17 @@ class SevenZipReader(BaseArchiveReader):
             self._translate_exception,
             archive_path=str(archive_path),
         )
+
+        # Cache solidity for member_access_cost (no extra I/O after archive is opened).
+        self._solid: bool = (
+            self._archive._is_solid() if self._archive is not None else False
+        )
+
+    @property
+    def member_access_cost(self) -> AccessCost:
+        if self._streaming_only:
+            return AccessCost.UNAVAILABLE
+        return AccessCost.EXPENSIVE if self._solid else AccessCost.DIRECT
 
     def _close_archive(self) -> None:
         """Close the archive and release any resources."""

@@ -10,7 +10,7 @@ pycdlib = pytest.importorskip("pycdlib")
 
 from archivey.core import open_archive  # noqa: E402
 from archivey.exceptions import ArchiveStreamNotSeekableError  # noqa: E402
-from archivey.types import ArchiveFormat, MemberType  # noqa: E402
+from archivey.types import AccessCost, ArchiveFormat, MemberType  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -121,7 +121,7 @@ class TestIsoBasic:
 
     def test_open_by_path(self, tmp_iso_rr):
         with open_archive(tmp_iso_rr) as ar:
-            assert ar.has_random_access()
+            assert ar.member_access_cost != AccessCost.UNAVAILABLE
             members = ar.get_members()
             assert any(m.filename == "file1.txt" for m in members)
 
@@ -157,7 +157,7 @@ class TestIsoBasic:
     def test_streaming_true_with_seekable_source(self, tmp_iso_rr):
         """streaming=True with seekable source: should work, no random-access."""
         with open_archive(tmp_iso_rr, streaming=True) as ar:
-            assert not ar.has_random_access()
+            assert ar.member_access_cost == AccessCost.UNAVAILABLE
             members = [m for m, _ in ar.iter_members_with_streams()]
             assert any(m.filename == "file1.txt" for m in members)
 
