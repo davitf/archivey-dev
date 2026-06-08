@@ -13,6 +13,9 @@
       - ContainerFormat
       - StreamFormat
       - MemberType
+      - CompressionMethod
+      - MemberListingCost
+      - AccessCost
       - ExtractionFilter
       - ArchiveyConfig
       - archivey_config
