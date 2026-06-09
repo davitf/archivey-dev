@@ -694,14 +694,11 @@ member_access_cost(reader):            # per instance: reaching a member out of 
     else:                          -> EXPENSIVE          # solid 7z, single stream
 ```
 
-To guarantee `seek_cost` (and a `name`) is always present, all archivey streams
-share a common **`ArchiveyStream`** base (`io.RawIOBase, BinaryIO`). Streams handed
-back by third-party libraries (py7zr / rarfile / zipfile) are normalized into it at
-the existing `ensure_binaryio()` / `BinaryIOWrapper` wrap point — wrapping rather
-than annotating the raw object, since `setattr` on a foreign stream is fragile and
-only saves an allocation. Open questions: the exact metadata beyond `seek_cost` +
-`name` (back-reference to the `ArchiveMember`? `CompressionMethod`? `StreamFormat`?)
-and whether `ArchiveyStream` is public.
+Here, `seek_cost` is added to archivey's own stream classes. Guaranteeing it on
+*every* returned stream — including those handed back raw by third-party libraries
+(py7zr / rarfile / zipfile) — needs a shared, **public** `ArchiveyStream` base and a
+broader look at how archivey constructs and wraps streams in general. That is its own
+exploration (the `public-stream-interface` change), kept separate from the cost surface.
 
 #### F. Access intent — the input dual of the cost surface
 

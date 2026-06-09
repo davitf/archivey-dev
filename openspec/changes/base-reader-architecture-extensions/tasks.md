@@ -33,13 +33,11 @@
 
 ## 3. Cost introspection (§8.E)
 
-- [ ] 3.0 Introduce a shared `ArchiveyStream` base (subclass of `io.RawIOBase,
-      BinaryIO`) declaring `seek_cost: AccessCost` (consistent with `seekable()`) and
-      `name: str | None`; have `ArchiveStream` / `DecompressorStream` (and the
-      decompressor subclasses) inherit it. Make `BinaryIOWrapper` / `ensure_binaryio`
-      (`internal/io_helpers.py`) produce an `ArchiveyStream` so foreign library streams
-      carry the same surface, and ensure `open()` / `iter_members_with_streams()` only
-      ever return `ArchiveyStream` instances (wrap rather than annotate raw streams)
+> The shared **public** `ArchiveyStream` base — guaranteeing `seek_cost` on *every*
+> returned stream, including third-party library streams — is split into the separate
+> `public-stream-interface` change. Here, `seek_cost` is added to archivey's own stream
+> classes only.
+
 - [ ] 3.1 Add a `MemberListingCost` enum (`INDEXED` / `SCAN_REQUIRED` /
       `SEQUENTIAL_ONLY`) and a shared `AccessCost` enum (`DIRECT` / `LIMITED` /
       `EXPENSIVE` / `UNAVAILABLE`) to `types.py`

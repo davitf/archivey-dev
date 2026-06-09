@@ -162,27 +162,6 @@ the stream layer where backend selection happens.
   `tar.gz`, `EXPENSIVE` for a rewind-from-start `tar.gz`, and `UNAVAILABLE` for a
   non-seekable source
 
-### Requirement: Returned streams share a common Archivey stream interface
-
-Every stream Archivey returns from `open()` and `iter_members_with_streams()` SHALL be
-an instance of a common base type (`ArchiveyStream`) that exposes the `seek_cost`
-introspection (above) and a `name: str | None` (the member path or source name,
-mirroring stdlib file objects' `.name`). This SHALL hold whether the bytes originate
-from an Archivey stream class or from a third-party library's stream object. A stream obtained from an underlying library
-SHALL be normalized into this interface (the existing protocol-normalizing wrapper is the
-natural place) so that `seek_cost` and `name` are always present; callers SHALL NOT have
-to special-case library-specific stream types to read them.
-
-#### Scenario: A library-backed member stream still exposes the interface
-- **WHEN** a member stream is obtained for a format whose decoding is delegated to a
-  third-party library
-- **THEN** the returned object exposes both `seek_cost` (an `AccessCost`) and `name`,
-  consistent with its `seekable()`
-
-#### Scenario: Member name is available on the stream
-- **WHEN** a member stream is obtained via `open()`
-- **THEN** its `name` reflects the member's path within the archive
-
 ## MODIFIED Requirements
 
 ### Requirement: get_members_if_available avoids full traversal

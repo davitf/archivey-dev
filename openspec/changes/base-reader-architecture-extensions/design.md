@@ -181,28 +181,12 @@ regression contract). §8.F (access intent) is specified in the separate
     The single source of truth for `LIMITED`/`EXPENSIVE` is the stream's own `seek_cost`
     (the `has_intermediate_seek_points` line); TAR reads it rather than re-deriving from
     `config.use_*`, which is the PR-#221 bug above.
-  - **All returned streams share a common Archivey base carrying `seek_cost` and a
-    `name`.** Today each archivey stream class (`ArchiveStream`, `DecompressorStream`,
-    `BinaryIOWrapper`, …) independently subclasses `io.RawIOBase, BinaryIO`, and a stream
-    handed back from a third-party library (py7zr / rarfile / zipfile) may not be an
-    archivey type at all — so nothing *guarantees* `seek_cost` is present on a returned
-    stream. This change introduces a shared base — `ArchiveyStream` (subclass of
-    `io.RawIOBase, BinaryIO`) — declaring `seek_cost: AccessCost` (kept consistent with
-    `seekable()`) and `name: str | None` (the member path / source name, mirroring stdlib
-    file objects' `.name`). The existing classes inherit it, and **every** stream archivey
-    returns from `open()` / `iter_members_with_streams()` is an `ArchiveyStream`.
-    - **Foreign streams are normalised at the existing wrap point.** Library streams
-      already pass through `ensure_binaryio()` / `BinaryIOWrapper` (`internal/io_helpers.py`)
-      to satisfy the `BinaryIO` protocol; making that wrapper an `ArchiveyStream` means
-      carrying `seek_cost` / `name` is free wherever a wrapper is already built.
-      **Recommendation: wrap, don't annotate** — `setattr`-ing `seek_cost` onto the raw
-      third-party object is fragile (`__slots__`, immutable handles) and only saves one
-      allocation; annotating-in-place is left as a profiled optimization if the wrapper
-      is ever shown to be a hotspot.
-    - **Open questions (for review):** the exact metadata beyond `seek_cost` + `name`
-      (candidates: a back-reference to the `ArchiveMember`, the member's
-      `CompressionMethod`, the source `StreamFormat`), and whether `ArchiveyStream` is a
-      public type or internal-only.
+  - **`seek_cost` is added to archivey's own stream classes here** (the per-member
+    `ArchiveStream` and each decompressor stream). Guaranteeing it on *every* returned
+    stream — including those handed back raw by third-party libraries — needs a shared,
+    **public** stream base (`ArchiveyStream`) and a broader look at how archivey
+    constructs and wraps streams. That is **split into the separate `public-stream-interface`
+    change** (exploration stage), so this change stays scoped to the cost surface.
 - **§8.A is folded into the native readers**: because `rar-native-metadata-reader`
   and `sevenzip-native-reader` already rewrite those readers, each adopts the
   existing `_iter_members_and_streams_internal` hook (dropping its public

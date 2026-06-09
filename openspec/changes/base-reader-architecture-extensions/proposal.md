@@ -93,15 +93,10 @@ This change adds the receipt; the request follows in `access-intent`.
     re-derived the cost by inspecting `config.use_rapidgzip` etc. — duplicating
     backend-selection logic and already mis-reporting multi-block `tar.xz` as
     `EXPENSIVE`. Making the stream the single source of truth fixes that.)
-  - **All returned streams share a common base** so `seek_cost` is guaranteed present.
-    Today archivey's stream classes each subclass `io.RawIOBase, BinaryIO`
-    independently, and a stream handed back from a third-party library may not be an
-    archivey type at all — nothing guarantees the property exists. A shared
-    `ArchiveyStream` base carries `seek_cost` **and** a `name` (member path / source
-    name, like stdlib file objects' `.name`); foreign streams are normalized into it at
-    the existing `ensure_binaryio()` / `BinaryIOWrapper` wrap point (wrap, don't annotate
-    raw third-party objects). The exact extra metadata and whether the base is public are
-    open review questions (see design).
+  - `seek_cost` is added to archivey's own stream classes here. Guaranteeing it on
+    **every** returned stream (including those handed back raw by third-party libraries)
+    via a shared **public** `ArchiveyStream` base is split into the separate
+    `public-stream-interface` change (exploration stage).
 ## Capabilities
 
 ### New Capabilities
@@ -114,9 +109,7 @@ This change adds the receipt; the request follows in `access-intent`.
   `member_listing_cost` / `member_access_cost` introspection properties, adds an `AccessCost`
   `seek_cost` property alongside the protocol-required `seekable()` on member streams
   **and on the decompressor-stream abstraction** (with TAR deriving its access cost
-  from it), introduces a shared `ArchiveyStream` base (carrying `seek_cost` and a `name`)
-  that every returned stream — including wrapped third-party library streams — is an
-  instance of, tightens `get_members_if_available` to never scan, and removes
+  from it), tightens `get_members_if_available` to never scan, and removes
   `has_random_access()` (superseded) (§8.E).
 - `archive-metadata`: adds the typed `CompressionMethod` enum and the lossless
   `compression_method_detail` field (§8.D).
@@ -159,12 +152,10 @@ Recommended order across all pending changes:
   removed `has_random_access`), `formats/*_reader.py` (`has_central_directory`
   ClassVar, `member_listing_cost` / `member_access_cost` reporting — TAR reads
   `member_access_cost` from its decompressed stream's `seek_cost`), the member-stream
-  wrapper (`archive_stream.py`, adds `seek_cost`/`name` alongside the existing
-  `seekable()`),
+  wrapper (`archive_stream.py`, adds `seek_cost` alongside the existing `seekable()`),
   the decompressor-stream classes (`formats/decompressor_stream.py`,
   `formats/compressed_streams.py`, `formats/xz_stream.py`, `formats/lzip_stream.py` —
-  each exposes its own `seek_cost`), `internal/io_helpers.py` (the shared `ArchiveyStream`
-  base, with `BinaryIOWrapper` / `ensure_binaryio` producing it),
+  each exposes its own `seek_cost`),
   `types.py` (`CompressionMethod` — exhaustive over `StreamFormat` —,
   `compression_method_detail`, `MemberListingCost`, `AccessCost`),
   `archive_reader.py` (property declarations).
