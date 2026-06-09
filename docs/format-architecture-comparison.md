@@ -693,10 +693,25 @@ random access (solid 7z, single-block xz) likewise honors the request as best it
 and reports the true cost. `streaming=True` together with `RANDOM` is contradictory
 and raises `ValueError`.
 
-Intent is the **request**; the §E cost properties are the **receipt**. A future
-follow-up could *warn* when intent cannot be honored (or when runtime access patterns
-contradict the declared intent), but that adds runtime tracking and is out of scope
-here.
+Intent is the **request**; the §E cost properties are the **receipt**.
+
+#### G. Inefficient-access warnings (opt-in)
+
+Some callers want to be *told* when they are using an archive badly rather than having
+to inspect the cost tier themselves. An **off-by-default** `warn_on_inefficient_access`
+flag enables a dedicated `InefficientAccessWarning`:
+
+- **at open** (the core, cheap case): when `access_intent=RANDOM` was requested but the
+  realized `member_access_cost` is `EXPENSIVE`/`UNAVAILABLE` — the preferred backend was
+  unavailable, the source is non-seekable, or the format simply cannot random-access
+  cheaply. The warning names the cause; the archive still opens and reads normally.
+- **at runtime** (secondary, may split into a follow-up): when repeated out-of-order
+  member access, or repeated re-decompressing backward seeks within a member, occur on
+  an `EXPENSIVE`-tier target — the O(N²) trap. This needs per-archive access-pattern
+  tracking, so it is the part most likely to move to its own change.
+
+Warnings are derived from the coarse `AccessCost` tier (not from measurement), are
+silent when the flag is off, and never change which bytes are returned.
 
 ---
 

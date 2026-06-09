@@ -68,8 +68,18 @@
 - [ ] 4.4 Raise `ValueError` for `streaming=True` together with `access_intent=RANDOM`;
       allow `streaming=True` with `AUTO`/`SEQUENTIAL`
 
-## 5. Validation
+## 5. Inefficient-access warnings (§8.G)
 
-- [ ] 5.1 `openspec validate base-reader-architecture-extensions --type change --strict`
-- [ ] 5.2 `hatch run lint` and `hatch run test` (no behavioral regressions; `AUTO`
-      default keeps current backend selection)
+- [ ] 5.1 Add a `warn_on_inefficient_access: bool = False` config flag and an
+      `InefficientAccessWarning` warning category
+- [ ] 5.2 When enabled, emit the warning at open when `access_intent=RANDOM` but the
+      realized `member_access_cost` is `EXPENSIVE`/`UNAVAILABLE` (name the cause)
+- [ ] 5.3 (secondary, may split) When enabled, track per-archive access patterns and
+      warn on repeated out-of-order access / re-decompressing backward seeks on an
+      `EXPENSIVE` target; keep this off the hot path and silent when the flag is off
+
+## 6. Validation
+
+- [ ] 6.1 `openspec validate base-reader-architecture-extensions --type change --strict`
+- [ ] 6.2 `hatch run lint` and `hatch run test` (no behavioral regressions; `AUTO`
+      default + `warn_on_inefficient_access=False` keep current behavior)
