@@ -19,15 +19,27 @@
 
 ## 2. Compression method types (§8.D)
 
-- [ ] 2.1 Add `CompressionMethod` `StrEnum` (STORED, DEFLATE, LZMA, LZMA2, ZSTD,
-      BZIP2, PPMD, BCJ2, …, UNKNOWN) in `types.py`; add a free-form
+- [ ] 2.1 Add `CompressionMethod` `StrEnum` in `types.py`, **exhaustive over every
+      `StreamFormat`**: STORED, DEFLATE (gzip/zlib), BZIP2, LZMA2 (xz), LZMA (lzip),
+      ZSTD, LZ4, BROTLI, LZW (Unix compress), plus container-internal codecs (PPMD,
+      BCJ2, DEFLATE64, DELTA, …) and UNKNOWN; add a free-form
       `compression_method_detail: Optional[str]` field to `ArchiveMember`
+- [ ] 2.1a Add a regression test asserting every `StreamFormat` member resolves to a
+      defined (non-`UNKNOWN`) `CompressionMethod`, so a new `StreamFormat` without its
+      codec fails CI
 - [ ] 2.2 Map readers' primary `compression_method` onto the enum (`UNKNOWN` for
       reported-but-unmapped, `None` when unreported); preserve the verbatim/full
       codec description (e.g. 7z filter chains) in `compression_method_detail`
 
 ## 3. Cost introspection (§8.E)
 
+- [ ] 3.0 Introduce a shared `ArchiveyStream` base (subclass of `io.RawIOBase,
+      BinaryIO`) declaring `seek_cost: AccessCost` (consistent with `seekable()`) and
+      `name: str | None`; have `ArchiveStream` / `DecompressorStream` (and the
+      decompressor subclasses) inherit it. Make `BinaryIOWrapper` / `ensure_binaryio`
+      (`internal/io_helpers.py`) produce an `ArchiveyStream` so foreign library streams
+      carry the same surface, and ensure `open()` / `iter_members_with_streams()` only
+      ever return `ArchiveyStream` instances (wrap rather than annotate raw streams)
 - [ ] 3.1 Add a `MemberListingCost` enum (`INDEXED` / `SCAN_REQUIRED` /
       `SEQUENTIAL_ONLY`) and a shared `AccessCost` enum (`DIRECT` / `LIMITED` /
       `EXPENSIVE` / `UNAVAILABLE`) to `types.py`

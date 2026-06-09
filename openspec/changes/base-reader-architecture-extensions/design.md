@@ -51,6 +51,17 @@ regression contract). §8.F (access intent) is specified in the separate
   remains optional (`None` when the format doesn't report it). The enum names the
   recognized **primary** codec; when the format reports a codec we don't map, it is
   `UNKNOWN` rather than `None`.
+- **The enum is exhaustive over the formats Archivey handles, not a sample.** PR #221
+  added only the codecs that appeared as examples; this is a bug-in-waiting. The enum
+  SHALL carry a value for **every `StreamFormat` member** — `STORED`/uncompressed,
+  `DEFLATE` (gzip, zlib), `BZIP2`, `XZ`/`LZMA2` (xz), `LZMA` (lzip), `ZSTD`, `LZ4`,
+  `BROTLI` (the one PR #221 missed), `LZW` (Unix `compress`, `StreamFormat.UNIX_COMPRESS`)
+  — **plus** the container-internal codecs that never appear as a standalone stream
+  (`LZMA`, `PPMD`, `BCJ2`, `DEFLATE64`, `DELTA`, …) used by ZIP/7z/RAR. A regression test
+  SHALL assert that every `StreamFormat` resolves to a non-`UNKNOWN` `CompressionMethod`,
+  so adding a new `StreamFormat` without its codec fails CI. (Note the mapping is
+  many-to-one: gzip and zlib both decode to `DEFLATE`; `StreamFormat` is the wrapper,
+  `CompressionMethod` is the codec.)
 - **Lossless detail is preserved separately (Design A).** A closed enum can't
   represent 7z filter chains (`"LZMA2 + BCJ2 + Delta"`) or a third-party reader's
   own codec name, so the verbatim/full description is kept in a free-form
@@ -140,6 +151,58 @@ regression contract). §8.F (access intent) is specified in the separate
     triggers a `SCAN_REQUIRED` pass** (that is `get_members()`'s job) — aligning the
     method with its already-documented "avoids full traversal" contract, which the
     current code violates for seekable TAR.
+  - **Computing the cost properties (pseudocode).** All three are *derived from
+    mechanism*, never measured; reading them does no I/O. The algorithm:
+
+    ```text
+    # member_listing_cost — per reader instance, from the §C ClassVar + seekability
+    def member_listing_cost(self):
+        if not self.source.seekable():        return SEQUENTIAL_ONLY
+        if type(self).has_central_directory:  return INDEXED        # catalog 1 seek away
+        return SCAN_REQUIRED                                        # seekable, no catalog (TAR)
+
+    # seek_cost — per decompressor / seekable stream, fixed at construction
+    def seek_cost(self):
+        if not self.seekable():               return UNAVAILABLE    # forward-only source
+        if self.is_plain_file_or_stored:      return DIRECT         # true random access
+        if self.has_intermediate_seek_points: return LIMITED        # rapidgzip, indexed_bzip2,
+                                                                    #   multi-block xz/lzip
+        return EXPENSIVE                                            # rewind-from-start / 1 block
+
+    # member_access_cost — per reader instance; reaching a member out of order
+    def member_access_cost(self):
+        if not self.member_random_access_possible:  return UNAVAILABLE  # streaming / non-seekable
+        if self.serves_members_from_decompressed_stream:               # TAR: a member IS a
+            return self.decompressed_stream.seek_cost                  #   seek on that stream
+        if self.members_stored_independently_seekably:  return DIRECT  # ZIP / stored entries
+        return EXPENSIVE                                               # solid 7z, single stream
+    ```
+
+    The single source of truth for `LIMITED`/`EXPENSIVE` is the stream's own `seek_cost`
+    (the `has_intermediate_seek_points` line); TAR reads it rather than re-deriving from
+    `config.use_*`, which is the PR-#221 bug above.
+  - **All returned streams share a common Archivey base carrying `seek_cost` and a
+    `name`.** Today each archivey stream class (`ArchiveStream`, `DecompressorStream`,
+    `BinaryIOWrapper`, …) independently subclasses `io.RawIOBase, BinaryIO`, and a stream
+    handed back from a third-party library (py7zr / rarfile / zipfile) may not be an
+    archivey type at all — so nothing *guarantees* `seek_cost` is present on a returned
+    stream. This change introduces a shared base — `ArchiveyStream` (subclass of
+    `io.RawIOBase, BinaryIO`) — declaring `seek_cost: AccessCost` (kept consistent with
+    `seekable()`) and `name: str | None` (the member path / source name, mirroring stdlib
+    file objects' `.name`). The existing classes inherit it, and **every** stream archivey
+    returns from `open()` / `iter_members_with_streams()` is an `ArchiveyStream`.
+    - **Foreign streams are normalised at the existing wrap point.** Library streams
+      already pass through `ensure_binaryio()` / `BinaryIOWrapper` (`internal/io_helpers.py`)
+      to satisfy the `BinaryIO` protocol; making that wrapper an `ArchiveyStream` means
+      carrying `seek_cost` / `name` is free wherever a wrapper is already built.
+      **Recommendation: wrap, don't annotate** — `setattr`-ing `seek_cost` onto the raw
+      third-party object is fragile (`__slots__`, immutable handles) and only saves one
+      allocation; annotating-in-place is left as a profiled optimization if the wrapper
+      is ever shown to be a hotspot.
+    - **Open questions (for review):** the exact metadata beyond `seek_cost` + `name`
+      (candidates: a back-reference to the `ArchiveMember`, the member's
+      `CompressionMethod`, the source `StreamFormat`), and whether `ArchiveyStream` is a
+      public type or internal-only.
 - **§8.A is folded into the native readers**: because `rar-native-metadata-reader`
   and `sevenzip-native-reader` already rewrite those readers, each adopts the
   existing `_iter_members_and_streams_internal` hook (dropping its public

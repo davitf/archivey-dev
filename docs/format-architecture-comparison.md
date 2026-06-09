@@ -591,10 +591,18 @@ The standalone `members_list_supported` boolean then disappears: it is precisely
 #### D. Typed compression method enum
 
 `ArchiveMember.compression_method` is an untyped string.  Adding a
-`CompressionMethod` enum (or `StrEnum`) with known values like `STORED`,
-`DEFLATE`, `LZMA`, `ZSTD`, `BZIP2`, `LZMA2`, `BCJ2`, `PPMD`, etc. and a
-fallback `UNKNOWN` would allow callers to make programmatic decisions without
-parsing strings.
+`CompressionMethod` enum (or `StrEnum`) with a fallback `UNKNOWN` would allow
+callers to make programmatic decisions without parsing strings. The enum must be
+**exhaustive over the formats archivey handles, not a sample**: a value for every
+`StreamFormat` — `STORED`, `DEFLATE` (gzip/zlib), `BZIP2`, `LZMA2` (xz), `LZMA`
+(lzip), `ZSTD`, `LZ4`, `BROTLI`, `LZW` (Unix `compress`) — **plus** the
+container-internal codecs that never appear standalone (`PPMD`, `BCJ2`,
+`DEFLATE64`, `DELTA`, …). A regression test should assert every `StreamFormat`
+resolves to a non-`UNKNOWN` codec, so adding a format without its codec fails CI.
+(The mapping is many-to-one: gzip and zlib both decode to `DEFLATE`; `StreamFormat`
+is the wrapper, `CompressionMethod` is the codec.) A multi-filter chain that a
+closed enum cannot express (7z `LZMA2 + BCJ2`) is preserved verbatim in a separate
+free-form `compression_method_detail`.
 
 #### E. Capability introspection
 
@@ -662,6 +670,38 @@ plain file), each of which reports its own tier. Readers whose access is a seek 
 such a stream (TAR) *read* that `seek_cost` rather than re-deriving it from
 `config.use_*` flags — one source of truth, and no drift (e.g. a multi-block
 `tar.xz` is correctly `LIMITED` instead of being mis-reported `EXPENSIVE`).
+
+The three properties are *derived from mechanism, never measured* (reading them
+does no I/O):
+
+```text
+member_listing_cost(reader):           # per instance: §C ClassVar + seekability
+    if not source.seekable():      -> SEQUENTIAL_ONLY
+    if has_central_directory:      -> INDEXED          # catalog one bounded seek away
+    else:                          -> SCAN_REQUIRED     # seekable, no catalog (TAR)
+
+seek_cost(stream):                     # per stream, fixed at construction
+    if not seekable():             -> UNAVAILABLE
+    if plain file / stored:        -> DIRECT
+    if intermediate seek points:   -> LIMITED           # rapidgzip, indexed_bzip2,
+                                                        #   multi-block xz/lzip
+    else:                          -> EXPENSIVE          # rewind / single block
+
+member_access_cost(reader):            # per instance: reaching a member out of order
+    if not random_access_possible: -> UNAVAILABLE       # streaming / non-seekable
+    if members from one stream:    -> decompressed_stream.seek_cost   # TAR
+    if stored independently:       -> DIRECT             # ZIP / stored
+    else:                          -> EXPENSIVE          # solid 7z, single stream
+```
+
+To guarantee `seek_cost` (and a `name`) is always present, all archivey streams
+share a common **`ArchiveyStream`** base (`io.RawIOBase, BinaryIO`). Streams handed
+back by third-party libraries (py7zr / rarfile / zipfile) are normalized into it at
+the existing `ensure_binaryio()` / `BinaryIOWrapper` wrap point — wrapping rather
+than annotating the raw object, since `setattr` on a foreign stream is fragile and
+only saves an allocation. Open questions: the exact metadata beyond `seek_cost` +
+`name` (back-reference to the `ArchiveMember`? `CompressionMethod`? `StreamFormat`?)
+and whether `ArchiveyStream` is public.
 
 #### F. Access intent — the input dual of the cost surface
 

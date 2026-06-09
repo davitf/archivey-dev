@@ -52,13 +52,18 @@ This change adds the receipt; the request follows in `access-intent`.
   source.) The standalone `members_list_supported` boolean is dropped; it is now
   exactly `member_listing_cost == INDEXED`.
 - **§8.D — typed `CompressionMethod` enum + lossless detail** *(public)*: a `StrEnum`
-  of known methods (`STORED`, `DEFLATE`, `LZMA`, `LZMA2`, `ZSTD`, `BZIP2`, `PPMD`,
-  `BCJ2`, …, plus `UNKNOWN`) so callers can branch on compression without parsing
-  free-form strings. Stays string-compatible. `compression_method` holds the typed
-  **primary** codec (`UNKNOWN` if reported-but-unmapped, `None` if unreported); a new
-  free-form `compression_method_detail: Optional[str]` preserves the full,
-  lossless description — 7z filter chains (`"LZMA2 + BCJ2"`) and third-party readers'
-  own codec names that a closed enum can't represent.
+  of known codecs (plus `UNKNOWN`) so callers can branch on compression without parsing
+  free-form strings. Stays string-compatible. The enum is **exhaustive over the formats
+  Archivey handles, not a sample**: it carries a value for **every `StreamFormat`** —
+  `STORED`, `DEFLATE` (gzip/zlib), `BZIP2`, `LZMA2`/`XZ`, `LZMA` (lzip), `ZSTD`, `LZ4`,
+  `BROTLI`, `LZW` (Unix `compress`) — **plus** container-internal codecs (`PPMD`, `BCJ2`,
+  `DEFLATE64`, `DELTA`, …), with a test asserting every `StreamFormat` maps to a
+  non-`UNKNOWN` value (PR #221 only added the example codecs and missed e.g. brotli).
+  `compression_method` holds the typed **primary** codec (`UNKNOWN` if
+  reported-but-unmapped, `None` if unreported); a new free-form
+  `compression_method_detail: Optional[str]` preserves the full, lossless description —
+  7z filter chains (`"LZMA2 + BCJ2"`) and third-party readers' own codec names that a
+  closed enum can't represent.
 - **§8.E — cost introspection (redesigned surface)** *(public)*: replace the
   confusing tangle of `streaming` / `has_random_access()` / "member list supported"
   with introspection on two orthogonal axes, each a cost-classifying enum so the
@@ -88,6 +93,15 @@ This change adds the receipt; the request follows in `access-intent`.
     re-derived the cost by inspecting `config.use_rapidgzip` etc. — duplicating
     backend-selection logic and already mis-reporting multi-block `tar.xz` as
     `EXPENSIVE`. Making the stream the single source of truth fixes that.)
+  - **All returned streams share a common base** so `seek_cost` is guaranteed present.
+    Today archivey's stream classes each subclass `io.RawIOBase, BinaryIO`
+    independently, and a stream handed back from a third-party library may not be an
+    archivey type at all — nothing guarantees the property exists. A shared
+    `ArchiveyStream` base carries `seek_cost` **and** a `name` (member path / source
+    name, like stdlib file objects' `.name`); foreign streams are normalized into it at
+    the existing `ensure_binaryio()` / `BinaryIOWrapper` wrap point (wrap, don't annotate
+    raw third-party objects). The exact extra metadata and whether the base is public are
+    open review questions (see design).
 ## Capabilities
 
 ### New Capabilities
@@ -100,7 +114,9 @@ This change adds the receipt; the request follows in `access-intent`.
   `member_listing_cost` / `member_access_cost` introspection properties, adds an `AccessCost`
   `seek_cost` property alongside the protocol-required `seekable()` on member streams
   **and on the decompressor-stream abstraction** (with TAR deriving its access cost
-  from it), tightens `get_members_if_available` to never scan, and removes
+  from it), introduces a shared `ArchiveyStream` base (carrying `seek_cost` and a `name`)
+  that every returned stream — including wrapped third-party library streams — is an
+  instance of, tightens `get_members_if_available` to never scan, and removes
   `has_random_access()` (superseded) (§8.E).
 - `archive-metadata`: adds the typed `CompressionMethod` enum and the lossless
   `compression_method_detail` field (§8.D).
@@ -143,11 +159,14 @@ Recommended order across all pending changes:
   removed `has_random_access`), `formats/*_reader.py` (`has_central_directory`
   ClassVar, `member_listing_cost` / `member_access_cost` reporting — TAR reads
   `member_access_cost` from its decompressed stream's `seek_cost`), the member-stream
-  wrapper (`archive_stream.py`, adds `seek_cost` alongside the existing `seekable()`),
+  wrapper (`archive_stream.py`, adds `seek_cost`/`name` alongside the existing
+  `seekable()`),
   the decompressor-stream classes (`formats/decompressor_stream.py`,
   `formats/compressed_streams.py`, `formats/xz_stream.py`, `formats/lzip_stream.py` —
-  each exposes its own `seek_cost`),
-  `types.py` (`CompressionMethod`, `compression_method_detail`, `MemberListingCost`,
-  `AccessCost`), `archive_reader.py` (property declarations).
+  each exposes its own `seek_cost`), `internal/io_helpers.py` (the shared `ArchiveyStream`
+  base, with `BinaryIOWrapper` / `ensure_binaryio` producing it),
+  `types.py` (`CompressionMethod` — exhaustive over `StreamFormat` —,
+  `compression_method_detail`, `MemberListingCost`, `AccessCost`),
+  `archive_reader.py` (property declarations).
 - **Live specs touched**: `archive-reading`, `archive-metadata`.
 - **Design reference**: `docs/format-architecture-comparison.md` §8–§9.
