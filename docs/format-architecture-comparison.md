@@ -563,20 +563,30 @@ only when its decompressor is genuinely non-seekable for this instance. The
 runtime streaming flag then means "user requested streaming OR format cannot
 random-access".
 
-#### C. `members_list_supported` should be a class attribute
+#### C. `has_central_directory` ClassVar (replacing the `members_list_supported` argument)
 
-Currently passed to `__init__()` as a constructor argument.  But it's
-determined solely by the format type, not by any runtime condition.
+Currently `members_list_supported` is passed to `__init__()` as a constructor
+argument. The name is misleading (it sounds like it returns the list) and it
+conflates two things: a format fact and a runtime fact.
 
-Exception: TAR sets it based on whether the stream has a seekable structure,
-but the flag actually doesn't matter for TAR since `streaming_only` already
-captures the relevant behaviour.
+Split them:
 
-Making it a `ClassVar` would clarify that it is a format-level property:
-```python
-class ZipReader(BaseArchiveReader):
-    members_list_supported = True
-```
+- **"Does this *format* have a catalog/central directory?"** is a pure format-level
+  fact — `True` for ZIP/7z/RAR/ISO/folder, `False` for TAR. That genuinely belongs
+  on the class, as a clearly-named `ClassVar`:
+  ```python
+  class ZipReader(BaseArchiveReader):
+      has_central_directory = True
+  ```
+- **"Can *this opened archive* be listed cheaply (`INDEXED`)?"** is the *realized*
+  cost, and it is **not** read from the ClassVar alone: a catalog at end-of-file is
+  only reachable when the source is seekable. So `member_listing_cost` (§E) is
+  computed per instance from `has_central_directory` **and** seekability — exactly the
+  same capability-vs-runtime split as §B. Deriving `INDEXED` from the ClassVar alone
+  is wrong for a catalog format opened from a non-seekable source.
+
+The standalone `members_list_supported` boolean then disappears: it is precisely
+`member_listing_cost == INDEXED`.
 
 #### D. Typed compression method enum
 
@@ -645,6 +655,48 @@ conservatively when the structure isn't known, never measured per call.
 `get_members_if_available()` returns the list only when `member_listing_cost` is
 `INDEXED` (or members are already registered) and never triggers a
 `SCAN_REQUIRED` pass.
+
+Crucially, `seek_cost` is owned by the **decompressor-stream abstraction** (the
+stdlib rewind wrapper, rapidgzip, indexed_bzip2, `XzDecompressorStream`, lzip, a
+plain file), each of which reports its own tier. Readers whose access is a seek on
+such a stream (TAR) *read* that `seek_cost` rather than re-deriving it from
+`config.use_*` flags — one source of truth, and no drift (e.g. a multi-block
+`tar.xz` is correctly `LIMITED` instead of being mis-reported `EXPENSIVE`).
+
+#### F. Access intent — the input dual of the cost surface
+
+§E lets callers *read* how expensive access is. But on its own it leaves them
+responsible for *configuring* the backend that produces a good cost: to get cheap
+random access on a `tar.gz` today you must already know to set `use_rapidgzip=True`.
+The low-level `use_*` flags leak archivey's cost model.
+
+**Proposed addition**: an `AccessIntent` enum and an `access_intent` parameter on
+`open_archive`, letting the caller state the *goal* and have archivey pick the
+backend:
+
+```python
+class AccessIntent(StrEnum):
+    AUTO = "auto"              # default: today's behavior; honor explicit use_* flags
+    SEQUENTIAL = "sequential"  # forward iteration; cheapest streaming backend
+    RANDOM = "random"          # out-of-order / repeated access; prefer indexed backends
+
+archive = open_archive("big.tar.gz", access_intent=AccessIntent.RANDOM)
+# → archivey enables rapidgzip if installed; member_access_cost == LIMITED
+```
+
+`access_intent` is **resolved into the existing `use_*` flags** (one selection
+mechanism, not a parallel one). It is **best-effort**: explicit `use_*` flags stay
+mandatory (raise if their package is missing), but `RANDOM` falls back to the stdlib
+backend when an optional package is absent and lets the §E cost properties report the
+realized (`EXPENSIVE`) cost rather than raising. A format that simply cannot do cheap
+random access (solid 7z, single-block xz) likewise honors the request as best it can
+and reports the true cost. `streaming=True` together with `RANDOM` is contradictory
+and raises `ValueError`.
+
+Intent is the **request**; the §E cost properties are the **receipt**. A future
+follow-up could *warn* when intent cannot be honored (or when runtime access patterns
+contradict the declared intent), but that adds runtime tracking and is out of scope
+here.
 
 ---
 

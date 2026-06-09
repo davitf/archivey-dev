@@ -61,22 +61,39 @@ written as one large block) carries a correspondingly loose bound.
 A `MemberListingCost` enum SHALL classify how the complete member list can be obtained,
 so callers can reason about cost up front instead of discovering it at runtime:
 
-- `INDEXED` — obtainable from a catalog / central directory with at most one bounded
-  seek, without scanning member data (ZIP, 7z, RAR, folder, ISO).
-- `SCAN_REQUIRED` — obtainable only by a full pass over the archive body, seeking or
-  reading past each member's data (a seekable TAR opened with `streaming=False`).
-- `SEQUENTIAL_ONLY` — no upfront list; members are discovered only as iteration
-  proceeds (a TAR opened with `streaming=True`, or any non-seekable source).
+- `INDEXED` — the format carries a catalog / central directory (its
+  `has_central_directory` class fact is true) **and that catalog is reachable on this
+  instance** (the source is seekable), so the list is obtainable with at most one
+  bounded seek without scanning member data (ZIP, 7z, RAR, folder, ISO on a seekable
+  source).
+- `SCAN_REQUIRED` — the format has no catalog but the source is seekable, so the list
+  is obtainable only by a full pass over the archive body, seeking or reading past each
+  member's data (a seekable TAR opened with `streaming=False`).
+- `SEQUENTIAL_ONLY` — the source is non-seekable, or iteration is forward-only, so
+  there is no upfront list; members are discovered only as iteration proceeds (a TAR
+  opened with `streaming=True`, or any archive opened from a non-seekable source).
 
-#### Scenario: Catalog format is INDEXED
-- **WHEN** a ZIP, 7z, RAR, folder, or ISO archive is opened
+`member_listing_cost` SHALL be computed **per instance** from the format's
+`has_central_directory` class fact **and** the runtime seekability of the source. It
+SHALL NOT be derived from `has_central_directory` alone: a catalog format opened from a
+non-seekable source cannot reach its catalog and is `SEQUENTIAL_ONLY`. The caller's
+`streaming=True` preference alone SHALL NOT downgrade `INDEXED` when the catalog
+remains reachable (the source is seekable).
+
+#### Scenario: Reachable catalog is INDEXED
+- **WHEN** a ZIP, 7z, RAR, folder, or ISO archive is opened from a seekable source
 - **THEN** `member_listing_cost` is `MemberListingCost.INDEXED`
+
+#### Scenario: Catalog format on a non-seekable source is sequential-only
+- **WHEN** a catalog format is opened from a non-seekable source (its end-of-file
+  catalog cannot be reached)
+- **THEN** `member_listing_cost` is `MemberListingCost.SEQUENTIAL_ONLY`
 
 #### Scenario: Seekable tar requires a scan
 - **WHEN** a seekable tar is opened with `streaming=False`
 - **THEN** `member_listing_cost` is `MemberListingCost.SCAN_REQUIRED`
 
-#### Scenario: Streaming or non-seekable source is sequential-only
+#### Scenario: Streaming tar or non-seekable source is sequential-only
 - **WHEN** a tar is opened with `streaming=True`, or any archive is opened from a
   non-seekable source
 - **THEN** `member_listing_cost` is `MemberListingCost.SEQUENTIAL_ONLY`
@@ -110,13 +127,92 @@ NOT perform archive I/O or raise.
 - **WHEN** `member_access_cost` or `member_listing_cost` is read
 - **THEN** the value is returned without performing archive I/O or raising
 
-#### Scenario: TAR member_access_cost derives from the decompressed stream's seek cost
+### Requirement: Decompressor streams expose seek_cost and readers consume it
+
+Each decompressor/seekable-stream class SHALL expose a `seek_cost` property (an
+`AccessCost` value) describing the cost of seeking within that stream, consistent with
+its `seekable()` (`seekable()` is `False` exactly when `seek_cost` is `UNAVAILABLE`).
+This covers the stdlib rewind-from-start wrapper, rapidgzip, indexed_bzip2, the xz and
+lzip decompressor streams, and a plain seekable file. The `seek_cost` SHALL reflect the
+stream's own mechanism (a plain file or stored data is
+`DIRECT`; rapidgzip / indexed_bzip2 / a multi-block xz reader is `LIMITED`; a single xz
+block or a rewind-from-start wrapper is `EXPENSIVE`; a forward-only stream is
+`UNAVAILABLE`).
+
+A reader whose out-of-order member access *is* a seek on such a stream — notably
+`TarReader` — SHALL derive its `member_access_cost`, and the `seek_cost` of the member
+streams it serves, by **reading the decompressed stream's `seek_cost`**, rather than
+re-deriving the cost from configuration flags. This keeps a single source of truth in
+the stream layer where backend selection happens.
+
+#### Scenario: A decompressor stream reports its own seek cost
+- **WHEN** a multi-block xz decompressor stream is opened over a seekable source
+- **THEN** its `seek_cost` is `AccessCost.LIMITED`, while a rewind-from-start stdlib
+  gzip wrapper opened over the same kind of source reports `AccessCost.EXPENSIVE`
+
+#### Scenario: TAR reads the decompressed stream's seek cost
+- **WHEN** a multi-block `tar.xz` is opened with `streaming=False`
+- **THEN** `member_access_cost` equals the xz stream's `seek_cost` (`AccessCost.LIMITED`),
+  not `AccessCost.EXPENSIVE`
+
+#### Scenario: TAR access cost tracks the decompressor across backends
 - **WHEN** a TAR reader reports `member_access_cost`
-- **THEN** the value equals the `seek_cost` of the decompressed stream it opens
-  (reaching a member out of order is a seek on that stream): `DIRECT` for an
-  uncompressed seekable tar, `LIMITED` for an indexed-decompressor `tar.gz`,
-  `EXPENSIVE` for a rewind-from-start `tar.gz`, and `UNAVAILABLE` for a non-seekable
-  source
+- **THEN** the value equals the `seek_cost` of the decompressed stream it opens:
+  `DIRECT` for an uncompressed seekable tar, `LIMITED` for an indexed-decompressor
+  `tar.gz`, `EXPENSIVE` for a rewind-from-start `tar.gz`, and `UNAVAILABLE` for a
+  non-seekable source
+
+### Requirement: AccessIntent declares the intended access pattern
+
+An `AccessIntent` enum SHALL let a caller declare at open time how they intend to access
+the archive, so archivey can choose backends accordingly:
+
+- `AUTO` (default) — no declared pattern; archivey preserves its default backend
+  selection and honors the explicit `use_*` configuration without selecting optional
+  backends on the caller's behalf.
+- `SEQUENTIAL` — the caller will iterate members in order; archivey MAY prefer the
+  cheapest streaming backend and SHALL NOT build seek indexes eagerly.
+- `RANDOM` — the caller will reach members out of order and/or seek within member
+  streams, possibly repeatedly; archivey SHALL prefer seekable/indexed backends (e.g.
+  rapidgzip, indexed_bzip2, a multi-block xz reader) when their packages are installed.
+
+`open_archive` SHALL accept an `access_intent` parameter defaulting to `AUTO`, and SHALL
+resolve it into the same backend selection driven by the explicit `use_*` configuration
+flags (a high-level shorthand over one selection mechanism, not a parallel one).
+
+#### Scenario: AUTO preserves default backend selection
+- **WHEN** an archive is opened with `access_intent=AUTO` (or the parameter omitted)
+- **THEN** backend selection is identical to opening with the explicit configuration
+  alone, and no optional backend is selected implicitly
+
+#### Scenario: RANDOM prefers an indexed backend when available
+- **WHEN** a `tar.gz` is opened with `access_intent=RANDOM` and rapidgzip is installed
+- **THEN** archivey uses the indexed (rapidgzip) backend and `member_access_cost` is
+  `AccessCost.LIMITED`
+
+### Requirement: Access intent is best-effort and reported through cost
+
+`access_intent` SHALL be a hint, not a guarantee. An explicit `use_*` configuration flag
+SHALL remain mandatory — an absent required package raises as today. `RANDOM` SHALL be
+best-effort: when a preferred optional backend's package is not installed, or the format
+cannot provide cheap random access (a solid 7z, a single-block xz), archivey SHALL fall
+back to an available backend and the cost properties (`member_access_cost`, member-stream
+`seek_cost`) SHALL report the **realized** cost rather than the requested one. archivey
+SHALL NOT raise solely because `RANDOM` could not be honored.
+
+#### Scenario: RANDOM falls back when the preferred package is missing
+- **WHEN** a `tar.gz` is opened with `access_intent=RANDOM` but rapidgzip is not installed
+- **THEN** the archive opens using the stdlib backend and `member_access_cost` is
+  `AccessCost.EXPENSIVE` (no exception is raised)
+
+#### Scenario: RANDOM on a format that cannot random-access cheaply
+- **WHEN** a solid 7z archive is opened with `access_intent=RANDOM`
+- **THEN** the archive opens and `member_access_cost` is `AccessCost.EXPENSIVE`
+
+#### Scenario: streaming=True conflicts with RANDOM
+- **WHEN** `open_archive` is called with `streaming=True` and `access_intent=RANDOM`
+- **THEN** it raises `ValueError` (forward-only and out-of-order are contradictory),
+  while `streaming=True` with `AUTO` or `SEQUENTIAL` is permitted
 
 ## MODIFIED Requirements
 
@@ -153,7 +249,9 @@ view of another property. In *addition*, member streams SHALL expose a separate
 the member's content. `seek_cost` refines `seekable()` — letting callers distinguish a
 true random-access stream from one that is seekable only by re-decompressing — and the
 two SHALL be consistent: `seekable()` returns `False` exactly when `seek_cost` is
-`UNAVAILABLE`, and `True` otherwise.
+`UNAVAILABLE`, and `True` otherwise. Where the member's bytes come from a decompressor
+stream (e.g. a TAR member), the member stream's `seek_cost` SHALL be taken from that
+stream's own `seek_cost` rather than re-derived.
 
 The four tiers carry the same meaning as the archive-level `AccessCost` (above),
 applied to within-member seeks:
