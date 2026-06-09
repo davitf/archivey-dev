@@ -214,40 +214,6 @@ SHALL NOT raise solely because `RANDOM` could not be honored.
 - **THEN** it raises `ValueError` (forward-only and out-of-order are contradictory),
   while `streaming=True` with `AUTO` or `SEQUENTIAL` is permitted
 
-### Requirement: Optional warnings flag inefficient access
-
-archivey SHALL provide an **opt-in** mechanism — a `warn_on_inefficient_access`
-configuration flag that defaults to disabled — which, when enabled, emits a Python
-warning of a dedicated `InefficientAccessWarning` category when archive usage is
-inefficient relative to the declared intent or the archive's cost tier. The mechanism
-SHALL be silent when disabled (the default), and emitting or suppressing a warning SHALL
-NOT change which bytes are returned. Warnings SHALL be derived from the coarse
-`AccessCost` tier, not from per-call measurement.
-
-When enabled, archivey SHALL emit a warning at open time when `access_intent=RANDOM` was
-requested but the realized `member_access_cost` is `EXPENSIVE` or `UNAVAILABLE` (the
-preferred backend was unavailable, the source is non-seekable, or the format cannot
-random-access cheaply), describing why the intent could not be honored. When enabled,
-archivey SHOULD additionally emit a warning when repeated out-of-order member access, or
-repeated re-decompressing backward seeks within a member stream, occur on an
-`EXPENSIVE`-tier target (an O(N²) access pattern).
-
-#### Scenario: Disabled by default
-- **WHEN** an archive is used inefficiently and `warn_on_inefficient_access` is not
-  enabled
-- **THEN** no `InefficientAccessWarning` is emitted
-
-#### Scenario: Unmet RANDOM intent warns at open
-- **WHEN** `warn_on_inefficient_access` is enabled and a `tar.gz` is opened with
-  `access_intent=RANDOM` while rapidgzip is not installed
-- **THEN** an `InefficientAccessWarning` is emitted at open identifying that `RANDOM`
-  could not be honored, and the archive still opens and reads normally
-
-#### Scenario: Inefficient access loop warns
-- **WHEN** `warn_on_inefficient_access` is enabled and a solid 7z archive (cost
-  `EXPENSIVE`) is accessed out of order repeatedly
-- **THEN** an `InefficientAccessWarning` identifying the O(N²) pattern is emitted
-
 ## MODIFIED Requirements
 
 ### Requirement: get_members_if_available avoids full traversal

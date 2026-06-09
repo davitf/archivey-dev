@@ -6,15 +6,14 @@ decisions.
 
 ## Scope (and what moved out)
 
-This change is **§8.B–§8.G** (§8.F — access intent — and §8.G — inefficient-access
-warnings — are new, not in the original doc list). §8.A (the 7z/RAR co-iteration
-migration) is a pure refactor with no spec delta
+This change is **§8.B–§8.F** (§8.F — access intent — is new, not in the original doc
+list). §8.A (the 7z/RAR co-iteration migration) is a pure refactor with no spec delta
 and is handled inside the native-reader changes, which already rewrite those readers;
 see the note under Decisions.
 
 ## Starting point (verified against current code)
 
-- **§8.B–G**: not implemented. `compression_method` is `Optional[str]`,
+- **§8.B–F**: not implemented. `compression_method` is `Optional[str]`,
   `members_list_supported` is a constructor argument, there is no
   `_format_supports_random_access` flag, the only capability accessor is the
   `has_random_access()` method, and there is no `access_intent` input (callers set the
@@ -40,10 +39,9 @@ see the note under Decisions.
 | §8.D `CompressionMethod` enum | **Yes** (`compression_method` value type) | `archive-metadata` |
 | §8.E cost introspection (`MemberListingCost` + `AccessCost` enums, `member_listing_cost` / `member_access_cost`, stream + decompressor `seek_cost` alongside `seekable()`, drop `has_random_access`) | **Yes** (public API surface change) | `archive-reading` |
 | §8.F `AccessIntent` enum + `access_intent` open parameter | **Yes** (new public input; affects backend selection) | `archive-reading` |
-| §8.G `warn_on_inefficient_access` flag + `InefficientAccessWarning` | **Yes** (opt-in, default off) | `archive-reading` |
 
-So §8.D, §8.E, §8.F and §8.G get delta specs; §8.B/§8.C are captured as tasks because
-they must not change behavior (the existing `archive-reading` requirements are the
+So §8.D, §8.E and §8.F get delta specs; §8.B/§8.C are captured as tasks because they
+must not change behavior (the existing `archive-reading` requirements are the
 regression contract).
 
 ## Decisions
@@ -166,22 +164,11 @@ regression contract).
   - **`streaming=True` + `RANDOM` is contradictory → `ValueError`.** `streaming=True`
     asserts forward-only use; `RANDOM` asserts out-of-order use. `streaming=True` with
     `AUTO`/`SEQUENTIAL` is fine (and implies sequential).
-- **Inefficient-access warnings are opt-in and off by default** (§8.G). A
-  `warn_on_inefficient_access` config flag (default `False`) gates a dedicated
-  `InefficientAccessWarning` category, so the default experience is unchanged and there
-  is no warning spam. Two triggers, in increasing implementation cost:
-  - **Open-time (core):** when `access_intent=RANDOM` was requested but the realized
-    `member_access_cost` is `EXPENSIVE`/`UNAVAILABLE`, warn once at open, naming the
-    cause (preferred package missing, non-seekable source, or a format that cannot
-    random-access cheaply). This is cheap — it reads the cost already computed at open.
-  - **Runtime (secondary):** when repeated out-of-order member access, or repeated
-    re-decompressing backward seeks within a member, occur on an `EXPENSIVE` target,
-    warn about the O(N²) pattern. This needs per-archive access-pattern tracking;
-    it is specified at the behavioral level and MAY be split into a follow-up change if
-    the bookkeeping grows. The open-time warning is the part that must land here.
-  - Warnings are derived from the coarse `AccessCost` tier, **not** from measurement,
-    and never change which bytes are returned. The honest cost properties remain the
-    primary mechanism; warnings are a convenience for callers who opt in.
+  - **A warning when `RANDOM` cannot be honored is explicitly deferred.** Detecting and
+    warning about unmet intent (or, more ambitiously, runtime access-pattern misuse) is
+    a reasonable future improvement but adds runtime tracking and policy that this
+    change does not take on. The honest cost properties are the mechanism callers use
+    in the meantime.
 - **§8.A is folded into the native readers**: because `rar-native-metadata-reader`
   and `sevenzip-native-reader` already rewrite those readers, each adopts the
   existing `_iter_members_and_streams_internal` hook (dropping its public

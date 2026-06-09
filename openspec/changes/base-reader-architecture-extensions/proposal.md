@@ -105,22 +105,9 @@ no access-intent input (callers must hand-pick the `use_*` backend flags).
   (raises if its package is missing), but `RANDOM` falls back to the stdlib backend
   when an optional package is absent and lets the §8.E cost properties report the
   realized (`EXPENSIVE`) outcome rather than raising. `streaming=True` together with
-  `RANDOM` is contradictory and raises `ValueError`.
-- **§8.G — inefficient-access warnings** *(public, opt-in)*: an **off-by-default**
-  config flag (`warn_on_inefficient_access`) and a dedicated `InefficientAccessWarning`
-  category. When enabled, archivey emits a Python warning when usage is inefficient
-  relative to the declared intent or the cost tier:
-  - at **open**, when `access_intent=RANDOM` was requested but the realized
-    `member_access_cost` is `EXPENSIVE`/`UNAVAILABLE` (preferred backend unavailable, or
-    the format cannot random-access cheaply) — the cheap, primary signal;
-  - at **runtime** (the lighter, secondary detector), when repeated out-of-order member
-    access or repeated re-decompressing backward seeks occur on an `EXPENSIVE` target
-    (the O(N²) trap).
-
-  Warnings never change which bytes are returned and are silent when the flag is off
-  (the default). The runtime detector requires per-archive access-pattern tracking and
-  MAY be split into a follow-up change if it grows; the open-time intent warning is the
-  core of §8.G.
+  `RANDOM` is contradictory and raises `ValueError`. (Emitting a *warning* when
+  `RANDOM` cannot be honored is noted as a possible future improvement, not part of
+  this change.)
 
 ## Capabilities
 
@@ -135,10 +122,9 @@ no access-intent input (callers must hand-pick the `use_*` backend flags).
   `seek_cost` property alongside the protocol-required `seekable()` on member streams
   **and on the decompressor-stream abstraction** (with TAR deriving its access cost
   from it), tightens `get_members_if_available` to never scan, removes
-  `has_random_access()` (superseded) (§8.E), adds the `AccessIntent` enum and the
+  `has_random_access()` (superseded) (§8.E), and adds the `AccessIntent` enum and the
   `access_intent` open parameter that selects backends to honor the requested access
-  pattern (§8.F), and adds the opt-in `warn_on_inefficient_access` flag with the
-  `InefficientAccessWarning` category (§8.G).
+  pattern (§8.F).
 - `archive-metadata`: adds the typed `CompressionMethod` enum and the lossless
   `compression_method_detail` field (§8.D).
 
@@ -150,7 +136,10 @@ no access-intent input (callers must hand-pick the `use_*` backend flags).
 - *Measured*, per-call cost. `AccessCost` is a coarse mechanism-based hint
   (worst-case tier), not a predicted running time; wall-clock cost (e.g. whether a
   `SCAN_REQUIRED` seek beats decompression on a given disk/network) is left
-  unmodeled. §8.G warnings are triggered by the coarse tier, not by measurement.
+  unmodeled.
+- **Access-pattern warnings** — a runtime detector that warns when the realized
+  usage contradicts the declared intent (e.g. repeated backward seeks on an
+  `EXPENSIVE` stream) is a plausible future follow-up, but is out of scope here.
 - The §8.A co-iteration migration — folded into the native-reader changes, since
   those rewrite the same `sevenzip_reader.py` / `rar_reader.py` iteration code.
 
@@ -159,13 +148,13 @@ no access-intent input (callers must hand-pick the `use_*` backend flags).
 **Land second** (after `test-suite-parametrization`, before the native readers).
 
 §8.D (the `CompressionMethod` enum) must land **before** the 7z native reader so
-that reader can emit typed compression methods directly. §8.B/§8.C/§8.E/§8.F/§8.G are
-independent and can ship anytime (§8.G depends on §8.E/§8.F within this change). (The
-§8.A migration lives in the native-reader changes.)
+that reader can emit typed compression methods directly. §8.B/§8.C/§8.E/§8.F are
+independent and can ship anytime. (The §8.A migration lives in the native-reader
+changes.)
 
 Recommended order across all pending changes:
 1. `test-suite-parametrization` — verification harness
-2. **this change** — §8.B–§8.G (§8.D enum prerequisite for 7z native)
+2. **this change** — §8.B–§8.F (§8.D enum prerequisite for 7z native)
 3. `rar-native-metadata-reader` + `sevenzip-native-reader` (in parallel; also run junction Windows spike)
 4. `unify-junction-handling` — after native readers (junction detection in native parsers)
 
@@ -180,10 +169,8 @@ Recommended order across all pending changes:
   the decompressor-stream classes (`formats/decompressor_stream.py`,
   `formats/compressed_streams.py`, `formats/xz_stream.py`, `formats/lzip_stream.py` —
   each exposes its own `seek_cost`), `core.py` + `config.py` (`access_intent`
-  parameter on `open_archive`, resolved into the effective backend selection;
-  `warn_on_inefficient_access` config flag), `types.py` (`CompressionMethod`,
-  `compression_method_detail`, `MemberListingCost`, `AccessCost`, `AccessIntent`),
-  `exceptions.py` (or `types.py`) (`InefficientAccessWarning` category),
-  `archive_reader.py` (property declarations).
+  parameter on `open_archive`, resolved into the effective backend selection),
+  `types.py` (`CompressionMethod`, `compression_method_detail`, `MemberListingCost`,
+  `AccessCost`, `AccessIntent`), `archive_reader.py` (property declarations).
 - **Live specs touched**: `archive-reading`, `archive-metadata`.
 - **Design reference**: `docs/format-architecture-comparison.md` §8–§9.
