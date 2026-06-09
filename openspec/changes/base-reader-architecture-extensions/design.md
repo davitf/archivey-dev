@@ -6,14 +6,14 @@ decisions.
 
 ## Scope (and what moved out)
 
-This change is **§8.B–§8.F** (§8.F — access intent — is new, not in the original doc
-list). §8.A (the 7z/RAR co-iteration migration) is a pure refactor with no spec delta
-and is handled inside the native-reader changes, which already rewrite those readers;
-see the note under Decisions.
+This change is **§8.B–§8.E**. §8.F (access intent) is split into its own `access-intent`
+change, which depends on the cost surface added here. §8.A (the 7z/RAR co-iteration
+migration) is a pure refactor with no spec delta and is handled inside the native-reader
+changes, which already rewrite those readers; see the note under Decisions.
 
 ## Starting point (verified against current code)
 
-- **§8.B–F**: not implemented. `compression_method` is `Optional[str]`,
+- **§8.B–E**: not implemented. `compression_method` is `Optional[str]`,
   `members_list_supported` is a constructor argument, there is no
   `_format_supports_random_access` flag, the only capability accessor is the
   `has_random_access()` method, and there is no `access_intent` input (callers set the
@@ -38,11 +38,11 @@ see the note under Decisions.
 | §8.C `has_central_directory` ClassVar (replaces `members_list_supported` arg) | No (listing cost unchanged where reachable) | none directly; feeds §8.E |
 | §8.D `CompressionMethod` enum | **Yes** (`compression_method` value type) | `archive-metadata` |
 | §8.E cost introspection (`MemberListingCost` + `AccessCost` enums, `member_listing_cost` / `member_access_cost`, stream + decompressor `seek_cost` alongside `seekable()`, drop `has_random_access`) | **Yes** (public API surface change) | `archive-reading` |
-| §8.F `AccessIntent` enum + `access_intent` open parameter | **Yes** (new public input; affects backend selection) | `archive-reading` |
 
-So §8.D, §8.E and §8.F get delta specs; §8.B/§8.C are captured as tasks because they
+So §8.D and §8.E get delta specs; §8.B/§8.C are captured as tasks because they
 must not change behavior (the existing `archive-reading` requirements are the
-regression contract).
+regression contract). §8.F (access intent) is specified in the separate
+`access-intent` change.
 
 ## Decisions
 
@@ -140,35 +140,6 @@ regression contract).
     triggers a `SCAN_REQUIRED` pass** (that is `get_members()`'s job) — aligning the
     method with its already-documented "avoids full traversal" contract, which the
     current code violates for seekable TAR.
-- **Access intent is the input dual of the cost surface** (§8.F). Cost introspection
-  alone tells callers *what they got* but makes them responsible for *configuring* the
-  backend that produces a good cost (today: knowing to set `use_rapidgzip=True`). The
-  `access_intent` parameter lets the caller state the *goal* and have archivey choose:
-  - **`AccessIntent` is a `StrEnum`**: `AUTO` (default), `SEQUENTIAL`, `RANDOM`.
-    `AUTO` preserves today's behavior exactly — honor the explicit `use_*` config flags
-    and select no optional backend on the caller's behalf — so the change is additive
-    and the default is unsurprising. `SEQUENTIAL` favors the cheapest streaming backend
-    and skips eager index building. `RANDOM` prefers seekable/indexed backends
-    (rapidgzip, indexed_bzip2, multi-block xz) **when their packages are installed**.
-  - **`access_intent` is resolved into the existing low-level `use_*` flags**, not a
-    parallel selection mechanism. `open_archive` computes an effective config from the
-    intent and passes it down the unchanged stream-opening path. This keeps one
-    backend-selection codepath and means intent is purely a high-level shorthand.
-  - **Intent is best-effort; explicit flags are mandatory.** Setting `use_rapidgzip=True`
-    explicitly is a hard requirement (raises `PackageNotInstalledError` if rapidgzip is
-    absent — unchanged). `access_intent=RANDOM` is a preference: if the preferred
-    optional package is missing it falls back to the stdlib backend and lets
-    `member_access_cost`/`seek_cost` report the realized (`EXPENSIVE`) outcome rather
-    than raising. Likewise a format that simply cannot do cheap random access (solid 7z,
-    single-block xz) honors the request as best it can and reports the true cost.
-  - **`streaming=True` + `RANDOM` is contradictory → `ValueError`.** `streaming=True`
-    asserts forward-only use; `RANDOM` asserts out-of-order use. `streaming=True` with
-    `AUTO`/`SEQUENTIAL` is fine (and implies sequential).
-  - **A warning when `RANDOM` cannot be honored is explicitly deferred.** Detecting and
-    warning about unmet intent (or, more ambitiously, runtime access-pattern misuse) is
-    a reasonable future improvement but adds runtime tracking and policy that this
-    change does not take on. The honest cost properties are the mechanism callers use
-    in the meantime.
 - **§8.A is folded into the native readers**: because `rar-native-metadata-reader`
   and `sevenzip-native-reader` already rewrite those readers, each adopts the
   existing `_iter_members_and_streams_internal` hook (dropping its public

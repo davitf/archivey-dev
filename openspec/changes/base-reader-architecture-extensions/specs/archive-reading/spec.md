@@ -162,58 +162,6 @@ the stream layer where backend selection happens.
   `tar.gz`, `EXPENSIVE` for a rewind-from-start `tar.gz`, and `UNAVAILABLE` for a
   non-seekable source
 
-### Requirement: AccessIntent declares the intended access pattern
-
-An `AccessIntent` enum SHALL let a caller declare at open time how they intend to access
-the archive, so archivey can choose backends accordingly:
-
-- `AUTO` (default) — no declared pattern; archivey preserves its default backend
-  selection and honors the explicit `use_*` configuration without selecting optional
-  backends on the caller's behalf.
-- `SEQUENTIAL` — the caller will iterate members in order; archivey MAY prefer the
-  cheapest streaming backend and SHALL NOT build seek indexes eagerly.
-- `RANDOM` — the caller will reach members out of order and/or seek within member
-  streams, possibly repeatedly; archivey SHALL prefer seekable/indexed backends (e.g.
-  rapidgzip, indexed_bzip2, a multi-block xz reader) when their packages are installed.
-
-`open_archive` SHALL accept an `access_intent` parameter defaulting to `AUTO`, and SHALL
-resolve it into the same backend selection driven by the explicit `use_*` configuration
-flags (a high-level shorthand over one selection mechanism, not a parallel one).
-
-#### Scenario: AUTO preserves default backend selection
-- **WHEN** an archive is opened with `access_intent=AUTO` (or the parameter omitted)
-- **THEN** backend selection is identical to opening with the explicit configuration
-  alone, and no optional backend is selected implicitly
-
-#### Scenario: RANDOM prefers an indexed backend when available
-- **WHEN** a `tar.gz` is opened with `access_intent=RANDOM` and rapidgzip is installed
-- **THEN** archivey uses the indexed (rapidgzip) backend and `member_access_cost` is
-  `AccessCost.LIMITED`
-
-### Requirement: Access intent is best-effort and reported through cost
-
-`access_intent` SHALL be a hint, not a guarantee. An explicit `use_*` configuration flag
-SHALL remain mandatory — an absent required package raises as today. `RANDOM` SHALL be
-best-effort: when a preferred optional backend's package is not installed, or the format
-cannot provide cheap random access (a solid 7z, a single-block xz), archivey SHALL fall
-back to an available backend and the cost properties (`member_access_cost`, member-stream
-`seek_cost`) SHALL report the **realized** cost rather than the requested one. archivey
-SHALL NOT raise solely because `RANDOM` could not be honored.
-
-#### Scenario: RANDOM falls back when the preferred package is missing
-- **WHEN** a `tar.gz` is opened with `access_intent=RANDOM` but rapidgzip is not installed
-- **THEN** the archive opens using the stdlib backend and `member_access_cost` is
-  `AccessCost.EXPENSIVE` (no exception is raised)
-
-#### Scenario: RANDOM on a format that cannot random-access cheaply
-- **WHEN** a solid 7z archive is opened with `access_intent=RANDOM`
-- **THEN** the archive opens and `member_access_cost` is `AccessCost.EXPENSIVE`
-
-#### Scenario: streaming=True conflicts with RANDOM
-- **WHEN** `open_archive` is called with `streaming=True` and `access_intent=RANDOM`
-- **THEN** it raises `ValueError` (forward-only and out-of-order are contradictory),
-  while `streaming=True` with `AUTO` or `SEQUENTIAL` is permitted
-
 ## MODIFIED Requirements
 
 ### Requirement: get_members_if_available avoids full traversal

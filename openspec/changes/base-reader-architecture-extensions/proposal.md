@@ -6,30 +6,29 @@ readers) are in place. None changes externally-observable archive behavior much,
 but together they clean up the reader contract and make a couple of useful
 capabilities first-class for callers.
 
-This change covers the four contract/spec items **§8.B–§8.E**, plus a new
-**§8.F — access intent**. The fifth original item, **§8.A** (migrating the 7z/RAR
-solid readers onto the existing `_iter_members_and_streams_internal()` hook), is a
-pure internal refactor with no spec delta, so it is **folded into the
-native-reader changes** (`rar-native-metadata-reader` / `sevenzip-native-reader`),
-which already rewrite those files — see their tasks.
+This change covers the four contract/spec items **§8.B–§8.E**. The fifth original
+item, **§8.A** (migrating the 7z/RAR solid readers onto the existing
+`_iter_members_and_streams_internal()` hook), is a pure internal refactor with no spec
+delta, so it is **folded into the native-reader changes**
+(`rar-native-metadata-reader` / `sevenzip-native-reader`), which already rewrite those
+files — see their tasks. The originally-grouped **§8.F — access intent** is split into
+its own **`access-intent`** change: it is a larger, externally-facing redesign (a new
+open-time input, removal of the `streaming` parameter, tri-state backend config) that
+*builds on* the cost surface added here, so the two land in sequence rather than as one.
 
 §8.E exposes **cost introspection** (how expensive is it to list members / reach a
-member / seek within one). On its own that pushes a burden onto callers: to *get*
-cheap random access on a `tar.gz` today you must already know to set
-`use_rapidgzip=True` — the low-level backend flags (`use_rapidgzip`,
-`use_indexed_bzip2`, `use_python_xz`, …) leak archivey's cost model. §8.F adds the
-**dual**: an `access_intent` *input* at open time where the caller declares how
-they will use the archive (forward iteration vs. out-of-order / repeated access),
-and archivey maps that intent onto the right backends. Intent is the request; the
-§8.E cost properties are the **receipt** — what archivey actually achieved, since
-intent cannot always be honored (a solid 7z, a single-block xz, or a missing
-optional package). The two are complementary, not redundant.
+member / seek within one). This is the foundation the `access-intent` change builds on:
+the cost properties are the **receipt** (what archivey actually achieved), and the
+later `access_intent` input is the **request** (how the caller intends to use the
+archive). Today both are missing — to *get* cheap random access on a `tar.gz` you must
+already know to set `use_rapidgzip=True`, so the low-level backend flags
+(`use_rapidgzip`, `use_indexed_bzip2`, `use_python_xz`, …) leak archivey's cost model.
+This change adds the receipt; the request follows in `access-intent`.
 
-**Current state (verified):** §8.B–F are not yet implemented —
+**Current state (verified):** §8.B–E are not yet implemented —
 `compression_method` is still a plain `str`, `members_list_supported` is still an
-`__init__` argument, there is no `_format_supports_random_access` flag or
-`*_cost` properties (only the existing `has_random_access()` method), and there is
-no access-intent input (callers must hand-pick the `use_*` backend flags).
+`__init__` argument, and there is no `_format_supports_random_access` flag or
+`*_cost` properties (only the existing `has_random_access()` method).
 
 ## What Changes
 
@@ -89,26 +88,6 @@ no access-intent input (callers must hand-pick the `use_*` backend flags).
     re-derived the cost by inspecting `config.use_rapidgzip` etc. — duplicating
     backend-selection logic and already mis-reporting multi-block `tar.xz` as
     `EXPENSIVE`. Making the stream the single source of truth fixes that.)
-- **§8.F — access intent** *(public, new)*: an `AccessIntent` `StrEnum`
-  (`AUTO` (default) / `SEQUENTIAL` / `RANDOM`) and an `access_intent` parameter on
-  `open_archive(...)`. It is a high-level declaration of how the caller will use the
-  archive that archivey **resolves into the existing low-level backend flags**:
-  - `AUTO` — preserve current behavior; honor the explicit `use_*` config flags and
-    pick no optional backend on the caller's behalf.
-  - `SEQUENTIAL` — caller iterates forward; prefer the cheapest streaming backend and
-    skip building seek indexes.
-  - `RANDOM` — caller will reach members out of order and/or seek within members,
-    possibly repeatedly; prefer seekable/indexed backends (rapidgzip, indexed_bzip2,
-    multi-block xz) **when installed**.
-
-  Intent is **best-effort**: an explicit `use_*` flag remains a hard requirement
-  (raises if its package is missing), but `RANDOM` falls back to the stdlib backend
-  when an optional package is absent and lets the §8.E cost properties report the
-  realized (`EXPENSIVE`) outcome rather than raising. `streaming=True` together with
-  `RANDOM` is contradictory and raises `ValueError`. (Emitting a *warning* when
-  `RANDOM` cannot be honored is noted as a possible future improvement, not part of
-  this change.)
-
 ## Capabilities
 
 ### New Capabilities
@@ -121,25 +100,22 @@ no access-intent input (callers must hand-pick the `use_*` backend flags).
   `member_listing_cost` / `member_access_cost` introspection properties, adds an `AccessCost`
   `seek_cost` property alongside the protocol-required `seekable()` on member streams
   **and on the decompressor-stream abstraction** (with TAR deriving its access cost
-  from it), tightens `get_members_if_available` to never scan, removes
-  `has_random_access()` (superseded) (§8.E), and adds the `AccessIntent` enum and the
-  `access_intent` open parameter that selects backends to honor the requested access
-  pattern (§8.F).
+  from it), tightens `get_members_if_available` to never scan, and removes
+  `has_random_access()` (superseded) (§8.E).
 - `archive-metadata`: adds the typed `CompressionMethod` enum and the lossless
   `compression_method_detail` field (§8.D).
 
 ## Non-Goals
 
 - Any change to what archives can be read or how members decode (§8.B/C are
-  internal refactors that keep observable behavior identical; §8.F only changes
-  *which backend* is selected, not decoded output).
+  internal refactors that keep observable behavior identical).
 - *Measured*, per-call cost. `AccessCost` is a coarse mechanism-based hint
   (worst-case tier), not a predicted running time; wall-clock cost (e.g. whether a
   `SCAN_REQUIRED` seek beats decompression on a given disk/network) is left
   unmodeled.
-- **Access-pattern warnings** — a runtime detector that warns when the realized
-  usage contradicts the declared intent (e.g. repeated backward seeks on an
-  `EXPENSIVE` stream) is a plausible future follow-up, but is out of scope here.
+- **Access intent (§8.F)** — the `access_intent` *input* (and the removal of the
+  `streaming` parameter and the tri-state backend config) is split into the separate
+  `access-intent` change; this change only adds the cost *receipt* it builds on.
 - The §8.A co-iteration migration — folded into the native-reader changes, since
   those rewrite the same `sevenzip_reader.py` / `rar_reader.py` iteration code.
 
@@ -148,15 +124,17 @@ no access-intent input (callers must hand-pick the `use_*` backend flags).
 **Land second** (after `test-suite-parametrization`, before the native readers).
 
 §8.D (the `CompressionMethod` enum) must land **before** the 7z native reader so
-that reader can emit typed compression methods directly. §8.B/§8.C/§8.E/§8.F are
-independent and can ship anytime. (The §8.A migration lives in the native-reader
-changes.)
+that reader can emit typed compression methods directly. §8.B/§8.C/§8.E are
+independent and can ship anytime. The `access-intent` change (§8.F) depends on §8.E
+(it reports realized cost through `member_access_cost`/`seek_cost`), so it lands after
+this one. (The §8.A migration lives in the native-reader changes.)
 
 Recommended order across all pending changes:
 1. `test-suite-parametrization` — verification harness
-2. **this change** — §8.B–§8.F (§8.D enum prerequisite for 7z native)
-3. `rar-native-metadata-reader` + `sevenzip-native-reader` (in parallel; also run junction Windows spike)
-4. `unify-junction-handling` — after native readers (junction detection in native parsers)
+2. **this change** — §8.B–§8.E (§8.D enum prerequisite for 7z native)
+3. `access-intent` — §8.F (depends on §8.E cost surface)
+4. `rar-native-metadata-reader` + `sevenzip-native-reader` (in parallel; also run junction Windows spike)
+5. `unify-junction-handling` — after native readers (junction detection in native parsers)
 
 ## Impact
 
@@ -168,9 +146,8 @@ Recommended order across all pending changes:
   wrapper (`archive_stream.py`, adds `seek_cost` alongside the existing `seekable()`),
   the decompressor-stream classes (`formats/decompressor_stream.py`,
   `formats/compressed_streams.py`, `formats/xz_stream.py`, `formats/lzip_stream.py` —
-  each exposes its own `seek_cost`), `core.py` + `config.py` (`access_intent`
-  parameter on `open_archive`, resolved into the effective backend selection),
+  each exposes its own `seek_cost`),
   `types.py` (`CompressionMethod`, `compression_method_detail`, `MemberListingCost`,
-  `AccessCost`, `AccessIntent`), `archive_reader.py` (property declarations).
+  `AccessCost`), `archive_reader.py` (property declarations).
 - **Live specs touched**: `archive-reading`, `archive-metadata`.
 - **Design reference**: `docs/format-architecture-comparison.md` §8–§9.

@@ -1,8 +1,10 @@
 # Implementation Tasks: Base reader architecture extensions
 
-> Scope: §8.B–§8.F. §8.A (migrate the 7z/RAR solid readers onto the existing
+> Scope: §8.B–§8.E. §8.A (migrate the 7z/RAR solid readers onto the existing
 > `_iter_members_and_streams_internal` hook) is folded into the native-reader
-> changes (`rar-native-metadata-reader` / `sevenzip-native-reader`).
+> changes (`rar-native-metadata-reader` / `sevenzip-native-reader`). §8.F (access
+> intent) is split out into the separate `access-intent` change, which builds on the
+> cost introspection added here.
 
 ## 1. Capability/preference split (§8.B, §8.C)
 
@@ -53,23 +55,8 @@
       `INDEXED` (or already-registered) members and never triggers a `SCAN_REQUIRED`
       pass
 
-## 4. Access intent (§8.F)
+## 4. Validation
 
-- [ ] 4.1 Add an `AccessIntent` `StrEnum` (`AUTO` / `SEQUENTIAL` / `RANDOM`) to
-      `types.py`
-- [ ] 4.2 Add an `access_intent: AccessIntent` parameter to `open_archive`
-      (default `AUTO`, accepting the string literal too) and resolve it into the
-      effective backend selection (the existing `use_*` flags), without adding a
-      parallel selection path
-- [ ] 4.3 Make `RANDOM` best-effort: prefer rapidgzip / indexed_bzip2 / multi-block xz
-      **when installed**, otherwise fall back and let the cost properties report the
-      realized (`EXPENSIVE`) outcome; keep explicit `use_*` flags mandatory (still
-      raise `PackageNotInstalledError` when their package is absent)
-- [ ] 4.4 Raise `ValueError` for `streaming=True` together with `access_intent=RANDOM`;
-      allow `streaming=True` with `AUTO`/`SEQUENTIAL`
-
-## 5. Validation
-
-- [ ] 5.1 `openspec validate base-reader-architecture-extensions --type change --strict`
-- [ ] 5.2 `hatch run lint` and `hatch run test` (no behavioral regressions; `AUTO`
-      default keeps current backend selection)
+- [ ] 4.1 `openspec validate base-reader-architecture-extensions --type change --strict`
+- [ ] 4.2 `hatch run lint` and `hatch run test` (no behavioral regressions; cost
+      properties are additive and `streaming` still drives access mode here)

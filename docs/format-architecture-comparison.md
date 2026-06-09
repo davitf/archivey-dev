@@ -670,33 +670,49 @@ responsible for *configuring* the backend that produces a good cost: to get chea
 random access on a `tar.gz` today you must already know to set `use_rapidgzip=True`.
 The low-level `use_*` flags leak archivey's cost model.
 
-**Proposed addition**: an `AccessIntent` enum and an `access_intent` parameter on
-`open_archive`, letting the caller state the *goal* and have archivey pick the
-backend:
+**Proposed addition** (split into its own `access-intent` change): an `AccessIntent`
+enum and an `access_intent` parameter on `open_archive`, letting the caller state the
+*goal* and have archivey pick the backend. It **replaces** the `streaming` /
+`streaming_only` parameters (forward-only use becomes `SEQUENTIAL`; the random-access
+default becomes `AUTO`):
 
 ```python
 class AccessIntent(StrEnum):
-    AUTO = "auto"              # default: today's behavior; honor explicit use_* flags
-    SEQUENTIAL = "sequential"  # forward iteration; cheapest streaming backend
-    RANDOM = "random"          # out-of-order / repeated access; prefer indexed backends
+    AUTO = "auto"              # default == old streaming=False; random methods on a
+                               #   seekable source, no optional backend enabled for you
+    SEQUENTIAL = "sequential"  # == old streaming=True; forward-only, accepts non-seekable
+    RANDOM = "random"          # out-of-order / within-member seeking; pay to make it cheap
 
 archive = open_archive("big.tar.gz", access_intent=AccessIntent.RANDOM)
 # → archivey enables rapidgzip if installed; member_access_cost == LIMITED
 ```
 
-`access_intent` is **resolved into the existing `use_*` flags** (one selection
-mechanism, not a parallel one). It is **best-effort**: explicit `use_*` flags stay
-mandatory (raise if their package is missing), but `RANDOM` falls back to the stdlib
-backend when an optional package is absent and lets the §E cost properties report the
-realized (`EXPENSIVE`) cost rather than raising. A format that simply cannot do cheap
-random access (solid 7z, single-block xz) likewise honors the request as best it can
-and reports the true cost. `streaming=True` together with `RANDOM` is contradictory
-and raises `ValueError`.
+**One axis for now**: `RANDOM` covers both reaching members out of order *and* seeking
+within a member. The cost surface already separates the two (`member_access_cost` vs
+`seek_cost`), so a within-member "content seek" facet can be added later (additively)
+when a reader differentiates on it — e.g. a native ZIP reader choosing rapidgzip *per
+member* only when the caller will seek inside files.
+
+**`AUTO` vs `RANDOM`** is "don't pay vs pay to make random access cheap": both expose
+random methods on a seekable source and both raise on a non-seekable one, but only
+`RANDOM` proactively activates `"auto"` seekable/indexed backends and tells the reader to
+keep seek points. `access_intent` is **resolved into the same backend selection** (one
+mechanism, not a parallel one) and is also handed to the reader so it can adapt strategy.
+
+The backend flags become **tri-state** (`True` / `False` / `"auto"`, default `"auto"`):
+`True` forces use (raises if the package is missing), `False` forbids it, `"auto"` uses it
+iff installed and the intent warrants it. The new default (`"auto"` + `AUTO`) activates
+nothing — identical to today's all-`False` default.
+
+Intent is **best-effort**: `RANDOM` falls back to the stdlib backend when an optional
+package is absent or the format cannot random-access cheaply (solid 7z, single-block xz),
+and the §E cost properties report the realized (`EXPENSIVE`) cost rather than raising.
+The one hard failure on account of intent is random access on a non-seekable source
+(impossible), preserving today's `streaming=False` behavior.
 
 Intent is the **request**; the §E cost properties are the **receipt**. A future
 follow-up could *warn* when intent cannot be honored (or when runtime access patterns
-contradict the declared intent), but that adds runtime tracking and is out of scope
-here.
+contradict the declared intent), but that adds runtime tracking and is out of scope.
 
 ---
 
@@ -719,8 +735,14 @@ Given the analysis above, the natural sequencing for work is:
    are done, the thread+queue pattern in 7z and the stream-reader pattern in
    RAR can be unified under a cleaner `_iter_members_and_streams()` hook.
 
-5. **`streaming_only` / capability refactor** (§8.B, §8.C, §8.E) — cosmetic
-   but improves the public API and clarifies the mental model for contributors.
+5. **Capability / cost-introspection refactor** (§8.B–§8.E,
+   `base-reader-architecture-extensions`) — adds the cost *receipt*
+   (`member_access_cost` / `seek_cost`, typed `CompressionMethod`); improves the public
+   API and clarifies the mental model for contributors.
+
+6. **Access intent** (§8.F, `access-intent`) — adds the *request* on top of the cost
+   surface: an `access_intent` parameter (replacing `streaming` / `streaming_only`) and
+   tri-state backend config. Lands after the cost refactor it depends on.
 
 ---
 
