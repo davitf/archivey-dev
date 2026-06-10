@@ -563,28 +563,60 @@ only when its decompressor is genuinely non-seekable for this instance. The
 runtime streaming flag then means "user requested streaming OR format cannot
 random-access".
 
-#### C. `members_list_supported` should be a class attribute
+#### C. Catalog-location ClassVar (replacing the `members_list_supported` argument)
 
-Currently passed to `__init__()` as a constructor argument.  But it's
-determined solely by the format type, not by any runtime condition.
+Currently `members_list_supported` is passed to `__init__()` as a constructor
+argument. The name is misleading (it sounds like it returns the list) and it
+conflates two things: a format fact and a runtime fact.
 
-Exception: TAR sets it based on whether the stream has a seekable structure,
-but the flag actually doesn't matter for TAR since `streaming_only` already
-captures the relevant behaviour.
+Split them:
 
-Making it a `ClassVar` would clarify that it is a format-level property:
-```python
-class ZipReader(BaseArchiveReader):
-    members_list_supported = True
-```
+- **"Where does this archive keep its member catalog?"** is a format-level fact
+  *where the layout is uniform*, and belongs on the class as a clearly-named `ClassVar`.
+  A plain `has_central_directory` bool is too coarse, because *where* the catalog lives
+  decides whether it is reachable without seeking:
+  ```python
+  class ZipReader(BaseArchiveReader):
+      member_catalog = CatalogLocation.TRAILER   # end-of-file central directory
+  ```
+  The locations are: **header-resident** (read while streaming forward),
+  **tail-resident** (ZIP's end-of-file central directory), **single-known-member**
+  (single-file streams), or **none** (TAR). But it is **not always a `ClassVar`** — for
+  some formats the location is *per file*. RAR is the case: its member headers precede
+  each file (no front index), and an upfront catalog exists only when the optional
+  **"quick open" service block** — an index at the *end* of the archive — is present, so
+  one `.rar` is tail-indexed and another is scan-only. Such readers determine the location
+  at open. The exact per-format mapping/variation (RAR/7z/ISO) is confirmed per reader,
+  notably when the native readers land.
+- **"Can *this opened archive* be listed cheaply (`INDEXED`)?"** is the *realized*
+  cost, **not** read from the ClassVar alone: it depends on the location **and**
+  seekability. `INDEXED` when the catalog (or single member) is reachable without a
+  backward seek — a header catalog, a single-member stream, or a tail catalog on a
+  seekable source; `SCAN_REQUIRED` for a seekable no-catalog format; `SEQUENTIAL_ONLY`
+  otherwise. So a `.gz` single-member stream is `INDEXED` even on a pipe, and a
+  header-resident catalog can be `INDEXED` on a non-seekable source once a native reader
+  parses it forward (today's seek-requiring third-party readers raise at open instead).
+  This is the same capability-vs-runtime split as §B; deriving `INDEXED` from a "has a
+  catalog" bool alone is wrong on both seekability and location.
+
+The standalone `members_list_supported` boolean then disappears: it is precisely
+`member_listing_cost == INDEXED`.
 
 #### D. Typed compression method enum
 
 `ArchiveMember.compression_method` is an untyped string.  Adding a
-`CompressionMethod` enum (or `StrEnum`) with known values like `STORED`,
-`DEFLATE`, `LZMA`, `ZSTD`, `BZIP2`, `LZMA2`, `BCJ2`, `PPMD`, etc. and a
-fallback `UNKNOWN` would allow callers to make programmatic decisions without
-parsing strings.
+`CompressionMethod` enum (or `StrEnum`) with a fallback `UNKNOWN` would allow
+callers to make programmatic decisions without parsing strings. The enum must be
+**exhaustive over the formats archivey handles, not a sample**: a value for every
+`StreamFormat` — `STORED`, `DEFLATE` (gzip/zlib), `BZIP2`, `LZMA2` (xz), `LZMA`
+(lzip), `ZSTD`, `LZ4`, `BROTLI`, `LZW` (Unix `compress`) — **plus** the
+container-internal codecs that never appear standalone (`PPMD`, `BCJ2`,
+`DEFLATE64`, `DELTA`, …). A regression test should assert every `StreamFormat`
+resolves to a non-`UNKNOWN` codec, so adding a format without its codec fails CI.
+(The mapping is many-to-one: gzip and zlib both decode to `DEFLATE`; `StreamFormat`
+is the wrapper, `CompressionMethod` is the codec.) A multi-filter chain that a
+closed enum cannot express (7z `LZMA2 + BCJ2`) is preserved verbatim in a separate
+free-form `compression_method_detail`.
 
 #### E. Capability introspection
 
@@ -646,6 +678,109 @@ conservatively when the structure isn't known, never measured per call.
 `INDEXED` (or members are already registered) and never triggers a
 `SCAN_REQUIRED` pass.
 
+Crucially, `seek_cost` is owned by the **decompressor-stream abstraction** (the
+stdlib rewind wrapper, rapidgzip, indexed_bzip2, `XzDecompressorStream`, lzip, a
+plain file), each of which reports its own tier. Readers whose access is a seek on
+such a stream (TAR) *read* that `seek_cost` rather than re-deriving it from
+`config.use_*` flags — one source of truth, and no drift (e.g. a multi-block
+`tar.xz` is correctly `LIMITED` instead of being mis-reported `EXPENSIVE`).
+
+The three properties are *derived from mechanism, never measured* (reading them
+does no I/O):
+
+```text
+member_listing_cost(reader):           # per instance: catalog location (§C) + seekability
+    cat = member_catalog               # HEADER | TRAILER | SINGLE_MEMBER | NONE;
+                                       #   ClassVar where uniform, else decided at open
+                                       #   (RAR: TRAILER iff quick-open index present)
+    if cat in (HEADER, SINGLE_MEMBER): -> INDEXED        # reachable forward, no back-seek
+    if cat == TRAILER:                 -> INDEXED if seekable else SEQUENTIAL_ONLY  # ZIP/RAR
+    # cat == NONE (TAR, or RAR without quick-open)
+    -> SCAN_REQUIRED if seekable else SEQUENTIAL_ONLY
+
+seek_cost(stream):                     # per stream, fixed at construction
+    if not seekable():             -> UNAVAILABLE
+    if plain file / stored:        -> DIRECT
+    if intermediate seek points:   -> LIMITED           # rapidgzip, indexed_bzip2,
+                                                        #   multi-block xz/lzip
+    else:                          -> EXPENSIVE          # rewind / single block
+
+seek_cost_of(stream):                  # tolerant helper: not every stream is ours yet
+    if has attr seek_cost:         -> stream.seek_cost
+    if not seekable():             -> UNAVAILABLE
+    else:                          -> EXPENSIVE          # conservative; mechanism unknown
+
+member_access_cost(reader):            # per instance: reaching a member out of order
+    if not random_access_possible: -> UNAVAILABLE       # streaming / non-seekable
+    if members from one stream:    -> seek_cost_of(decompressed_stream)   # TAR
+    if stored independently:       -> DIRECT             # ZIP / stored
+    else:                          -> EXPENSIVE          # solid 7z, single stream
+```
+
+So a `.gz` single-member stream lists `INDEXED` even on a pipe, and a header-resident
+catalog can list `INDEXED` from a non-seekable source once a reader parses it forward
+(today's seek-requiring third-party readers raise at open instead). The `seek_cost_of`
+helper is a deliberate stopgap for this phase, where some decompressor streams are still
+raw third-party objects without a `seek_cost`; it collapses into a direct read once the
+public `ArchiveyStream` base guarantees the property.
+
+Here, `seek_cost` is added to archivey's own stream classes. Guaranteeing it on
+*every* returned stream — including those handed back raw by third-party libraries
+(py7zr / rarfile / zipfile) — needs a shared, **public** `ArchiveyStream` base and a
+broader look at how archivey constructs and wraps streams in general. That is its own
+exploration (the `public-stream-interface` change), kept separate from the cost surface.
+
+#### F. Access intent — the input dual of the cost surface
+
+§E lets callers *read* how expensive access is. But on its own it leaves them
+responsible for *configuring* the backend that produces a good cost: to get cheap
+random access on a `tar.gz` today you must already know to set `use_rapidgzip=True`.
+The low-level `use_*` flags leak archivey's cost model.
+
+**Proposed addition** (split into its own `access-intent` change): an `AccessIntent`
+enum and an `access_intent` parameter on `open_archive`, letting the caller state the
+*goal* and have archivey pick the backend. It **replaces** the `streaming` /
+`streaming_only` parameters (forward-only use becomes `SEQUENTIAL`; the random-access
+default becomes `AUTO`):
+
+```python
+class AccessIntent(StrEnum):
+    AUTO = "auto"              # default == old streaming=False; random methods on a
+                               #   seekable source, no optional backend enabled for you
+    SEQUENTIAL = "sequential"  # == old streaming=True; forward-only, accepts non-seekable
+    RANDOM = "random"          # out-of-order / within-member seeking; pay to make it cheap
+
+archive = open_archive("big.tar.gz", access_intent=AccessIntent.RANDOM)
+# → archivey enables rapidgzip if installed; member_access_cost == LIMITED
+```
+
+**One axis for now**: `RANDOM` covers both reaching members out of order *and* seeking
+within a member. The cost surface already separates the two (`member_access_cost` vs
+`seek_cost`), so a within-member "content seek" facet can be added later (additively)
+when a reader differentiates on it — e.g. a native ZIP reader choosing rapidgzip *per
+member* only when the caller will seek inside files.
+
+**`AUTO` vs `RANDOM`** is "don't pay vs pay to make random access cheap": both expose
+random methods on a seekable source and both raise on a non-seekable one, but only
+`RANDOM` proactively activates `"auto"` seekable/indexed backends and tells the reader to
+keep seek points. `access_intent` is **resolved into the same backend selection** (one
+mechanism, not a parallel one) and is also handed to the reader so it can adapt strategy.
+
+The backend flags become **tri-state** (`True` / `False` / `"auto"`, default `"auto"`):
+`True` forces use (raises if the package is missing), `False` forbids it, `"auto"` uses it
+iff installed and the intent warrants it. The new default (`"auto"` + `AUTO`) activates
+nothing — identical to today's all-`False` default.
+
+Intent is **best-effort**: `RANDOM` falls back to the stdlib backend when an optional
+package is absent or the format cannot random-access cheaply (solid 7z, single-block xz),
+and the §E cost properties report the realized (`EXPENSIVE`) cost rather than raising.
+The one hard failure on account of intent is random access on a non-seekable source
+(impossible), preserving today's `streaming=False` behavior.
+
+Intent is the **request**; the §E cost properties are the **receipt**. A future
+follow-up could *warn* when intent cannot be honored (or when runtime access patterns
+contradict the declared intent), but that adds runtime tracking and is out of scope.
+
 ---
 
 ## 9. Recommended implementation order
@@ -667,8 +802,14 @@ Given the analysis above, the natural sequencing for work is:
    are done, the thread+queue pattern in 7z and the stream-reader pattern in
    RAR can be unified under a cleaner `_iter_members_and_streams()` hook.
 
-5. **`streaming_only` / capability refactor** (§8.B, §8.C, §8.E) — cosmetic
-   but improves the public API and clarifies the mental model for contributors.
+5. **Capability / cost-introspection refactor** (§8.B–§8.E,
+   `base-reader-architecture-extensions`) — adds the cost *receipt*
+   (`member_access_cost` / `seek_cost`, typed `CompressionMethod`); improves the public
+   API and clarifies the mental model for contributors.
+
+6. **Access intent** (§8.F, `access-intent`) — adds the *request* on top of the cost
+   surface: an `access_intent` parameter (replacing `streaming` / `streaming_only`) and
+   tri-state backend config. Lands after the cost refactor it depends on.
 
 ---
 
