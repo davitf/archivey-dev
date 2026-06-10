@@ -101,8 +101,9 @@ regardless of seekability (the one member is known up front, though its size/CRC
 be until the stream is read).
 
 #### Scenario: Reachable catalog is INDEXED
-- **WHEN** a ZIP, 7z, RAR, folder, or ISO archive is opened from a seekable source
-- **THEN** `member_listing_cost` is `MemberListingCost.INDEXED`
+- **WHEN** a ZIP, 7z, folder, or ISO archive is opened from a seekable source
+- **THEN** `member_listing_cost` is `MemberListingCost.INDEXED` (RAR is covered by the
+  per-file scenario below: it is `INDEXED` only when its quick-open index is present)
 
 #### Scenario: Single-member stream is INDEXED even when non-seekable
 - **WHEN** a single-file stream (e.g. a standalone `.gz`) is opened from a non-seekable
@@ -130,9 +131,11 @@ be until the stream is read).
 - **THEN** `member_listing_cost` is `MemberListingCost.SCAN_REQUIRED`
 
 #### Scenario: Streaming tar or non-seekable source is sequential-only
-- **WHEN** a tar is opened with `streaming=True`, or any archive is opened from a
-  non-seekable source
-- **THEN** `member_listing_cost` is `MemberListingCost.SEQUENTIAL_ONLY`
+- **WHEN** a tar is opened with `streaming=True`, or an archive **without a
+  forward-reachable catalog** (no header-resident catalog or single known member) is
+  opened from a non-seekable source
+- **THEN** `member_listing_cost` is `MemberListingCost.SEQUENTIAL_ONLY` (a single-member
+  `.gz` on a pipe stays `INDEXED` per the scenario above)
 
 ### Requirement: Reader exposes capability-introspection properties
 

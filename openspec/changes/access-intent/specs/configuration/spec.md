@@ -28,8 +28,23 @@ unrar-streaming reader for RAR). Each flag is tri-state:
 - `False` — never use the alternative; always fall back to the default implementation,
   regardless of `access_intent`.
 - `"auto"` (default) — use the alternative **iff** its package is installed **and** the
-  resolved `access_intent` makes it worthwhile (`RANDOM` activates a seekable/indexed
-  backend; `AUTO` and `SEQUENTIAL` do not).
+  resolved `access_intent` makes it worthwhile. What is "worthwhile" is per flag,
+  because the alternatives differ in what they improve over the default backend:
+  - `use_rapidgzip` and `use_indexed_bzip2`: activated by `AUTO` and `RANDOM` on a
+    **seekable** source — they are both faster than the stdlib backends (parallel
+    decompression) and indexed (they turn an `EXPENSIVE` rewind backend into a
+    `LIMITED` one), so the zero-config default gets the better backend when it is
+    installed. Not activated on a non-seekable source, nor (pending benchmarks — see
+    design) under `SEQUENTIAL`.
+  - `use_python_xz`: never activated implicitly — the default XZ backend
+    (`XzDecompressorStream`) already provides block-level seeking, so the alternative
+    does not improve the cost class under any intent.
+  - `use_zstandard`: never activated implicitly — its reopen-on-backward-seek wrapper
+    has no random-access advantage over the default backend.
+  - `use_rar_stream`: activated by `SEQUENTIAL` — a single `unrar p` pass serves a
+    solid RAR's members in order (O(N) instead of O(N²)), and its limitation
+    (per-member `open()` stays O(N)) is moot in streaming mode, where random-access
+    methods are restricted anyway. Not activated by `AUTO`/`RANDOM`.
 
 #### Scenario: Forcing a backend on
 - **WHEN** `ArchiveyConfig(use_rapidgzip=True)` is used to open a gzip stream
@@ -46,10 +61,20 @@ unrar-streaming reader for RAR). Each flag is tri-state:
   gzip-compressed archive is opened with `access_intent="random"`
 - **THEN** the rapidgzip backend is used
 
-#### Scenario: Auto stays off without RANDOM intent
-- **WHEN** the default `use_rapidgzip="auto"` is in effect and an archive is opened with
-  the default intent (`AUTO`)
-- **THEN** the stdlib gzip module is used (no optional backend is activated)
+#### Scenario: Auto activates under the default intent when installed
+- **WHEN** the default `use_rapidgzip="auto"` is in effect, rapidgzip is installed, and a
+  gzip-compressed archive is opened from a seekable source with the default intent
+  (`AUTO`)
+- **THEN** the rapidgzip backend is used
+
+#### Scenario: Auto stays off when the package is absent
+- **WHEN** the default `use_rapidgzip="auto"` is in effect and rapidgzip is not installed
+- **THEN** the stdlib gzip module is used and no exception is raised
+
+#### Scenario: SEQUENTIAL activates the RAR streaming reader
+- **WHEN** a solid RAR archive is opened with `access_intent="sequential"` and
+  `use_rar_stream` left at `"auto"`
+- **THEN** iteration is served by the single-pass unrar streaming reader
 
 ## ADDED Requirements
 
@@ -57,11 +82,12 @@ unrar-streaming reader for RAR). Each flag is tri-state:
 
 `access_intent` SHALL be resolved into the same backend selection governed by the `use_*`
 configuration — a high-level shorthand over one selection mechanism, not a parallel one.
-For a flag left at `"auto"`, the resolved choice SHALL depend on intent: `RANDOM` enables
-an installed seekable/indexed backend; `AUTO` and `SEQUENTIAL` do not enable it. A flag
-set explicitly to `True` or `False` SHALL override intent (force or forbid). Resolution
-SHALL be best-effort: when `RANDOM` cannot be honored — a preferred package is absent, or
-the format cannot random-access cheaply (a solid 7z, a single-block xz) — archivey SHALL
+For a flag left at `"auto"`, the resolved choice SHALL depend on intent according to the
+per-flag mapping above (`AUTO`/`RANDOM` enable installed rapidgzip/indexed_bzip2 on a
+seekable source; `SEQUENTIAL` enables the RAR streaming reader). A flag set explicitly to
+`True` or `False` SHALL override intent (force or forbid). Resolution SHALL be
+best-effort: when an intent cannot be honored — a preferred package is absent, or the
+format cannot random-access cheaply (a solid 7z, a single-block xz) — archivey SHALL
 fall back to an available backend and the cost properties (`member_access_cost`,
 `seek_cost`) SHALL report the realized cost rather than raising. archivey SHALL raise
 solely on account of intent only when random access is impossible because the source is
@@ -82,7 +108,8 @@ non-seekable.
 - **WHEN** a `tar.gz` is opened with `use_rapidgzip=False` and `access_intent="random"`
 - **THEN** the stdlib backend is used
 
-#### Scenario: Default intent selects no optional backend
-- **WHEN** a `tar.gz` is opened with the default configuration and default intent
-- **THEN** no optional backend is selected (behavior identical to the previous all-`False`
+#### Scenario: Default open path without optional packages is unchanged
+- **WHEN** a `tar.gz` is opened with the default configuration and default intent and
+  none of the optional backend packages are installed
+- **THEN** the stdlib backends are used (behavior identical to the previous all-`False`
   default)

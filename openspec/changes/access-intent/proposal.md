@@ -43,12 +43,18 @@ no auto-detection and no `access_intent` input.
   - old `streaming=False` (default) → `access_intent=AUTO` (random access on a seekable
     source; a non-seekable source still raises `ArchiveStreamNotSeekableError`).
 - **`AUTO` vs `RANDOM`** — both expose random-access methods on a seekable source and
-  both raise on a non-seekable one; they differ only in **whether archivey proactively
-  pays to make random access cheap**. `AUTO` does the cheap thing and never enables an
-  optional backend on the caller's behalf (so default behavior is unchanged). `RANDOM`
-  turns on `AUTO`-tagged seekable/indexed backends (rapidgzip, indexed_bzip2, multi-block
-  xz) **when installed** and tells the reader to keep seek points. `SEQUENTIAL` favors the
-  cheapest streaming backend and skips eager index building.
+  both raise on a non-seekable one. `AUTO` (the default) uses the **best installed
+  backend**: on a seekable source it enables an installed rapidgzip / indexed_bzip2 —
+  these are both *faster* than the stdlib backends (parallel decompression) *and*
+  indexed (cheap random access), so zero-config gets the good backend, per the
+  "most correct available backend" design principle. (XZ needs no activation: the
+  default `XzDecompressorStream` already block-seeks.) `RANDOM` additionally declares
+  that out-of-order access *will* happen, so the reader keeps/builds seek points
+  eagerly rather than lazily. `SEQUENTIAL` favors the cheapest streaming path: it
+  activates `use_rar_stream` for solid RAR iteration (single `unrar p` pass, O(N)
+  instead of O(N²); `open()` is restricted in this mode anyway) and skips eager index
+  building. Whether `SEQUENTIAL` should also use rapidgzip/indexed_bzip2 for raw
+  decompression speed is an open question in design.md (pending benchmarks).
 - **Intent is carried into the reader**, generalizing today's `streaming_only=streaming`
   hand-off: the reader receives `access_intent` and may adapt its strategy (eager vs
   lazy, build vs skip a seek index), in addition to backend selection.
@@ -59,9 +65,17 @@ no auto-detection and no `access_intent` input.
     (unchanged from today's explicit `True`);
   - `False` = never use;
   - `"auto"` = use iff the package is installed **and** the resolved intent makes it
-    worthwhile (`RANDOM` enables a seekable/indexed backend; `AUTO`/`SEQUENTIAL` do not).
-  - The new default (`"auto"` + default intent `AUTO`) selects **no** optional backend —
-    identical to today's all-`False` default.
+    worthwhile (per-flag mapping in the configuration delta: rapidgzip/indexed_bzip2
+    under `AUTO`/`RANDOM` on a seekable source; `use_rar_stream` under `SEQUENTIAL`;
+    `use_python_xz`/`use_zstandard` never implicitly).
+  - **The new default is deliberately not behavior-preserving**: `"auto"` + default
+    intent `AUTO` enables installed rapidgzip/indexed_bzip2, where today's all-`False`
+    default never did. Decided 2026-06-10 — zero-config should get the faster, indexed
+    backend when it's installed; users who want stdlib-only behavior set the flag to
+    `False`. With none of the optional packages installed, behavior is unchanged.
+  - **Prerequisite for the default flip**: rapidgzip/indexed_bzip2 must be verified
+    safe for multiple concurrently-open member streams (see the
+    `concurrent-member-access` exploration) before they are enabled by default.
 - **`RANDOM` is best-effort and reported through cost**: if a preferred package is absent
   or the format cannot random-access cheaply (solid 7z, single-block xz), archivey falls
   back and the cost properties report the realized (`EXPENSIVE`) outcome rather than

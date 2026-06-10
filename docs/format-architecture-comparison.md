@@ -24,7 +24,7 @@ architecture should evolve.
 | Duplicate filenames | No | Yes | No | Yes | No |
 | CRC stored per member | CRC32 | None⁴ | CRC32 | CRC32 | None |
 | Encryption detection | Per-member flag | N/A | Per-member + header flag | Per-folder flag | N/A |
-| Library used | `zipfile` (stdlib) | `tarfile` (stdlib) | `rarfile` (third-party) | `py7zr` (third-party) | `pycdlib` (third-party, test-only) |
+| Library used | `zipfile` (stdlib) | `tarfile` (stdlib) | `rarfile` (third-party) | `py7zr` (third-party) | `pycdlib` (third-party) |
 
 ¹ Forced streaming when TAR is inside a non-seekable compressed stream; always
   streaming for piped stdin usage.  With indexed backends the compressed stream
@@ -212,7 +212,7 @@ Maps library exceptions to `ArchiveError` subclasses.
 | TAR | `TarError` and subclasses | Good |
 | RAR | `rarfile.BadRarFile`, `rarfile.PasswordRequired`, `rarfile.NeedFirstVolume` | Good |
 | 7z | `py7zr.*Error`, `PasswordRequired` | Good |
-| ISO | N/A (reader not implemented) | — |
+| ISO | `pycdlib.PyCdlibInvalidISO` etc. | Good (reader added in #209) |
 
 ---
 
@@ -393,7 +393,7 @@ TAR is the only format with native hardlink support.
 | TAR | `tarfile` (stdlib) | Full in-process decompressor + parser | Good | Low benefit: stdlib works well |
 | RAR | `rarfile` (third-party) | Metadata parsing; shells out to `unrar` for data | Medium | **High** — native reader target; eliminates dependency |
 | 7z | `py7zr` (third-party) | Metadata + in-process decompressor | Medium | **High** — full native reader target (metadata + decompression); drops py7zr entirely (stdlib `lzma`/`bz2`/`zlib` cover LZMA2/BCJ/Delta/Deflate/BZip2, existing `zstandard`/`brotli`/crypto optionals + new `pyppmd`/`inflate64` cover the rest; BCJ2 detect-and-raise as py7zr does) |
-| ISO | `pycdlib` (third-party) | Test-only (creation); no reader exists | N/A | Wrap pycdlib or write native (native is ~400 lines) |
+| ISO | `pycdlib` (third-party) | Full reader (`iso_reader.py`, added in #209) + test creation | Good | Medium — a native reader (~400 lines) would drop the dependency |
 
 The RAR and 7z native reader designs are documented in
 `rar-native-reader-design.md` and `sevenzip-native-reader-design.md`.
@@ -474,7 +474,7 @@ accept per-call passwords).
 
 ISO is the simplest format for data access (sector-aligned reads, no
 compression) but pycdlib's API requires choosing a namespace before every
-path operation.  An archivey `IsoReader` must:
+path operation.  The archivey `IsoReader` (implemented in #209) must:
 1. At open time: detect which extensions are present (Rock Ridge, Joliet, UDF).
 2. Pick a priority chain: Rock Ridge → Joliet → ISO9660.
 3. Walk using `walk(rr_path="/")` / `walk(joliet_path="/")` / `walk(iso_path="/")`.
@@ -746,11 +746,12 @@ default becomes `AUTO`):
 ```python
 class AccessIntent(StrEnum):
     AUTO = "auto"              # default == old streaming=False; random methods on a
-                               #   seekable source, no optional backend enabled for you
+                               #   seekable source, best installed backend selected
     SEQUENTIAL = "sequential"  # == old streaming=True; forward-only, accepts non-seekable
-    RANDOM = "random"          # out-of-order / within-member seeking; pay to make it cheap
+    RANDOM = "random"          # declared out-of-order / within-member seeking; build
+                               #   seek points eagerly
 
-archive = open_archive("big.tar.gz", access_intent=AccessIntent.RANDOM)
+archive = open_archive("big.tar.gz")  # AUTO
 # → archivey enables rapidgzip if installed; member_access_cost == LIMITED
 ```
 
@@ -760,16 +761,21 @@ within a member. The cost surface already separates the two (`member_access_cost
 when a reader differentiates on it — e.g. a native ZIP reader choosing rapidgzip *per
 member* only when the caller will seek inside files.
 
-**`AUTO` vs `RANDOM`** is "don't pay vs pay to make random access cheap": both expose
-random methods on a seekable source and both raise on a non-seekable one, but only
-`RANDOM` proactively activates `"auto"` seekable/indexed backends and tells the reader to
-keep seek points. `access_intent` is **resolved into the same backend selection** (one
-mechanism, not a parallel one) and is also handed to the reader so it can adapt strategy.
+**`AUTO` vs `RANDOM`** *(revised 2026-06-10; an earlier draft had `AUTO` activate
+nothing, preserving today's default — rejected as contradicting the "most correct
+available backend" principle)*: both expose random methods on a seekable source and
+both raise on a non-seekable one. `AUTO` selects the best installed backend
+(rapidgzip/indexed_bzip2 are both faster than the stdlib backends and indexed);
+`RANDOM` additionally declares the pattern, so the reader keeps/builds seek points
+eagerly. `SEQUENTIAL` activates the single-pass unrar streaming reader for solid RAR.
+`access_intent` is **resolved into the same backend selection** (one mechanism, not a
+parallel one) and is also handed to the reader so it can adapt strategy.
 
 The backend flags become **tri-state** (`True` / `False` / `"auto"`, default `"auto"`):
 `True` forces use (raises if the package is missing), `False` forbids it, `"auto"` uses it
-iff installed and the intent warrants it. The new default (`"auto"` + `AUTO`) activates
-nothing — identical to today's all-`False` default.
+iff installed and the intent warrants it (per-flag mapping in the `access-intent`
+configuration delta). With no optional packages installed, the default behaves exactly
+like today's all-`False` default.
 
 Intent is **best-effort**: `RANDOM` falls back to the stdlib backend when an optional
 package is absent or the format cannot random-access cheaply (solid 7z, single-block xz),
@@ -785,35 +791,90 @@ contradict the declared intent), but that adds runtime tracking and is out of sc
 
 ## 9. Recommended implementation order
 
-Given the analysis above, the natural sequencing for work is:
+> Historical note: an earlier version of this section listed an ISO reader first
+> (since implemented in #209, via pycdlib) and placed the cost refactor after the
+> native readers. The order below matches the sequencing recorded in the openspec
+> change proposals, which supersede this document where they differ.
 
-1. **ISO reader** — simplest to add (no solid concerns, no external process,
-   library or ~400-line native parser).  Completes the format matrix.
+1. **Test-suite parametrization** — the declarative verification harness
+   (implemented and archived).
 
-2. **RAR native metadata reader** — eliminates the `rarfile` dependency for
-   metadata.  `unrar` remains for decompression.  Documented in
-   `rar-native-reader-design.md`.
-
-3. **7z native metadata reader** — eliminates py7zr for metadata parsing.
-   py7zr remains for decompression.  Documented in
-   `sevenzip-native-reader-design.md`.
-
-4. **Solid archive co-iteration refactor** (§8.A) — once both native readers
-   are done, the thread+queue pattern in 7z and the stream-reader pattern in
-   RAR can be unified under a cleaner `_iter_members_and_streams()` hook.
-
-5. **Capability / cost-introspection refactor** (§8.B–§8.E,
+2. **Capability / cost-introspection refactor** (§8.B–§8.E,
    `base-reader-architecture-extensions`) — adds the cost *receipt*
-   (`member_access_cost` / `seek_cost`, typed `CompressionMethod`); improves the public
-   API and clarifies the mental model for contributors.
+   (`member_access_cost` / `seek_cost`, typed `CompressionMethod`). §8.D must precede
+   the 7z native reader so it can emit typed compression methods.
 
-6. **Access intent** (§8.F, `access-intent`) — adds the *request* on top of the cost
+3. **Access intent** (§8.F, `access-intent`) — adds the *request* on top of the cost
    surface: an `access_intent` parameter (replacing `streaming` / `streaming_only`) and
-   tri-state backend config. Lands after the cost refactor it depends on.
+   tri-state backend config. Sequenced early because it is the breaking API change.
+
+4. **RAR + 7z native readers** (`rar-native-metadata-reader`,
+   `sevenzip-native-reader`, in parallel) — each folds in its half of the §8.A
+   co-iteration migration; run the junction Windows spike during this phase.
+
+5. **Junction unification** (`unify-junction-handling`) — after the native readers,
+   since junction detection wires into the native parsers.
+
+6. **Public stream interface** (`public-stream-interface`) — last, after its own
+   exploration; hoists per-class `seek_cost` onto the shared `ArchiveyStream` base.
 
 ---
 
-## 10. References
+## 10. Native-reader rollout: parallel readers + differential testing
+
+*(Adopted 2026-06-10 — applies to **every** format rewrite: the RAR and 7z native
+readers now, the native/streaming ZIP reader later.)*
+
+A native reader never replaces its third-party-backed predecessor in one step.
+The rollout for each rewrite is:
+
+1. **Implement the native reader as a separate `ArchiveReader` class**, living
+   alongside the legacy reader, selectable via a transitional config flag (exact
+   surface decided at implementation; deprecated from birth). The native reader is
+   the default; the legacy reader remains reachable as an escape hatch.
+2. **Differential-test the two across the whole sample-archive corpus** (and the
+   external fixtures): compare member lists (names, order, types), *every*
+   `ArchiveMember` metadata field, `ArchiveInfo`, full decompressed bytes per
+   member, and error behavior (same `ArchiveError` subclass for the same bad
+   input). The comparison harness should diff structured dumps so a mismatch
+   reports the exact field, not just "not equal".
+3. **Fix or explain every discrepancy.** Some will be intentional — the legacy
+   reader can be wrong (e.g. py7zr mishandles LZMA1+IA64; rarfile's UTF-16
+   corruption workaround) — and each intentional difference is recorded in the
+   change's design doc and pinned by a test asserting the *native* behavior.
+4. **The legacy dependency moves out of the `optional` extra immediately** (the
+   native reader is the default and needs no third-party package), but stays as a
+   **dev/test dependency** so the differential tests keep running in CI.
+5. **Delete the legacy reader path in a follow-up cleanup change** once parity has
+   been confirmed (ideally after a release of soak time), removing the transitional
+   flag and the dev dependency together.
+
+This converts "big-bang dependency swap" into a reversible migration with a
+machine-checked parity story, at the cost of carrying both readers briefly.
+
+## 11. Future work (identified, not yet owned by a change)
+
+- **Native/streaming ZIP reader** — exploration planned (seed:
+  `zip-stdlib-limitations.md`); unlocks streaming ZIP listing, Deflate64 via the
+  shared `inflate64` opener, and per-member backend choice. Lower priority for now.
+- **Duplicate-filename policy** (§7.3) — with the native 7z reader the rename
+  round-trip map disappears, but the representation question remains: today 7z
+  renames duplicates at registration while TAR silently shadows. Needs a deliberate
+  policy (`KEEP_FIRST` / `KEEP_LAST` / rename / by-id) applied uniformly.
+- **Multi-volume archives** — rarfile supports multi-volume RAR when given a path
+  (it locates sibling volumes by naming convention); py7zr does not support
+  multi-volume 7z at all (volumes must be concatenated first); `unrar` handles RAR
+  volumes natively. Archivey currently cannot represent the input ("open this
+  *list* of files / this volume set"), so support needs an API decision first —
+  e.g. `open_archive([vol1, vol2, ...])` or path-based sibling discovery. Worth its
+  own exploration; the native RAR parser should keep volume metadata (volume flag,
+  volume number) surfaced in its clean errors meanwhile.
+- **Concurrent member access / thread-safety** — being explored in the
+  `concurrent-member-access` change: independent member streams, thread-safety
+  contract, the shared-source-stream multiplexer problem, and multi-stream safety
+  of rapidgzip/indexed_bzip2 (which gates the `access-intent` default flip).
+
+## 12. References
 
 | Document | Covers |
 |---|---|

@@ -20,10 +20,20 @@ pull-based and deletes the entire thread/queue/lock apparatus.
 
 ## What Changes
 
-- **Drop py7zr entirely.** Replace it for metadata parsing *and* decompression. (The
-  earlier metadata-only/phase-2 split is collapsed into this one change: keeping the
-  split would leave the messy push-model scaffolding in place and require a second
-  migration later — messier and slower than doing it once.)
+- **Drop py7zr as a runtime dependency.** Replace it for metadata parsing *and*
+  decompression. (The earlier metadata-only/phase-2 split is collapsed into this one
+  change: keeping the split would leave the messy push-model scaffolding in place and
+  require a second migration later — messier and slower than doing it once.)
+- **Rollout follows the parallel-reader strategy**
+  (`docs/format-architecture-comparison.md` §10, adopted 2026-06-10): the native
+  reader is a **separate reader class** and the default; the existing py7zr-backed
+  reader is kept reachable behind a transitional config flag and exercised by a
+  **differential test** comparing both readers across the whole 7z corpus (member
+  lists, all metadata fields, decompressed bytes, error types). Discrepancies are
+  fixed or documented as intentional (the legacy reader can be wrong — e.g. py7zr
+  mishandles LZMA1+IA64). py7zr leaves the `optional` extra now but stays a dev/test
+  dependency; the legacy reader path and flag are deleted in a follow-up cleanup
+  change once parity is confirmed.
 - **New** `src/archivey/formats/sevenzip_parser.py`: `SevenZipParser` reading the
   signature header, (encoded/encrypted) end header, `FILES_INFO`, `PACK_INFO`,
   `UNPACK_INFO` (folders, coders, bind pairs), and `SUBSTREAMS_INFO`; plus a
@@ -40,10 +50,13 @@ pull-based and deletes the entire thread/queue/lock apparatus.
 - **BCJ2** (`0x0303011B`): detect and raise a clean `UnsupportedCompressionMethodError`.
   This matches py7zr, which cannot decode BCJ2 either, so behavior is strictly
   equal-or-better than the current baseline.
-- **Modified** `src/archivey/formats/sevenzip_reader.py`: build the member list and
-  decompression from the native parser; **delete** the thread+queue extractor,
-  `_temporary_password` + class lock, `reset()`, the duplicate-name map, and the
-  `WriterFactory`/`StreamingFile` machinery (design §5).
+- **Modified** `src/archivey/formats/sevenzip_reader.py`: the native reader is built
+  fresh (no thread+queue extractor, no `_temporary_password` + class lock, no
+  `reset()`, no `WriterFactory`/`StreamingFile` machinery — design §5); the legacy
+  py7zr reader (with all that scaffolding) moves aside unchanged (e.g.
+  `sevenzip_reader_legacy.py`) until the follow-up deletion change. Duplicate-name
+  handling: registration-time renaming behavior is preserved; only the
+  rename-reversal round-trip map (a py7zr artifact) disappears in the native path.
 - **New metadata** the native parser exposes (design §4.7): per-member
   `compression_method` (typed primary codec, full filter chain in
   `compression_method_detail`); archive `comment`; `atime`/`ctime`.

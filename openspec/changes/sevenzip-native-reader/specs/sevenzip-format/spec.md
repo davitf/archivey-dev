@@ -103,7 +103,10 @@ codec (for example `LZMA2`, `LZMA`, `PPMD`) and SHALL preserve the full coder ch
 ### Requirement: 7z exposes the archive comment
 
 The reader SHALL surface the archive comment (from `FILES_INFO`) in
-`ArchiveInfo.comment` when present, rather than discarding it.
+`ArchiveInfo.comment` when present, rather than discarding it. *(Contingent on tasks
+§1.7: the 7z comment property is defined by the format spec but no real-world producer
+is currently known to write it — if verification finds none, this requirement is
+dropped from the change as untestable.)*
 
 #### Scenario: Archive with a comment
 - **WHEN** a 7z archive stores a comment

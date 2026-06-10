@@ -482,3 +482,17 @@ This makes these streams usable as seekable `fileobj` for `tarfile.open(mode="r:
 - Current implementation: `src/archivey/formats/tar_reader.py`
 - Compressed stream wrappers: `src/archivey/formats/compressed_streams.py`
 - PEP 706 (tarfile extraction filters): https://peps.python.org/pep-0706/
+
+---
+
+## Corrections from technical review (2026-06-10)
+
+- **§3.3 is wrong about links:** `extractfile()` returns the *target's* file object
+  for symlinks/hardlinks (or raises `StreamError` on non-seekable streams); it
+  returns `None` only for directories and special files (devices/FIFOs). Archivey's
+  link handling must account for the actual behavior.
+- **§4.3 overstates `BufferedReader.read(n)`:** it returns fewer bytes at EOF and
+  does not raise; the real guarantee is only "no short reads mid-stream". The
+  workaround described remains valid.
+- **§4.11 tense:** Python 3.14 is released; the default extraction filter change to
+  `data` has shipped.

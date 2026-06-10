@@ -359,3 +359,18 @@ Fields that are in the format but not exposed by `ZipInfo` / archivey:
 - InfoZIP extra field specification (0x5455, 0x7875, 0x756E, etc.)
 - Python stdlib zipfile source: `/usr/lib/python3.11/zipfile.py`
 - Current implementation: `src/archivey/formats/zip_reader.py`
+
+---
+
+## Corrections from technical review (2026-06-10)
+
+- **Zstandard:** "stored/deflate/bzip2/lzma only" is true through Python 3.13 but
+  outdated for **3.14+**, where `zipfile` supports method 93 (Zstandard) via PEP 784's
+  `compression.zstd`. Statements should be version-qualified (the project supports
+  ≥3.10).
+- **WinZip AES vs flag bit 6:** WinZip AES (method 99) does **not** set the
+  strong-encryption flag (bit 6); it fails in `_check_compression` ("compression
+  method not supported"), not via the flag-6 `NotImplementedError` path. The
+  PBKDF2-SHA1 + HMAC-SHA1 sketch is correct.
+- **LZMA "extra field":** the 9-byte version/properties header lives at the start of
+  the member's *compressed data*, not in a header extra field.

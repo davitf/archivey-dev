@@ -52,6 +52,11 @@ seed for a wider review of archivey's stream handling.
   before locking the API.
 - **Write paths** — does the public base cover only readable streams, or also writable
   ones?
+- **Separability** *(constraint, decided 2026-06-10)*: the generic stream plumbing
+  (wrappers, combinators, multiplexer, `seek_cost`) must stay free of archive-specific
+  imports, keeping open the option of extracting it as a standalone streams library —
+  see `docs/streams-library-idea.md`. Archive semantics (member back-reference, etc.)
+  layer on top.
 
 ## Capabilities
 
