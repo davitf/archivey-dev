@@ -67,6 +67,14 @@ Depends on `base-reader-architecture-extensions` (the `AccessCost` / `seek_cost`
 Should be scheduled **after** a dedicated exploration of archivey's stream usage; the spec
 here is intentionally minimal until that analysis is done.
 
+Recommended order: implemented **last** of the pending changes
+(`test-suite-parametrization` → `base-reader-architecture-extensions` → `access-intent`
+→ native readers → `unify-junction-handling` → **this change**). It is sequenced last on
+purpose — blocking the cost foundation on this exploration would stall everything, and
+the cost of waiting is small and known: this change hoists the per-class `seek_cost` that
+`base-reader-architecture-extensions` adds onto the shared `ArchiveyStream` base, at which
+point that change's tolerant `seek_cost_of` helper collapses into a direct property read.
+
 ## Impact
 
 - **Files (anticipated)**: `internal/io_helpers.py` (the `ArchiveyStream` base + the

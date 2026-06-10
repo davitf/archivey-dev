@@ -102,6 +102,13 @@ reports the realized outcome through `member_access_cost` / `seek_cost`, which t
 change introduces. No other change depends on this one; the native readers are
 unaffected (they gain intent handling for free via the shared reader hand-off).
 
+Recommended order: `test-suite-parametrization` → `base-reader-architecture-extensions`
+→ **this change** → native readers (`rar-native-metadata-reader`, `sevenzip-native-reader`)
+→ `unify-junction-handling` → `public-stream-interface`. Sequence this change **early**
+(right after the cost foundation): it is the one **breaking** API change here (removing
+`streaming` / `streaming_only`), so the sooner it lands the fewer `streaming=` call sites
+accumulate to migrate.
+
 ## Impact
 
 - **Files**: `core.py` (`open_archive`: remove `streaming`/`streaming_only`, add

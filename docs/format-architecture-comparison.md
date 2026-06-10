@@ -563,7 +563,7 @@ only when its decompressor is genuinely non-seekable for this instance. The
 runtime streaming flag then means "user requested streaming OR format cannot
 random-access".
 
-#### C. `has_central_directory` ClassVar (replacing the `members_list_supported` argument)
+#### C. Catalog-location ClassVar (replacing the `members_list_supported` argument)
 
 Currently `members_list_supported` is passed to `__init__()` as a constructor
 argument. The name is misleading (it sounds like it returns the list) and it
@@ -571,19 +571,29 @@ conflates two things: a format fact and a runtime fact.
 
 Split them:
 
-- **"Does this *format* have a catalog/central directory?"** is a pure format-level
-  fact — `True` for ZIP/7z/RAR/ISO/folder, `False` for TAR. That genuinely belongs
-  on the class, as a clearly-named `ClassVar`:
+- **"Where does this *format* keep its member catalog?"** is a pure format-level
+  fact and belongs on the class, as a clearly-named `ClassVar`. A plain
+  `has_central_directory` bool is too coarse, because *where* the catalog lives
+  decides whether it is reachable without seeking:
   ```python
   class ZipReader(BaseArchiveReader):
-      has_central_directory = True
+      member_catalog = CatalogLocation.TRAILER   # end-of-file central directory
   ```
+  The locations are: **header-resident** (read while streaming forward),
+  **tail-resident** (ZIP's end-of-file central directory), **single-known-member**
+  (single-file streams), or **none** (TAR). The exact per-format mapping (e.g. whether
+  RAR/7z/ISO are header- or tail-resident) is confirmed per reader, notably when the
+  native readers land.
 - **"Can *this opened archive* be listed cheaply (`INDEXED`)?"** is the *realized*
-  cost, and it is **not** read from the ClassVar alone: a catalog at end-of-file is
-  only reachable when the source is seekable. So `member_listing_cost` (§E) is
-  computed per instance from `has_central_directory` **and** seekability — exactly the
-  same capability-vs-runtime split as §B. Deriving `INDEXED` from the ClassVar alone
-  is wrong for a catalog format opened from a non-seekable source.
+  cost, **not** read from the ClassVar alone: it depends on the location **and**
+  seekability. `INDEXED` when the catalog (or single member) is reachable without a
+  backward seek — a header catalog, a single-member stream, or a tail catalog on a
+  seekable source; `SCAN_REQUIRED` for a seekable no-catalog format; `SEQUENTIAL_ONLY`
+  otherwise. So a `.gz` single-member stream is `INDEXED` even on a pipe, and a
+  header-resident catalog can be `INDEXED` on a non-seekable source once a native reader
+  parses it forward (today's seek-requiring third-party readers raise at open instead).
+  This is the same capability-vs-runtime split as §B; deriving `INDEXED` from a "has a
+  catalog" bool alone is wrong on both seekability and location.
 
 The standalone `members_list_supported` boolean then disappears: it is precisely
 `member_listing_cost == INDEXED`.
@@ -675,10 +685,12 @@ The three properties are *derived from mechanism, never measured* (reading them
 does no I/O):
 
 ```text
-member_listing_cost(reader):           # per instance: §C ClassVar + seekability
-    if not source.seekable():      -> SEQUENTIAL_ONLY
-    if has_central_directory:      -> INDEXED          # catalog one bounded seek away
-    else:                          -> SCAN_REQUIRED     # seekable, no catalog (TAR)
+member_listing_cost(reader):           # per instance: catalog location (§C) + seekability
+    cat = member_catalog               # HEADER | TRAILER | SINGLE_MEMBER | NONE
+    if cat in (HEADER, SINGLE_MEMBER): -> INDEXED        # reachable forward, no back-seek
+    if cat == TRAILER:                 -> INDEXED if seekable else SEQUENTIAL_ONLY  # ZIP EOCD
+    # cat == NONE (TAR)
+    -> SCAN_REQUIRED if seekable else SEQUENTIAL_ONLY
 
 seek_cost(stream):                     # per stream, fixed at construction
     if not seekable():             -> UNAVAILABLE
@@ -687,12 +699,24 @@ seek_cost(stream):                     # per stream, fixed at construction
                                                         #   multi-block xz/lzip
     else:                          -> EXPENSIVE          # rewind / single block
 
+seek_cost_of(stream):                  # tolerant helper: not every stream is ours yet
+    if has attr seek_cost:         -> stream.seek_cost
+    if not seekable():             -> UNAVAILABLE
+    else:                          -> EXPENSIVE          # conservative; mechanism unknown
+
 member_access_cost(reader):            # per instance: reaching a member out of order
     if not random_access_possible: -> UNAVAILABLE       # streaming / non-seekable
-    if members from one stream:    -> decompressed_stream.seek_cost   # TAR
+    if members from one stream:    -> seek_cost_of(decompressed_stream)   # TAR
     if stored independently:       -> DIRECT             # ZIP / stored
     else:                          -> EXPENSIVE          # solid 7z, single stream
 ```
+
+So a `.gz` single-member stream lists `INDEXED` even on a pipe, and a header-resident
+catalog can list `INDEXED` from a non-seekable source once a reader parses it forward
+(today's seek-requiring third-party readers raise at open instead). The `seek_cost_of`
+helper is a deliberate stopgap for this phase, where some decompressor streams are still
+raw third-party objects without a `seek_cost`; it collapses into a direct read once the
+public `ArchiveyStream` base guarantees the property.
 
 Here, `seek_cost` is added to archivey's own stream classes. Guaranteeing it on
 *every* returned stream — including those handed back raw by third-party libraries

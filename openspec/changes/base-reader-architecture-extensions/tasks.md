@@ -13,9 +13,12 @@
       cannot random-access — i.e. a compressed TAR whose decompressor is
       non-seekable at construction time
 - [ ] 1.2 Replace the `members_list_supported` `__init__` argument with a
-      `has_central_directory: ClassVar[bool]` on each reader class (`True` for
-      ZIP/7z/RAR/ISO/folder/single-file, `False` for TAR); remove the standalone
-      boolean (it is now `member_listing_cost == INDEXED`)
+      catalog-location `ClassVar` on each reader class capturing *where* the member
+      catalog lives — header-resident (readable streaming forward), tail-resident (ZIP
+      EOCD), single-known-member (single-file), or none (TAR) — richer than a plain
+      "has a catalog" bool; remove the standalone boolean (it is now
+      `member_listing_cost == INDEXED`). Confirm each format's actual catalog location
+      (e.g. RAR/7z/ISO) when wiring this up
 
 ## 2. Compression method types (§8.D)
 
@@ -42,23 +45,31 @@
       `SEQUENTIAL_ONLY`) and a shared `AccessCost` enum (`DIRECT` / `LIMITED` /
       `EXPENSIVE` / `UNAVAILABLE`) to `types.py`
 - [ ] 3.2 Add a `member_listing_cost: MemberListingCost` property computed **per
-      instance** from `has_central_directory` **and** source seekability (do **not**
-      derive `INDEXED` from the ClassVar alone); `streaming=True` on a seekable catalog
-      source stays `INDEXED`
+      instance** from the catalog-location ClassVar **and** source seekability (do
+      **not** derive `INDEXED` from a "has a catalog" flag alone): `INDEXED` when the
+      catalog/single member is reachable without a backward seek (header catalog,
+      single-member, or tail catalog on a seekable source), `SCAN_REQUIRED` for a
+      seekable no-catalog format, `SEQUENTIAL_ONLY` otherwise; `streaming=True` on a
+      seekable catalog source stays `INDEXED`, and a single-file `.gz` is `INDEXED` even
+      on a pipe
 - [ ] 3.3 Add a `seek_cost: AccessCost` property to each decompressor/seekable-stream
       class (stdlib rewind wrapper, rapidgzip, indexed_bzip2, `XzDecompressorStream`,
       lzip, plain file), consistent with its `seekable()`
+- [ ] 3.3a Add a tolerant `seek_cost_of(stream) -> AccessCost` helper that returns
+      `stream.seek_cost` when present and otherwise a conservative estimate from the
+      stream's type / `seekable()` (seekable-unknown → `EXPENSIVE`, non-seekable →
+      `UNAVAILABLE`), so readers do not assume every stream is an Archivey type yet
 - [ ] 3.4 Add a `member_access_cost: AccessCost` property to
       `ArchiveReader`/`BaseArchiveReader`; have each reader report it by mechanism
-      (no I/O, no raise). For `TarReader`, **read** `member_access_cost` from the
-      `seek_cost` of the decompressed stream it opens (do not re-derive from
+      (no I/O, no raise). For `TarReader`, derive `member_access_cost` from the
+      decompressed stream it opens via `seek_cost_of(...)` (do not re-derive from
       `config.use_*`); this refines the inner-stream `seekable()` check at
       `tar_reader.py:112`
 - [ ] 3.5 Add a `seek_cost: AccessCost` property to the member-stream wrapper
       (`ArchiveStream`) *alongside* the protocol-required `seekable()` (keep
       `seekable()` as-is — the IO contract); keep the two consistent (`seekable()` is
-      `False` iff `seek_cost == UNAVAILABLE`), and take it from the underlying
-      decompressor stream's `seek_cost` where applicable
+      `False` iff `seek_cost == UNAVAILABLE`), and take it from the underlying stream via
+      `seek_cost_of(...)` where applicable
 - [ ] 3.6 Remove `has_random_access()`; migrate callers/docs to
       `member_access_cost != AccessCost.UNAVAILABLE`
 - [ ] 3.7 Tighten `get_members_if_available()` so it returns the list only for

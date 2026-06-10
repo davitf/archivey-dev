@@ -40,17 +40,21 @@ This change adds the receipt; the request follows in `access-intent`.
   stdlib on a file rewinds; rapidgzip/indexed_bzip2 are always seekable), so it is
   set in `__init__`. The runtime streaming flag becomes "user requested OR format
   can't".
-- **§8.C — `has_central_directory` ClassVar (replaces the `members_list_supported`
-  argument)** *(internal)*: "does this *format* have a catalog/central directory?"
-  is a genuine format-level fact (ZIP/7z/RAR/ISO/folder yes, TAR no), so it becomes
-  a `ClassVar[bool]` named `has_central_directory` — a clearer name than
-  `members_list_supported`. But the *realized* listing cost is **not** read from
-  that flag alone: a catalog at end-of-file is only reachable when the source is
-  seekable, so `member_listing_cost` (§8.E) is computed **per instance** from
-  `has_central_directory` **and** seekability. (The PR-#221 implementation derived
-  `INDEXED` from the ClassVar only — wrong for a catalog format on a non-seekable
-  source.) The standalone `members_list_supported` boolean is dropped; it is now
-  exactly `member_listing_cost == INDEXED`.
+- **§8.C — catalog-location ClassVar (replaces the `members_list_supported`
+  argument)** *(internal)*: *where* a format keeps its member catalog is a genuine
+  format-level fact, so it becomes a `ClassVar` — header-resident (read while streaming
+  forward), tail-resident (ZIP's end-of-file central directory), a single-known-member
+  stream, or none (TAR). This is richer than PR #221's bool `has_central_directory`,
+  because *where* the catalog lives decides whether it is reachable without seeking. The
+  *realized* listing cost is **not** read from that fact alone: `member_listing_cost`
+  (§8.E) is computed **per instance** from the location **and** seekability — `INDEXED`
+  when the catalog (or single member) is reachable without a backward seek (header
+  catalog, single-member stream, or tail catalog on a seekable source), so a `.gz`
+  single-member stream is `INDEXED` even on a pipe and a header catalog can be `INDEXED`
+  on a non-seekable source once a native reader parses it forward. (PR #221 derived
+  `INDEXED` from a "has a catalog" bool only — wrong on both counts.) The standalone
+  `members_list_supported` boolean is dropped; it is now exactly
+  `member_listing_cost == INDEXED`.
 - **§8.D — typed `CompressionMethod` enum + lossless detail** *(public)*: a `StrEnum`
   of known codecs (plus `UNKNOWN`) so callers can branch on compression without parsing
   free-form strings. Stays string-compatible. The enum is **exhaustive over the formats
@@ -71,7 +75,7 @@ This change adds the receipt; the request follows in `access-intent`.
   - `member_listing_cost: MemberListingCost` (`INDEXED` / `SCAN_REQUIRED` / `SEQUENTIAL_ONLY`)
     — *how cheaply the full member list is obtainable*, so "one bounded seek (ZIP
     catalog)" is no longer conflated with "O(N) full pass (seekable TAR)". Computed
-    per instance from `has_central_directory` and seekability (see §8.C).
+    per instance from catalog location and seekability (see §8.C).
     `get_members_if_available()` is tightened to return the list only for `INDEXED`
     (or already-known) and never to trigger a scan.
   - `member_access_cost: AccessCost` (`DIRECT` / `LIMITED` / `EXPENSIVE` / `UNAVAILABLE`)
@@ -87,9 +91,15 @@ This change adds the receipt; the request follows in `access-intent`.
   - **`seek_cost` is owned by the seekable-stream abstraction, not re-derived by each
     reader.** Each decompressor/seekable stream (stdlib rewind wrapper, rapidgzip,
     indexed_bzip2, `XzDecompressorStream`, lzip, a plain file) exposes its own
-    `seek_cost`. A TAR reader's `member_access_cost` is then read directly from the
-    `seek_cost` of the decompressed stream it opens (reaching a member is a seek on
-    that stream) instead of re-inferring it from config flags. (The PR-#221 TarReader
+    `seek_cost`. A TAR reader's `member_access_cost` is then read from the `seek_cost` of
+    the decompressed stream it opens (reaching a member is a seek on that stream) instead
+    of re-inferring it from config flags. **Because not every stream is an Archivey type
+    yet** (some are returned raw by third-party libraries; the public `ArchiveyStream`
+    base is the separate `public-stream-interface` change), this read goes through a
+    tolerant `seek_cost_of(stream)` helper — returns `stream.seek_cost` when present, else
+    a conservative estimate from type/`seekable()` (seekable-unknown → `EXPENSIVE`,
+    non-seekable → `UNAVAILABLE`). The helper collapses into a direct read once all
+    streams expose the property. (The PR-#221 TarReader
     re-derived the cost by inspecting `config.use_rapidgzip` etc. — duplicating
     backend-selection logic and already mis-reporting multi-block `tar.xz` as
     `EXPENSIVE`. Making the stream the single source of truth fixes that.)
@@ -140,10 +150,15 @@ this one. (The §8.A migration lives in the native-reader changes.)
 
 Recommended order across all pending changes:
 1. `test-suite-parametrization` — verification harness
-2. **this change** — §8.B–§8.E (§8.D enum prerequisite for 7z native)
-3. `access-intent` — §8.F (depends on §8.E cost surface)
+2. **this change** — §8.B–§8.E (§8.D enum prerequisite for 7z native; the foundation
+   both `access-intent` and `public-stream-interface` build on)
+3. `access-intent` — §8.F (depends on §8.E; sequence it early since it is the breaking
+   API change — removing `streaming` — and the longer it waits the more call sites accrete)
 4. `rar-native-metadata-reader` + `sevenzip-native-reader` (in parallel; also run junction Windows spike)
 5. `unify-junction-handling` — after native readers (junction detection in native parsers)
+6. `public-stream-interface` — implemented **last**, after its own exploration; it hoists
+   the per-class `seek_cost` added here onto the shared `ArchiveyStream` base (a small,
+   anticipated refactor that also lets the `seek_cost_of` helper collapse into a direct read)
 
 ## Impact
 

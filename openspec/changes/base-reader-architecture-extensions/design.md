@@ -73,25 +73,32 @@ regression contract). §8.F (access intent) is specified in the separate
   (§8.B). Whether a compressed TAR can random-access is decided at construction by
   the decompressor backend (stdlib-on-pipe vs stdlib-on-file vs
   rapidgzip/indexed_bzip2), so it is set in `__init__`, not declared on the class.
-- **`has_central_directory` is a `ClassVar`; the realized listing cost is not**
+- **The catalog *location* is a `ClassVar`; the realized listing cost is not**
   (§8.C). This splits a capability from a runtime fact, exactly as §8.B does for
   random access:
-  - `has_central_directory: ClassVar[bool]` names the pure **format** fact — does this
-    format carry a catalog/central directory at all? `True` for ZIP/7z/RAR/ISO/folder,
-    `False` for TAR. As a class fact it is honestly a `ClassVar`, and the name says
-    what it means (unlike `members_list_supported`, which sounded like it returned the
-    list and hid the seekability dependency).
-  - **`member_listing_cost` is computed per instance**, because a catalog sitting at
-    end-of-file is only `INDEXED` if the source is *seekable*. The rule is
-    `INDEXED` when `has_central_directory` **and the source is seekable**;
-    `SCAN_REQUIRED` when there is no catalog but the source is seekable (a TAR that can
-    be scanned); `SEQUENTIAL_ONLY` when the source is non-seekable. The user's
-    `streaming=True` preference does **not** by itself downgrade listing for a seekable
-    catalog format (the catalog is still one seek away — see the independence scenario
-    in the spec).
+  - A `ClassVar` names the pure **format** fact — *where* this format keeps its member
+    catalog: header-resident (read while streaming forward), tail-resident (ZIP's
+    end-of-file central directory), a single-known-member stream, or no catalog (TAR).
+    This generalizes the bool `has_central_directory` PR #221 used: "has a catalog" is
+    too coarse, because *where* the catalog lives decides whether it is reachable on a
+    non-seekable source. (The exact per-format mapping — e.g. whether RAR/7z/ISO are
+    header- or tail-resident — is settled per reader, notably when the native readers
+    land; the model only needs the location, not a fixed list here.)
+  - **`member_listing_cost` is computed per instance** from that location **and**
+    seekability, because reachability depends on both. The rule: `INDEXED` when the
+    catalog (or single known member) is reachable **without a backward seek** — a
+    header-resident catalog, a single-member stream, or a tail-resident catalog on a
+    *seekable* source; `SCAN_REQUIRED` when there is no catalog but the source is
+    seekable (a TAR that can be scanned); `SEQUENTIAL_ONLY` when there is no catalog and
+    the source is non-seekable. So a `.gz` single-member stream is `INDEXED` even on a
+    pipe, and a header-resident catalog can be `INDEXED` on a non-seekable source once a
+    reader can parse it forward (today's third-party readers that require seeking raise
+    at open instead — see `archive-opening`). The user's `streaming=True` preference does
+    **not** by itself downgrade listing while the catalog stays reachable.
   - The standalone `members_list_supported` boolean is dropped: it is now exactly
-    `member_listing_cost == INDEXED`. Deriving `INDEXED` from the `ClassVar` alone (as
-    PR #221 did) is the bug this split fixes.
+    `member_listing_cost == INDEXED`. Deriving `INDEXED` from a "has a catalog" bool
+    alone (as PR #221 did) is the bug this split fixes — it ignores both seekability and
+    catalog location.
 - **Cost introspection is redesigned around two orthogonal axes, each a
   cost-classifying enum** (§8.E), because the old `streaming` / `has_random_access()`
   / "member list supported" set conflated listing cost, access cost, and the user's
@@ -155,11 +162,15 @@ regression contract). §8.F (access intent) is specified in the separate
     mechanism*, never measured; reading them does no I/O. The algorithm:
 
     ```text
-    # member_listing_cost — per reader instance, from the §C ClassVar + seekability
+    # member_listing_cost — per reader instance, from catalog location (§C) + seekability
     def member_listing_cost(self):
-        if not self.source.seekable():        return SEQUENTIAL_ONLY
-        if type(self).has_central_directory:  return INDEXED        # catalog 1 seek away
-        return SCAN_REQUIRED                                        # seekable, no catalog (TAR)
+        cat = type(self).member_catalog            # HEADER | TRAILER | SINGLE_MEMBER | NONE
+        if cat in (HEADER, SINGLE_MEMBER):    return INDEXED        # reachable forward, no
+                                                                   #   backward seek needed
+        if cat == TRAILER:                                          # ZIP end-of-file catalog
+            return INDEXED if self.source.seekable() else SEQUENTIAL_ONLY
+        # cat == NONE  (TAR: no catalog)
+        return SCAN_REQUIRED if self.source.seekable() else SEQUENTIAL_ONLY
 
     # seek_cost — per decompressor / seekable stream, fixed at construction
     def seek_cost(self):
@@ -169,18 +180,33 @@ regression contract). §8.F (access intent) is specified in the separate
                                                                     #   multi-block xz/lzip
         return EXPENSIVE                                            # rewind-from-start / 1 block
 
+    # seek_cost_of(stream) — tolerant helper, since not every stream is ours yet
+    def seek_cost_of(stream):
+        if hasattr(stream, "seek_cost"):      return stream.seek_cost
+        if not stream.seekable():             return UNAVAILABLE
+        return EXPENSIVE                       # conservative: seekable, mechanism unknown
+
     # member_access_cost — per reader instance; reaching a member out of order
     def member_access_cost(self):
         if not self.member_random_access_possible:  return UNAVAILABLE  # streaming / non-seekable
-        if self.serves_members_from_decompressed_stream:               # TAR: a member IS a
-            return self.decompressed_stream.seek_cost                  #   seek on that stream
-        if self.members_stored_independently_seekably:  return DIRECT  # ZIP / stored entries
-        return EXPENSIVE                                               # solid 7z, single stream
+        if self.serves_members_from_decompressed_stream:                # TAR: a member IS a
+            return seek_cost_of(self.decompressed_stream)               #   seek on that stream
+        if self.members_stored_independently_seekably:  return DIRECT   # ZIP / stored entries
+        return EXPENSIVE                                                # solid 7z, single stream
     ```
 
     The single source of truth for `LIMITED`/`EXPENSIVE` is the stream's own `seek_cost`
-    (the `has_intermediate_seek_points` line); TAR reads it rather than re-deriving from
-    `config.use_*`, which is the PR-#221 bug above.
+    (the `has_intermediate_seek_points` line); TAR reads it via `seek_cost_of(...)` rather
+    than re-deriving from `config.use_*`, which is the PR-#221 bug above.
+  - **`seek_cost` is read through a tolerant helper in this phase.** Because not every
+    decompressor/member stream is an Archivey type yet — some are raw third-party streams
+    with no `seek_cost` — readers MUST NOT assume the attribute exists. The `seek_cost_of`
+    helper above returns the stream's `seek_cost` when present and otherwise a conservative
+    estimate from its type / `seekable()` (seekable-but-unknown → `EXPENSIVE`,
+    non-seekable → `UNAVAILABLE`). This is a deliberate stopgap: once the public
+    `ArchiveyStream` base (the `public-stream-interface` change) guarantees `seek_cost` on
+    every returned stream, the helper collapses into a direct read. Erring toward
+    `EXPENSIVE` is safe — it never over-promises cheap random access.
   - **`seek_cost` is added to archivey's own stream classes here** (the per-member
     `ArchiveStream` and each decompressor stream). Guaranteeing it on *every* returned
     stream — including those handed back raw by third-party libraries — needs a shared,

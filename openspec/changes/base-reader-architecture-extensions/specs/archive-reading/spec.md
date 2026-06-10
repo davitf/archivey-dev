@@ -61,33 +61,55 @@ written as one large block) carries a correspondingly loose bound.
 A `MemberListingCost` enum SHALL classify how the complete member list can be obtained,
 so callers can reason about cost up front instead of discovering it at runtime:
 
-- `INDEXED` — the format carries a catalog / central directory (its
-  `has_central_directory` class fact is true) **and that catalog is reachable on this
-  instance** (the source is seekable), so the list is obtainable with at most one
-  bounded seek without scanning member data (ZIP, 7z, RAR, folder, ISO on a seekable
-  source).
+- `INDEXED` — the full member list is obtainable with at most one bounded seek and
+  without scanning member data. This holds when the format's member catalog is reachable
+  **without seeking backward** — a catalog read while streaming forward (a header-resident
+  catalog), or a stream with a single, immediately-known member — **and also** when a
+  tail-resident catalog (ZIP's end-of-file central directory) is opened from a seekable
+  source.
 - `SCAN_REQUIRED` — the format has no catalog but the source is seekable, so the list
   is obtainable only by a full pass over the archive body, seeking or reading past each
   member's data (a seekable TAR opened with `streaming=False`).
-- `SEQUENTIAL_ONLY` — the source is non-seekable, or iteration is forward-only, so
-  there is no upfront list; members are discovered only as iteration proceeds (a TAR
-  opened with `streaming=True`, or any archive opened from a non-seekable source).
+- `SEQUENTIAL_ONLY` — the format has no catalog **and** the source is non-seekable (or
+  iteration is forward-only), so there is no upfront list; members are discovered only as
+  iteration proceeds (a TAR opened with `streaming=True`). A format whose catalog is
+  reachable while streaming forward, or whose single member is known up front, is **not**
+  `SEQUENTIAL_ONLY` merely because the source is non-seekable.
 
-`member_listing_cost` SHALL be computed **per instance** from the format's
-`has_central_directory` class fact **and** the runtime seekability of the source. It
-SHALL NOT be derived from `has_central_directory` alone: a catalog format opened from a
-non-seekable source cannot reach its catalog and is `SEQUENTIAL_ONLY`. The caller's
-`streaming=True` preference alone SHALL NOT downgrade `INDEXED` when the catalog
-remains reachable (the source is seekable).
+`member_listing_cost` SHALL be computed **per instance** from where the format keeps its
+member catalog (front/header-resident, tail-resident, single-known-member, or none) **and**
+the runtime seekability of the source — not from a plain "has a catalog" flag alone. The
+rule is: `INDEXED` when the catalog (or single known member) is reachable without a
+backward seek — a header-resident catalog, a single-member stream, or a tail-resident
+catalog on a seekable source; `SCAN_REQUIRED` when there is no catalog but the source is
+seekable; `SEQUENTIAL_ONLY` when there is no catalog and the source is non-seekable. The
+caller's `streaming=True` preference alone SHALL NOT downgrade `INDEXED` when the catalog
+remains reachable.
+
+The realized value SHALL track the reader actually in use. Listing a header-resident
+catalog from a **non-seekable** source becomes possible only when the reader can parse it
+forward; some formats are currently backed by third-party readers that require a seekable
+source, so a non-seekable open raises (see `archive-opening`) and produces no listing cost
+until a native streaming reader replaces them. A single-member stream is `INDEXED`
+regardless of seekability (the one member is known up front, though its size/CRC may not
+be until the stream is read).
 
 #### Scenario: Reachable catalog is INDEXED
 - **WHEN** a ZIP, 7z, RAR, folder, or ISO archive is opened from a seekable source
 - **THEN** `member_listing_cost` is `MemberListingCost.INDEXED`
 
-#### Scenario: Catalog format on a non-seekable source is sequential-only
-- **WHEN** a catalog format is opened from a non-seekable source (its end-of-file
-  catalog cannot be reached)
-- **THEN** `member_listing_cost` is `MemberListingCost.SEQUENTIAL_ONLY`
+#### Scenario: Single-member stream is INDEXED even when non-seekable
+- **WHEN** a single-file stream (e.g. a standalone `.gz`) is opened from a non-seekable
+  source
+- **THEN** `member_listing_cost` is `MemberListingCost.INDEXED` (its one member is known
+  up front, even though its size/CRC may not be until the stream is read)
+
+#### Scenario: Header-resident catalog can be INDEXED without seeking
+- **WHEN** a format whose member catalog is read while streaming forward is opened by a
+  reader that can parse that catalog without seeking backward
+- **THEN** `member_listing_cost` is `MemberListingCost.INDEXED` even if the source is
+  non-seekable (a capability native streaming readers unlock; a third-party reader that
+  requires a seekable source instead raises at open and produces no listing cost)
 
 #### Scenario: Seekable tar requires a scan
 - **WHEN** a seekable tar is opened with `streaming=False`
@@ -141,9 +163,25 @@ block or a rewind-from-start wrapper is `EXPENSIVE`; a forward-only stream is
 
 A reader whose out-of-order member access *is* a seek on such a stream — notably
 `TarReader` — SHALL derive its `member_access_cost`, and the `seek_cost` of the member
-streams it serves, by **reading the decompressed stream's `seek_cost`**, rather than
-re-deriving the cost from configuration flags. This keeps a single source of truth in
-the stream layer where backend selection happens.
+streams it serves, from **the underlying stream's seek cost**, rather than re-deriving the
+cost from configuration flags. This keeps a single source of truth in the stream layer
+where backend selection happens.
+
+Because in this phase not every decompressor stream is an Archivey type that exposes
+`seek_cost` (some are returned raw by third-party libraries; the public `ArchiveyStream`
+base that would guarantee the property is the separate `public-stream-interface` change),
+the seek cost SHALL be obtained through a **helper** rather than by assuming the attribute
+is present. The helper SHALL return the stream's own `seek_cost` when it exposes one, and
+otherwise fall back to a conservative estimate from the stream's type and `seekable()`
+(e.g. a seekable stream of unknown mechanism → `EXPENSIVE`; a non-seekable one →
+`UNAVAILABLE`). The estimate is a stopgap that will collapse into a direct read once all
+streams expose `seek_cost`.
+
+#### Scenario: Seek cost falls back for a non-Archivey stream
+- **WHEN** a reader obtains the seek cost of an underlying stream that does not expose a
+  `seek_cost` property
+- **THEN** the helper returns a conservative estimate from the stream's type and
+  `seekable()` (never raising), rather than assuming the property exists
 
 #### Scenario: A decompressor stream reports its own seek cost
 - **WHEN** a multi-block xz decompressor stream is opened over a seekable source
@@ -198,8 +236,9 @@ the member's content. `seek_cost` refines `seekable()` — letting callers disti
 true random-access stream from one that is seekable only by re-decompressing — and the
 two SHALL be consistent: `seekable()` returns `False` exactly when `seek_cost` is
 `UNAVAILABLE`, and `True` otherwise. Where the member's bytes come from a decompressor
-stream (e.g. a TAR member), the member stream's `seek_cost` SHALL be taken from that
-stream's own `seek_cost` rather than re-derived.
+stream (e.g. a TAR member), the member stream's `seek_cost` SHALL be obtained from that
+underlying stream — via the same helper described above (reading its `seek_cost` when
+present, else a conservative estimate) — rather than re-derived from configuration.
 
 The four tiers carry the same meaning as the archive-level `AccessCost` (above),
 applied to within-member seeks:
