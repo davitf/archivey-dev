@@ -27,12 +27,18 @@
 ## 2. Wire the reader to the native parser
 
 - [ ] 2.1 Replace `rarfile.RarFile`/`Rar*Info` usage in
-      `iter_members_for_registration` with the native parser
+      `iter_members_for_registration` with the native parser, as a **separate reader
+      path**: native is the default, and the rarfile-backed path stays reachable
+      behind a transitional config flag until the follow-up deletion change (rollout
+      strategy: `docs/format-architecture-comparison.md` §10)
 - [ ] 2.2 Keep `RarStreamReader`, `RarStreamMemberFile`, CRC/encryption helpers; make
       them consume `RarMemberInfo`
 - [ ] 2.3 Re-implement the extract-hack (RAR3/RAR5 minimal temp archive) natively
 - [ ] 2.4 Raise clean `ArchiveError`/`ArchiveUnsupportedFeatureError` for
-      multi-volume and RAR2 archives
+      multi-volume and RAR2 archives; for volumes, detect "this is volume N, not the
+      first" (RAR3 first-volume flag, RAR5 volume-number field) so the error can say
+      so, and keep the volume metadata on the parser output (groundwork for future
+      multi-volume support — see `format-architecture-comparison.md` §11)
 - [ ] 2.5 While in this reader, adopt the base co-iteration hook for the
       `use_rar_stream` solid path: override `_iter_members_and_streams_internal`
       instead of the public `iter_members_with_streams`, dropping the bespoke
@@ -44,11 +50,19 @@
 
 - [ ] 3.1 `internal/dependency_checker.py`: rarfile no longer required; surface the
       `unrar` binary as the decompression requirement
-- [ ] 3.2 `pyproject.toml`: remove `rarfile` from the `optional` extra
+- [ ] 3.2 `pyproject.toml`: remove `rarfile` from the `optional` extra (keep it as a
+      dev/test dependency for the differential tests until the follow-up deletion
+      change)
 
 ## 4. Tests & validation
 
 - [ ] 4.1 All existing RAR test archives still pass (metadata + extraction + CRC)
+- [ ] 4.1a **Differential test** (rollout §10): run the full RAR corpus through both
+      the native and rarfile-backed paths and diff structured dumps — member lists
+      (names, order, types), every `ArchiveMember` field, `ArchiveInfo`, decompressed
+      bytes, and error types for corrupt/encrypted inputs. Fix or document each
+      discrepancy as intentional (record intentional ones in design.md, pinned by
+      tests asserting the native behavior). Runs in CI while the legacy path exists
 - [ ] 4.2 New parser unit tests (RAR3 and RAR5 headers, encrypted headers, Unicode
       names, solid detection)
 - [ ] 4.3 Blake2sp-only member reports `crc32 = None`

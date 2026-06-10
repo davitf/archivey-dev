@@ -44,18 +44,23 @@ and a tri-state config) that builds on the cost surface (`member_access_cost` /
   `content`-level facet then is a purely additive parameter, not a break. Building it now
   would be speculative surface with no consumer.
 
-- **`AUTO` vs `RANDOM` is "don't pay vs pay to make random access cheap."** Both allow
-  random-access methods on a seekable source and both raise on a non-seekable one (so the
-  default's footgun-guard is preserved). They differ only in proactivity:
-  - `AUTO` (default): never enables an optional backend on the caller's behalf, so an
-    out-of-order open on a `tar.gz` just pays the stdlib rewind. Equivalent to today's
-    `streaming=False` with all `use_*` at their default.
-  - `RANDOM`: turns on `"auto"`-tagged seekable/indexed backends (rapidgzip,
-    indexed_bzip2) **when installed**, and signals the reader to keep seek points.
-    (XZ needs no activation: the default `XzDecompressorStream` already block-seeks.)
-    This is the *only* intent under which an `"auto"` backend is activated.
-  - `SEQUENTIAL`: forward-only; prefers the cheapest streaming backend, skips eager index
-    building, and (like today's `streaming=True`) accepts a non-seekable source.
+- **`AUTO` uses the best installed backend; `RANDOM` declares the access pattern.**
+  *(Revised 2026-06-10 — an earlier draft had `AUTO` never enable an optional backend,
+  which preserved today's default but contradicted design principle 4: a user with
+  rapidgzip installed would still hit the stdlib rewind trap by default.)* Both allow
+  random-access methods on a seekable source and both raise on a non-seekable one (so
+  the default's footgun-guard is preserved). The semantics:
+  - `AUTO` (default): on a **seekable** source, enables an installed rapidgzip /
+    indexed_bzip2 — they are both faster than the stdlib backends (parallel
+    decompression) and indexed, so this is a strict improvement, not a trade. On a
+    non-seekable source the optional backends are not engaged. (XZ needs no activation:
+    the default `XzDecompressorStream` already block-seeks.)
+  - `RANDOM`: same backend selection as `AUTO`, plus a declared pattern: the reader
+    keeps/builds seek points eagerly (rather than lazily) because out-of-order access
+    *will* happen.
+  - `SEQUENTIAL`: forward-only; accepts a non-seekable source (like today's
+    `streaming=True`); skips eager index building; activates `use_rar_stream` for
+    solid RAR (see resolved question below).
 
 - **Remove `streaming` and `streaming_only` outright** (not a deprecation alias —
   `streaming_only` was already the deprecation step). The forward-only mode is unchanged;
@@ -70,11 +75,16 @@ and a tri-state config) that builds on the cost surface (`member_access_cost` /
   the requested "AUTO / true / false" ergonomically (`True`/`False` keep their meaning;
   `"auto"` is the new default) without forcing callers onto an enum. `True` = force, raise
   `PackageNotInstalledError` if missing (today's explicit-`True` behavior, unchanged);
-  `False` = never; `"auto"` = use iff installed and intent warrants it. **The new default
-  is behavior-preserving**: `"auto"` + default intent `AUTO` activates nothing, exactly
-  like today's all-`False` default. An optional backend is auto-activated only under
-  `RANDOM`. (A `LibraryUsage` `StrEnum` was considered; the `bool | "auto"` literal is
-  less ceremony and round-trips through the existing string-literal config conversion.)
+  `False` = never; `"auto"` = use iff installed and intent warrants it (per-flag mapping
+  in the configuration delta). **The new default is deliberately not
+  behavior-preserving** *(decided 2026-06-10)*: `"auto"` + default intent `AUTO` enables
+  installed rapidgzip/indexed_bzip2 on seekable sources, where today's all-`False`
+  default never did. Zero-config should get the faster, indexed backend when installed;
+  stdlib-only behavior remains one `False` away, and with no optional packages installed
+  nothing changes. Prerequisite: the multi-stream thread-safety of these backends must
+  be verified first (see the `concurrent-member-access` exploration). (A `LibraryUsage`
+  `StrEnum` was considered; the `bool | "auto"` literal is less ceremony and round-trips
+  through the existing string-literal config conversion.)
 
 - **Intent resolves into the existing backend selection, and is also handed to the
   reader.** `open_archive` computes an effective config from `access_intent` + the
@@ -91,27 +101,30 @@ and a tri-state config) that builds on the cost surface (`member_access_cost` /
   source** (`AUTO` or `RANDOM`), because it is genuinely impossible — preserving today's
   `streaming=False` + non-seekable behavior.
 
-## Open question: should SEQUENTIAL activate `use_rar_stream`?
+## Resolved: SEQUENTIAL activates `use_rar_stream` *(decided 2026-06-10)*
 
-The proposal says "`SEQUENTIAL` favors the cheapest streaming backend", but the
-decision above says `AUTO`/`SEQUENTIAL` activate nothing — and for solid RAR those
-conflict. With `use_rar_stream` off, iterating a solid RAR via rarfile shells out to
-`unrar` once per member (O(N²) total); with it on, a single `unrar p` pass serves all
-members in order (O(N)). Its known limitation — `open()` on an individual member still
-costs O(N) — is moot under `SEQUENTIAL`, where random-access methods are restricted
-anyway. Both paths require the same `unrar` binary, so `"auto"` here is not about an
-extra package.
+With `use_rar_stream` off, iterating a solid RAR via rarfile shells out to `unrar`
+once per member (O(N²) total); with it on, a single `unrar p` pass serves all members
+in order (O(N)). Its known limitation — `open()` on an individual member still costs
+O(N) — is moot under `SEQUENTIAL`, where random-access methods are restricted anyway.
+Both paths require the same `unrar` binary, so `"auto"` here is not about an extra
+package. **Decision: `"auto"` + `SEQUENTIAL` activates `use_rar_stream`.** This changes
+behavior relative to today's `streaming=True` (which used the O(N²) path unless the
+flag was set) — an intended improvement, with a scenario in the configuration delta.
 
-So `"auto" + SEQUENTIAL → use_rar_stream` looks strictly better, at the cost of
-breaking the clean rule "only `RANDOM` ever activates an `auto` backend". Options:
+Expected lifetime note: `use_rar_stream` will likely **disappear when the native RAR
+reader lands** — the single-pass `unrar p` strategy becomes the standard behavior for
+sequential extraction rather than an opt-in backend. The intent mapping here is the
+transitional behavior.
 
-1. Keep the clean rule (current spec): `use_rar_stream` is never auto-activated.
-2. Activate it under `SEQUENTIAL` (and arguably during `extractall()`/full iteration
-   under any intent, where the access pattern is known to be sequential).
+## Open question: should SEQUENTIAL (and AUTO on non-indexed paths) use
+rapidgzip/indexed_bzip2 for raw speed?
 
-Leaning toward (2) for `SEQUENTIAL` at least, but it changes behavior relative to
-today's `streaming=True` (which uses the O(N²) path unless the flag is set), so it
-needs an explicit decision and a scenario in the configuration delta.
+`AUTO`/`RANDOM` enable them for cost-class reasons; under `SEQUENTIAL` there is no
+random access to make cheap, but rapidgzip's parallel decompression may still be a
+large wall-clock win for a pure forward pass. Needs a benchmark (the `benchmarks/`
+suite is the place) and a look at memory overhead before deciding; until then
+`SEQUENTIAL` keeps the stdlib streaming backends.
 
 A related point, now reflected in the configuration delta: `use_python_xz` and
 `use_zstandard` provide no cost-class improvement over the defaults (the native

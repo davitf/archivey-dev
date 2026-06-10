@@ -746,11 +746,12 @@ default becomes `AUTO`):
 ```python
 class AccessIntent(StrEnum):
     AUTO = "auto"              # default == old streaming=False; random methods on a
-                               #   seekable source, no optional backend enabled for you
+                               #   seekable source, best installed backend selected
     SEQUENTIAL = "sequential"  # == old streaming=True; forward-only, accepts non-seekable
-    RANDOM = "random"          # out-of-order / within-member seeking; pay to make it cheap
+    RANDOM = "random"          # declared out-of-order / within-member seeking; build
+                               #   seek points eagerly
 
-archive = open_archive("big.tar.gz", access_intent=AccessIntent.RANDOM)
+archive = open_archive("big.tar.gz")  # AUTO
 # → archivey enables rapidgzip if installed; member_access_cost == LIMITED
 ```
 
@@ -760,16 +761,21 @@ within a member. The cost surface already separates the two (`member_access_cost
 when a reader differentiates on it — e.g. a native ZIP reader choosing rapidgzip *per
 member* only when the caller will seek inside files.
 
-**`AUTO` vs `RANDOM`** is "don't pay vs pay to make random access cheap": both expose
-random methods on a seekable source and both raise on a non-seekable one, but only
-`RANDOM` proactively activates `"auto"` seekable/indexed backends and tells the reader to
-keep seek points. `access_intent` is **resolved into the same backend selection** (one
-mechanism, not a parallel one) and is also handed to the reader so it can adapt strategy.
+**`AUTO` vs `RANDOM`** *(revised 2026-06-10; an earlier draft had `AUTO` activate
+nothing, preserving today's default — rejected as contradicting the "most correct
+available backend" principle)*: both expose random methods on a seekable source and
+both raise on a non-seekable one. `AUTO` selects the best installed backend
+(rapidgzip/indexed_bzip2 are both faster than the stdlib backends and indexed);
+`RANDOM` additionally declares the pattern, so the reader keeps/builds seek points
+eagerly. `SEQUENTIAL` activates the single-pass unrar streaming reader for solid RAR.
+`access_intent` is **resolved into the same backend selection** (one mechanism, not a
+parallel one) and is also handed to the reader so it can adapt strategy.
 
 The backend flags become **tri-state** (`True` / `False` / `"auto"`, default `"auto"`):
 `True` forces use (raises if the package is missing), `False` forbids it, `"auto"` uses it
-iff installed and the intent warrants it. The new default (`"auto"` + `AUTO`) activates
-nothing — identical to today's all-`False` default.
+iff installed and the intent warrants it (per-flag mapping in the `access-intent`
+configuration delta). With no optional packages installed, the default behaves exactly
+like today's all-`False` default.
 
 Intent is **best-effort**: `RANDOM` falls back to the stdlib backend when an optional
 package is absent or the format cannot random-access cheaply (solid 7z, single-block xz),
@@ -814,7 +820,61 @@ contradict the declared intent), but that adds runtime tracking and is out of sc
 
 ---
 
-## 10. References
+## 10. Native-reader rollout: parallel readers + differential testing
+
+*(Adopted 2026-06-10 — applies to **every** format rewrite: the RAR and 7z native
+readers now, the native/streaming ZIP reader later.)*
+
+A native reader never replaces its third-party-backed predecessor in one step.
+The rollout for each rewrite is:
+
+1. **Implement the native reader as a separate `ArchiveReader` class**, living
+   alongside the legacy reader, selectable via a transitional config flag (exact
+   surface decided at implementation; deprecated from birth). The native reader is
+   the default; the legacy reader remains reachable as an escape hatch.
+2. **Differential-test the two across the whole sample-archive corpus** (and the
+   external fixtures): compare member lists (names, order, types), *every*
+   `ArchiveMember` metadata field, `ArchiveInfo`, full decompressed bytes per
+   member, and error behavior (same `ArchiveError` subclass for the same bad
+   input). The comparison harness should diff structured dumps so a mismatch
+   reports the exact field, not just "not equal".
+3. **Fix or explain every discrepancy.** Some will be intentional — the legacy
+   reader can be wrong (e.g. py7zr mishandles LZMA1+IA64; rarfile's UTF-16
+   corruption workaround) — and each intentional difference is recorded in the
+   change's design doc and pinned by a test asserting the *native* behavior.
+4. **The legacy dependency moves out of the `optional` extra immediately** (the
+   native reader is the default and needs no third-party package), but stays as a
+   **dev/test dependency** so the differential tests keep running in CI.
+5. **Delete the legacy reader path in a follow-up cleanup change** once parity has
+   been confirmed (ideally after a release of soak time), removing the transitional
+   flag and the dev dependency together.
+
+This converts "big-bang dependency swap" into a reversible migration with a
+machine-checked parity story, at the cost of carrying both readers briefly.
+
+## 11. Future work (identified, not yet owned by a change)
+
+- **Native/streaming ZIP reader** — exploration planned (seed:
+  `zip-stdlib-limitations.md`); unlocks streaming ZIP listing, Deflate64 via the
+  shared `inflate64` opener, and per-member backend choice. Lower priority for now.
+- **Duplicate-filename policy** (§7.3) — with the native 7z reader the rename
+  round-trip map disappears, but the representation question remains: today 7z
+  renames duplicates at registration while TAR silently shadows. Needs a deliberate
+  policy (`KEEP_FIRST` / `KEEP_LAST` / rename / by-id) applied uniformly.
+- **Multi-volume archives** — rarfile supports multi-volume RAR when given a path
+  (it locates sibling volumes by naming convention); py7zr does not support
+  multi-volume 7z at all (volumes must be concatenated first); `unrar` handles RAR
+  volumes natively. Archivey currently cannot represent the input ("open this
+  *list* of files / this volume set"), so support needs an API decision first —
+  e.g. `open_archive([vol1, vol2, ...])` or path-based sibling discovery. Worth its
+  own exploration; the native RAR parser should keep volume metadata (volume flag,
+  volume number) surfaced in its clean errors meanwhile.
+- **Concurrent member access / thread-safety** — being explored in the
+  `concurrent-member-access` change: independent member streams, thread-safety
+  contract, the shared-source-stream multiplexer problem, and multi-stream safety
+  of rapidgzip/indexed_bzip2 (which gates the `access-intent` default flip).
+
+## 12. References
 
 | Document | Covers |
 |---|---|

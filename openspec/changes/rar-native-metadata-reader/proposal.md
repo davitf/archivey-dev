@@ -28,9 +28,17 @@ spec already requires. Decompression stays exactly as it is today (`unrar`).
 - **Decompression unchanged**: stored members read raw bytes; everything else uses
   `unrar`. The extract-hack (minimal temp archive per member) is re-implemented
   natively using stored block offsets.
-- **Dependency shift**: `rarfile` is removed from the `optional` extra; the `unrar`
-  binary becomes the documented requirement for decompression; a cryptography
-  backend remains required only for encrypted headers.
+- **Rollout follows the parallel-reader strategy**
+  (`docs/format-architecture-comparison.md` §10, adopted 2026-06-10): the native
+  parser backs a **separate reader path**, default-on, with the rarfile-backed reader
+  kept reachable behind a transitional config flag and exercised by a **differential
+  test** across the whole RAR corpus (member lists, all metadata fields, decompressed
+  bytes, error types). Discrepancies are fixed or documented as intentional. The
+  legacy path + flag are deleted in a follow-up change once parity is confirmed.
+- **Dependency shift**: `rarfile` is removed from the `optional` extra (kept as a
+  dev/test dependency for the differential tests until the follow-up deletion
+  change); the `unrar` binary becomes the documented requirement for decompression; a
+  cryptography backend remains required only for encrypted headers.
 - **New behaviors** the native parser makes explicit: clean `ArchiveError` for
   multi-volume and RAR2 archives instead of relying on `rarfile`; Blake2sp-only RAR5
   members report `crc32 = None`.

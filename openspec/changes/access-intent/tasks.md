@@ -30,10 +30,15 @@
 - [ ] 3.2 At each backend-selection site (gzip/bzip2/zstd/xz/rar picks), implement the
       tri-state: `True` = use or raise `PackageNotInstalledError`; `False` = never;
       `"auto"` = use iff installed **and** the resolved intent warrants it
-- [ ] 3.3 Resolve `access_intent` into the effective backend choice: `RANDOM` activates an
-      installed `"auto"` seekable/indexed backend; `AUTO`/`SEQUENTIAL` do not; explicit
-      `True`/`False` override intent. Verify default (`"auto"` + `AUTO`) selects no
-      optional backend (behavior-preserving)
+- [ ] 3.3 Resolve `access_intent` into the effective backend choice per the per-flag
+      mapping in the configuration delta: `AUTO`/`RANDOM` activate installed
+      rapidgzip/indexed_bzip2 on a seekable source; `SEQUENTIAL` activates
+      `use_rar_stream`; `use_python_xz`/`use_zstandard` never activate implicitly;
+      explicit `True`/`False` override intent
+- [ ] 3.4 Before enabling rapidgzip/indexed_bzip2 by default under `AUTO`, verify they
+      are safe with multiple concurrently-open member streams (coordinate with the
+      `concurrent-member-access` exploration); if unsafe, gate the default-on behavior
+      or defer the flip for that backend
 
 ## 4. Best-effort semantics
 
@@ -46,4 +51,6 @@
 
 - [ ] 5.1 `openspec validate access-intent --type change --strict`
 - [ ] 5.2 `hatch run lint` and `hatch run test`; confirm the default open path is
-      byte-for-byte unchanged (no optional backend activated without `RANDOM`)
+      unchanged when no optional packages are installed, and that with rapidgzip /
+      indexed_bzip2 installed the default (`AUTO`) path uses them on seekable sources
+      with identical decompressed output and metadata

@@ -18,7 +18,12 @@
 - [ ] 1.5 Detect `is_solid` (`num_unpackstreams_folders`) and per-folder encryption
       (coder-list check) directly
 - [ ] 1.6 Derive `compression_method` (typed primary codec) + `compression_method_detail`
-      (full chain) from the coder chain; read archive `comment`; populate `atime`/`ctime`
+      (full chain) from the coder chain; populate `atime`/`ctime`
+- [ ] 1.7 **Verify the `kComment` claim before implementing it**: the 7z spec defines a
+      comment property ID, but it is unclear any real producer (7-Zip GUI/CLI) ever
+      writes it — py7zr does not expose it. If a producer exists, create a fixture and
+      surface the comment in `ArchiveInfo.comment`; if none does, drop the
+      archive-comment requirement from the spec delta as untestable
 
 ## 2. Native decompression
 
@@ -57,9 +62,15 @@
 
 - [ ] 3.1 Build the member list in `iter_members_for_registration` from the native
       parser; `raw_info` becomes `SevenZipMemberInfo`
-- [ ] 3.2 Replace extraction with native decompression; **delete** the thread+queue
-      extractor, `WriterFactory`/`StreamingFile`/`NullIO`, `_temporary_password` +
-      class `_password_lock`, `reset()`, and the duplicate-name round-trip map (§5)
+- [ ] 3.2 Build the native reader as a **separate reader class** with native
+      decompression and none of the py7zr scaffolding (thread+queue extractor,
+      `WriterFactory`/`StreamingFile`/`NullIO`, `_temporary_password` + class
+      `_password_lock`, `reset()`, duplicate-name round-trip map — §5). Move the
+      legacy py7zr reader aside unchanged (e.g. `sevenzip_reader_legacy.py`) behind a
+      transitional config flag; the native reader is the default. Preserve
+      registration-time duplicate renaming behavior. The legacy path + flag are
+      deleted in a follow-up change after parity soak (rollout strategy:
+      `docs/format-architecture-comparison.md` §10)
 - [ ] 3.3 Replace `_is_member_encrypted` and the `archiveinfo()` empty-archive guard
       with native equivalents; inline `filetime_to_dt`
 - [ ] 3.4 Raise a clean `ArchiveError` for multi-volume; warn on anti-files
@@ -70,8 +81,10 @@
 
 ## 4. Dependencies
 
-- [ ] 4.1 `pyproject.toml`: remove `py7zr>=1.0.0`; add `pyppmd` and `inflate64` to the
-      `optional` and `optional-freethreaded` extras
+- [ ] 4.1 `pyproject.toml`: remove `py7zr>=1.0.0` from the `optional` extra (keep it as
+      a dev/test dependency for the differential tests until the follow-up deletion
+      change); add `pyppmd` and `inflate64` to the `optional` and
+      `optional-freethreaded` extras
 - [ ] 4.2 `internal/dependency_checker.py`: drop py7zr; gate PPMd/Deflate64/Zstd/
       Brotli/AES on their own packages with clear messages
 
@@ -79,6 +92,12 @@
 
 - [ ] 5.1 All existing 7z test archives still pass (metadata + extraction + CRC) with
       py7zr uninstalled
+- [ ] 5.1a **Differential test** (rollout §10): run the full 7z corpus through both the
+      native and legacy readers and diff structured dumps — member lists (names,
+      order, types), every `ArchiveMember` field, `ArchiveInfo`, decompressed bytes,
+      and error types for corrupt/encrypted inputs. Fix or document each discrepancy
+      as intentional (record intentional ones in design.md, pinned by tests asserting
+      the native behavior). Runs in CI while the legacy reader exists
 - [ ] 5.2 Per-codec decompression tests (LZMA2, LZMA2+BCJ, LZMA2+Delta, LZMA1+BCJ,
       Deflate, BZip2, Zstd, Brotli, PPMd, Deflate64, AES-256, Copy); solid folders
 - [ ] 5.3 BCJ2 (and an ARM64/RISC-V BCJ if a sample exists) raise a clean

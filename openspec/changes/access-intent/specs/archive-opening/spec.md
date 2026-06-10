@@ -9,13 +9,16 @@ SHALL be passed to the reader so that both backend selection and reader strategy
 honor it.
 
 - `AUTO` (default) — no declared pattern. Random-access methods are available when the
-  source is seekable; archivey SHALL NOT enable any optional backend on the caller's
-  behalf.
+  source is seekable; archivey SHALL use the best installed backend the configuration
+  permits (on a seekable source, an installed faster/indexed backend such as rapidgzip
+  or indexed_bzip2 — see the `configuration` per-flag mapping).
 - `SEQUENTIAL` — the caller will iterate forward only. The archive opens in streaming
-  (forward-only) mode; random-access methods are restricted as in streaming mode.
+  (forward-only) mode; random-access methods are restricted as in streaming mode;
+  archivey SHALL prefer the cheapest single-pass strategy the configuration permits
+  (e.g. the unrar streaming reader for solid RAR).
 - `RANDOM` — the caller will reach members out of order and/or seek within members.
-  archivey SHALL proactively prefer installed seekable/indexed backends that the
-  configuration permits, and SHALL signal the reader to retain seek points.
+  Backend selection matches `AUTO`; additionally archivey SHALL signal the reader to
+  retain/build seek points eagerly.
 
 The `streaming` and `streaming_only` parameters SHALL NOT exist; their behavior is
 expressed through `access_intent` (`streaming=True` → `SEQUENTIAL`; `streaming=False`,
@@ -24,7 +27,7 @@ the previous default → `AUTO`).
 #### Scenario: Default access intent is AUTO
 - **WHEN** `open_archive(seekable_source)` is called without `access_intent`
 - **THEN** the archive opens with `AccessIntent.AUTO` and random-access methods are
-  available, and no optional backend is enabled implicitly
+  available, using the best installed backend the configuration permits
 
 #### Scenario: Sequential intent opens streaming mode
 - **WHEN** `open_archive(source, access_intent="sequential")` is called

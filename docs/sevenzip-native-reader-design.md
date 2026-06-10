@@ -800,3 +800,8 @@ this section contradicts the text above, **this section wins**:
   goes away with py7zr). The native AES stage should target `cryptography`.
 - **Dependency note confirmed**: `pyppmd`/`inflate64` are currently *only* transitive
   via py7zr; they must be added to the extras when py7zr is dropped (tasks §4.1).
+- **Archive comment (`kComment`) — unverified.** The 7z header spec enumerates a
+  comment property, but no evidence was found that 7-Zip (or any common producer)
+  ever writes it, and py7zr does not expose one. Before the spec requires surfacing
+  it, confirm a producer exists and create a fixture; otherwise drop the requirement
+  (tasks §1.7).
