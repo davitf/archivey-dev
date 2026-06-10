@@ -73,32 +73,41 @@ regression contract). §8.F (access intent) is specified in the separate
   (§8.B). Whether a compressed TAR can random-access is decided at construction by
   the decompressor backend (stdlib-on-pipe vs stdlib-on-file vs
   rapidgzip/indexed_bzip2), so it is set in `__init__`, not declared on the class.
-- **The catalog *location* is a `ClassVar`; the realized listing cost is not**
-  (§8.C). This splits a capability from a runtime fact, exactly as §8.B does for
-  random access:
-  - A `ClassVar` names the pure **format** fact — *where* this format keeps its member
-    catalog: header-resident (read while streaming forward), tail-resident (ZIP's
-    end-of-file central directory), a single-known-member stream, or no catalog (TAR).
-    This generalizes the bool `has_central_directory` PR #221 used: "has a catalog" is
-    too coarse, because *where* the catalog lives decides whether it is reachable on a
-    non-seekable source. (The exact per-format mapping — e.g. whether RAR/7z/ISO are
-    header- or tail-resident — is settled per reader, notably when the native readers
-    land; the model only needs the location, not a fixed list here.)
-  - **`member_listing_cost` is computed per instance** from that location **and**
-    seekability, because reachability depends on both. The rule: `INDEXED` when the
-    catalog (or single known member) is reachable **without a backward seek** — a
+- **The catalog *location* is determined per instance; the realized listing cost is not
+  a pure `ClassVar`** (§8.C). This splits a capability from a runtime fact, exactly as
+  §8.B does for random access:
+  - The reader determines, **at open**, where (if anywhere) an upfront member catalog
+    sits and whether it is reachable: header-resident (read while streaming forward),
+    tail-resident (ZIP's end-of-file central directory), a single-known-member stream,
+    or none (members discovered only by scanning, as in TAR). This generalizes the bool
+    `has_central_directory` PR #221 used — "has a catalog" is too coarse, because *where*
+    the catalog lives decides reachability on a non-seekable source.
+  - **It is not purely a `ClassVar`, because for some formats the location is per-file.**
+    RAR is the clear case: its member headers precede each file (no front index), and an
+    upfront catalog exists only when the optional **"quick open" service block** — an
+    index at the *end* of the archive — is present. So a given `.rar` is tail-indexed
+    when that block is present and reachable, and otherwise scan/sequential. A `ClassVar`
+    can carry a baseline where a format's layout is uniform (ZIP is always TRAILER, TAR
+    always NONE), but the realized location is decided at open by inspection where it
+    varies. (The exact per-format mapping — RAR/7z/ISO included — is settled per reader,
+    notably when the native readers land; the model only needs the per-instance location,
+    not a fixed list here.)
+  - **`member_listing_cost` is computed per instance** from that realized location
+    **and** seekability, because reachability depends on both. The rule: `INDEXED` when
+    the catalog (or single known member) is reachable **without a backward seek** — a
     header-resident catalog, a single-member stream, or a tail-resident catalog on a
-    *seekable* source; `SCAN_REQUIRED` when there is no catalog but the source is
-    seekable (a TAR that can be scanned); `SEQUENTIAL_ONLY` when there is no catalog and
-    the source is non-seekable. So a `.gz` single-member stream is `INDEXED` even on a
-    pipe, and a header-resident catalog can be `INDEXED` on a non-seekable source once a
-    reader can parse it forward (today's third-party readers that require seeking raise
-    at open instead — see `archive-opening`). The user's `streaming=True` preference does
-    **not** by itself downgrade listing while the catalog stays reachable.
+    *seekable* source; `SCAN_REQUIRED` when there is no upfront catalog but the source is
+    seekable (a TAR, or a RAR with no quick-open block, that can be scanned);
+    `SEQUENTIAL_ONLY` when there is no upfront catalog and the source is non-seekable. So
+    a `.gz` single-member stream is `INDEXED` even on a pipe, and a header-resident
+    catalog can be `INDEXED` on a non-seekable source once a reader can parse it forward
+    (today's third-party readers that require seeking raise at open instead — see
+    `archive-opening`). The user's `streaming=True` preference does **not** by itself
+    downgrade listing while the catalog stays reachable.
   - The standalone `members_list_supported` boolean is dropped: it is now exactly
     `member_listing_cost == INDEXED`. Deriving `INDEXED` from a "has a catalog" bool
-    alone (as PR #221 did) is the bug this split fixes — it ignores both seekability and
-    catalog location.
+    alone (as PR #221 did) is the bug this split fixes — it ignores seekability, catalog
+    location, *and* per-file variation like RAR's optional index.
 - **Cost introspection is redesigned around two orthogonal axes, each a
   cost-classifying enum** (§8.E), because the old `streaming` / `has_random_access()`
   / "member list supported" set conflated listing cost, access cost, and the user's
@@ -164,12 +173,14 @@ regression contract). §8.F (access intent) is specified in the separate
     ```text
     # member_listing_cost — per reader instance, from catalog location (§C) + seekability
     def member_listing_cost(self):
-        cat = type(self).member_catalog            # HEADER | TRAILER | SINGLE_MEMBER | NONE
+        cat = self.member_catalog          # HEADER | TRAILER | SINGLE_MEMBER | NONE;
+                                           #   ClassVar where uniform, else decided at open
+                                           #   (e.g. RAR: TRAILER iff quick-open index present)
         if cat in (HEADER, SINGLE_MEMBER):    return INDEXED        # reachable forward, no
                                                                    #   backward seek needed
-        if cat == TRAILER:                                          # ZIP end-of-file catalog
+        if cat == TRAILER:                                          # ZIP EOCD / RAR quick-open
             return INDEXED if self.source.seekable() else SEQUENTIAL_ONLY
-        # cat == NONE  (TAR: no catalog)
+        # cat == NONE  (TAR, or RAR without a quick-open index)
         return SCAN_REQUIRED if self.source.seekable() else SEQUENTIAL_ONLY
 
     # seek_cost — per decompressor / seekable stream, fixed at construction

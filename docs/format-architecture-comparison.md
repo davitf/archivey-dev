@@ -571,9 +571,9 @@ conflates two things: a format fact and a runtime fact.
 
 Split them:
 
-- **"Where does this *format* keep its member catalog?"** is a pure format-level
-  fact and belongs on the class, as a clearly-named `ClassVar`. A plain
-  `has_central_directory` bool is too coarse, because *where* the catalog lives
+- **"Where does this archive keep its member catalog?"** is a format-level fact
+  *where the layout is uniform*, and belongs on the class as a clearly-named `ClassVar`.
+  A plain `has_central_directory` bool is too coarse, because *where* the catalog lives
   decides whether it is reachable without seeking:
   ```python
   class ZipReader(BaseArchiveReader):
@@ -581,9 +581,13 @@ Split them:
   ```
   The locations are: **header-resident** (read while streaming forward),
   **tail-resident** (ZIP's end-of-file central directory), **single-known-member**
-  (single-file streams), or **none** (TAR). The exact per-format mapping (e.g. whether
-  RAR/7z/ISO are header- or tail-resident) is confirmed per reader, notably when the
-  native readers land.
+  (single-file streams), or **none** (TAR). But it is **not always a `ClassVar`** — for
+  some formats the location is *per file*. RAR is the case: its member headers precede
+  each file (no front index), and an upfront catalog exists only when the optional
+  **"quick open" service block** — an index at the *end* of the archive — is present, so
+  one `.rar` is tail-indexed and another is scan-only. Such readers determine the location
+  at open. The exact per-format mapping/variation (RAR/7z/ISO) is confirmed per reader,
+  notably when the native readers land.
 - **"Can *this opened archive* be listed cheaply (`INDEXED`)?"** is the *realized*
   cost, **not** read from the ClassVar alone: it depends on the location **and**
   seekability. `INDEXED` when the catalog (or single member) is reachable without a
@@ -686,10 +690,12 @@ does no I/O):
 
 ```text
 member_listing_cost(reader):           # per instance: catalog location (§C) + seekability
-    cat = member_catalog               # HEADER | TRAILER | SINGLE_MEMBER | NONE
+    cat = member_catalog               # HEADER | TRAILER | SINGLE_MEMBER | NONE;
+                                       #   ClassVar where uniform, else decided at open
+                                       #   (RAR: TRAILER iff quick-open index present)
     if cat in (HEADER, SINGLE_MEMBER): -> INDEXED        # reachable forward, no back-seek
-    if cat == TRAILER:                 -> INDEXED if seekable else SEQUENTIAL_ONLY  # ZIP EOCD
-    # cat == NONE (TAR)
+    if cat == TRAILER:                 -> INDEXED if seekable else SEQUENTIAL_ONLY  # ZIP/RAR
+    # cat == NONE (TAR, or RAR without quick-open)
     -> SCAN_REQUIRED if seekable else SEQUENTIAL_ONLY
 
 seek_cost(stream):                     # per stream, fixed at construction

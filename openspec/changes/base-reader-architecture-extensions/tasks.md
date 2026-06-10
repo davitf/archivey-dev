@@ -12,13 +12,15 @@
       `__init__`, **not** a ClassVar); set `False` only when the format genuinely
       cannot random-access — i.e. a compressed TAR whose decompressor is
       non-seekable at construction time
-- [ ] 1.2 Replace the `members_list_supported` `__init__` argument with a
-      catalog-location `ClassVar` on each reader class capturing *where* the member
-      catalog lives — header-resident (readable streaming forward), tail-resident (ZIP
-      EOCD), single-known-member (single-file), or none (TAR) — richer than a plain
-      "has a catalog" bool; remove the standalone boolean (it is now
-      `member_listing_cost == INDEXED`). Confirm each format's actual catalog location
-      (e.g. RAR/7z/ISO) when wiring this up
+- [ ] 1.2 Replace the `members_list_supported` `__init__` argument with a catalog-location
+      fact capturing *where* the opened archive's member catalog lives — header-resident
+      (readable streaming forward), tail-resident (ZIP EOCD), single-known-member
+      (single-file), or none (TAR) — richer than a plain "has a catalog" bool. Allow it to
+      be a `ClassVar` where the format's layout is uniform (ZIP, TAR) **but per-instance
+      where it varies**: RAR has an upfront catalog only when its optional end-of-archive
+      "quick open" index is present, else its per-member headers are scan-only. Remove the
+      standalone boolean (it is now `member_listing_cost == INDEXED`). Confirm each
+      format's actual catalog location/variation (RAR/7z/ISO) when wiring this up
 
 ## 2. Compression method types (§8.D)
 
@@ -45,12 +47,13 @@
       `SEQUENTIAL_ONLY`) and a shared `AccessCost` enum (`DIRECT` / `LIMITED` /
       `EXPENSIVE` / `UNAVAILABLE`) to `types.py`
 - [ ] 3.2 Add a `member_listing_cost: MemberListingCost` property computed **per
-      instance** from the catalog-location ClassVar **and** source seekability (do
-      **not** derive `INDEXED` from a "has a catalog" flag alone): `INDEXED` when the
-      catalog/single member is reachable without a backward seek (header catalog,
-      single-member, or tail catalog on a seekable source), `SCAN_REQUIRED` for a
-      seekable no-catalog format, `SEQUENTIAL_ONLY` otherwise; `streaming=True` on a
-      seekable catalog source stays `INDEXED`, and a single-file `.gz` is `INDEXED` even
+      instance** from the realized catalog location (ClassVar baseline or, where it varies
+      per file like RAR's optional quick-open index, determined at open) **and** source
+      seekability (do **not** derive `INDEXED` from a "has a catalog" flag alone):
+      `INDEXED` when the catalog/single member is reachable without a backward seek (header
+      catalog, single-member, or tail catalog on a seekable source), `SCAN_REQUIRED` for a
+      seekable no-upfront-catalog archive, `SEQUENTIAL_ONLY` otherwise; `streaming=True` on
+      a seekable catalog source stays `INDEXED`, and a single-file `.gz` is `INDEXED` even
       on a pipe
 - [ ] 3.3 Add a `seek_cost: AccessCost` property to each decompressor/seekable-stream
       class (stdlib rewind wrapper, rapidgzip, indexed_bzip2, `XzDecompressorStream`,

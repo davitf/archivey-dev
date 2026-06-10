@@ -40,21 +40,23 @@ This change adds the receipt; the request follows in `access-intent`.
   stdlib on a file rewinds; rapidgzip/indexed_bzip2 are always seekable), so it is
   set in `__init__`. The runtime streaming flag becomes "user requested OR format
   can't".
-- **§8.C — catalog-location ClassVar (replaces the `members_list_supported`
-  argument)** *(internal)*: *where* a format keeps its member catalog is a genuine
-  format-level fact, so it becomes a `ClassVar` — header-resident (read while streaming
-  forward), tail-resident (ZIP's end-of-file central directory), a single-known-member
-  stream, or none (TAR). This is richer than PR #221's bool `has_central_directory`,
-  because *where* the catalog lives decides whether it is reachable without seeking. The
-  *realized* listing cost is **not** read from that fact alone: `member_listing_cost`
-  (§8.E) is computed **per instance** from the location **and** seekability — `INDEXED`
-  when the catalog (or single member) is reachable without a backward seek (header
-  catalog, single-member stream, or tail catalog on a seekable source), so a `.gz`
-  single-member stream is `INDEXED` even on a pipe and a header catalog can be `INDEXED`
-  on a non-seekable source once a native reader parses it forward. (PR #221 derived
-  `INDEXED` from a "has a catalog" bool only — wrong on both counts.) The standalone
-  `members_list_supported` boolean is dropped; it is now exactly
-  `member_listing_cost == INDEXED`.
+- **§8.C — catalog location (replaces the `members_list_supported` argument)**
+  *(internal)*: *where* an archive keeps an upfront member catalog — header-resident
+  (read while streaming forward), tail-resident (ZIP's end-of-file central directory), a
+  single-known-member stream, or none (members found only by scanning, as in TAR) —
+  decides whether it is reachable without seeking. This is richer than PR #221's bool
+  `has_central_directory`. Crucially it is **not purely a `ClassVar`**: for some formats
+  the location is per-file. RAR is the case — member headers precede each file (no front
+  index), and an upfront catalog exists only when the optional "quick open" service block
+  (an index at the *end*) is present, so a given `.rar` is tail-indexed or scan-only
+  depending on the file. A `ClassVar` carries a baseline where the layout is uniform
+  (ZIP=TRAILER, TAR=NONE); otherwise the reader determines the location at open. The
+  *realized* listing cost is computed **per instance** from that location **and**
+  seekability (§8.E): `INDEXED` when the catalog (or single member) is reachable without
+  a backward seek, so a `.gz` single-member stream is `INDEXED` even on a pipe. (PR #221
+  derived `INDEXED` from a "has a catalog" bool only — wrong on all of seekability,
+  location, and per-file variation.) The standalone `members_list_supported` boolean is
+  dropped; it is now exactly `member_listing_cost == INDEXED`.
 - **§8.D — typed `CompressionMethod` enum + lossless detail** *(public)*: a `StrEnum`
   of known codecs (plus `UNKNOWN`) so callers can branch on compression without parsing
   free-form strings. Stays string-compatible. The enum is **exhaustive over the formats

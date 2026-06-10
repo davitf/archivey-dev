@@ -76,15 +76,21 @@ so callers can reason about cost up front instead of discovering it at runtime:
   reachable while streaming forward, or whose single member is known up front, is **not**
   `SEQUENTIAL_ONLY` merely because the source is non-seekable.
 
-`member_listing_cost` SHALL be computed **per instance** from where the format keeps its
-member catalog (front/header-resident, tail-resident, single-known-member, or none) **and**
-the runtime seekability of the source — not from a plain "has a catalog" flag alone. The
-rule is: `INDEXED` when the catalog (or single known member) is reachable without a
+`member_listing_cost` SHALL be computed **per instance** from where the opened archive
+keeps its member catalog (header-resident, tail-resident, single-known-member, or none)
+**and** the runtime seekability of the source — not from a plain "has a catalog" flag
+alone. The catalog location itself MAY be **per file, not per format**: it MAY be a class
+fact where a format's layout is uniform (ZIP is always tail-resident, TAR always has no
+upfront catalog), but where it varies the reader SHALL determine it at open. For example,
+a RAR archive has an upfront catalog only when its optional "quick open" index (at the end
+of the archive) is present, and otherwise its per-member headers are found only by
+scanning — so the same format is tail-resident for one file and catalog-less for another.
+The rule is: `INDEXED` when the catalog (or single known member) is reachable without a
 backward seek — a header-resident catalog, a single-member stream, or a tail-resident
-catalog on a seekable source; `SCAN_REQUIRED` when there is no catalog but the source is
-seekable; `SEQUENTIAL_ONLY` when there is no catalog and the source is non-seekable. The
-caller's `streaming=True` preference alone SHALL NOT downgrade `INDEXED` when the catalog
-remains reachable.
+catalog on a seekable source; `SCAN_REQUIRED` when there is no upfront catalog but the
+source is seekable; `SEQUENTIAL_ONLY` when there is no upfront catalog and the source is
+non-seekable. The caller's `streaming=True` preference alone SHALL NOT downgrade `INDEXED`
+when the catalog remains reachable.
 
 The realized value SHALL track the reader actually in use. Listing a header-resident
 catalog from a **non-seekable** source becomes possible only when the reader can parse it
@@ -110,6 +116,14 @@ be until the stream is read).
 - **THEN** `member_listing_cost` is `MemberListingCost.INDEXED` even if the source is
   non-seekable (a capability native streaming readers unlock; a third-party reader that
   requires a seekable source instead raises at open and produces no listing cost)
+
+#### Scenario: Catalog location varies per file (RAR quick-open index)
+- **WHEN** a seekable RAR archive that carries its optional "quick open" end-of-archive
+  index is opened, versus an otherwise-identical RAR file without it
+- **THEN** `member_listing_cost` is `MemberListingCost.INDEXED` for the first (the index
+  is one seek away) and `MemberListingCost.SCAN_REQUIRED` for the second (members are
+  found only by scanning the per-member headers), showing the location is decided per
+  file rather than per format
 
 #### Scenario: Seekable tar requires a scan
 - **WHEN** a seekable tar is opened with `streaming=False`
