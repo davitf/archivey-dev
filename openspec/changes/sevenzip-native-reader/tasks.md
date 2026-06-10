@@ -9,7 +9,12 @@
       verify) and header decryption when a password is supplied (design §4.6)
 - [ ] 1.4 Parse `FILES_INFO`, `PACK_INFO` (pack-stream offsets/sizes), `UNPACK_INFO`
       (folders, coders, bind pairs), and `SUBSTREAMS_INFO`; associate files to folders;
-      compute per-file size/CRC and `(folder_index, file_in_folder)`
+      compute per-file size/CRC and `(folder_index, file_in_folder)`. Order the coder
+      pipeline from the bind-pair graph and packed-stream indices — the folder's output
+      is the out-stream not consumed by any bind pair; do **not** assume coder-list
+      order is pipeline order. Substream CRC parsing must implement the
+      `AllAreDefined`/defined-bits logic (CRCs are stored only for streams whose CRC
+      isn't already known from folder digests)
 - [ ] 1.5 Detect `is_solid` (`num_unpackstreams_folders`) and per-folder encryption
       (coder-list check) directly
 - [ ] 1.6 Derive `compression_method` (typed primary codec) + `compression_method_detail`
@@ -24,15 +29,27 @@
 - [ ] 2.2 Add shared `pyppmd` (PPMd var.H / `Ppmd7Decoder`) and `inflate64` (Deflate64)
       stream openers in `compressed_streams.py`, alongside the existing openers, so
       they are reusable by other readers (e.g. native ZIP, method 9)
-- [ ] 2.3 AES-256 stage: key derivation (§3.5) + CBC decrypt, built per folder with the
-      supplied password (no global lock, no folder mutation)
+- [ ] 2.3 AES-256 stage: key derivation + CBC decrypt, built per folder with the
+      supplied password (no global lock, no folder mutation). **Do not implement from
+      design §3.5 as written** — see the design doc's Corrections section: the SHA-256
+      update order is salt+password+counter (not password+salt), `cycles==0x3F` means
+      *no hashing* (key = first 32 bytes of salt+password+zeros), the salt/IV sizes
+      are bit-packed into the property bytes (no separate size bytes), and there is no
+      PKCS#7 padding (zero-padded; truncate to the unpack size). Target the
+      `cryptography` package (py7zr's own AES path uses `pycryptodomex`, which
+      archivey does not depend on). Add a salted-archive test case
 - [ ] 2.4 Expose each member as a pull-based `BinaryIO` via `DecompressorStream` over
       the folder's packed byte range; for solid folders, decompress once and slice
       substreams by unpack size (O(N); design §4.3–§4.4)
 - [ ] 2.5 Detect BCJ2 (`numinstreams == 4`) and unsupported/newer BCJ filters before
       building a pipeline; raise a clear unsupported-compression-method `ArchiveError`
-      (parity with py7zr). Decide the LZMA1+BCJ handling (separate single-filter lzma
-      step, or pull in `pybcj` only for that path) and cover it with a test archive
+      (parity with py7zr). For LZMA1+BCJ, the BCJ stage must use `pybcj` (or a
+      hand-rolled BCJ pass): a liblzma FORMAT_RAW chain containing *only* a BCJ/Delta
+      filter is rejected (`LZMAError`), so a "separate single-filter lzma step" is not
+      possible; and a combined `[BCJ, LZMA1]` raw chain silently truncates output
+      because 7z LZMA1 streams carry no end-of-payload marker, so liblzma never
+      flushes the BCJ filter's lookahead tail. Cover with test archives (include
+      LZMA1+IA64, which py7zr itself mishandles)
 - [ ] 2.6 Raise `PackageNotInstalledError` naming the missing package when a required
       codec backend (pyppmd/inflate64/zstandard/brotli/crypto) is absent
 

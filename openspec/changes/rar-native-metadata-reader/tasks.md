@@ -10,7 +10,19 @@
       decompression, solid/password detection)
 - [ ] 1.4 Implement SFX-prefix skipping (scan up to 2 MB for `RAR_ID`/`RAR5_ID`)
 - [ ] 1.5 Implement header decryption (RAR3 SHA-1 key derivation; RAR5
-      PBKDF2-HMAC-SHA256), reusing the existing cryptography backend
+      PBKDF2-HMAC-SHA256), reusing the existing cryptography backend. **Implement
+      from the design doc's Corrections section, not §4.3 as originally written**:
+      RAR3 is AES-128 with 262,144 rounds of WinRAR's buggy SHA-1 (port rarfile's
+      `Rar3Sha1`; plain `hashlib.sha1` fails for long passwords); RAR5 is plain
+      PBKDF2 with `1 << kdf_count` iterations (no `+32`) and a plaintext IV stored
+      before each encrypted header block. Test with a ≥28-char password
+- [ ] 1.6 Handle service blocks during the block walk — at minimum skip RAR5
+      service headers (comment `CMT`, quick-open `QO`, recovery `RR`) without
+      misparsing. Record whether a quick-open (`QO`) block is present: the
+      `base-reader-architecture-extensions` cost surface defines RAR
+      `member_listing_cost` as `INDEXED` iff the quick-open index exists (actually
+      *reading* member headers from the QO block instead of scanning is optional
+      and can be a follow-up)
 
 ## 2. Wire the reader to the native parser
 

@@ -24,18 +24,33 @@
 
 ## 3. RAR reader
 
-- [ ] 3.1 Detect `file_redir[0] == rarfile.RAR5_XREDIR_WIN_JUNCTION`; emit
+> Lands after `rar-native-metadata-reader`: detection is wired into the native
+> parser's RAR5 file-redirection record (the equivalent of rarfile's `file_redir`),
+> not the rarfile facade. The spike (section 1) still uses rarfile in its own
+> throwaway environment.
+
+- [ ] 3.1 Expose the RAR5 redirect record (type + flags + target) on `RarMemberInfo`
+      in the native parser; on the `WIN_JUNCTION` redirect type, emit
       `SYMLINK` + `extra["is_junction"]=True` + `link_target_type=DIR`
-- [ ] 3.2 Populate `link_target` from `file_redir[2]` for junctions (today
+- [ ] 3.2 Populate `link_target` from the redirect record's target for junctions (today
       `_get_link_target` returns None for non-symlink/non-hardlink) with any
       normalization the spike identified
 - [ ] 3.3 Tests against the RAR junction fixture
 
 ## 4. 7z reader
 
-- [ ] 4.1 Detect `file.is_junction`; emit the unified junction representation
-      instead of `MemberType.OTHER`
-- [ ] 4.2 Read and normalize the junction target into `link_target`
+> Lands after `sevenzip-native-reader`: junction detection reads the native parser's
+> Windows attribute bits (`FILE_ATTRIBUTE_REPARSE_POINT`, the basis of py7zr's
+> `is_junction`), not the py7zr facade. Note that 7z stores a reparse point's target
+> as the member's *content*, so reading the target costs a member read — in a solid
+> folder, decompressing the folder prefix; reuse the mechanism the reader already
+> uses for symlink targets (`_prepare_member_for_open`) instead of reading targets
+> eagerly at registration.
+
+- [ ] 4.1 Detect junctions from the native parser's attribute bits; emit the unified
+      junction representation instead of `MemberType.OTHER`
+- [ ] 4.2 Read and normalize the junction target into `link_target` lazily, via the
+      existing link-target path (spike decides `\??\` prefix / slash normalization)
 - [ ] 4.3 Tests against the 7z junction fixture
 
 ## 5. Folder reader

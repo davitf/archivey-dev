@@ -28,8 +28,20 @@ unrar-streaming reader for RAR). Each flag is tri-state:
 - `False` — never use the alternative; always fall back to the default implementation,
   regardless of `access_intent`.
 - `"auto"` (default) — use the alternative **iff** its package is installed **and** the
-  resolved `access_intent` makes it worthwhile (`RANDOM` activates a seekable/indexed
-  backend; `AUTO` and `SEQUENTIAL` do not).
+  resolved `access_intent` makes it worthwhile. What is "worthwhile" is per flag,
+  because only some alternatives change the access-cost class relative to the default
+  backend:
+  - `use_rapidgzip` and `use_indexed_bzip2`: activated by `RANDOM` (they turn an
+    `EXPENSIVE` rewind backend into a `LIMITED` indexed one); not by `AUTO` or
+    `SEQUENTIAL`.
+  - `use_python_xz`: never activated implicitly — the default XZ backend
+    (`XzDecompressorStream`) already provides block-level seeking, so the alternative
+    does not improve the cost class under any intent.
+  - `use_zstandard`: never activated implicitly — its reopen-on-backward-seek wrapper
+    has no random-access advantage over the default backend.
+  - `use_rar_stream`: never activated implicitly in this change (it changes the
+    iteration strategy for solid RAR, not seekability; whether `SEQUENTIAL` should
+    activate it is an open question recorded in the design).
 
 #### Scenario: Forcing a backend on
 - **WHEN** `ArchiveyConfig(use_rapidgzip=True)` is used to open a gzip stream

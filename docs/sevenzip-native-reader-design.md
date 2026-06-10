@@ -750,3 +750,53 @@ mostly thin wrappers over existing libraries.
 - Base class: `src/archivey/internal/base_reader.py`.
 - RAR reader (for comparison, especially `RarStreamReader` solid-stream
   pattern): `src/archivey/formats/rar_reader.py`.
+
+---
+
+## Corrections from technical review (2026-06-10)
+
+A verification pass (run against the actual stdlib `lzma`, py7zr 1.1.0 source, and
+the installed packages) confirmed the overall architecture but found errors that
+would compile into wrong code if the sections above are followed literally. Where
+this section contradicts the text above, **this section wins**:
+
+- **§3.5 AES key derivation — three errors.**
+  1. The SHA-256 update order is **salt + password + counter** per round (see
+     py7zr `helpers._calculate_key1` and 7-Zip itself), not password + salt.
+     Because 7-Zip usually writes no salt, tests pass either way until a salted
+     archive appears — add one to the test set.
+  2. `cycles == 0x3F` does not mean "2^63 iterations" or "max iterations": it means
+     **no hashing at all** — `key = (salt + password + zeros)[:32]`.
+  3. The properties layout has no separate `SaltSize`/`IVSize` bytes. A second
+     properties byte exists iff `b0 & 0xC0`; then
+     `saltsize = ((b0 >> 7) & 1) + (b1 >> 4)` and
+     `ivsize = ((b0 >> 6) & 1) + (b1 & 0x0F)`.
+- **§4.6 "decrypt, strip padding" is wrong.** 7z AES-CBC data carries **no PKCS#7
+  padding**; it is zero-padded to the 16-byte block size. Decrypt and **truncate to
+  the known unpack size** — literally stripping "padding" corrupts the last block.
+- **§7.1 option (b) is impossible.** liblzma rejects a FORMAT_RAW filter chain that
+  contains only a BCJ or Delta filter (`LZMAError: Invalid or unsupported options`)
+  — a raw chain must end in LZMA1/LZMA2. So the BCJ stage of an LZMA1+BCJ folder
+  cannot be decoded "as a separate liblzma single-filter step"; only option (a)
+  (`pybcj` or a hand-rolled BCJ pass) works. Note also *why* the combined
+  `[BCJ, LZMA1]` raw chain fails: 7z LZMA1 streams have no end-of-payload marker,
+  so liblzma never sees stream end and never flushes the BCJ filter's lookahead
+  tail — silent truncation. (py7zr's own special-case list omits `FILTER_IA64`, so
+  py7zr mishandles LZMA1+IA64 — a chance to be strictly better, with a test.)
+- **Coder→filter mapping needs property decoding.** Mapping 7z coder properties to
+  lzma filter dicts requires `lzma._decode_filter_properties()` (private CPython
+  API, which py7zr itself uses) or manual parsing of the props bytes (LZMA2
+  dict-size byte; LZMA1 5-byte props). Decide which and pin it with tests.
+- **§4.3 pipeline order must come from bind pairs.** The folder's output stream is
+  defined as the out-stream not consumed by any bind pair; coder-list order is not
+  pipeline order. Build the chain from the bind-pair graph + packed-stream indices.
+- **§3.3 substream CRCs** require the `AllAreDefined`/defined-bits logic — CRCs are
+  stored only for substreams whose CRC isn't already known from folder digests.
+- **§3.1 "no SFX support / 7z always starts at byte 0" is wrong as a format fact.**
+  7z SFX executables exist and locate the signature by scanning; py7zr also rejects
+  them, so detect-and-raise is parity, but the doc should not claim the format
+  forbids it.
+- **Crypto backend**: py7zr's AES uses `pycryptodomex` (a transitive dependency that
+  goes away with py7zr). The native AES stage should target `cryptography`.
+- **Dependency note confirmed**: `pyppmd`/`inflate64` are currently *only* transitive
+  via py7zr; they must be added to the extras when py7zr is dropped (tasks §4.1).

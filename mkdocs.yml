@@ -6,6 +6,17 @@ nav:
   - Design principles: design_principles.md
   - Developer guide: developer_guide.md
   - API reference: api.md
+
+# Internal design explorations live in docs/ for convenience but are not part
+# of the published documentation.
+exclude_docs: |
+  format-architecture-comparison.md
+  rar-native-reader-design.md
+  sevenzip-native-reader-design.md
+  zip-stdlib-limitations.md
+  tar-stdlib-limitations.md
+  iso-pycdlib-analysis.md
+  generate_api_docs.sh
 plugins:
   - search
   - mkdocstrings:

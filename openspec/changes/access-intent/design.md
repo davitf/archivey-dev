@@ -51,8 +51,9 @@ and a tri-state config) that builds on the cost surface (`member_access_cost` /
     out-of-order open on a `tar.gz` just pays the stdlib rewind. Equivalent to today's
     `streaming=False` with all `use_*` at their default.
   - `RANDOM`: turns on `"auto"`-tagged seekable/indexed backends (rapidgzip,
-    indexed_bzip2, multi-block xz) **when installed**, and signals the reader to keep
-    seek points. This is the *only* intent under which an `"auto"` backend is activated.
+    indexed_bzip2) **when installed**, and signals the reader to keep seek points.
+    (XZ needs no activation: the default `XzDecompressorStream` already block-seeks.)
+    This is the *only* intent under which an `"auto"` backend is activated.
   - `SEQUENTIAL`: forward-only; prefers the cheapest streaming backend, skips eager index
     building, and (like today's `streaming=True`) accepts a non-seekable source.
 
@@ -89,3 +90,30 @@ and a tri-state config) that builds on the cost surface (`member_access_cost` /
   (`EXPENSIVE`) cost. The single intent that *raises* is random access on a **non-seekable
   source** (`AUTO` or `RANDOM`), because it is genuinely impossible — preserving today's
   `streaming=False` + non-seekable behavior.
+
+## Open question: should SEQUENTIAL activate `use_rar_stream`?
+
+The proposal says "`SEQUENTIAL` favors the cheapest streaming backend", but the
+decision above says `AUTO`/`SEQUENTIAL` activate nothing — and for solid RAR those
+conflict. With `use_rar_stream` off, iterating a solid RAR via rarfile shells out to
+`unrar` once per member (O(N²) total); with it on, a single `unrar p` pass serves all
+members in order (O(N)). Its known limitation — `open()` on an individual member still
+costs O(N) — is moot under `SEQUENTIAL`, where random-access methods are restricted
+anyway. Both paths require the same `unrar` binary, so `"auto"` here is not about an
+extra package.
+
+So `"auto" + SEQUENTIAL → use_rar_stream` looks strictly better, at the cost of
+breaking the clean rule "only `RANDOM` ever activates an `auto` backend". Options:
+
+1. Keep the clean rule (current spec): `use_rar_stream` is never auto-activated.
+2. Activate it under `SEQUENTIAL` (and arguably during `extractall()`/full iteration
+   under any intent, where the access pattern is known to be sequential).
+
+Leaning toward (2) for `SEQUENTIAL` at least, but it changes behavior relative to
+today's `streaming=True` (which uses the O(N²) path unless the flag is set), so it
+needs an explicit decision and a scenario in the configuration delta.
+
+A related point, now reflected in the configuration delta: `use_python_xz` and
+`use_zstandard` provide no cost-class improvement over the defaults (the native
+`XzDecompressorStream` already block-seeks; the zstandard wrapper rewinds like the
+default), so their `"auto"` never activates implicitly under any intent.

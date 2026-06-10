@@ -530,3 +530,49 @@ from the RAR Technical Note.
 - Base class: `src/archivey/internal/base_reader.py`.
 - 7-zip reader (parallel for solid-archive streaming pattern):
   `src/archivey/formats/sevenzip_reader.py`.
+
+---
+
+## Corrections from technical review (2026-06-10)
+
+A verification pass against rarfile 4.2's implementation confirmed the parsing
+design but found errors in the crypto/edge-case specifics. Where this section
+contradicts the text above, **this section wins**:
+
+- **RAR3 header encryption (§2.4, §4.3) — three errors.**
+  1. It is **AES-128**, not AES-256: `rar3_s2k` returns `digest()[:16]`.
+  2. The KDF round count is **262,144** SHA-1 update rounds (16 × 0x4000), with one
+     IV byte harvested every 0x4000 rounds — not "70,144" / "20 rounds".
+  3. The KDF requires **WinRAR's buggy SHA-1** (rarfile's `Rar3Sha1(rarbug=True)`,
+     which deliberately corrupts the input buffer on `update()` calls > 64 bytes).
+     Plain `hashlib.sha1` derives wrong keys whenever `utf16le(password) + salt`
+     exceeds 64 bytes (passwords ≳ 28 chars). A native port must include the
+     `Rar3Sha1` workaround (~40 lines in rarfile).
+- **RAR5 header KDF (§4.3 step 2) — corrected.** The header key is exactly
+  `PBKDF2-HMAC-SHA256(utf8(password), salt, 1 << kdf_count)` — **no `+32`** — and
+  the 16-byte **IV is stored in plaintext before each encrypted header block**;
+  there is no "IV tweak XOR". The `+32` iterations belong only to the password
+  *check value*; `+16` belongs to the tweaked-CRC hash key (§2.5's `+16` is
+  correct and matches `rar_reader._rar_hash_key`).
+- **§2.2 vs §4.2 RAR3 extract-hack prefix:** §4.2 is right (`RAR_ID` +
+  `S_BLK_HDR.pack(0x90CF, 0x73, 0, 13)` + **6** zero bytes); §2.2's "13 zero
+  bytes" is wrong — 13 is the header *size* field.
+- **Quick-open (`QO`) service block — missing from the design.** RAR5 archives
+  commonly carry a main-header locator extra record pointing to a quick-open
+  service block whose *data area contains copies of file headers*. The block walk
+  must skip service-block data areas and exclude service blocks (QO, CMT comment,
+  RR recovery) from the member list, or it will double-register members. Record QO
+  presence: the cost surface in `base-reader-architecture-extensions` defines RAR
+  `member_listing_cost = INDEXED` iff the quick-open index exists. (Tasks §1.6.)
+- **Blake2sp (§7.4) — two missing facts.** stdlib has no blake2sp; rarfile builds
+  it from `hashlib.blake2s` tree-mode parameters (~40 lines, portable). And for
+  encrypted (tweaked) files rarfile disables blake2sp verification entirely (only
+  CRC32 has a `ConvertHashToMAC` re-derivation), so "tweaked blake2sp" is
+  unverifiable in practice.
+- **Multi-volume detection** should match rarfile's error quality: also detect
+  "not the first volume" (RAR3 `RAR_MAIN_FIRSTVOLUME` flag absent, RAR5
+  volume-number field present) and recognize both volume naming schemes, so the
+  error can say "this is volume N, open the first volume" rather than a generic
+  unsupported-feature message.
+- **RAR3 Unicode names:** entries whose name field has no NUL separator are plain
+  UTF-8 — port that path from rarfile alongside the compressed-Unicode decoder.

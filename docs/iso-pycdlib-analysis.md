@@ -482,3 +482,14 @@ The following steps are required to add a working `IsoReader`:
 - Test archive creation: `tests/archivey/create_archives.py` (`create_iso_archive_with_pycdlib`, `create_iso_archive_with_genisoimage`)
 - Format detection: `src/archivey/formats/format_detection.py`
 - Reader registration: `src/archivey/core.py` (`_FORMAT_TO_READER`)
+
+---
+
+## Corrections from technical review (2026-06-10)
+
+- **§13 `iso.get_iso_file_length()` does not exist** in pycdlib 1.16.0 (verified
+  against the installed package). Multi-extent total size must be computed by
+  summing the directory records of the extent group (or by another API); the
+  recommendation as written is uncallable.
+- Confirmed accurate: `PyCdlibIO` binds `_fp` only in `__enter__`, and the Rock
+  Ridge ER-reset quirk exists in pycdlib source.

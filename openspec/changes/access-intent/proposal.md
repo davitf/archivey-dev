@@ -46,9 +46,11 @@ no auto-detection and no `access_intent` input.
   both raise on a non-seekable one; they differ only in **whether archivey proactively
   pays to make random access cheap**. `AUTO` does the cheap thing and never enables an
   optional backend on the caller's behalf (so default behavior is unchanged). `RANDOM`
-  turns on `AUTO`-tagged seekable/indexed backends (rapidgzip, indexed_bzip2, multi-block
-  xz) **when installed** and tells the reader to keep seek points. `SEQUENTIAL` favors the
-  cheapest streaming backend and skips eager index building.
+  turns on `AUTO`-tagged seekable/indexed backends (rapidgzip, indexed_bzip2) **when
+  installed** and tells the reader to keep seek points (XZ needs no activation: the
+  default `XzDecompressorStream` already block-seeks). `SEQUENTIAL` favors the cheapest
+  streaming backend and skips eager index building (whether it should auto-enable
+  `use_rar_stream` for solid RAR iteration is an open question in design.md).
 - **Intent is carried into the reader**, generalizing today's `streaming_only=streaming`
   hand-off: the reader receives `access_intent` and may adapt its strategy (eager vs
   lazy, build vs skip a seek index), in addition to backend selection.

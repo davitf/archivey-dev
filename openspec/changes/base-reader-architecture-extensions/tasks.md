@@ -55,6 +55,13 @@
       seekable no-upfront-catalog archive, `SEQUENTIAL_ONLY` otherwise; `streaming=True` on
       a seekable catalog source stays `INDEXED`, and a single-file `.gz` is `INDEXED` even
       on a pipe
+- [ ] 3.2a RAR interim behavior: while the reader is still rarfile-backed, rarfile
+      scans all member headers inside `RarFile(...)` at open and does not expose
+      quick-open presence — report RAR conservatively (`SCAN_REQUIRED`; the scan is
+      paid at open, so members are registered and `get_members_if_available()` returns
+      them via the "already-registered" rule regardless). The per-file quick-open
+      distinction in the spec becomes implementable when `rar-native-metadata-reader`
+      lands (its task 1.6 records QO presence)
 - [ ] 3.3 Add a `seek_cost: AccessCost` property to each decompressor/seekable-stream
       class (stdlib rewind wrapper, rapidgzip, indexed_bzip2, `XzDecompressorStream`,
       lzip, plain file), consistent with its `seekable()`
