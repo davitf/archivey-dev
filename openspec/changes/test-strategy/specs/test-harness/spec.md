@@ -22,11 +22,12 @@ differential tests.
 
 ### Requirement: External tool listings serve as ground truth
 
-When a sample archive is created with an external tool, the tool's own listing
-SHALL be captured at creation time and stored alongside the fixture, and a test
-SHALL assert that archivey's reported metadata agrees with the tool's on the
-overlapping fields (with documented exceptions for known tool quirks). CI SHALL NOT
-require the external tools (the listings are recorded, not regenerated).
+The archive-creation flow SHALL capture, for every sample archive created with an
+external tool, the tool's own listing at creation time, stored alongside the
+fixture; a test SHALL assert that archivey's reported metadata agrees with the
+tool's on the overlapping fields (with documented exceptions for known tool quirks).
+CI SHALL NOT require the external tools (the listings are recorded, not
+regenerated).
 
 #### Scenario: Disagreement with the creating tool fails
 - **WHEN** archivey reports a member size that differs from the recorded `7z l -slt`
