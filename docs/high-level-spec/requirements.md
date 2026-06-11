@@ -259,7 +259,7 @@ literals are accepted where an option is really an enumerated choice.
 The library can **create** archives, at first in the formats where writing is
 straightforward — TAR (plain and compressed), ZIP, and the single-file
 compressors — with room to add others later. Writing is intentionally simple
-(create a new archive; it is not an editor for existing ones, see §9).
+(create a new archive; it is not an editor for existing ones, see §10).
 
 The shape of a writing API, conceptually:
 
@@ -513,7 +513,64 @@ for; they explain why several requirements above exist. Implementation choices
 
 ---
 
-## 9. Non-goals and known boundaries
+## 9. Testing and verification
+
+The library's central promise — *one interface, many formats, same results* — is
+only credible if it is verified that way. The test strategy is therefore a
+first-class requirement, not an afterthought, and the following must hold.
+
+- **One catalog of sample archives.** Every sample archive is defined once, in a
+  single place, together with how it is built, what it contains, and which
+  features it exercises. Tests select from that catalog declaratively (by format,
+  by feature, by predicate) rather than re-defining archives inline. Fixtures are
+  generated reproducibly from those definitions and built on demand when not
+  already present.
+
+- **Cross-format and cross-backend equivalence.** The same logical content,
+  packaged in different formats and read through different backends (standard
+  library, optional third-party libraries, external tools, native parsers), must
+  produce the same members, the same metadata, and the same bytes. This is the
+  test that proves the unification is real rather than nominal.
+
+- **The full matrix.** Tests run across the supported language runtimes and across
+  dependency sets — at least a minimal install (no optional packages) and a
+  full install — so both the zero-dependency path and every optional-backend path
+  are covered, on each supported operating system (permissions, symlinks,
+  junctions, and path rules differ per platform).
+
+- **Missing optional dependencies skip, not fail.** When a case needs an optional
+  package or external tool that is absent, it is skipped centrally — mirroring the
+  library's own runtime contract — while genuine failures still fail loudly.
+
+- **Adversarial and malformed input.** Corrupted, truncated, and deliberately
+  hostile archives (path traversal, absolute paths, escaping links, decompression
+  bombs) are part of the suite, verifying that safe-by-default extraction holds,
+  that truncation and corruption are detected rather than silently accepted, and
+  that failures surface as the right error type instead of crashing or doing
+  something unsafe.
+
+- **Round-trip and conversion identity.** Anything written is read back and
+  compared: write-then-read must reproduce the content and the metadata both
+  formats can represent, and converting between formats must preserve member data
+  and as much metadata as the target format supports.
+
+- **Streaming and memory behaviour.** The streaming principle is tested, not just
+  asserted: large inputs are processed without buffering the whole thing,
+  non-seekable sources work everywhere they are promised to, and per-member
+  streams are released as iteration advances.
+
+- **Real-world archives, not only self-generated ones.** The suite also exercises
+  archives produced by the actual native tools and other libraries — including
+  old, unusual, and edge-case files — so the library is validated against data it
+  will meet in practice, not only against fixtures it created itself.
+
+How this is implemented (test framework, parametrization mechanism, fixture
+storage) is left to the implementer; the requirement is the coverage and the
+guarantees above.
+
+---
+
+## 10. Non-goals and known boundaries
 
 - **No in-place modification** of an existing archive. Writing produces a new
   archive (§4.8); it does not add to, or rewrite a member inside, a file that
@@ -530,7 +587,7 @@ for; they explain why several requirements above exist. Implementation choices
 
 ---
 
-## 10. Summary
+## 11. Summary
 
 Archivey's contract is: *give me any supported archive or compressed file, by
 path or by stream, and let me list, read, and safely extract it through one
