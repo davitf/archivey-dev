@@ -28,13 +28,16 @@ In scope:
 - Reading and extracting archives and compressed files.
 - A uniform metadata model across formats.
 - Safe-by-default extraction of untrusted archives.
+- Simple creation (writing) of archives in the formats where writing is
+  straightforward, through a model compatible enough with reading that
+  converting one archive into another falls out naturally (see §4.9).
 - Optional, opt-in performance backends and behaviours.
 
 Out of scope (current):
 
-- **Writing or modifying** archives. Archivey is read-only.
-- Acting as a format-conversion tool. (It reads many formats, but does not
-  re-encode between them.)
+- **In-place modification** of an existing archive (adding to, or rewriting a
+  member inside, a file that already exists). Producing a *new* archive from
+  existing contents is supported; editing one in place is not.
 
 ### Supported inputs
 
@@ -43,12 +46,16 @@ Out of scope (current):
 - **Plain directories** on the local filesystem, presented through the same
   interface as an archive.
 - **Single-file compressed streams:** gzip, bzip2, xz, zstandard, lz4, lzip,
-  zlib, brotli, and Unix `compress`. Each is presented either as a raw
-  decompressed stream or as an "archive" containing exactly one member.
+  zlib, brotli, and Unix `compress`. The requirement is that each is presented
+  through the archive interface as an archive containing exactly one member;
+  opening one directly as a decompressed binary stream is an additional,
+  optional entry point.
 - A compressed TAR (e.g. a gzip- or zstd-wrapped TAR) is recognised as a TAR
   container, not as a single compressed file, when its contents warrant it.
 
-Inputs may be supplied as a filesystem path or as an already-open binary stream.
+Inputs may be supplied as a filesystem path or as an already-open binary stream,
+**including non-seekable streams** (pipes, network reads) wherever the format
+can be read without random access.
 
 ---
 
@@ -94,6 +101,15 @@ does something unusual.
    one common error type (with discriminable subtypes). Underlying library
    exceptions are always translated, never leaked raw. Warn-and-continue is used
    only where recovery is genuinely safe.
+
+8. **Stream, don't buffer.** Reading or writing is incremental and bounded in
+   memory. The library must not silently decompress a whole file into memory or a
+   temporary file before handing back data, nor read an entire input before it
+   starts producing output. Operations must remain viable on inputs far larger
+   than available memory, and a caller processing one member at a time should pay
+   only for what they touch. Where a format genuinely cannot avoid a whole-archive
+   pass (a solid archive, a no-index compressed TAR), that cost is made visible
+   (principle 2) rather than hidden behind buffering.
 
 ---
 
@@ -141,11 +157,11 @@ did not record.
 most familiar standard-library archive type, so existing code keeps working
 where it reasonably can.
 
-**Compression method.** The compression method is reported both as a value drawn
-from a closed, exhaustive set of known codecs (so callers can branch on it
-programmatically) and, when the real encoding is richer than a single codec
-(for example a 7z filter chain), as a lossless free-form description that the
-closed set cannot capture.
+**Compression method.** The compression method a member uses is exposed in a way
+callers can act on programmatically (not only a free-form string they must
+parse), without losing detail when the real encoding is richer than a single
+codec — for example a 7z filter chain. Exactly how that is represented is left to
+the implementer.
 
 ---
 
@@ -219,15 +235,14 @@ to get good behaviour.
   source). Intent replaces any need to set low-level performance switches by
   hand.
 
-- **Cost (the receipt).** An opened archive honestly reports, without doing any
-  I/O, how expensive its operations are: how cheaply the full member list can be
-  obtained (already indexed, a full scan required, or only as iteration
-  proceeds), and what it costs to reach an arbitrary member out of order (direct,
-  bounded, expensive, or unavailable). Content streams likewise report whether
-  and how cheaply they can seek, distinguishing a true random-access stream from
-  one that is "seekable" only by re-decompressing from the start. These reports
-  describe what was actually achieved, so a caller can reason about performance
-  instead of discovering it by trial and error.
+- **Cost (the receipt).** The library helps callers avoid performance
+  footguns rather than letting them discover costs by trial and error. An opened
+  archive should give callers enough information — without doing I/O to produce it
+  — to tell cheap operations from expensive ones (a one-seek listing versus a full
+  scan; a direct member open versus one that re-decompresses everything before it)
+  and to know whether a content stream can truly seek or only appears to. The
+  exact shape of this information is left to the implementer; the requirement is
+  that the honest cost is *available* to a caller who wants to reason about it.
 
 ### 4.7 Configuration
 
@@ -239,7 +254,48 @@ fail if unavailable), never use, or *use when it helps and is installed* (the
 default) — so that declared intent can decide automatically. Convenience string
 literals are accepted where an option is really an enumerated choice.
 
-### 4.8 Command-line use
+### 4.8 Writing archives
+
+The library can **create** archives, at first in the formats where writing is
+straightforward — TAR (plain and compressed), ZIP, and the single-file
+compressors — with room to add others later. Writing is intentionally simple
+(create a new archive; it is not an editor for existing ones, see §9).
+
+The shape of a writing API, conceptually:
+
+- The caller opens a destination — a path or a binary stream, **including a
+  non-seekable stream** for formats that can be written sequentially — choosing
+  the target format and any archive-level options (compression method/level,
+  comment).
+- The caller adds members one at a time. A member can be supplied as a path on
+  disk, as bytes, or as a readable stream whose content is **consumed
+  incrementally** (never buffered whole, per principle 8); directories, symlinks,
+  and hardlinks are added by description rather than content. Per-member metadata
+  (name, modification time, permissions, etc.) is taken from the source or set
+  explicitly.
+- The output is produced as members are added, so writing a huge archive to a
+  pipe streams straight through.
+- Closing finalises the archive (writing any trailing index the format needs).
+  The whole thing works as a context-managed resource, like reading.
+
+The reading and writing models share the **same member abstraction**, which is
+what makes conversion fall out for free (see §4.9): a member obtained from a
+reader can be handed to a writer.
+
+Formats that cannot reasonably be written incrementally, or at all (RAR; ISO;
+7z initially), are simply not offered as write targets rather than emulated
+badly.
+
+### 4.9 Converting between formats
+
+Because a member read from one archive can be written into another, converting an
+archive from one format to another — or recompressing a single-file stream — is
+just *iterate the source, write to the destination*, with no separate conversion
+machinery. The requirement is that the read and write surfaces stay compatible
+enough (the same member objects, streamed content) that piping a decompressor
+into a compressor, or one container into another, is easy and memory-bounded.
+
+### 4.10 Command-line use
 
 A small command-line tool can list and extract archives, primarily for testing
 and exploration. It is not the library's main surface but must exercise the same
@@ -301,22 +357,17 @@ safety is at stake. It only warns-and-continues where recovery is genuinely safe
 
 ## 7. Format detection
 
-Detection determines the format from content and, when available, the filename:
+Format is auto-detected by default. Detection is **content-based first** — it
+identifies the format by inspecting the data itself, not by trusting the
+filename. A filename extension may be used as a secondary hint, but when content
+and name disagree, content wins. Detection must leave the input usable afterwards
+(it never consumes a stream destructively and works on non-seekable sources by
+reading only what it needs).
 
-- A path that is an existing directory is the folder "format".
-- Formats with fixed signatures are identified by magic bytes at known offsets
-  (ZIP, RAR, 7z, the single-file compressors, TAR's `ustar` marker, ISO volume
-  descriptors).
-- Formats without a usable signature are detected heuristically (a trial brotli
-  decompression; attempting to read a first TAR header).
-- When a single-file compressor wraps a TAR, detection can look through the
-  compression and report the compound TAR format.
-- Self-extracting executables that embed a supported archive are recognised.
-- Filename extensions (including compound TAR suffixes) provide a second opinion.
-
-When content-based and name-based detection disagree, content wins, and the
-discrepancy is logged. Detection must leave the input usable afterwards — it
-never consumes a stream destructively, and restores the read position.
+How content detection is performed for formats without a clean signature, how
+deeply it looks (e.g. recognising a compressed TAR, or an archive embedded in a
+self-extracting executable), and how name hints are weighed are left to the
+implementer.
 
 ---
 
@@ -385,8 +436,9 @@ for; they explain why several requirements above exist. Implementation choices
   the listing) and can use password-tweaked checksums that must *not* be reported
   as plain CRCs. Symlinks/junctions appear via redirection metadata; link targets
   sometimes require actually extracting the member.
-- Multi-volume and very old RAR generations are out of scope and must fail
-  cleanly.
+- **Multi-volume** archives (a set split across several files) are a supported
+  goal: the volumes are read as one logical archive. Very old RAR generations
+  (e.g. RAR2) are out of scope and must fail cleanly rather than mishandle input.
 
 ### 8.4 7z
 
@@ -405,6 +457,7 @@ for; they explain why several requirements above exist. Implementation choices
   when it is a chain. A few codecs (e.g. certain branch filters) may be
   undecodable and must raise a clean unsupported-feature error.
 - Duplicate filenames are possible and must remain individually addressable.
+- **Multi-volume** 7z archives are a supported goal, read as one logical archive.
 
 ### 8.5 ISO 9660
 
@@ -462,15 +515,18 @@ for; they explain why several requirements above exist. Implementation choices
 
 ## 9. Non-goals and known boundaries
 
-- **No writing/modification** of archives.
+- **No in-place modification** of an existing archive. Writing produces a new
+  archive (§4.8); it does not add to, or rewrite a member inside, a file that
+  already exists.
 - **No faithful re-creation of every exotic entry** on every OS (for example,
   recreating a native Windows junction during extraction); such entries fall back
   to the nearest safe representation, and unsafe targets are dropped by the
   default filter.
-- **No support for multi-volume RAR/7z or the oldest format generations**; these
-  fail cleanly rather than silently mishandling input.
-- **No measured/predicted performance numbers:** cost reporting is a coarse,
-  mechanism-derived tier, not a wall-clock estimate.
+- **No support for the oldest format generations** (e.g. RAR2); these fail
+  cleanly rather than silently mishandling input. (Multi-volume archives, by
+  contrast, are a supported goal — see §8.3/§8.4.)
+- **No measured or predicted performance numbers:** the cost information of §4.6
+  distinguishes cheap from expensive operations; it is not a wall-clock estimate.
 
 ---
 
