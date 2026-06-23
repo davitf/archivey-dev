@@ -140,6 +140,7 @@ def archivey_config(
     if updates:
         config = replace(config, **updates)
 
+    assert config is not None  # Make Pyrefly happy
     token = _default_config_var.set(config)
     try:
         yield config
